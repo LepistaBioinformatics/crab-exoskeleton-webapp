@@ -3,7 +3,7 @@ import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } f
 import { clearSession, getSession } from "@/lib/session";
 
 interface HistoryResponse {
-  messages: { role: string; content: string }[];
+  messages: { role: string; content: string; created_at?: string }[];
 }
 
 export async function GET(

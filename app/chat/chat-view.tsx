@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createConversation, touchConversation, syncSessionRefs } from "@/lib/chatSession";
+import {
+  createConversation,
+  touchConversation,
+  syncSessionRefs,
+  notifyConversationsUpdated,
+} from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
 import { KeyRound, PanelRight, Reply } from "lucide-react";
-import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
+import { setFragmentSid, historyQuery, useFragment, type Workspace } from "@/app/chat/fragment";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
@@ -30,9 +35,9 @@ import { Spinner } from "@/components/ui/spinner";
 const messageBand = cva("group relative w-full py-3 text-fg", {
   variants: {
     role: {
-      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-[3px] after:bg-accent after:content-['']",
+      user: "border-[0.5px] border-accent/60 dark:border-0 bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-[3px] after:bg-accent after:content-['']",
       assistant:
-        "bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
+        "border-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
     },
   },
 });
@@ -47,6 +52,7 @@ const bandGap = cva("", {
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  created_at?: string;
 }
 
 // A message the composer is quoting (Telegram-style reply). Pico is text-only
@@ -94,9 +100,9 @@ export default function ChatView({
   sessionId: string | undefined;
 }) {
   const router = useRouter();
+  const fragment = useFragment();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,9 +189,11 @@ export default function ChatView({
         const data = await res.json();
         const loaded = Array.isArray(data.messages) ? data.messages : [];
         setMessages(loaded);
-        // Opening a conversation lands on the most recent message; only *new*
-        // messages sent from here get the scroll-to-top-of-message treatment.
-        if (loaded.length > 0) {
+        // Opening a conversation lands on the most recent message -- UNLESS a
+        // scroll anchor is set (a past point clicked in the tree view), which the
+        // anchor effect below handles instead.
+        const hasAnchor = new URLSearchParams(window.location.hash.slice(1)).get("msg");
+        if (loaded.length > 0 && !hasAnchor) {
           requestAnimationFrame(() => setScrollToIndex(loaded.length - 1));
         }
       } catch {
@@ -206,6 +214,30 @@ export default function ChatView({
     messageRefs.current[scrollToIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
+
+  // Scroll anchor: when the fragment carries a `msg` (a message's created_at,
+  // set by clicking a past point in the tree view), scroll to that message once
+  // the target conversation's history is loaded, then strip the anchor. A ref
+  // guards it so it fires exactly once per anchor -- a later send (which mutates
+  // `messages`) must not re-jump to the old point. Handles the
+  // same-conversation case too (the history-load effect doesn't re-run when only
+  // `msg` changes).
+  const anchorMsg = fragment?.msg;
+  const consumedAnchor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!anchorMsg || messages.length === 0) return;
+    if (consumedAnchor.current === anchorMsg) return;
+    const idx = messages.findIndex((m) => m.created_at === anchorMsg);
+    if (idx < 0) return; // target conversation's messages not loaded yet
+    consumedAnchor.current = anchorMsg;
+    requestAnimationFrame(() => setScrollToIndex(idx));
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    if (params.get("msg") === anchorMsg) {
+      params.delete("msg");
+      window.history.replaceState(null, "", `#${params.toString()}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorMsg, messages]);
 
   // Reloads a conversation's transcript from picoclaw -- used to reconcile a
   // reply that finished after the user had navigated away and back.
@@ -242,9 +274,14 @@ export default function ChatView({
     setAttachments((prev) => prev.filter((a) => a.path !== path));
   }
 
-  async function sendMessage() {
-    const text = input.trim();
-    if ((!text && attachments.length === 0) || !sessionId || sending) return;
+  // Returns true when the send is accepted, so the composer (which now owns the
+  // draft text) can clear itself. The guard + optimistic UI run synchronously;
+  // the network turn runs in a detached async IIFE, so a keystroke never rides
+  // the streaming path -- and typing, living in the composer, no longer
+  // re-renders the message list at all.
+  function sendMessage(text: string): boolean {
+    const trimmed = text.trim();
+    if ((!trimmed && attachments.length === 0) || !sessionId || sending) return false;
     const sid = sessionId; // the conversation this reply belongs to
 
     // The turn is text-only: attachments ride along as workspace path references
@@ -253,17 +290,17 @@ export default function ChatView({
     // user sees exactly what was sent and the quote persists on reload.
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
     const quote = replyTo ? buildQuote(replyTo) : "";
-    const composed = [quote, text, refs].filter(Boolean).join("\n\n");
+    const composed = [quote, trimmed, refs].filter(Boolean).join("\n\n");
 
     // The new user message's index -- scroll its *top* into view once it (and
     // the assistant placeholder after it) render.
     setScrollToIndex(messages.length);
     setMessages((prev) => [...prev, { role: "user", content: composed }, { role: "assistant", content: "" }]);
-    setInput("");
     setReplyTo(null);
     setSending(true);
     setError(null);
 
+    void (async () => {
     // If a file was just uploaded, wait for picoclaw to settle (reload) before
     // firing the turn, so the first message after an attach doesn't hit the
     // container mid-reload. Shows a friendly "saving your file" note meanwhile.
@@ -373,6 +410,12 @@ export default function ChatView({
       // gated on the active sid: the reply drained even if the user navigated
       // away, so its refs are still correct.
       syncSessionRefs(workspace, sid).catch(() => {});
+
+      // Nudge the sidebar to re-read the now-final transcript. recency was
+      // already bumped at send time (so the tree's updatedAt-keyed cache won't
+      // refetch on its own); the tree treats this event as a force-refresh of
+      // the active conversation, so the completed assistant reply shows up.
+      notifyConversationsUpdated();
     } catch {
       // Keep whatever partial content already streamed in -- only surface the
       // error banner if the user is still viewing this conversation.
@@ -383,6 +426,9 @@ export default function ChatView({
         setRetrying(null);
       }
     }
+    })();
+
+    return true;
   }
 
   // The message index + reply + copy, reused by the desktop (hover, bottom-right)
@@ -408,8 +454,6 @@ export default function ChatView({
 
   const composer = (
     <Composer
-      value={input}
-      onChange={setInput}
       onSend={sendMessage}
       sending={sending}
       loadingHistory={loadingHistory}
@@ -507,9 +551,14 @@ export default function ChatView({
                   >
                     <div
                       className={messageBand({ role: m.role })}
-                      onClick={() =>
-                        setOpenActions((cur) => (cur === i ? null : i))
-                      }
+                      onClick={() => {
+                        // A drag-to-select ends in a click here; don't hijack it
+                        // (toggling state would drop the selection). Only the
+                        // mobile tap-to-reveal-actions toggles, and only when
+                        // there's no active text selection.
+                        if (!window.getSelection()?.isCollapsed) return;
+                        setOpenActions((cur) => (cur === i ? null : i));
+                      }}
                     >
                       {m.content.trim() !== "" && (
                         // Desktop only: transparent toolbar at the message's

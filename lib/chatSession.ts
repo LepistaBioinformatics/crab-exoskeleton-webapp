@@ -41,6 +41,13 @@ function notifyUpdated(): void {
   window.dispatchEvent(new Event(UPDATED_EVENT));
 }
 
+// Public trigger for the same refresh event -- used after a turn completes so
+// the sidebar (notably the tree view) re-reads the now-final transcript, even
+// though recency (updated_at) was already bumped at send time.
+export function notifyConversationsUpdated(): void {
+  notifyUpdated();
+}
+
 interface ConversationApiRow {
   id: string;
   instance: string;

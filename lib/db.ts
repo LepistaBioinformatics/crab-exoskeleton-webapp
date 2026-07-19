@@ -6,9 +6,27 @@ import { Pool } from "pg";
 // comment on the chat-webapp-postgres service for why those stay separate).
 const globalForDb = globalThis as unknown as { pgPool?: Pool; schemaReady?: Promise<void> };
 
+// Parse DATABASE_URL with the WHATWG URL API and hand pg discrete fields, rather
+// than passing `connectionString` (which routes through the legacy `url.parse()`
+// and trips Node's DEP0169 deprecation warning). Falls back to letting pg read
+// its own PG* env vars when DATABASE_URL is unset.
+function poolConfig() {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return {};
+  const u = new URL(raw);
+  return {
+    host: decodeURIComponent(u.hostname),
+    port: u.port ? Number(u.port) : undefined,
+    user: u.username ? decodeURIComponent(u.username) : undefined,
+    password: u.password ? decodeURIComponent(u.password) : undefined,
+    database: u.pathname ? decodeURIComponent(u.pathname.replace(/^\//, "")) || undefined : undefined,
+    ssl: u.searchParams.get("sslmode") === "require" ? { rejectUnauthorized: false } : undefined,
+  };
+}
+
 function getPool(): Pool {
   if (!globalForDb.pgPool) {
-    globalForDb.pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+    globalForDb.pgPool = new Pool(poolConfig());
   }
   return globalForDb.pgPool;
 }

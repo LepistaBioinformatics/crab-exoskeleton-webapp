@@ -31,9 +31,8 @@ const CATEGORY_ICON: Record<string, typeof ImageIcon> = {
 };
 
 interface ComposerProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
+  // Returns true when the send was accepted, so the composer clears its text.
+  onSend: (text: string) => boolean;
   sending: boolean;
   loadingHistory: boolean;
   sessionId: string;
@@ -50,8 +49,6 @@ interface ComposerProps {
 // circular accent button, plus an attach menu (categories + "Outros") and
 // attached-file chips. Owns auto-grow and the autofocus-on-open behavior.
 export default function Composer({
-  value,
-  onChange,
   onSend,
   sending,
   loadingHistory,
@@ -67,6 +64,13 @@ export default function Composer({
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The draft text lives HERE (not in ChatView), so typing re-renders only the
+  // composer -- not the whole message list. Cleared only when a send is accepted.
+  const [value, setValue] = useState("");
+
+  function submit() {
+    if (onSend(value)) setValue("");
+  }
   // Touch devices have no Shift key, so Enter must stay a newline there (send is
   // the button); only fine-pointer (desktop) gets Enter-to-send + the hint.
   const [coarsePointer, setCoarsePointer] = useState(false);
@@ -223,11 +227,11 @@ export default function Composer({
           ref={ref}
           rows={1}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
               e.preventDefault();
-              if (canSend) onSend();
+              if (canSend) submit();
             }
           }}
           placeholder={
@@ -242,7 +246,7 @@ export default function Composer({
           size="md"
           aria-label="Send message"
           disabled={!canSend}
-          onClick={onSend}
+          onClick={submit}
           className="mb-0.5 shrink-0"
         >
           <ArrowUp size={20} aria-hidden />
