@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import {
   Bot,
   Check,
+  GitBranch,
+  List,
   MessageSquarePlus,
   PanelLeftClose,
   Pencil,
-  Plus,
   Search,
   Tags,
   Trash2,
@@ -16,23 +17,20 @@ import {
 import {
   createConversation,
   deleteConversation,
-  deleteTag,
   listConversations,
   onConversationsUpdated,
   renameConversation,
-  setAlias,
-  upsertTag,
   type ConversationSummary,
-  type Tag,
 } from "@/lib/chatSession";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cva } from "class-variance-authority";
-import { useFragment, setFragmentSid, historyQuery, type Workspace } from "./fragment";
+import { useFragment, setFragmentSid, setHistoryView, historyQuery, type Workspace } from "./fragment";
+import ConversationTree from "./conversation-tree";
+import { TagChip, ConversationEditor } from "./conversation-enrichment";
 
 const conversationRow = cva(
   // Column on mobile (name on top, actions below); row on desktop with the
@@ -42,6 +40,17 @@ const conversationRow = cva(
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
+    },
+    defaultVariants: { active: false },
+  },
+);
+
+// The List | Tree segmented control (see .specs/features/conversation-tree-view).
+const viewToggle = cva(
+  "flex h-6 w-7 items-center justify-center rounded-md transition-colors",
+  {
+    variants: {
+      active: { true: "bg-accent/15 text-accent", false: "text-fg-muted hover:text-fg" },
     },
     defaultVariants: { active: false },
   },
@@ -58,6 +67,10 @@ export default function HistorySidebar({
 }) {
   const fragment = useFragment();
   const activeSessionId = fragment?.sid;
+
+  // List (default) vs. Tree view, persisted in the URL (fragment `hv`) so a
+  // reload or shared link keeps the chosen mode.
+  const view: "list" | "tree" = fragment?.hv === "tree" ? "tree" : "list";
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");
@@ -213,22 +226,25 @@ export default function HistorySidebar({
         )}
       </div>
 
-      <div className="shrink-0 p-2">
-        <div className="relative">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-          />
-          <Input
-            variant="subtle"
-            inputSize="sm"
-            className="pl-9"
-            placeholder="Search conversations"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+      {/* Search is List-mode only; the Tree view ignores the query (first cut). */}
+      {view === "list" && (
+        <div className="shrink-0 p-2">
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+            />
+            <Input
+              variant="subtle"
+              inputSize="sm"
+              className="pl-9"
+              placeholder="Search conversations"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="px-3 pb-1">
         <Button
@@ -244,12 +260,44 @@ export default function HistorySidebar({
 
       <div className="flex items-center gap-2 px-3 pb-1 pt-1">
         <span className="h-2 w-2 shrink-0 bg-accent" />
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="min-w-0 flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
           CONVERSATIONS
         </span>
+        <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
+          <button
+            type="button"
+            onClick={() => setHistoryView("list")}
+            className={viewToggle({ active: view === "list" })}
+            aria-label="List view"
+            aria-pressed={view === "list"}
+            title="List"
+          >
+            <List size={14} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => setHistoryView("tree")}
+            className={viewToggle({ active: view === "tree" })}
+            aria-label="Tree view"
+            aria-pressed={view === "tree"}
+            title="Tree"
+          >
+            <GitBranch size={14} aria-hidden />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto px-2 pb-2">
+        {view === "tree" ? (
+          <ConversationTree
+            workspace={workspace}
+            conversations={conversations}
+            activeSessionId={activeSessionId}
+            onSelect={onSelect}
+            onApply={applyToLists}
+          />
+        ) : (
+          <>
         {searching && (
           <div className="flex justify-center py-4">
             <Spinner size={20} />
@@ -312,8 +360,15 @@ export default function HistorySidebar({
                     className="flex min-w-0 flex-1 flex-col items-start gap-1 px-3 py-2 text-left"
                   >
                     <span className="w-full truncate text-sm text-fg">
-                      {conversation.alias || conversation.title}
+                      {conversation.title}
                     </span>
+                    {conversation.alias && (
+                      // The title (derived from the message) stays primary; the
+                      // user's alias sits below it in smaller, muted type.
+                      <span className="w-full truncate text-xs text-fg-muted">
+                        {conversation.alias}
+                      </span>
+                    )}
                     {conversation.tags.length > 0 && (
                       <span className="flex flex-wrap gap-1">
                         {conversation.tags.map((tag) => (
@@ -369,6 +424,8 @@ export default function HistorySidebar({
               </div>
             );
           })}
+          </>
+        )}
       </div>
 
       <ConfirmDialog
@@ -385,196 +442,6 @@ export default function HistorySidebar({
           setDeleteError(null);
         }}
       />
-    </div>
-  );
-}
-
-// A read-only chip for a tag: outlined + tinted in the tag's `metadata.color`
-// when set (border + text colored rather than filled, so it stays legible in
-// either theme), else the neutral Badge tone.
-function TagChip({ tag }: { tag: Tag }) {
-  const color = typeof tag.metadata.color === "string" ? tag.metadata.color : undefined;
-  const description = typeof tag.metadata.description === "string" ? tag.metadata.description : undefined;
-  const label = tag.value ? `${tag.name}: ${tag.value}` : tag.name;
-  return (
-    <Badge tone="neutral" title={description ?? label} style={color ? { borderColor: color, color } : undefined}>
-      {label}
-    </Badge>
-  );
-}
-
-// The per-conversation alias + tag editor, expanded under a row. Local state for
-// the alias draft and the new-tag fields; writes go through the owner-scoped
-// client fns and update the parent lists optimistically.
-function ConversationEditor({
-  conversation,
-  onApply,
-  onClose,
-}: {
-  conversation: ConversationSummary;
-  onApply: (fn: (c: ConversationSummary) => ConversationSummary) => void;
-  onClose: () => void;
-}) {
-  const [aliasDraft, setAliasDraft] = useState(conversation.alias ?? "");
-  const [tagName, setTagName] = useState("");
-  const [tagValue, setTagValue] = useState("");
-  const [tagColor, setTagColor] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function saveAlias() {
-    const alias = aliasDraft.trim();
-    setError(null);
-    setBusy(true);
-    try {
-      await setAlias(conversation.id, alias);
-      onApply((c) => ({ ...c, alias: alias || null }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the alias.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addTag() {
-    const name = tagName.trim();
-    if (!name) {
-      setError("Tag name can't be empty.");
-      return;
-    }
-    const tag: Tag = {
-      name,
-      value: tagValue.trim() || null,
-      metadata: tagColor ? { color: tagColor } : {},
-    };
-    setError(null);
-    setBusy(true);
-    try {
-      await upsertTag(conversation.id, tag);
-      onApply((c) => ({ ...c, tags: [...c.tags.filter((t) => t.name !== name), tag] }));
-      setTagName("");
-      setTagValue("");
-      setTagColor("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add the tag.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeTag(name: string) {
-    setError(null);
-    setBusy(true);
-    try {
-      await deleteTag(conversation.id, name);
-      onApply((c) => ({ ...c, tags: c.tags.filter((t) => t.name !== name) }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't remove the tag.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="mb-1 flex flex-col gap-3 rounded-lg bg-elevated/60 px-3 py-3">
-      <div className="flex flex-col gap-1">
-        <label className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Alias
-        </label>
-        <div className="flex items-center gap-1">
-          <Input
-            inputSize="sm"
-            value={aliasDraft}
-            placeholder={conversation.title}
-            onChange={(e) => setAliasDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                saveAlias();
-              }
-            }}
-            aria-label="Conversation alias"
-          />
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label="Save alias"
-            title="Save alias"
-            onClick={saveAlias}
-            disabled={busy}
-          >
-            <Check size={16} aria-hidden />
-          </IconButton>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Tags
-        </span>
-        {conversation.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {conversation.tags.map((tag) => (
-              <span key={tag.name} className="inline-flex items-center gap-0.5">
-                <TagChip tag={tag} />
-                <IconButton
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove tag ${tag.name}`}
-                  title="Remove tag"
-                  onClick={() => removeTag(tag.name)}
-                  disabled={busy}
-                  className="h-6 w-6"
-                >
-                  <X size={12} aria-hidden />
-                </IconButton>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-1">
-          <Input
-            inputSize="sm"
-            value={tagName}
-            placeholder="name"
-            onChange={(e) => setTagName(e.target.value)}
-            aria-label="Tag name"
-          />
-          <Input
-            inputSize="sm"
-            value={tagValue}
-            placeholder="value"
-            onChange={(e) => setTagValue(e.target.value)}
-            aria-label="Tag value"
-          />
-          <input
-            type="color"
-            value={tagColor || "#888888"}
-            onChange={(e) => setTagColor(e.target.value)}
-            aria-label="Tag color"
-            title="Tag color"
-            className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-brand bg-elevated"
-          />
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label="Add tag"
-            title="Add tag"
-            onClick={addTag}
-            disabled={busy}
-          >
-            <Plus size={16} aria-hidden />
-          </IconButton>
-        </div>
-      </div>
-
-      {error && <p className="text-xs text-red-500">{error}</p>}
-
-      <div className="flex justify-end">
-        <Button variant="text" size="sm" onClick={onClose}>
-          Done
-        </Button>
-      </div>
     </div>
   );
 }
