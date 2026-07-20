@@ -117,6 +117,7 @@ export default function HistorySidebar({
       const synced = applySyncFilters(conversations, parsed);
       if (parsed.texts.length === 0) {
         setSearchResults(synced);
+        setSearching(false);
         return;
       }
       setSearching(true);
@@ -221,7 +222,7 @@ export default function HistorySidebar({
         )}
       </div>
 
-      <div className="px-2 pb-2">
+      <div className="shrink-0 px-2 pb-2">
         <ConversationSearchBar
           value={query}
           onChange={setQuery}
