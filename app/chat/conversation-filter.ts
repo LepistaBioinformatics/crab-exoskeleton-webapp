@@ -85,8 +85,10 @@ export function parseFilterQuery(input: string, now: number): FilterQuery {
         if (df) query.dates.push(df);
         break;
       }
-      default:
-        if (value) query.texts.push(value);
+      default: {
+        const bare = unquote(token).trim();
+        if (bare) query.texts.push(bare);
+      }
     }
   }
   return query;

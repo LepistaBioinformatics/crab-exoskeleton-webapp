@@ -60,6 +60,18 @@ describe("parseFilterQuery", () => {
     expect(q.texts).toEqual([]);
     expect(isEmptyQuery(q)).toBe(true);
   });
+
+  it("keeps unrecognized-prefix tokens whole as text (e.g. time formats)", () => {
+    expect(parseFilterQuery("10:30", NOW).texts).toEqual(["10:30"]);
+  });
+
+  it("keeps unrecognized-prefix tokens whole as text (e.g. note:foo)", () => {
+    expect(parseFilterQuery("note:foo", NOW).texts).toEqual(["note:foo"]);
+  });
+
+  it("still correctly extracts values from recognized prefixes (regression)", () => {
+    expect(parseFilterQuery("text:deploy", NOW).texts).toEqual(["deploy"]);
+  });
 });
 
 function makeConv(over: Partial<ConversationSummary>): ConversationSummary {
