@@ -44,4 +44,40 @@ describe("getHistory", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })));
     expect(await getHistory(workspace, conv("z", 1))).toEqual([]);
   });
+
+  it("force=true refetches even when updatedAt is unchanged", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ messages: [{ role: "user", content: "hello" }] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getHistory(workspace, conv("a", 100));
+    await getHistory(workspace, conv("a", 100), true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns stale cached messages on non-ok after a prior entry", async () => {
+    const fetchMock = vi
+      .fn(async () => ({
+        ok: true,
+        json: async () => ({ messages: [{ role: "user", content: "cached" }] }),
+      }))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ messages: [{ role: "user", content: "cached" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({}),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cached = await getHistory(workspace, conv("a", 100));
+    const stale = await getHistory(workspace, conv("a", 200));
+
+    expect(cached).toEqual([{ role: "user", content: "cached" }]);
+    expect(stale).toEqual([{ role: "user", content: "cached" }]);
+  });
 });
