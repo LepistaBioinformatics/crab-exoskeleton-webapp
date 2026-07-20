@@ -135,11 +135,11 @@ export default function ModelPanel({ scope }: { scope: ScopeRef }) {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      {models === null || override === null ? (
+      {(models === null || override === null) && !error ? (
         <div className="flex justify-center py-6">
           <Spinner size={22} />
         </div>
-      ) : (
+      ) : models === null || override === null ? null : (
         <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-elevated p-3">
           <div className="flex items-center gap-2">
             <Cpu size={16} className="shrink-0 text-fg-muted" aria-hidden />
@@ -219,6 +219,7 @@ function UserModels({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope.kind, scope.tenantId, scope.subsAccId]);
 
   return (
@@ -227,11 +228,11 @@ function UserModels({
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      {users === null || models === null ? (
+      {(users === null || models === null) && !error ? (
         <div className="flex justify-center py-4">
           <Spinner size={18} />
         </div>
-      ) : users.length === 0 ? (
+      ) : users === null || models === null ? null : users.length === 0 ? (
         <p className="py-2 text-xs text-fg-muted">No members under this subscription yet.</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -260,6 +261,14 @@ function UserModelRow({
   const [resetting, setResetting] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Resync the dropdown whenever the user's effective model changes underneath
+  // us (e.g. after Apply/Reset refreshes the list) -- otherwise the row keeps
+  // whatever was selected at mount, which goes stale on reset (dropdown would
+  // still show the just-cleared model with Apply wrongly enabled).
+  useEffect(() => {
+    setSelection(modelKey({ provider: user.provider, name: user.name }));
+  }, [user.provider, user.name]);
 
   const overriddenHere = user.level === "user";
   const dirty = selection !== modelKey({ provider: user.provider, name: user.name });
