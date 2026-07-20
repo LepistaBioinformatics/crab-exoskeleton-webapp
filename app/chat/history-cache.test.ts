@@ -70,7 +70,7 @@ describe("getHistory", () => {
       })
       .mockResolvedValueOnce({
         ok: false,
-        json: async () => ({}),
+        json: async () => ({ messages: [] }),
       });
     vi.stubGlobal("fetch", fetchMock);
 
