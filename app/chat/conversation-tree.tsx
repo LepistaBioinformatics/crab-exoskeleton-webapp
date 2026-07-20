@@ -333,12 +333,11 @@ export default function ConversationTree({
         const alias = conv?.alias ?? null;
         const tags = conv?.tags ?? [];
         const editing = enrichingId === key;
-        // Dimming is driven purely by hover: with no thread hovered the whole
-        // tree stays at full emphasis (a session carried over from list mode
-        // never fades the rest), and hovering a conversation fades the others
-        // so that one thread stands out. The active conversation still gets its
-        // subtle row-background highlight (see `active` above), just no fade.
-        const focused = hoveredConv;
+        // Focused thread = hovered (if any) else the selected conversation; the
+        // others fade back so one thread stands out. With nothing selected and
+        // nothing hovered the whole tree stays at full emphasis (nada esmaecido);
+        // a selected chat fades the rest, and hovering overrides that focus.
+        const focused = hoveredConv ?? activeSessionId ?? null;
         const dimmed = focused != null && b.conversationId !== focused;
 
         return (
