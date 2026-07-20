@@ -9,7 +9,6 @@ import {
   MessageSquarePlus,
   PanelLeftClose,
   Pencil,
-  Search,
   Tags,
   Trash2,
   X,
@@ -28,9 +27,12 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cva } from "class-variance-authority";
-import { useFragment, setFragmentSid, setHistoryView, historyQuery, type Workspace } from "./fragment";
+import { useFragment, setFragmentSid, setHistoryView, type Workspace } from "./fragment";
 import ConversationTree from "./conversation-tree";
 import { TagChip, ConversationEditor } from "./conversation-enrichment";
+import ConversationSearchBar from "./conversation-search-bar";
+import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
+import { getHistory } from "./history-cache";
 
 const conversationRow = cva(
   // Column on mobile (name on top, actions below); row on desktop with the
@@ -98,51 +100,44 @@ export default function HistorySidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.t, workspace.s, workspace.r]);
 
-  // Full-content search: fires a debounced fetch of every conversation's
-  // history and filters by substring match (title or message content) --
-  // see .specs/features/chat-ui-redesign/spec.md "Full-content search".
+  // Two-stage filter: a synchronous predicate (tag/alias/date) narrows the set
+  // instantly, then an async content stage (text:) runs only over survivors,
+  // reading message history from the shared cache. AbortController guarantees
+  // latest-query-wins so a slow earlier keystroke can't clobber fresh results.
   useEffect(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) {
+    const parsed = parseFilterQuery(query, Date.now());
+    if (isEmptyQuery(parsed)) {
       setSearchResults(null);
+      setSearching(false);
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
+      const synced = applySyncFilters(conversations, parsed);
+      if (parsed.texts.length === 0) {
+        setSearchResults(synced);
+        return;
+      }
       setSearching(true);
-      const all = await listConversations(workspace);
-      const results = await Promise.all(
-        all.map(async (conversation) => {
-          if (conversation.title.toLowerCase().includes(q)) return conversation;
-          try {
-            const res = await fetch(
-              `/api/chat/${conversation.role}/history?${historyQuery(workspace, conversation.id)}`,
-            );
-            if (!res.ok) return null;
-            const data = await res.json();
-            const messages: { content?: string }[] = Array.isArray(data.messages) ? data.messages : [];
-            const matches = messages.some(
-              (m) => typeof m.content === "string" && m.content.toLowerCase().includes(q),
-            );
-            return matches ? conversation : null;
-          } catch {
-            return null;
-          }
-        }),
+      const matched = await applyContentFilter(
+        synced,
+        parsed.texts,
+        (c) => getHistory(workspace, c),
+        controller.signal,
       );
-      if (!cancelled) {
-        setSearchResults(results.filter((c): c is ConversationSummary => c !== null));
+      if (!controller.signal.aborted) {
+        setSearchResults(matched);
         setSearching(false);
       }
     }, 300);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, workspace.t, workspace.s, workspace.r]);
+  }, [query, conversations, workspace.t, workspace.s, workspace.r]);
 
   const visible = searchResults ?? conversations;
 
@@ -226,25 +221,14 @@ export default function HistorySidebar({
         )}
       </div>
 
-      {/* Search is List-mode only; the Tree view ignores the query (first cut). */}
-      {view === "list" && (
-        <div className="shrink-0 p-2">
-          <div className="relative">
-            <Search
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-            />
-            <Input
-              variant="subtle"
-              inputSize="sm"
-              className="pl-9"
-              placeholder="Search conversations"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
+      <div className="px-2 pb-2">
+        <ConversationSearchBar
+          value={query}
+          onChange={setQuery}
+          conversations={conversations}
+          searching={searching}
+        />
+      </div>
 
       <div className="px-3 pb-1">
         <Button
@@ -291,7 +275,7 @@ export default function HistorySidebar({
         {view === "tree" ? (
           <ConversationTree
             workspace={workspace}
-            conversations={conversations}
+            conversations={visible}
             activeSessionId={activeSessionId}
             onSelect={onSelect}
             onApply={applyToLists}
