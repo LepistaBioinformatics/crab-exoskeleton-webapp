@@ -54,6 +54,10 @@ describe("parseFilterQuery", () => {
     expect(parseFilterQuery("date:notadate", NOW).dates).toEqual([]);
   });
 
+  it("ignores a reversed date range", () => {
+    expect(parseFilterQuery("date:2026-06-01..2026-01-01", NOW).dates).toEqual([]);
+  });
+
   it("ignores empty prefixes and reports emptiness", () => {
     const q = parseFilterQuery("tag:  text:", NOW);
     expect(q.tags).toEqual([]);

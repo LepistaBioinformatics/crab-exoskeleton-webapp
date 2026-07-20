@@ -56,6 +56,7 @@ function parseDate(raw: string, now: number): DateFilter | null {
     const from = new Date(`${range[1]}T00:00:00`);
     const to = new Date(`${range[2]}T23:59:59.999`);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+    if (from.getTime() > to.getTime()) return null;
     return { from: from.getTime(), to: to.getTime() };
   }
 
