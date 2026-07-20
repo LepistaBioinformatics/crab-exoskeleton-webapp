@@ -5,9 +5,10 @@ import { cva } from "class-variance-authority";
 import { Tags } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { IconButton } from "@/components/ui/icon-button";
-import { historyQuery, setFragmentSid, type Workspace } from "./fragment";
+import { setFragmentSid, type Workspace } from "./fragment";
 import { onConversationsUpdated, type ConversationSummary } from "@/lib/chatSession";
 import { TagChip, ConversationEditor } from "./conversation-enrichment";
+import { getHistory } from "./history-cache";
 
 // The "Tree" view: a single vertical timeline where each conversation is a
 // colored lane and each *visit* is a node -- a visit ("burst") is a run of
@@ -17,12 +18,6 @@ import { TagChip, ConversationEditor } from "./conversation-enrichment";
 // list -- the git-graph look comes from activity hopping between lanes over time,
 // and returning to a conversation makes a NEW node, so the interleaving stays
 // visible without a dot per message (see .specs/features/conversation-tree-view/).
-
-interface HistoryMessage {
-  role: string;
-  content: string;
-  created_at?: string;
-}
 
 interface TreeEvent {
   conversationId: string;
@@ -95,11 +90,6 @@ function formatWhen(ts: number): string {
     ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString([], { day: "2-digit", month: "short" });
 }
-
-// Module-level cache keyed by conversation id: reused across List<->Tree toggles
-// so flipping the view doesn't refetch. Invalidated per conversation once its
-// updatedAt advances (a new message arrived).
-const historyCache = new Map<string, { updatedAt: number; messages: HistoryMessage[] }>();
 
 const eventRow = cva(
   "group relative flex w-full items-stretch gap-1 rounded-lg text-left transition-colors",
@@ -179,22 +169,8 @@ export default function ConversationTree({
     (async () => {
       const lists = await Promise.all(
         conversations.map(async (c) => {
-          const cached = historyCache.get(c.id);
-          // Cache by updatedAt, but always re-pull the active conversation so a
-          // completed turn (same updatedAt) still refreshes.
-          if (cached && cached.updatedAt >= c.updatedAt && c.id !== active) {
-            return { c, messages: cached.messages };
-          }
-          try {
-            const res = await fetch(`/api/chat/${c.role}/history?${historyQuery(workspace, c.id)}`);
-            if (!res.ok) return { c, messages: [] as HistoryMessage[] };
-            const data = await res.json();
-            const messages: HistoryMessage[] = Array.isArray(data.messages) ? data.messages : [];
-            historyCache.set(c.id, { updatedAt: c.updatedAt, messages });
-            return { c, messages };
-          } catch {
-            return { c, messages: [] as HistoryMessage[] };
-          }
+          const messages = await getHistory(workspace, c, c.id === active);
+          return { c, messages };
         }),
       );
       if (cancelled) return;
