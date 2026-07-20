@@ -80,6 +80,7 @@ export default function ConversationSearchBar({
   }, [prefix, partial, tagNames, aliases]);
 
   function applySuggestion(suggestion: string) {
+    if (!prefix || !suggestion) return;
     const head = value.slice(0, start);
     onChange(`${head}${prefix}:${suggestion} `);
     setOpen(false);
@@ -104,7 +105,7 @@ export default function ConversationSearchBar({
       setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
-      applySuggestion(suggestions[activeIdx]);
+      applySuggestion(suggestions[Math.min(activeIdx, suggestions.length - 1)]);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
