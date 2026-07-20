@@ -17,6 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { TenantAvatar } from "@/components/ui/avatar";
+
+type TenantBrand = { logo?: string; color?: string };
 
 // Selectable agent leaf: active = M3 tonal selected fill (no border). Depth
 // indentation comes from the hierarchy guide wrappers, not padding here.
@@ -66,6 +69,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
+  const [tenantBrands, setTenantBrands] = useState<Record<string, TenantBrand>>({});
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
@@ -103,6 +107,8 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
           if (cancelled || !data) return;
           const name = tenantDisplayName(data.tenant);
           if (name) setTenantNames((prev) => ({ ...prev, [tenant.tenantId]: name }));
+          const brand = tenantBrand(data.tenant);
+          if (brand) setTenantBrands((prev) => ({ ...prev, [tenant.tenantId]: brand }));
         })
         .catch(() => {});
     }
@@ -185,11 +191,19 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
             {visibleGroups!.map((tenant) => {
               const tKey = tenant.tenantId;
               const tOpen = q ? true : !collapsed.has(tKey);
+              const tName = tenantNames[tenant.tenantId];
+              const tBrand = tenantBrands[tenant.tenantId];
               return (
                 <div key={tKey}>
                   <GroupHeader
-                    icon={<Building2 size={15} aria-hidden />}
-                    label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
+                    icon={
+                      tName ? (
+                        <TenantAvatar name={tName} logo={tBrand?.logo} color={tBrand?.color} />
+                      ) : (
+                        <Building2 size={15} aria-hidden />
+                      )
+                    }
+                    label={tName ?? tenant.tenantId}
                     open={tOpen}
                     level="tenant"
                     onClick={() => toggle(tKey)}
@@ -309,4 +323,19 @@ function tenantDisplayName(tenant: unknown): string | null {
     if (typeof name === "string" && name.trim()) return name.trim();
   }
   return null;
+}
+
+// The tenant brand is stored in mycelium as a tag with value "brand"; its meta
+// carries the base64 logo (a data URL) and optional brand colors. Returns the
+// logo + primaryColor for the sidebar avatar, or null when there's no brand tag.
+function tenantBrand(tenant: unknown): TenantBrand | null {
+  if (!tenant || typeof tenant !== "object") return null;
+  const tags = (tenant as { tags?: unknown }).tags;
+  if (!Array.isArray(tags)) return null;
+  const brand = tags.find(
+    (tag) => tag && typeof tag === "object" && (tag as { value?: unknown }).value === "brand",
+  ) as { meta?: Record<string, string> | null } | undefined;
+  const meta = brand?.meta;
+  if (!meta) return null;
+  return { logo: meta.base64Logo, color: meta.primaryColor };
 }

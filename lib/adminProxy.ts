@@ -63,3 +63,36 @@ export async function proxyAdminJson(
   const data = await out.json().catch(() => ({}));
   return NextResponse.json(data);
 }
+
+// Agent-aware variant: routes through `/picoclaw-<agent>/v1/admin` so the proxy
+// resolves that specific agent. Used by the model registry, which is per-agent
+// (alpha and beta keep separate model catalogs). `agent` must be an instance.
+export async function proxyAdminJsonAgent(
+  session: SessionCookie,
+  agent: string,
+  suffix: string,
+  init: RequestInit = {},
+): Promise<NextResponse> {
+  let res: Response;
+  try {
+    res = await fetchMycelium(`/picoclaw-${agent}/v1/admin${suffix}`, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${session.token}` },
+    });
+  } catch (err) {
+    if (err instanceof MyceliumConnectivityError) {
+      return NextResponse.json({ error: "connectivity" }, { status: 502 });
+    }
+    throw err;
+  }
+  if (res.status === 401) {
+    await clearSession();
+    return NextResponse.json({ error: "session_expired" }, { status: 401 });
+  }
+  if (!res.ok) {
+    const { error, status } = await upstreamError(res);
+    return NextResponse.json({ error, status }, { status });
+  }
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data);
+}

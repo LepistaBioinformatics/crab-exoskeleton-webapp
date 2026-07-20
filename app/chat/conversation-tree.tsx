@@ -132,6 +132,11 @@ export default function ConversationTree({
   // the selected one. The focused thread stays vivid; the rest fade back.
   const [hoveredConv, setHoveredConv] = useState<string | null>(null);
 
+  // The focus/dim treatment is gated on the cursor being over the tree area:
+  // outside it the whole tree stays at full emphasis regardless of selection.
+  // Only while hovering does one thread stand out and the rest fade back.
+  const [treeHovered, setTreeHovered] = useState(false);
+
   // Always-current active sid, read inside the fetch effect without making it a
   // dependency (navigating shouldn't refetch; only sends/completions should).
   const activeRef = useRef(activeSessionId);
@@ -321,7 +326,13 @@ export default function ConversationTree({
   const { bursts, dotLaneOf, laneCount, laneSegments } = model;
 
   return (
-    <div role="tree" aria-label="Conversation tree" className="flex flex-col">
+    <div
+      role="tree"
+      aria-label="Conversation tree"
+      className="flex min-h-full flex-col"
+      onMouseEnter={() => setTreeHovered(true)}
+      onMouseLeave={() => setTreeHovered(false)}
+    >
       {bursts.map((b, i) => {
         const dotLane = dotLaneOf.get(b.conversationId)!;
         const conv = convById.get(b.conversationId);
@@ -333,12 +344,12 @@ export default function ConversationTree({
         const alias = conv?.alias ?? null;
         const tags = conv?.tags ?? [];
         const editing = enrichingId === key;
-        // Focused thread = hovered (if any) else the selected conversation; the
-        // others fade back so one thread stands out. With nothing selected and
-        // nothing hovered the whole tree stays at full emphasis (nada esmaecido);
-        // a selected chat fades the rest, and hovering overrides that focus.
+        // Dimming only happens while the cursor is over the tree. When it is,
+        // the focused thread = hovered row (if any) else the selected one stays
+        // vivid and the rest fade back; hovering an empty area with no active
+        // selection fades them all. Off the tree, everything is full emphasis.
         const focused = hoveredConv ?? activeSessionId ?? null;
-        const dimmed = focused != null && b.conversationId !== focused;
+        const dimmed = treeHovered && b.conversationId !== focused;
 
         return (
           <div
@@ -374,8 +385,10 @@ export default function ConversationTree({
                   {Array.from({ length: laneCount }, (_, l) => {
                     const seg = laneSegments[l].find((s) => i >= s.first && i <= s.last);
                     const dotHere = l === dotLane;
-                    // Focused thread's rail is boosted; others fade back.
-                    const railAlpha = focused == null ? 0.4 : seg && seg.id === focused ? 0.65 : 0.1;
+                    // Off the tree every rail sits at the baseline; while
+                    // hovering, the focused thread's rail is boosted and the
+                    // others fade back.
+                    const railAlpha = !treeHovered ? 0.4 : seg && seg.id === focused ? 0.65 : 0.1;
                     return (
                       <span key={l} className="relative w-3.5">
                         {seg && (

@@ -14,7 +14,7 @@ import { ScopeTree } from "./scope-tree";
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
 import SharedSkillsPanel from "./shared-skills-panel";
-import ModelPanel from "./model-panel";
+import ModelRegistryPanel from "./model-registry-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
 
@@ -36,7 +36,12 @@ const tabButton = cva(
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "files", label: "Shared files", icon: <FileBox size={16} aria-hidden /> },
   { key: "secrets", label: "Shared secrets", icon: <KeyRound size={16} aria-hidden /> },
-  { key: "skills", label: "Shared skills", icon: <Wrench size={16} aria-hidden /> },
+  // "Shared skills" is hidden until the crab-shell-proxy exposes the
+  // /v1/admin/skills* endpoints. The webapp panel + BFF routes exist, but the
+  // proxy has no per-scope skills management API yet (only the global,
+  // read-only managed-skills cascade), so listing 404s. Re-enable once the
+  // proxy backend lands. See .specs/features/shared-skills-management.
+  // { key: "skills", label: "Shared skills", icon: <Wrench size={16} aria-hidden /> },
   { key: "model", label: "Model", icon: <Cpu size={16} aria-hidden /> },
   { key: "members", label: "Members", icon: <Users size={16} aria-hidden /> },
 ];
@@ -246,7 +251,7 @@ export default function AdminScreen() {
                   ) : tab === "skills" ? (
                     <SharedSkillsPanel scope={selected} />
                   ) : tab === "model" ? (
-                    <ModelPanel scope={selected} />
+                    <ModelRegistryPanel scope={selected} />
                   ) : (
                     <MembersPanel scope={selected} />
                   )

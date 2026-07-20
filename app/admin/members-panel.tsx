@@ -71,12 +71,16 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
       ) : (
         <ul className="flex flex-col gap-1.5">
           {users?.map((u) => {
-            const open = expanded === u.accId;
+            // A user present under more than one agent is returned once per
+            // agent (same accId), so identity is (role, accId) — key + expand on
+            // that, and label the agent, otherwise the rows look like duplicates.
+            const rowKey = `${u.role ?? ""}:${u.accId}`;
+            const open = expanded === rowKey;
             return (
-              <li key={u.accId} className="rounded-lg border border-brand/30 bg-elevated">
+              <li key={rowKey} className="rounded-lg border border-brand/30 bg-elevated">
                 <button
                   type="button"
-                  onClick={() => setExpanded(open ? null : u.accId)}
+                  onClick={() => setExpanded(open ? null : rowKey)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left"
                 >
                   {open ? (
@@ -88,6 +92,11 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                   <span className="min-w-0 flex-1 truncate text-sm text-fg">
                     {u.name || u.email || u.accId}
                   </span>
+                  {u.role && (
+                    <span className="shrink-0 rounded border border-brand/40 px-1.5 py-0.5 font-mono text-[10px] uppercase text-fg-muted">
+                      {u.role}
+                    </span>
+                  )}
                 </button>
                 {open && scope.subsAccId && (
                   <UserFiles

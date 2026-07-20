@@ -28,9 +28,12 @@ export interface FileMeta {
 }
 
 // An end user under a subscription (UserRef). `accId` is the mycelium account
-// id; `name`/`email` are best-effort display fields.
+// id; `name`/`email` are best-effort display fields. `role` is the agent the
+// user has a workspace under — a user present in more than one agent (alpha +
+// beta) is returned once per agent, so (role, accId) is the unique identity.
 export interface UserRef {
   accId: string;
+  role?: string;
   name?: string;
   email?: string;
 }
@@ -43,6 +46,23 @@ function scopeParams(scope: ScopeRef): URLSearchParams {
 
 export function scopeKey(scope: ScopeRef): string {
   return scope.kind === "tenant" ? `t:${scope.tenantId}` : `s:${scope.tenantId}:${scope.subsAccId}`;
+}
+
+// True when the caller may administer the given workspace scope: they hold the
+// tenant scope for that tenant (controls every subscription under it), or the
+// subscription scope matching that exact tenant + subscription account. Drives
+// who may configure native (picoclaw) secrets, on both the client (UI gating)
+// and the server (the real gate in /api/secrets).
+export function canManageWorkspaceScope(
+  scopes: AdminScope[],
+  tenantId: string,
+  subsAccId: string,
+): boolean {
+  return scopes.some(
+    (s) =>
+      (s.kind === "tenant" && s.tenantId === tenantId) ||
+      (s.kind === "subscription" && s.tenantId === tenantId && s.subsAccId === subsAccId),
+  );
 }
 
 export async function listScopes(): Promise<AdminScope[]> {
