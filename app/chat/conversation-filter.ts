@@ -1,3 +1,5 @@
+import type { ConversationSummary } from "@/lib/chatSession";
+
 export interface DateFilter {
   from: number | null; // inclusive ms epoch, null = unbounded
   to: number | null; // inclusive ms epoch, null = unbounded
@@ -91,4 +93,35 @@ export function parseFilterQuery(input: string, now: number): FilterQuery {
 
 export function isEmptyQuery(q: FilterQuery): boolean {
   return q.tags.length === 0 && q.aliases.length === 0 && q.texts.length === 0 && q.dates.length === 0;
+}
+
+function matchesTags(conv: ConversationSummary, tags: string[]): boolean {
+  if (tags.length === 0) return true;
+  const names = conv.tags.map((t) => t.name.toLowerCase());
+  return tags.some((needle) => names.some((n) => n.includes(needle.toLowerCase())));
+}
+
+function matchesAliases(conv: ConversationSummary, aliases: string[]): boolean {
+  if (aliases.length === 0) return true;
+  const alias = (conv.alias ?? "").toLowerCase();
+  return aliases.some((needle) => alias.includes(needle.toLowerCase()));
+}
+
+function matchesDates(conv: ConversationSummary, dates: DateFilter[]): boolean {
+  if (dates.length === 0) return true;
+  return dates.some(
+    (d) => (d.from === null || conv.updatedAt >= d.from) && (d.to === null || conv.updatedAt <= d.to),
+  );
+}
+
+export function applySyncFilters(
+  conversations: ConversationSummary[],
+  query: FilterQuery,
+): ConversationSummary[] {
+  return conversations.filter(
+    (c) =>
+      matchesTags(c, query.tags) &&
+      matchesAliases(c, query.aliases) &&
+      matchesDates(c, query.dates),
+  );
 }

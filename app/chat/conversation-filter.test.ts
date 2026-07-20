@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseFilterQuery, isEmptyQuery } from "./conversation-filter";
+import { parseFilterQuery, isEmptyQuery, applySyncFilters } from "./conversation-filter";
+import type { ConversationSummary } from "@/lib/chatSession";
 
 // Fixed clock: 2026-07-19T12:00:00Z
 const NOW = Date.UTC(2026, 6, 19, 12, 0, 0);
@@ -57,5 +58,45 @@ describe("parseFilterQuery", () => {
     expect(q.tags).toEqual([]);
     expect(q.texts).toEqual([]);
     expect(isEmptyQuery(q)).toBe(true);
+  });
+});
+
+function makeConv(over: Partial<ConversationSummary>): ConversationSummary {
+  return {
+    id: "id", role: "picoclaw" as never, tenantId: "t", subsAccId: "s",
+    title: "Title", updatedAt: NOW, alias: null, tags: [],
+    sessionKey: null, sessionFile: null, ...over,
+  };
+}
+
+describe("applySyncFilters", () => {
+  const urgent = makeConv({ id: "u", tags: [{ name: "urgente", value: null, metadata: {} }] });
+  const bug = makeConv({ id: "b", tags: [{ name: "bug", value: null, metadata: {} }] });
+  const cli = makeConv({ id: "c", alias: "my-cli", tags: [{ name: "bug", value: null, metadata: {} }] });
+  const old = makeConv({ id: "o", updatedAt: new Date(2020, 0, 1).getTime() });
+  const all = [urgent, bug, cli, old];
+
+  it("ORs within tags", () => {
+    const q = parseFilterQuery("tag:urgente tag:bug", NOW);
+    expect(applySyncFilters(all, q).map((c) => c.id)).toEqual(["u", "b", "c"]);
+  });
+
+  it("ANDs across types (tag AND alias)", () => {
+    const q = parseFilterQuery("tag:bug alias:cli", NOW);
+    expect(applySyncFilters(all, q).map((c) => c.id)).toEqual(["c"]);
+  });
+
+  it("filters by date range on updatedAt", () => {
+    const q = parseFilterQuery("date:2020", NOW);
+    expect(applySyncFilters(all, q).map((c) => c.id)).toEqual(["o"]);
+  });
+
+  it("ignores text tokens (handled by content stage)", () => {
+    const q = parseFilterQuery("text:deploy", NOW);
+    expect(applySyncFilters(all, q)).toHaveLength(all.length);
+  });
+
+  it("returns everything for an empty query", () => {
+    expect(applySyncFilters(all, parseFilterQuery("", NOW))).toHaveLength(all.length);
   });
 });
