@@ -115,12 +115,29 @@ gateway (new allowlist paths) + proxy (registry endpoints) + webapp (UI/fixes).
 - **DEC (avatar/dimming/model UI):** confirmed with the user via questions;
   model UI lives inside the per-user secrets drawer.
 
-## Blockers / pending decisions
+## DONE (runtime-unverified) — shared skills backend (Option A)
 
-- **Shared skills backend** — blocked on a design choice: **A** = per-scope
-  shared-skills subsystem (storage + 5 endpoints mirroring shared-files), or
-  **B** = expose the global `managed-skills` as operator-only CRUD. Webapp side
-  (panel + BFF + `lib/adminSkills.ts`) already exists; proxy side absent.
+Chosen **A** (per-scope subsystem). Proxy: `internal/config/config.go`
+(TenantSharedSkillsDir/SubscriptionSharedSkillsDir/EffectiveSkillsDir),
+`internal/docker/skills.go` (store: name+frontmatter validation, doc, zip with
+hardening, archive, delete; cascade `syncEffectiveSkills`/
+`SyncEffectiveSkillsForScope`), `create()` mounts the merged EffectiveSkillsDir
+RO at the global skills root + scaffold dirs, handlers in `admin.go`
+(GET/POST/DELETE /v1/admin/skills + /doc + /archive) with SyncEffectiveSkills +
+RestartScope on write. Unit-tested (skills_test.go: validation, frontmatter,
+doc round-trip, zip good + traversal/no-SKILL.md/bad-frontmatter rejects,
+archive, delete). Gateway already had the /v1/admin/skills* paths. Webapp UI
+(shared-skills-panel + lib/adminSkills + BFF) already existed; the admin
+"Shared skills" tab was re-enabled. Deploy proxy + webapp to verify the live
+cascade/mount.
+
+## Cleanup — removed native from the shared-secrets admin panel
+
+`WriteSharedSecret` (proxy) only accepts dotenv/json, so the panel's native
+format (web + model) always 400'd and scope-native never cascades; model keys
+are owned by the registry now. Removed the native format from
+`shared-secrets-panel.tsx` (dropdown → dotenv/json/file). The per-user drawer
+keeps native/web (works per-user).
 - **Model management runtime verification** — blocked on a real deploy (sandbox
   has no Docker daemon; can't chown; docker-integration tests fail on
   `chown operation not permitted`, pre-existing/environmental).

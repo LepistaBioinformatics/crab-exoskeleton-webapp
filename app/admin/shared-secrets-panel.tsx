@@ -10,7 +10,6 @@ import {
 } from "@/lib/admin";
 import {
   SECRET_FORMATS,
-  WEB_PROVIDERS,
   SECRET_NAME_RE,
   type SecretNames,
   type SecretFormat,
@@ -41,9 +40,6 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
-  const [nativeKind, setNativeKind] = useState<"web" | "model">("web");
-  const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
-  const [model, setModel] = useState("");
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
 
@@ -71,9 +67,6 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   }, [scope.kind, scope.tenantId, scope.subsAccId]);
 
   function targetName(): string {
-    if (format === "native") {
-      return nativeKind === "web" ? `web.${provider}` : `model_list.${model.trim()}.api_keys`;
-    }
     return name.trim();
   }
 
@@ -82,12 +75,8 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     setSubmitError(null);
     const finalName = targetName();
 
-    if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
+    if (!SECRET_NAME_RE.test(finalName)) {
       setSubmitError("Name may only contain letters, numbers, and . _ -");
-      return;
-    }
-    if (format === "native" && nativeKind === "model" && !model.trim()) {
-      setSubmitError("Enter the model name.");
       return;
     }
     if (!value) {
@@ -142,7 +131,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
             value={format}
             onChange={(e) => setFormat(e.target.value as SecretFormat)}
           >
-            {SECRET_FORMATS.map((f) => (
+            {SECRET_FORMATS.filter((f) => f !== "native").map((f) => (
               <option key={f} value={f}>
                 {FORMAT_LABEL[f]}
               </option>
@@ -150,63 +139,15 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
           </select>
         </label>
 
-        {format === "native" ? (
-          <>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">Slot</span>
-              <select
-                className={selectClass}
-                value={nativeKind}
-                onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
-              >
-                <option value="web">Web search provider</option>
-                <option value="model">Model API key</option>
-              </select>
-            </label>
-            {nativeKind === "web" ? (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Provider</span>
-                <select
-                  className={selectClass}
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  {WEB_PROVIDERS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Model</span>
-                <Input
-                  inputSize="md"
-                  placeholder="e.g. deepseek-chat"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                />
-                <span className="text-[11px] text-fg-muted">
-                  Slot:{" "}
-                  <code className="font-mono">
-                    model_list.{model.trim() || "<model>"}.api_keys
-                  </code>
-                </span>
-              </label>
-            )}
-          </>
-        ) : (
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">Name</span>
-            <Input
-              inputSize="md"
-              placeholder="e.g. SHARED_API_KEY"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-        )}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-fg-muted">Name</span>
+          <Input
+            inputSize="md"
+            placeholder="e.g. SHARED_API_KEY"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
 
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-muted">Value</span>
