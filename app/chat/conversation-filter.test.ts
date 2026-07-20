@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseFilterQuery, isEmptyQuery, applySyncFilters } from "./conversation-filter";
+import { parseFilterQuery, isEmptyQuery, applySyncFilters, applyContentFilter, matchesTextMeta } from "./conversation-filter";
 import type { ConversationSummary } from "@/lib/chatSession";
+import type { HistoryMessage } from "./history-cache";
 
 // Fixed clock: 2026-07-19T12:00:00Z
 const NOW = Date.UTC(2026, 6, 19, 12, 0, 0);
@@ -98,5 +99,51 @@ describe("applySyncFilters", () => {
 
   it("returns everything for an empty query", () => {
     expect(applySyncFilters(all, parseFilterQuery("", NOW))).toHaveLength(all.length);
+  });
+});
+
+describe("applyContentFilter", () => {
+  const byTitle = makeConv({ id: "t", title: "Deploy notes" });
+  const byContent = makeConv({ id: "m", title: "Random" });
+  const noMatch = makeConv({ id: "n", title: "Random" });
+  const histories: Record<string, HistoryMessage[]> = {
+    m: [{ role: "user", content: "let's deploy tomorrow" }],
+    n: [{ role: "user", content: "nothing here" }],
+  };
+  const load = async (c: ConversationSummary) => histories[c.id] ?? [];
+  const live = new AbortController().signal;
+
+  it("returns candidates unchanged when there are no text tokens", async () => {
+    const out = await applyContentFilter([byTitle, byContent], [], load, live);
+    expect(out).toHaveLength(2);
+  });
+
+  it("matches on title without loading history", async () => {
+    const loadSpy = async () => {
+      throw new Error("should not load");
+    };
+    const out = await applyContentFilter([byTitle], ["deploy"], loadSpy, live);
+    expect(out.map((c) => c.id)).toEqual(["t"]);
+  });
+
+  it("matches on message content when title/alias miss", async () => {
+    const out = await applyContentFilter([byContent, noMatch], ["deploy"], load, live);
+    expect(out.map((c) => c.id)).toEqual(["m"]);
+  });
+
+  it("returns [] when aborted", async () => {
+    const ctrl = new AbortController();
+    ctrl.abort();
+    const out = await applyContentFilter([byContent], ["deploy"], load, ctrl.signal);
+    expect(out).toEqual([]);
+  });
+});
+
+describe("matchesTextMeta", () => {
+  it("matches title or alias case-insensitively", () => {
+    const c = makeConv({ title: "Deploy", alias: "prod-cli" });
+    expect(matchesTextMeta(c, ["deploy"])).toBe(true);
+    expect(matchesTextMeta(c, ["CLI"])).toBe(true);
+    expect(matchesTextMeta(c, ["missing"])).toBe(false);
   });
 });

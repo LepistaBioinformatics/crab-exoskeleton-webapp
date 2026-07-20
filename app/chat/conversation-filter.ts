@@ -1,4 +1,5 @@
 import type { ConversationSummary } from "@/lib/chatSession";
+import type { HistoryMessage } from "./history-cache";
 
 export interface DateFilter {
   from: number | null; // inclusive ms epoch, null = unbounded
@@ -124,4 +125,37 @@ export function applySyncFilters(
       matchesAliases(c, query.aliases) &&
       matchesDates(c, query.dates),
   );
+}
+
+export function matchesTextMeta(conv: ConversationSummary, texts: string[]): boolean {
+  const haystack = `${conv.title}\n${conv.alias ?? ""}`.toLowerCase();
+  return texts.some((needle) => haystack.includes(needle.toLowerCase()));
+}
+
+function matchesTextContent(messages: HistoryMessage[], texts: string[]): boolean {
+  return messages.some(
+    (m) =>
+      typeof m.content === "string" &&
+      texts.some((needle) => m.content.toLowerCase().includes(needle.toLowerCase())),
+  );
+}
+
+export async function applyContentFilter(
+  candidates: ConversationSummary[],
+  texts: string[],
+  loadHistory: (c: ConversationSummary) => Promise<HistoryMessage[]>,
+  signal: AbortSignal,
+): Promise<ConversationSummary[]> {
+  if (texts.length === 0) return candidates;
+  if (signal.aborted) return [];
+
+  const results = await Promise.all(
+    candidates.map(async (c) => {
+      if (matchesTextMeta(c, texts)) return c;
+      const messages = await loadHistory(c);
+      return matchesTextContent(messages, texts) ? c : null;
+    }),
+  );
+  if (signal.aborted) return [];
+  return results.filter((c): c is ConversationSummary => c !== null);
 }
