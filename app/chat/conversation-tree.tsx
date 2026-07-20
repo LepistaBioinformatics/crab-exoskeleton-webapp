@@ -334,8 +334,10 @@ export default function ConversationTree({
         const tags = conv?.tags ?? [];
         const editing = enrichingId === key;
         // Focused thread = hovered (if any) else the selected conversation; the
-        // others fade back so one thread stands out.
-        const focused = hoveredConv ?? activeSessionId ?? null;
+        // others fade back so one thread stands out. Focus only applies when a
+        // session is actually selected -- with nothing selected the whole tree
+        // stays at full emphasis and hovering never fades the rest.
+        const focused = activeSessionId != null ? (hoveredConv ?? activeSessionId) : null;
         const dimmed = focused != null && b.conversationId !== focused;
 
         return (
