@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cva } from "class-variance-authority";
-import { ArrowLeft, FileBox, KeyRound, Palette, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, FileBox, KeyRound, Palette, ShieldCheck, Users, Wrench } from "lucide-react";
 import { listScopes, resolveScopeNames, type AdminScope, type ScopeRef } from "@/lib/admin";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
@@ -13,10 +13,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { ScopeTree } from "./scope-tree";
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
+import SharedSkillsPanel from "./shared-skills-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
 
-type Tab = "files" | "secrets" | "members" | "branding";
+type Tab = "files" | "secrets" | "skills" | "members" | "branding";
 
 const tabButton = cva(
   "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
@@ -34,6 +35,7 @@ const tabButton = cva(
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "files", label: "Shared files", icon: <FileBox size={16} aria-hidden /> },
   { key: "secrets", label: "Shared secrets", icon: <KeyRound size={16} aria-hidden /> },
+  { key: "skills", label: "Shared skills", icon: <Wrench size={16} aria-hidden /> },
   { key: "members", label: "Members", icon: <Users size={16} aria-hidden /> },
 ];
 
@@ -239,6 +241,8 @@ export default function AdminScreen() {
                     <SharedFilesPanel scope={selected} />
                   ) : tab === "secrets" ? (
                     <SharedSecretsPanel scope={selected} />
+                  ) : tab === "skills" ? (
+                    <SharedSkillsPanel scope={selected} />
                   ) : (
                     <MembersPanel scope={selected} />
                   )
