@@ -7,6 +7,7 @@ import {
   FileText,
   Files,
   Image as ImageIcon,
+  Maximize2,
   Paperclip,
   Presentation,
   Reply,
@@ -19,8 +20,10 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
 import type { ReplyTo } from "@/app/chat/chat-view";
+import MarkdownEditor from "@/app/chat/markdown-editor";
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
+const MIN_HEIGHT = 44; // a taller resting height so the box feels roomy
 
 const CATEGORY_ICON: Record<string, typeof ImageIcon> = {
   image: ImageIcon,
@@ -33,6 +36,12 @@ const CATEGORY_ICON: Record<string, typeof ImageIcon> = {
 interface ComposerProps {
   // Returns true when the send was accepted, so the composer clears its text.
   onSend: (text: string) => boolean;
+  // Fired on each keystroke, so a pending (queued) batch can push its send back
+  // while the user is still typing.
+  onTyping?: () => void;
+  // Handle a slash command (text starting with "/"). Returns true when the text
+  // was consumed as a command, so the composer clears and nothing is sent.
+  onCommand?: (raw: string) => boolean;
   sending: boolean;
   loadingHistory: boolean;
   sessionId: string;
@@ -50,6 +59,8 @@ interface ComposerProps {
 // attached-file chips. Owns auto-grow and the autofocus-on-open behavior.
 export default function Composer({
   onSend,
+  onTyping,
+  onCommand,
   sending,
   loadingHistory,
   sessionId,
@@ -64,25 +75,75 @@ export default function Composer({
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   // The draft text lives HERE (not in ChatView), so typing re-renders only the
   // composer -- not the whole message list. Cleared only when a send is accepted.
   const [value, setValue] = useState("");
+  // "typing" drives the soft pulse; it decays a beat after the last keystroke.
+  const [typing, setTyping] = useState(false);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Slash commands act on the current chat instead of sending a message.
+  const SLASH = [
+    { cmd: "/rename", hint: "rename this chat — /rename <new title>" },
+    { cmd: "/tag", hint: "tag this chat — /tag <name> [value] [#color]" },
+  ];
 
   function submit() {
-    if (onSend(value)) setValue("");
+    const v = value;
+    // A leading "/" is a command, not a message.
+    if (v.trim().startsWith("/") && onCommand) {
+      if (onCommand(v)) setValue("");
+      return;
+    }
+    if (onSend(v)) setValue("");
+  }
+
+  function markTyping() {
+    onTyping?.();
+    setTyping(true);
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => setTyping(false), 900);
+  }
+  useEffect(
+    () => () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+    },
+    [],
+  );
+
+  // While the user is typing the command name (a leading "/", no space yet),
+  // surface the matching commands as a hint menu the keyboard can drive.
+  const slashQuery = value.startsWith("/") && !value.includes(" ") ? value.toLowerCase() : null;
+  const slashMatches = slashQuery ? SLASH.filter((s) => s.cmd.startsWith(slashQuery)) : [];
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [slashHidden, setSlashHidden] = useState(false);
+  const slashOpen = slashMatches.length > 0 && !slashHidden;
+  // Reset the highlight whenever the query (menu contents) changes.
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashQuery]);
+
+  function pickSlash(cmd: string) {
+    setValue(`${cmd} `);
+    ref.current?.focus();
   }
   // Touch devices have no Shift key, so Enter must stay a newline there (send is
   // the button); only fine-pointer (desktop) gets Enter-to-send + the hint.
   const [coarsePointer, setCoarsePointer] = useState(false);
+  // The field follows the browser locale so spell-check uses the matching
+  // dictionary; no in-app language switch (that's a browser-side setting).
+  const [locale, setLocale] = useState<string | undefined>(undefined);
   useEffect(() => {
     setCoarsePointer(window.matchMedia?.("(pointer: coarse)").matches ?? false);
+    setLocale(navigator.language);
   }, []);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+    el.style.height = `${Math.max(MIN_HEIGHT, Math.min(el.scrollHeight, MAX_HEIGHT))}px`;
   }, [value]);
 
   useEffect(() => {
@@ -165,7 +226,38 @@ export default function Composer({
         </div>
       )}
 
-      <div className="flex items-end gap-2 rounded-2xl border border-brand bg-elevated px-3 py-2 transition-shadow focus-within:ring-2 focus-within:ring-accent-soft">
+      {slashOpen && (
+        <div
+          className="mb-2 overflow-hidden rounded-xl border border-accent/40 bg-surface shadow-lg"
+          role="listbox"
+          aria-label="Slash commands"
+        >
+          {slashMatches.map((s, i) => (
+            <button
+              key={s.cmd}
+              type="button"
+              role="option"
+              aria-selected={i === slashIndex}
+              // Keep pointer focus in the textarea so keyboard nav still works.
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setSlashIndex(i)}
+              onClick={() => pickSlash(s.cmd)}
+              className={`flex w-full items-baseline gap-2 px-3 py-2 text-left transition-colors ${
+                i === slashIndex ? "bg-accent/15" : "hover:bg-elevated"
+              }`}
+            >
+              <span className="font-mono text-sm font-semibold text-accent">{s.cmd}</span>
+              <span className="text-xs text-fg-muted">{s.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div
+        className={`flex flex-col gap-2 rounded-2xl border border-accent/40 bg-elevated px-4 pt-4 pb-3 shadow-lg transition-[border-color,box-shadow] focus-within:border-[2.5px] focus-within:border-accent${
+          typing ? " composer-typing" : ""
+        }`}
+      >
         <input
           ref={fileRef}
           type="file"
@@ -178,6 +270,61 @@ export default function Composer({
           }}
         />
 
+        <Textarea
+          // Remount when the locale resolves so the browser reads `lang` and
+          // picks the matching spell-check dictionary.
+          key={locale || "auto"}
+          ref={ref}
+          rows={1}
+          lang={locale}
+          spellCheck
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSlashHidden(false);
+            markTyping();
+          }}
+          onKeyDown={(e) => {
+            // When the slash menu is open, the keyboard drives it: arrows move
+            // the highlight, Enter picks, Escape dismisses.
+            if (slashOpen) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSlashIndex((i) => (i + 1) % slashMatches.length);
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSlashIndex((i) => (i - 1 + slashMatches.length) % slashMatches.length);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setSlashHidden(true);
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
+                e.preventDefault();
+                pickSlash(slashMatches[slashIndex].cmd);
+                return;
+              }
+            }
+            if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
+              e.preventDefault();
+              if (canSend) submit();
+            }
+          }}
+          placeholder={
+            coarsePointer
+              ? "Message your agent…"
+              : "Message your agent…  (Shift+Enter for a new line)"
+          }
+          className="max-h-[200px] py-1.5 text-base leading-relaxed"
+        />
+
+        {/* Toolbar row inside the box, below the textarea: utilities on the
+            left, Send on the right. Popovers open upward (bottom-full). */}
+        <div className="mt-1 flex items-center gap-1">
         <div className="relative">
           <IconButton
             variant="ghost"
@@ -186,7 +333,7 @@ export default function Composer({
             title="Attach file"
             disabled={sending || loadingHistory}
             onClick={() => setMenuOpen((o) => !o)}
-            className="mb-0.5 shrink-0"
+            className="shrink-0"
           >
             <Paperclip size={20} aria-hidden />
           </IconButton>
@@ -223,35 +370,50 @@ export default function Composer({
           )}
         </div>
 
-        <Textarea
-          ref={ref}
-          rows={1}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
-              e.preventDefault();
-              if (canSend) submit();
-            }
-          }}
-          placeholder={
-            coarsePointer
-              ? "Message your agent…"
-              : "Message your agent…  (Shift+Enter for a new line)"
-          }
-          className="max-h-[200px] py-1.5 leading-relaxed"
-        />
+        <IconButton
+          variant="ghost"
+          size="md"
+          aria-label="Advanced markdown editor"
+          title="Advanced markdown editor"
+          disabled={sending || loadingHistory}
+          onClick={() => setAdvancedOpen(true)}
+          className="shrink-0"
+        >
+          <Maximize2 size={20} aria-hidden />
+        </IconButton>
+
+        <div className="flex-1" />
+
         <IconButton
           variant="filled"
           size="md"
           aria-label="Send message"
           disabled={!canSend}
           onClick={submit}
-          className="mb-0.5 shrink-0"
+          className="shrink-0"
         >
           <ArrowUp size={20} aria-hidden />
         </IconButton>
       </div>
+      </div>
+
+      {advancedOpen && (
+        <MarkdownEditor
+          initialValue={value}
+          lang={locale}
+          onClose={(draft) => {
+            setValue(draft);
+            setAdvancedOpen(false);
+            ref.current?.focus();
+          }}
+          onSubmit={(md) => {
+            if (onSend(md)) {
+              setValue("");
+              setAdvancedOpen(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
