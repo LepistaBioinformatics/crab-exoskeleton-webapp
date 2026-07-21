@@ -18,7 +18,9 @@ const codeText = cva("font-mono text-[0.85em]", {
 // Wide tables and code blocks scroll horizontally inside the bubble.
 export default function MessageContent({ content }: { content: string }) {
   return (
-    <div className="text-sm leading-relaxed [&>*:last-child]:mb-0">
+    // Slightly larger than the rest of the UI (which is text-sm/xs) so the chat
+    // body reads as the primary content.
+    <div className="text-base leading-relaxed [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

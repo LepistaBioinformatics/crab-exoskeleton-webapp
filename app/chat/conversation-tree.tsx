@@ -9,6 +9,13 @@ import { setFragmentSid, type Workspace } from "./fragment";
 import { onConversationsUpdated, type ConversationSummary } from "@/lib/chatSession";
 import { TagChip, ConversationEditor } from "./conversation-enrichment";
 import { getHistory } from "./history-cache";
+import {
+  laneColorFor,
+  buildEvents,
+  aggregateBursts,
+  type TreeEvent,
+  type Burst,
+} from "./conversation-bursts";
 
 // The "Tree" view: a single vertical timeline where each conversation is a
 // colored lane and each *visit* is a node -- a visit ("burst") is a run of
@@ -19,69 +26,12 @@ import { getHistory } from "./history-cache";
 // and returning to a conversation makes a NEW node, so the interleaving stays
 // visible without a dot per message (see .specs/features/conversation-tree-view/).
 
-interface TreeEvent {
-  conversationId: string;
-  label: string; // conversation title/alias (for the row tooltip)
-  content: string; // the message text shown on the node
-  createdAt: string; // raw created_at (scroll anchor)
-  ts: number; // parsed created_at (ms)
-  seq: number; // original line index within its conversation, for tiebreaks
-}
-
-// A visit: a run of consecutive same-conversation messages. This is the rendered
-// unit (one node per burst), keeping the interleaving without a dot per message.
-// text/anchor/ts describe the burst's most-recent message -- the one the node
-// shows and the one clicking it scrolls to.
-interface Burst {
-  conversationId: string;
-  label: string;
-  text: string;
-  anchor: string; // most-recent message (scroll target + shown time/text)
-  startAnchor: string; // oldest message of the visit -- a stable key as it grows
-  ts: number;
-  count: number;
-  isLatest: boolean; // the most-recent visit of its conversation (shows alias + tags)
-}
-
 // Hard cap on rendered lane columns so the gutter can't grow unbounded in the
 // narrow sidebar (NFR-3). Lanes recycle (a column frees once its conversation's
 // last visit has passed), so the count is the max *simultaneously-active*
 // conversations, not the total -- this cap is only hit under extreme
 // interleaving, where the last column is shared as graceful degradation.
 const MAX_LANE_COLUMNS = 8;
-
-// A stable per-conversation color via the golden angle: hashing the id into a
-// hue spreads many conversations across the wheel with few collisions (vs. a
-// small fixed palette). Applied via inline `style` (not className) since the set
-// is per-conversation and unbounded -- same approach as the tag-color chips in
-// history-sidebar.tsx. Fixed S/L stay legible in either theme.
-function laneColor(id: string, alpha = 1): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  const hue = (h * 137.508) % 360;
-  return alpha < 1
-    ? `hsl(${hue.toFixed(1)} 65% 55% / ${alpha})`
-    : `hsl(${hue.toFixed(1)} 65% 55%)`;
-}
-
-// The first tag color a conversation carries, if any.
-function tagColorOf(conv: ConversationSummary | undefined): string | undefined {
-  const tag = conv?.tags.find((t) => typeof t.metadata.color === "string" && t.metadata.color);
-  return tag ? (tag.metadata.color as string) : undefined;
-}
-
-// #rrggbb -> #rrggbbaa, for the faint rail tint.
-function withAlpha(hex: string, alpha: number): string {
-  return `${hex}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`;
-}
-
-// A conversation's lane color: its tag color when set (so a user-assigned color
-// carries into the tree), else the stable golden-angle hash.
-function laneColorFor(conv: ConversationSummary | undefined, id: string, alpha = 1): string {
-  const tc = tagColorOf(conv);
-  if (tc) return alpha < 1 ? withAlpha(tc, alpha) : tc;
-  return laneColor(id, alpha);
-}
 
 function formatWhen(ts: number): string {
   const d = new Date(ts);
@@ -179,30 +129,9 @@ export default function ConversationTree({
         }),
       );
       if (cancelled) return;
-
-      const built: TreeEvent[] = [];
-      for (const { c, messages } of lists) {
-        messages.forEach((m, seq) => {
-          const parsed = m.created_at ? Date.parse(m.created_at) : NaN;
-          // Fall back to the conversation's recency (+ line order) when a
-          // per-message timestamp is missing/unparseable -- e.g. an older proxy
-          // build that didn't surface created_at. Keeps the tree populated
-          // (degraded ordering) instead of showing nothing.
-          const ts = Number.isNaN(parsed) ? c.updatedAt + seq : parsed;
-          built.push({
-            conversationId: c.id,
-            label: c.alias || c.title,
-            content: m.content,
-            createdAt: m.created_at ?? "",
-            ts,
-            seq,
-          });
-        });
-      }
-      // Most recent on top. Same-conversation ties fall back to line order; the
-      // sort is on parsed instants, never raw strings (NFR-2).
-      built.sort((a, b) => b.ts - a.ts || (a.conversationId === b.conversationId ? b.seq - a.seq : 0));
-      setEvents(built);
+      // Most recent on top; see buildEvents (conversation-bursts.ts) for the
+      // created_at parse, the updatedAt+seq fallback, and the instant-based sort.
+      setEvents(buildEvents(lists));
     })();
     return () => {
       cancelled = true;
@@ -212,34 +141,9 @@ export default function ConversationTree({
 
   const model = useMemo(() => {
     if (!events) return null;
-    // Collapse consecutive same-conversation messages into visits. Since events
-    // are globally time-sorted (desc), adjacency here means no other
-    // conversation's message fell between them -> exactly one visit. The first
-    // element of a run is the most recent, so its ts positions the burst.
-    const bursts: Burst[] = [];
-    const seenConv = new Set<string>(); // first burst seen per conv (desc) = its latest
-    for (const e of events) {
-      const last = bursts[bursts.length - 1];
-      if (last && last.conversationId === e.conversationId) {
-        // events are desc, so the run's first element (kept below) is already the
-        // most recent; older ones only add to the count and push startAnchor back.
-        last.count += 1;
-        last.startAnchor = e.createdAt;
-      } else {
-        const isLatest = !seenConv.has(e.conversationId);
-        seenConv.add(e.conversationId);
-        bursts.push({
-          conversationId: e.conversationId,
-          label: e.label,
-          text: e.content,
-          anchor: e.createdAt,
-          startAnchor: e.createdAt,
-          ts: e.ts,
-          count: 1,
-          isLatest,
-        });
-      }
-    }
+    // Collapse consecutive same-conversation messages into visits (bursts) --
+    // see aggregateBursts (conversation-bursts.ts).
+    const bursts: Burst[] = aggregateBursts(events);
     // The [first,last] burst-index span of each conversation -> the vertical
     // extent of its rail.
     const range = new Map<string, { first: number; last: number }>();
@@ -344,12 +248,13 @@ export default function ConversationTree({
         const alias = conv?.alias ?? null;
         const tags = conv?.tags ?? [];
         const editing = enrichingId === key;
-        // Dimming only happens while the cursor is over the tree. When it is,
-        // the focused thread = hovered row (if any) else the selected one stays
-        // vivid and the rest fade back; hovering an empty area with no active
-        // selection fades them all. Off the tree, everything is full emphasis.
+        // Focus/dim treatment applies when a conversation is SELECTED (persists
+        // without hovering) or while the cursor is over the tree. The focused
+        // thread = hovered row (if any) else the selected one stays vivid and the
+        // rest fade back. With nothing selected and off the tree, full emphasis.
         const focused = hoveredConv ?? activeSessionId ?? null;
-        const dimmed = treeHovered && b.conversationId !== focused;
+        const emphasize = treeHovered || activeSessionId != null;
+        const dimmed = emphasize && focused !== null && b.conversationId !== focused;
 
         return (
           <div
@@ -385,10 +290,10 @@ export default function ConversationTree({
                   {Array.from({ length: laneCount }, (_, l) => {
                     const seg = laneSegments[l].find((s) => i >= s.first && i <= s.last);
                     const dotHere = l === dotLane;
-                    // Off the tree every rail sits at the baseline; while
-                    // hovering, the focused thread's rail is boosted and the
-                    // others fade back.
-                    const railAlpha = !treeHovered ? 0.4 : seg && seg.id === focused ? 0.65 : 0.1;
+                    // With nothing focused every rail sits at the baseline; when
+                    // a thread is focused (selected or hovered), its rail is
+                    // boosted and the others fade back.
+                    const railAlpha = !emphasize ? 0.4 : seg && seg.id === focused ? 0.65 : 0.1;
                     return (
                       <span key={l} className="relative w-3.5">
                         {seg && (

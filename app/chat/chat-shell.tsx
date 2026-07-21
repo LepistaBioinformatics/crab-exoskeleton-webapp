@@ -6,6 +6,7 @@ import { useFragment, toWorkspace } from "./fragment";
 import NavSidebar from "./nav-sidebar";
 import HistorySidebar from "./history-sidebar";
 import ChatView from "./chat-view";
+import CanvasTimeline from "./canvas-timeline";
 import EmptyState from "./empty-state";
 import ResizablePane from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
@@ -26,6 +27,18 @@ export default function ChatShell({ email }: { email: string }) {
   const resolved = fragment !== null;
   const workspace = fragment ? toWorkspace(fragment) : null;
   const sessionId = fragment?.sid;
+
+  // Canvas is a desktop-only top-level view; on mobile a shared `view=canvas`
+  // link is ignored and the traditional chat renders (spec edge case).
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const canvas = fragment?.view === "canvas" && !!workspace && desktop;
 
   const [navOpen, setNavOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -104,7 +117,7 @@ export default function ChatShell({ email }: { email: string }) {
           />
         </ResizablePane>
 
-        {workspace && (
+        {workspace && !canvas && (
           <ResizablePane
             ariaLabel="Conversations"
             open={historyOpen}
@@ -127,6 +140,8 @@ export default function ChatShell({ email }: { email: string }) {
             <div className="flex h-full items-center justify-center">
               <Spinner size={28} />
             </div>
+          ) : canvas && workspace ? (
+            <CanvasTimeline workspace={workspace} />
           ) : workspace ? (
             <ChatView workspace={workspace} sessionId={sessionId} />
           ) : (
