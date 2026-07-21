@@ -9,7 +9,7 @@ import type { SessionCookie } from "@/lib/session";
 // vehicle (same pattern as /api/subscriptions). Authorization (caller tier vs
 // target scope) is enforced server-side in the proxy from the injected profile;
 // this BFF only forwards the session JWT and surfaces the real status.
-const ADMIN_BASE = "/picoclaw-alpha/v1/admin";
+const ADMIN_BASE = "/alpha/v1/admin";
 
 export async function requireSession(): Promise<SessionCookie | NextResponse> {
   const session = await getSession();
@@ -61,5 +61,38 @@ export async function proxyAdminJson(
     return NextResponse.json({ error, status }, { status });
   }
   const data = await out.json().catch(() => ({}));
+  return NextResponse.json(data);
+}
+
+// Agent-aware variant: routes through `/<agent>/v1/admin` so the proxy
+// resolves that specific agent. Used by the model registry, which is per-agent
+// (alpha and beta keep separate model catalogs). `agent` must be an instance.
+export async function proxyAdminJsonAgent(
+  session: SessionCookie,
+  agent: string,
+  suffix: string,
+  init: RequestInit = {},
+): Promise<NextResponse> {
+  let res: Response;
+  try {
+    res = await fetchMycelium(`/${agent}/v1/admin${suffix}`, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${session.token}` },
+    });
+  } catch (err) {
+    if (err instanceof MyceliumConnectivityError) {
+      return NextResponse.json({ error: "connectivity" }, { status: 502 });
+    }
+    throw err;
+  }
+  if (res.status === 401) {
+    await clearSession();
+    return NextResponse.json({ error: "session_expired" }, { status: 401 });
+  }
+  if (!res.ok) {
+    const { error, status } = await upstreamError(res);
+    return NextResponse.json({ error, status }, { status });
+  }
+  const data = await res.json().catch(() => ({}));
   return NextResponse.json(data);
 }

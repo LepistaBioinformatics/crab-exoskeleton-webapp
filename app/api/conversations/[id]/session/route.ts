@@ -10,7 +10,7 @@ interface ResolveResponse {
 
 // Resolves the proxy session identifiers behind a conversation and stores them
 // on the owner's row. Body `{ tenant_id, subs_acc_id, role, session_id }`; calls
-// the proxy `GET /v1/sessions/resolve` through the `picoclaw-<role>` service
+// the proxy `GET /v1/sessions/resolve` through the `<role>` service
 // (same BFF pattern as chat/history), then persists via setSessionRefs
 // (owner-scoped). sessionFile is "" until picoclaw has written the transcript.
 export async function POST(
@@ -41,7 +41,7 @@ export async function POST(
   let res: Response;
   try {
     res = await fetchMycelium(
-      `/picoclaw-${role}/v1/sessions/resolve?${query.toString()}`,
+      `/${role}/v1/sessions/resolve?${query.toString()}`,
       { headers: { Authorization: `Bearer ${session.token}` } },
     );
   } catch (err) {

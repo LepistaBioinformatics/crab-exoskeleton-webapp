@@ -53,9 +53,7 @@ export default function SecretsDrawer({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
-  const [nativeKind, setNativeKind] = useState<"web" | "model">("web");
   const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
-  const [model, setModel] = useState("");
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
 
@@ -86,7 +84,7 @@ export default function SecretsDrawer({
   // The slot/name actually submitted, built from the format-specific inputs.
   function targetName(): string {
     if (format === "native") {
-      return nativeKind === "web" ? `web.${provider}` : `model_list.${model.trim()}.api_keys`;
+      return `web.${provider}`;
     }
     return name.trim();
   }
@@ -98,10 +96,6 @@ export default function SecretsDrawer({
 
     if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
       setSubmitError("Name may only contain letters, numbers, and . _ -");
-      return;
-    }
-    if (format === "native" && nativeKind === "model" && !model.trim()) {
-      setSubmitError("Enter the model name.");
       return;
     }
     if (!value) {
@@ -186,48 +180,20 @@ export default function SecretsDrawer({
             </label>
 
             {format === "native" ? (
-              <>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-fg-muted">Slot</span>
-                  <select
-                    className={selectClass}
-                    value={nativeKind}
-                    onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
-                  >
-                    <option value="web">Web search provider</option>
-                    <option value="model">Model API key</option>
-                  </select>
-                </label>
-                {nativeKind === "web" ? (
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-fg-muted">Provider</span>
-                    <select
-                      className={selectClass}
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                    >
-                      {WEB_PROVIDERS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : (
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-fg-muted">Model</span>
-                    <Input
-                      inputSize="md"
-                      placeholder="e.g. deepseek-chat"
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                    />
-                    <span className="text-[11px] text-fg-muted">
-                      Slot: <code className="font-mono">model_list.{model.trim() || "<model>"}.api_keys</code>
-                    </span>
-                  </label>
-                )}
-              </>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-fg-muted">Web search provider</span>
+                <select
+                  className={selectClass}
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                >
+                  {WEB_PROVIDERS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : (
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-fg-muted">Name</span>

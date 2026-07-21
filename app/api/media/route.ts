@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/media?${query.toString()}`, {
+    res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {
       headers: { Authorization: `Bearer ${session.token}` },
     });
   } catch (err) {
@@ -67,7 +67,7 @@ export async function DELETE(req: NextRequest) {
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId, path });
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/media?${query.toString()}`, {
+    res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${session.token}` },
     });
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
   try {
     // No explicit Content-Type: fetch sets the multipart boundary for a
     // FormData body.
-    res = await fetchMycelium(`/picoclaw-${role}/v1/media`, {
+    res = await fetchMycelium(`/${role}/v1/media`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.token}` },
       body: upstream,

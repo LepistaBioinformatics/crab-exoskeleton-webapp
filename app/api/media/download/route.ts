@@ -3,7 +3,7 @@ import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } f
 import { clearSession, getSession } from "@/lib/session";
 
 // Streams one uploaded file back for download. Forwards to the proxy's
-// GET /picoclaw-<role>/v1/media?path=<file> (the download branch) with the
+// GET /<role>/v1/media?path=<file> (the download branch) with the
 // session JWT and pipes the binary body through.
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId, path });
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/media?${query.toString()}`, {
+    res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {
       headers: { Authorization: `Bearer ${session.token}` },
     });
   } catch (err) {

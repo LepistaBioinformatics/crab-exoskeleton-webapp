@@ -6,7 +6,7 @@ import type { SessionCookie } from "@/lib/session";
 // BFF for the proxy's per-(user, agent) secret store (agent-customization).
 // The selected workspace lives in the URL fragment (never sent to the server),
 // so the client passes tenant_id/subs_acc_id explicitly; `role` picks the
-// gateway service path (`/picoclaw-<role>/v1/secrets`). The session JWT is
+// gateway service path (`/<role>/v1/secrets`). The session JWT is
 // attached here. The secret `value` only ever travels in the POST body -- it is
 // never logged, echoed, or placed in a URL. Real 4xx reasons are surfaced via
 // upstreamError (never masked as "connectivity").
@@ -18,7 +18,7 @@ async function callSecrets(
 ): Promise<NextResponse> {
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/secrets${suffix}`, {
+    res = await fetchMycelium(`/${role}/v1/secrets${suffix}`, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${session.token}` },
     });

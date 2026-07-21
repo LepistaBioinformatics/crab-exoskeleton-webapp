@@ -22,6 +22,10 @@
   --brand: #663a88;      /* structural violet border (brand-600) */
   --fg: #0a2933;         /* text primary */
   --fg-muted: #5a6b72;   /* secondary text */
+  /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
+     A plain dark shadow vanishes on a dark background, so dark mode adds a
+     faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
+  --shadow-e: 0 1px 2px rgba(10, 41, 51, 0.10), 0 4px 12px rgba(10, 41, 51, 0.10);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,6 +39,7 @@
     --brand: #a988c9;
     --fg: #e6eef2;
     --fg-muted: #9fb0b7;
+    --shadow-e: 0 2px 8px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 }
 
@@ -48,6 +53,10 @@
   --color-brand: var(--brand);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
+
+  /* Theme-aware elevation utility -> `shadow-elevated`. Uses the runtime var so
+     it flips with prefers-color-scheme (a baked literal here would not). */
+  --shadow-elevated: var(--shadow-e);
 
   /* next/font sets --ff-* on <html>; keep the family utilities pointing at
      those runtime vars (with static fallbacks) rather than baking a value. */
@@ -65,6 +74,35 @@
 
 @theme {
   --animate-blink: blink 1s step-start infinite;
+}
+
+/* Pending (queued-but-not-yet-sent) message: its origin bar (the ::before /
+   ::after speaker stripe) pulses until the batch flushes to the gateway, so the
+   user can see a message hasn't been sent yet. Auto-neutralized by the
+   reduced-motion guard below. */
+@keyframes originPulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+.origin-pulse::before,
+.origin-pulse::after {
+  animation: originPulse 1.1s ease-in-out infinite;
+}
+
+/* The composer breathes a soft accent ring while the user is actively typing.
+   Auto-neutralized by the reduced-motion guard below. */
+@keyframes composerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+.composer-typing {
+  animation: composerPulse 1.15s ease-in-out infinite;
 }
 
 /* Respect reduced-motion everywhere without policing each transition. */

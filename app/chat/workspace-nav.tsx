@@ -12,11 +12,15 @@ import {
   type TenantGroup,
   type AgentLeaf,
 } from "@/lib/subscriptions";
+import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { TenantAvatar } from "@/components/ui/avatar";
+
+type TenantBrand = { logo?: string; color?: string };
 
 // Selectable agent leaf: active = M3 tonal selected fill (no border). Depth
 // indentation comes from the hierarchy guide wrappers, not padding here.
@@ -28,8 +32,15 @@ const leafButton = cva(
         true: "bg-accent/12 font-medium text-fg",
         false: "text-fg hover:bg-elevated/60",
       },
+      // Enrichment from /tools: an agent whose tool reports unhealthy is dimmed
+      // (not disabled) -- health detection is best-effort, so a mis-read stays
+      // recoverable by leaving the leaf clickable.
+      unhealthy: {
+        true: "opacity-50",
+        false: "",
+      },
     },
-    defaultVariants: { active: false },
+    defaultVariants: { active: false, unhealthy: false },
   },
 );
 
@@ -66,6 +77,8 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
+  const [tenantBrands, setTenantBrands] = useState<Record<string, TenantBrand>>({});
+  const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
@@ -90,6 +103,21 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
     })();
   }, [router]);
 
+  // Enrich the agent list from the gateway's public /tools catalog, joined by
+  // tool.name === role. Best-effort: listTools never throws (yields [] on any
+  // failure), so the tree renders exactly as before when /tools is empty or
+  // unreachable -- it only ever adds a tooltip + health hint, never filters.
+  useEffect(() => {
+    let cancelled = false;
+    listTools().then((list) => {
+      if (cancelled) return;
+      setTools(new Map(list.map((t) => [t.name, t])));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Resolve tenant display names lazily, per tenant, once the tree is grouped.
   // The tree renders immediately with uuids; names replace them as each fetch
   // lands -- never blocking the sidebar.
@@ -103,6 +131,8 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
           if (cancelled || !data) return;
           const name = tenantDisplayName(data.tenant);
           if (name) setTenantNames((prev) => ({ ...prev, [tenant.tenantId]: name }));
+          const brand = tenantBrand(data.tenant);
+          if (brand) setTenantBrands((prev) => ({ ...prev, [tenant.tenantId]: brand }));
         })
         .catch(() => {});
     }
@@ -185,11 +215,19 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
             {visibleGroups!.map((tenant) => {
               const tKey = tenant.tenantId;
               const tOpen = q ? true : !collapsed.has(tKey);
+              const tName = tenantNames[tenant.tenantId];
+              const tBrand = tenantBrands[tenant.tenantId];
               return (
                 <div key={tKey}>
                   <GroupHeader
-                    icon={<Building2 size={15} aria-hidden />}
-                    label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
+                    icon={
+                      tName ? (
+                        <TenantAvatar name={tName} logo={tBrand?.logo} color={tBrand?.color} />
+                      ) : (
+                        <Building2 size={15} aria-hidden />
+                      )
+                    }
+                    label={tName ?? tenant.tenantId}
                     open={tOpen}
                     level="tenant"
                     onClick={() => toggle(tKey)}
@@ -214,13 +252,16 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
                                   const lKey = `${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`;
                                   const active = lKey === activeKey;
                                   const badge = accessLabel(leaf.perms);
+                                  const tool = tools.get(leaf.role);
+                                  const unhealthy = tool ? !isToolHealthy(tool) : false;
                                   return (
                                     <button
                                       key={lKey}
                                       type="button"
                                       disabled={entering}
                                       onClick={() => onPick(leaf)}
-                                      className={leafButton({ active })}
+                                      title={tool?.description || undefined}
+                                      className={leafButton({ active, unhealthy })}
                                     >
                                       <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
                                       <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>
@@ -309,4 +350,19 @@ function tenantDisplayName(tenant: unknown): string | null {
     if (typeof name === "string" && name.trim()) return name.trim();
   }
   return null;
+}
+
+// The tenant brand is stored in mycelium as a tag with value "brand"; its meta
+// carries the base64 logo (a data URL) and optional brand colors. Returns the
+// logo + primaryColor for the sidebar avatar, or null when there's no brand tag.
+function tenantBrand(tenant: unknown): TenantBrand | null {
+  if (!tenant || typeof tenant !== "object") return null;
+  const tags = (tenant as { tags?: unknown }).tags;
+  if (!Array.isArray(tags)) return null;
+  const brand = tags.find(
+    (tag) => tag && typeof tag === "object" && (tag as { value?: unknown }).value === "brand",
+  ) as { meta?: Record<string, string> | null } | undefined;
+  const meta = brand?.meta;
+  if (!meta) return null;
+  return { logo: meta.base64Logo, color: meta.primaryColor };
 }

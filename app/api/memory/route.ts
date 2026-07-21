@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/memory?${query.toString()}`, {
+    res = await fetchMycelium(`/${role}/v1/memory?${query.toString()}`, {
       headers: { Authorization: `Bearer ${session.token}` },
     });
   } catch (err) {
@@ -74,7 +74,7 @@ export async function PUT(req: NextRequest) {
 
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${role}/v1/memory`, {
+    res = await fetchMycelium(`/${role}/v1/memory`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${session.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ tenant_id: tenantId, subs_acc_id: subsAccId, content }),
