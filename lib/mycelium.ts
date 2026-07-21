@@ -3,11 +3,18 @@
 export const MYCELIUM_INTERNAL_URL =
   process.env.MYCELIUM_INTERNAL_URL ?? "http://mycelium-gateway:8080";
 
+// With the gateway rename (service name == guest-role name) the set of agents
+// is no longer a fixed allowlist -- any subscribed role is a chattable agent,
+// and routing uses the role directly (`/<role>/v1/...`). `Instance` is thus a
+// plain role string, and `isInstance` is now only a non-empty guard (it no
+// longer gates which roles are allowed). INSTANCES survives solely as the seed
+// list for the admin model-registry dropdown; it does not gate routing or
+// subscription discovery.
 export const INSTANCES = ["alpha", "beta"] as const;
-export type Instance = (typeof INSTANCES)[number];
+export type Instance = string;
 
-export function isInstance(value: string): value is Instance {
-  return (INSTANCES as readonly string[]).includes(value);
+export function isInstance(value: string): boolean {
+  return typeof value === "string" && value.length > 0;
 }
 
 export class MyceliumConnectivityError extends Error {}

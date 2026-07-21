@@ -12,6 +12,7 @@ import {
   type TenantGroup,
   type AgentLeaf,
 } from "@/lib/subscriptions";
+import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -31,8 +32,15 @@ const leafButton = cva(
         true: "bg-accent/12 font-medium text-fg",
         false: "text-fg hover:bg-elevated/60",
       },
+      // Enrichment from /tools: an agent whose tool reports unhealthy is dimmed
+      // (not disabled) -- health detection is best-effort, so a mis-read stays
+      // recoverable by leaving the leaf clickable.
+      unhealthy: {
+        true: "opacity-50",
+        false: "",
+      },
     },
-    defaultVariants: { active: false },
+    defaultVariants: { active: false, unhealthy: false },
   },
 );
 
@@ -70,6 +78,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
   const [tenantBrands, setTenantBrands] = useState<Record<string, TenantBrand>>({});
+  const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
@@ -93,6 +102,21 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
       }
     })();
   }, [router]);
+
+  // Enrich the agent list from the gateway's public /tools catalog, joined by
+  // tool.name === role. Best-effort: listTools never throws (yields [] on any
+  // failure), so the tree renders exactly as before when /tools is empty or
+  // unreachable -- it only ever adds a tooltip + health hint, never filters.
+  useEffect(() => {
+    let cancelled = false;
+    listTools().then((list) => {
+      if (cancelled) return;
+      setTools(new Map(list.map((t) => [t.name, t])));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Resolve tenant display names lazily, per tenant, once the tree is grouped.
   // The tree renders immediately with uuids; names replace them as each fetch
@@ -228,13 +252,16 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
                                   const lKey = `${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`;
                                   const active = lKey === activeKey;
                                   const badge = accessLabel(leaf.perms);
+                                  const tool = tools.get(leaf.role);
+                                  const unhealthy = tool ? !isToolHealthy(tool) : false;
                                   return (
                                     <button
                                       key={lKey}
                                       type="button"
                                       disabled={entering}
                                       onClick={() => onPick(leaf)}
-                                      className={leafButton({ active })}
+                                      title={tool?.description || undefined}
+                                      className={leafButton({ active, unhealthy })}
                                     >
                                       <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
                                       <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>

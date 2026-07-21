@@ -37,13 +37,17 @@ import { getHistory } from "./history-cache";
 const conversationRow = cva(
   // Column on mobile (name on top, actions below); row on desktop with the
   // actions absolutely positioned so they reserve no width (the name never
-  // truncates just to make room for hidden buttons).
-  "group relative flex w-full flex-col rounded-lg transition-colors md:flex-row md:items-center md:pr-1",
+  // truncates just to make room for hidden buttons). `group/row` scopes the
+  // per-row hover/focus reveal so only the row under the cursor shows actions.
+  "group/row relative flex w-full flex-col rounded-lg transition md:flex-row md:items-center md:pr-1",
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
+      // When another conversation is hovered, the rest fade back so the row
+      // under the cursor is spotlighted.
+      dimmed: { true: "opacity-40", false: "opacity-100" },
     },
-    defaultVariants: { active: false },
+    defaultVariants: { active: false, dimmed: false },
   },
 );
 
@@ -84,6 +88,12 @@ export default function HistorySidebar({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
+  // The conversation currently under the cursor: the others dim (spotlight).
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Whether the cursor is anywhere over the sidebar. At rest the whole list is
+  // dimmed (only the active chat stays lit); hovering the sidebar lifts the dim,
+  // and hovering one row then spotlights just that chat.
+  const [sidebarHovered, setSidebarHovered] = useState(false);
 
   // Applies a change to a single conversation across both the base list and the
   // (optional) search results, mirroring the optimistic updates rename/delete do.
@@ -199,7 +209,11 @@ export default function HistorySidebar({
   const pendingDelete = deletingId ? visible.find((c) => c.id === deletingId) : null;
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div
+      className="flex h-full flex-col bg-surface"
+      onMouseEnter={() => setSidebarHovered(true)}
+      onMouseLeave={() => setSidebarHovered(false)}
+    >
       <div className="flex h-16 shrink-0 items-center gap-2 px-4">
         <Bot size={18} className="shrink-0 text-fg-muted" aria-hidden />
         <span
@@ -278,6 +292,7 @@ export default function HistorySidebar({
             workspace={workspace}
             conversations={visible}
             activeSessionId={activeSessionId}
+            sidebarHovered={sidebarHovered}
             onSelect={onSelect}
             onApply={applyToLists}
           />
@@ -336,9 +351,23 @@ export default function HistorySidebar({
               );
             }
             const enriching = enrichingId === conversation.id;
+            // Resting: dim all but the active chat. Sidebar hovered (no row):
+            // everything lit. A row hovered: only that chat stays lit.
+            const dimmed =
+              hoveredId !== null
+                ? hoveredId !== conversation.id
+                : sidebarHovered
+                  ? false
+                  : !active;
             return (
               <div key={conversation.id}>
-                <div className={conversationRow({ active })}>
+                <div
+                  onMouseEnter={() => setHoveredId(conversation.id)}
+                  onMouseLeave={() =>
+                    setHoveredId((cur) => (cur === conversation.id ? null : cur))
+                  }
+                  className={conversationRow({ active, dimmed })}
+                >
                   <button
                     type="button"
                     onClick={() => onOpenConversation(conversation.id)}
@@ -365,7 +394,7 @@ export default function HistorySidebar({
                   {/* Mobile: an always-visible action row below the name. Desktop:
                       an absolute box on the right, revealed on hover, so it costs
                       the name no width. */}
-                  <div className="flex items-center gap-0.5 border-t border-brand/10 px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                  <div className="flex items-center gap-0.5 border-t border-brand/10 px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
                     <IconButton
                       variant="ghost"
                       size="sm"

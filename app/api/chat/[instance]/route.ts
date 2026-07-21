@@ -27,7 +27,7 @@ export async function POST(
 
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${instance}/v1/chat/completions`, {
+    res = await fetchMycelium(`/${instance}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -16,12 +16,12 @@ interface DiscoveryResponse {
   subscriptions: Subscription[];
 }
 
-// Workspace discovery. The `/picoclaw-alpha/v1/subscriptions` proxy route is
+// Workspace discovery. The `/alpha/v1/subscriptions` proxy route is
 // `protected` (any member) and agent-agnostic -- alpha is just the vehicle,
 // the response lists every workspace the caller is licensed into regardless
-// of agent. We keep only the ones whose role maps to a configured agent
-// (INSTANCES): a role with no agent can't be chatted (would 403), so it has
-// no card (workspace-selection resolved point 3).
+// of agent. We keep every row with a non-empty role: with the service==role
+// rename the agent list is no longer an allowlist, so any subscribed role is
+// a chattable workspace (workspace-selection resolved point 3).
 export async function GET() {
   const session = await getSession();
   if (!session) {
@@ -30,7 +30,7 @@ export async function GET() {
 
   let res: Response;
   try {
-    res = await fetchMycelium("/picoclaw-alpha/v1/subscriptions", {
+    res = await fetchMycelium("/alpha/v1/subscriptions", {
       headers: { Authorization: `Bearer ${session.token}` },
     });
   } catch (err) {

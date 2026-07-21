@@ -22,6 +22,10 @@
   --brand: #663a88;      /* structural violet border (brand-600) */
   --fg: #0a2933;         /* text primary */
   --fg-muted: #5a6b72;   /* secondary text */
+  /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
+     A plain dark shadow vanishes on a dark background, so dark mode adds a
+     faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
+  --shadow-e: 0 1px 2px rgba(10, 41, 51, 0.10), 0 4px 12px rgba(10, 41, 51, 0.10);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,6 +39,7 @@
     --brand: #a988c9;
     --fg: #e6eef2;
     --fg-muted: #9fb0b7;
+    --shadow-e: 0 2px 8px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 }
 
@@ -48,6 +53,10 @@
   --color-brand: var(--brand);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
+
+  /* Theme-aware elevation utility -> `shadow-elevated`. Uses the runtime var so
+     it flips with prefers-color-scheme (a baked literal here would not). */
+  --shadow-elevated: var(--shadow-e);
 
   /* next/font sets --ff-* on <html>; keep the family utilities pointing at
      those runtime vars (with static fallbacks) rather than baking a value. */

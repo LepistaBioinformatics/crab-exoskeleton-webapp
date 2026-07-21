@@ -9,7 +9,7 @@ import type { SessionCookie } from "@/lib/session";
 // vehicle (same pattern as /api/subscriptions). Authorization (caller tier vs
 // target scope) is enforced server-side in the proxy from the injected profile;
 // this BFF only forwards the session JWT and surfaces the real status.
-const ADMIN_BASE = "/picoclaw-alpha/v1/admin";
+const ADMIN_BASE = "/alpha/v1/admin";
 
 export async function requireSession(): Promise<SessionCookie | NextResponse> {
   const session = await getSession();
@@ -64,7 +64,7 @@ export async function proxyAdminJson(
   return NextResponse.json(data);
 }
 
-// Agent-aware variant: routes through `/picoclaw-<agent>/v1/admin` so the proxy
+// Agent-aware variant: routes through `/<agent>/v1/admin` so the proxy
 // resolves that specific agent. Used by the model registry, which is per-agent
 // (alpha and beta keep separate model catalogs). `agent` must be an instance.
 export async function proxyAdminJsonAgent(
@@ -75,7 +75,7 @@ export async function proxyAdminJsonAgent(
 ): Promise<NextResponse> {
   let res: Response;
   try {
-    res = await fetchMycelium(`/picoclaw-${agent}/v1/admin${suffix}`, {
+    res = await fetchMycelium(`/${agent}/v1/admin${suffix}`, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${session.token}` },
     });

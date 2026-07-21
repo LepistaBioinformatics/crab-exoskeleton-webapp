@@ -55,12 +55,16 @@ export default function ConversationTree({
   workspace,
   conversations,
   activeSessionId,
+  sidebarHovered = false,
   onSelect,
   onApply,
 }: {
   workspace: Workspace;
   conversations: ConversationSummary[];
   activeSessionId?: string;
+  // Whether the cursor is anywhere over the sidebar (owned by the parent so the
+  // resting dim lifts on hover of the whole sidebar, matching the list view).
+  sidebarHovered?: boolean;
   onSelect?: () => void;
   // Optimistic update of a conversation's metadata (alias/tags), so editing from
   // the tree updates the shared list the same way the list view does.
@@ -85,7 +89,6 @@ export default function ConversationTree({
   // The focus/dim treatment is gated on the cursor being over the tree area:
   // outside it the whole tree stays at full emphasis regardless of selection.
   // Only while hovering does one thread stand out and the rest fade back.
-  const [treeHovered, setTreeHovered] = useState(false);
 
   // Always-current active sid, read inside the fetch effect without making it a
   // dependency (navigating shouldn't refetch; only sends/completions should).
@@ -163,20 +166,30 @@ export default function ConversationTree({
       .sort((a, b) => a.first - b.first);
     const laneLastRow: number[] = []; // laneLastRow[l] = bottom-most row still in lane l
     const dotLaneOf = new Map<string, number>();
+    // Conversations whose real lane exceeds the column cap: they're clamped onto
+    // the last column for their dot, but must NOT contribute a rail segment there
+    // -- their span overlaps whoever legitimately owns that column, and a shared
+    // column can only draw one continuous 1px rail. Adding them would let the
+    // first-sorted segment steal the others' rails, leaving their dots detached
+    // and mis-colored. So overflow lanes keep their dots but forgo the rail.
+    const overflowIds = new Set<string>();
     for (const c of convs) {
       let lane = laneLastRow.findIndex((lastRow) => lastRow < c.first);
       if (lane === -1) lane = laneLastRow.length;
       laneLastRow[lane] = c.last;
+      if (lane >= MAX_LANE_COLUMNS) overflowIds.add(c.id);
       dotLaneOf.set(c.id, Math.min(lane, MAX_LANE_COLUMNS - 1));
     }
     const laneCount = Math.min(laneLastRow.length, MAX_LANE_COLUMNS);
-    // Per-lane segments (after clamping) so a row can look up which conversation
-    // occupies each lane column and draw its rail in the right color.
+    // Per-lane segments so a row can look up which conversation occupies each lane
+    // column and draw its rail in the right color. Overflow lanes are skipped so
+    // they never corrupt the owning conversation's rail (see above).
     const laneSegments: { first: number; last: number; id: string }[][] = Array.from(
       { length: laneCount },
       () => [],
     );
     range.forEach((r, id) => {
+      if (overflowIds.has(id)) return;
       laneSegments[dotLaneOf.get(id)!].push({ first: r.first, last: r.last, id });
     });
     laneSegments.forEach((segs) => segs.sort((a, b) => a.first - b.first));
@@ -229,14 +242,16 @@ export default function ConversationTree({
 
   const { bursts, dotLaneOf, laneCount, laneSegments } = model;
 
+  // Three emphasis states, matching the list view. At rest (cursor off the
+  // sidebar) everything dims but the active chat; hovering the sidebar lifts the
+  // dim; hovering one row spotlights just that conversation.
+  const spotlightId = hoveredConv ?? (sidebarHovered ? null : activeSessionId ?? null);
+  const uniformLit = hoveredConv == null && sidebarHovered;
+  const isDimmed = (id: string) =>
+    uniformLit ? false : spotlightId != null ? id !== spotlightId : true;
+
   return (
-    <div
-      role="tree"
-      aria-label="Conversation tree"
-      className="flex min-h-full flex-col"
-      onMouseEnter={() => setTreeHovered(true)}
-      onMouseLeave={() => setTreeHovered(false)}
-    >
+    <div role="tree" aria-label="Conversation tree" className="flex min-h-full flex-col">
       {bursts.map((b, i) => {
         const dotLane = dotLaneOf.get(b.conversationId)!;
         const conv = convById.get(b.conversationId);
@@ -248,13 +263,7 @@ export default function ConversationTree({
         const alias = conv?.alias ?? null;
         const tags = conv?.tags ?? [];
         const editing = enrichingId === key;
-        // Focus/dim treatment applies when a conversation is SELECTED (persists
-        // without hovering) or while the cursor is over the tree. The focused
-        // thread = hovered row (if any) else the selected one stays vivid and the
-        // rest fade back. With nothing selected and off the tree, full emphasis.
-        const focused = hoveredConv ?? activeSessionId ?? null;
-        const emphasize = treeHovered || activeSessionId != null;
-        const dimmed = emphasize && focused !== null && b.conversationId !== focused;
+        const dimmed = isDimmed(b.conversationId);
 
         return (
           <div
@@ -290,16 +299,18 @@ export default function ConversationTree({
                   {Array.from({ length: laneCount }, (_, l) => {
                     const seg = laneSegments[l].find((s) => i >= s.first && i <= s.last);
                     const dotHere = l === dotLane;
-                    // With nothing focused every rail sits at the baseline; when
-                    // a thread is focused (selected or hovered), its rail is
-                    // boosted and the others fade back.
-                    const railAlpha = !emphasize ? 0.4 : seg && seg.id === focused ? 0.65 : 0.1;
                     return (
                       <span key={l} className="relative w-3.5">
                         {seg && (
                           <span
-                            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-[background-color] duration-200"
-                            style={{ backgroundColor: laneColorFor(convById.get(seg.id), seg.id, railAlpha) }}
+                            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-opacity duration-200"
+                            // Full lane color + opacity dim, so the connecting
+                            // line matches its dot exactly (same color and fade)
+                            // instead of a washed-out low-alpha tint.
+                            style={{
+                              backgroundColor: laneColorFor(convById.get(seg.id), seg.id),
+                              opacity: isDimmed(seg.id) ? 0.3 : 1,
+                            }}
                           />
                         )}
                         {dotHere && (

@@ -36,7 +36,7 @@ export async function GET(
   let res: Response;
   try {
     res = await fetchMycelium(
-      `/picoclaw-${instance}/v1/sessions/history?${query.toString()}`,
+      `/${instance}/v1/sessions/history?${query.toString()}`,
       { headers: { Authorization: `Bearer ${session.token}` } },
     );
   } catch (err) {
