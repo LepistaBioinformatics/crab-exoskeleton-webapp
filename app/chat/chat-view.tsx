@@ -4,22 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createConversation,
+  listConversations,
   touchConversation,
   syncSessionRefs,
   notifyConversationsUpdated,
   renameConversation,
   upsertTag,
+  type ConversationSummary,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { KeyRound, PanelRight, Reply } from "lucide-react";
+import { Bot, KeyRound, PanelRight, Reply, User } from "lucide-react";
 import { setFragmentSid, historyQuery, useFragment, type Workspace } from "@/app/chat/fragment";
 import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { TagChip } from "@/app/chat/conversation-enrichment";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
@@ -40,9 +43,9 @@ const messageBand = cva("group relative w-full text-fg", {
     role: {
       // Vertical padding is applied per-message in the render (userPad) since it
       // depends on whether the user message stands alone between agent messages.
-      user: "border-[0.5px] border-accent/60 dark:border-0 bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1 after:bg-accent after:content-['']",
+      user: "border-x-[0.5px] border-accent/60 dark:border-0 bg-accent/12 px-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1 after:bg-accent after:content-['']",
       assistant:
-        "border-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
+        "border-x-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 px-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
     },
   },
 });
@@ -150,6 +153,9 @@ export default function ChatView({
   // holds the index of the message whose actions are open (mobile only).
   const [openActions, setOpenActions] = useState<number | null>(null);
   const lastUploadAtRef = useRef(0);
+  // When the current conversation is empty, the most-recent OTHER conversation
+  // (if the user has one) is offered as a "resume where you left off" card.
+  const [resumeCandidate, setResumeCandidate] = useState<ConversationSummary | null>(null);
 
   // The uploads panel is a permanent right column; remember whether it's open.
   useEffect(() => {
@@ -158,6 +164,31 @@ export default function ChatView({
   useEffect(() => {
     localStorage.setItem("chat-files-open", filesOpen ? "1" : "0");
   }, [filesOpen]);
+
+  // Find the most-recent conversation other than the current one, skipping
+  // freshly-minted empty chats, so an empty conversation can offer to resume a
+  // real previous one. Re-runs when the workspace or selected session changes.
+  useEffect(() => {
+    let alive = true;
+    listConversations(workspace)
+      .then((list) => {
+        if (!alive) return;
+        const candidate = list
+          .filter((c) => c.id !== sessionId)
+          .filter((c) => !(c.title === "New chat" && !c.alias && c.tags.length === 0))
+          .reduce<ConversationSummary | null>(
+            (best, c) => (!best || c.updatedAt > best.updatedAt ? c : best),
+            null,
+          );
+        setResumeCandidate(candidate);
+      })
+      .catch(() => {
+        if (alive) setResumeCandidate(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [workspace.t, workspace.s, workspace.r, sessionId]);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a long
   // reply can be read from the start while it's still streaming), while the
@@ -616,6 +647,9 @@ export default function ChatView({
   // same cluster as the buttons.
   const renderActions = (m: ChatMessage, index: number) => (
     <>
+      <span className="select-none self-center pl-1 text-fg-muted" aria-hidden>
+        {m.role === "user" ? <User size={15} /> : <Bot size={15} />}
+      </span>
       <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
         {index + 1}
       </span>
@@ -653,12 +687,12 @@ export default function ChatView({
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-brand/30 px-4 py-2">
-        <span className="min-w-0 truncate font-display text-sm font-semibold text-fg">
+      <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2">
+        <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
           agent {workspace.r}
         </span>
-        <div className="flex items-center gap-1">
-          <ViewModeToggle view="chat" />
+        <ViewModeToggle view="chat" />
+        <div className="flex flex-1 items-center justify-end gap-1">
           <IconButton
             variant="ghost"
             size="sm"
@@ -713,6 +747,39 @@ export default function ChatView({
         // Empty conversation: center the composer with a prompt to begin, so a
         // fresh chat invites a first message instead of showing a blank column.
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+          {resumeCandidate && (
+            <div className="flex w-full flex-col items-center gap-4">
+              <div className="text-center">
+                <h2 className="font-display text-2xl font-bold text-fg">
+                  Continue where you left off
+                </h2>
+                <p className="mt-2 text-sm text-fg-muted">
+                  Jump back into your most recent conversation with agent {workspace.r}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFragmentSid(resumeCandidate.id)}
+                className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-brand/30 bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-brand/60 hover:bg-elevated"
+              >
+                <span className="w-full truncate text-sm font-medium text-fg">
+                  {resumeCandidate.title}
+                </span>
+                {resumeCandidate.alias && (
+                  <span className="w-full truncate text-xs text-fg-muted">
+                    {resumeCandidate.alias}
+                  </span>
+                )}
+                {resumeCandidate.tags.length > 0 && (
+                  <span className="flex flex-wrap gap-1">
+                    {resumeCandidate.tags.map((tag) => (
+                      <TagChip key={tag.name} tag={tag} />
+                    ))}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
           <div className="text-center">
             <h2 className="font-display text-2xl font-bold text-fg">Start a new chat</h2>
             <p className="mt-2 text-sm text-fg-muted">

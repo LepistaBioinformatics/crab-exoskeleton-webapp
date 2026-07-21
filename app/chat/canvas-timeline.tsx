@@ -172,11 +172,12 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
   const model = useMemo(() => (bursts ? deriveLanes(bursts, MAX_LANES) : null), [bursts]);
 
   const header = (
-    <div className="flex h-[45px] shrink-0 items-center justify-between gap-2 border-b border-brand/30 px-4">
-      <span className="min-w-0 truncate font-display text-sm font-semibold capitalize text-fg" title={`agent ${workspace.r}`}>
+    <div className="flex h-[45px] shrink-0 items-center gap-2 border-b border-brand/30 px-4">
+      <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold capitalize text-fg" title={`agent ${workspace.r}`}>
         {workspace.r}
       </span>
       <ViewModeToggle view="canvas" />
+      <div className="flex-1" aria-hidden />
     </div>
   );
 
