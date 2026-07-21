@@ -28,6 +28,10 @@ export interface FragmentState {
   // History sidebar view mode ("tree" | "list"); persisted in the URL so a
   // reload or shared link keeps it. Absent means the default (list).
   hv?: string;
+  // Top-level workspace view ("canvas"); when set, the Canvas timeline replaces
+  // the history sidebar + chat view. Persisted in the URL so a reload or shared
+  // link keeps it. Absent means the traditional chat.
+  view?: string;
 }
 
 export function fragmentHash(workspace: Workspace, sid: string): string {
@@ -44,6 +48,7 @@ function readFragment(): FragmentState {
     sid: params.get("sid") ?? undefined,
     msg: params.get("msg") ?? undefined,
     hv: params.get("hv") ?? undefined,
+    view: params.get("view") ?? undefined,
   };
 }
 
@@ -69,6 +74,19 @@ export function setHistoryView(view: "list" | "tree"): void {
   const params = new URLSearchParams(window.location.hash.slice(1));
   if (view === "tree") params.set("hv", "tree");
   else params.delete("hv");
+  window.location.hash = params.toString();
+}
+
+// Persists the top-level workspace view in the URL. Same assign-`location.hash`
+// mechanism as setHistoryView so a native `hashchange` fires and the address bar
+// updates; other params (t/s/r/sid/hv) are preserved. "chat" is the default, so
+// it's dropped from the hash to keep it clean; entering canvas drops the
+// transient scroll anchor (`msg`).
+export function setView(view: "chat" | "canvas"): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (view === "canvas") params.set("view", "canvas");
+  else params.delete("view");
+  params.delete("msg");
   window.location.hash = params.toString();
 }
 
