@@ -7,12 +7,15 @@ import {
   touchConversation,
   syncSessionRefs,
   notifyConversationsUpdated,
+  renameConversation,
+  upsertTag,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
 import { KeyRound, PanelRight, Reply } from "lucide-react";
 import { setFragmentSid, historyQuery, useFragment, type Workspace } from "@/app/chat/fragment";
+import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
@@ -32,22 +35,29 @@ import { Spinner } from "@/components/ui/spinner";
 // stronger (still light) yellow origin bar; dark mode keeps the neutral band but
 // turns the text and bar yellow. The user's messages stay cyan, only shifting
 // their text to a soft blue in dark mode.
-const messageBand = cva("group relative w-full py-3 text-fg", {
+const messageBand = cva("group relative w-full text-fg", {
   variants: {
     role: {
-      user: "border-[0.5px] border-accent/60 dark:border-0 bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-[3px] after:bg-accent after:content-['']",
+      // Vertical padding is applied per-message in the render (userPad) since it
+      // depends on whether the user message stands alone between agent messages.
+      user: "border-[0.5px] border-accent/60 dark:border-0 bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1 after:bg-accent after:content-['']",
       assistant:
-        "border-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
+        "border-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
     },
   },
 });
 
-// A clear gap when the speaker changes (distinct blocks), tight when the same
-// speaker continues (one flowing message).
+// A small gap only when the speaker changes (distinct blocks); consecutive
+// same-speaker messages touch (no gap) so a run reads as one continuous block.
 const bandGap = cva("", {
-  variants: { changed: { true: "mt-4", false: "mt-0.5" } },
+  variants: { changed: { true: "mt-1", false: "mt-0" } },
   defaultVariants: { changed: false },
 });
+
+// Band vertical padding, shared by both roles: roomy in a same-speaker run,
+// roomier still when a message stands alone between the other speaker's
+// messages. (Applied to the agent's bands too, matching the user's.)
+const bandPad = (standalone: boolean) => (standalone ? "py-10" : "py-6");
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -92,6 +102,15 @@ const RETRY_MAX_MS = 30000;
 const retryDelay = (attempt: number) => Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Debounced batch send. A message isn't POSTed the instant you hit send: it
+// joins a pending queue and, after SEND_DEBOUNCE_MS of no further typing/sending,
+// the whole queue flushes as ONE turn (a single API call). Typing again re-arms
+// the timer -- since nothing has hit the API yet, the prior send is effectively
+// cancelled. The queue is keyed by conversation id at module scope so it
+// survives switching chats (and remounts): stacked messages are never lost.
+const SEND_DEBOUNCE_MS = 3000;
+const pendingOutbox = new Map<string, string[]>();
+
 export default function ChatView({
   workspace,
   sessionId,
@@ -115,6 +134,18 @@ export default function ChatView({
   const [settling, setSettling] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   const [retrying, setRetrying] = useState<number | null>(null);
+  // Composed-but-not-yet-sent messages for the current conversation (mirrors
+  // pendingOutbox for reactivity); each shows as a pulsing user band.
+  const [pending, setPending] = useState<string[]>([]);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Transient feedback for slash commands (/rename, /tag).
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = (kind: "ok" | "error", text: string) => {
+    setNotice({ kind, text });
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 4000);
+  };
   // On touch (no hover), tapping a message opens its action row below the card;
   // holds the index of the message whose actions are open (mobile only).
   const [openActions, setOpenActions] = useState<number | null>(null);
@@ -133,6 +164,10 @@ export default function ChatView({
   // very first load of a conversation jumps to the most recent message.
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
+  // Pending bubbles live after the message list (not in messageRefs); a sentinel
+  // lets us scroll them into view so the "not sent yet" pulse is never below the
+  // fold in a long conversation.
+  const pendingEndRef = useRef<HTMLDivElement | null>(null);
   const creatingSid = useRef(false);
 
   // Always mirrors the currently-viewed session, so an in-flight stream can
@@ -142,6 +177,16 @@ export default function ChatView({
   useEffect(() => {
     activeSidRef.current = sessionId;
   }, [sessionId]);
+
+  // Clear the pending flush timer on unmount. The queue itself lives in
+  // pendingOutbox (module scope), so it survives and is never lost.
+  useEffect(
+    () => () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
 
   // A valid workspace with no `sid` (direct nav) gets a fresh conversation (id
   // minted server-side, so it also lands in the sidebar) instead of losing the
@@ -171,6 +216,17 @@ export default function ChatView({
     setReplyTo(null);
     setOpenActions(null);
     setLoadingHistory(true);
+
+    // Restore this conversation's stacked (pending) messages and cancel any timer
+    // left from the previous conversation. We do NOT re-arm here: a stack parked
+    // by switching away stays parked (never force-sends just from looking at it);
+    // its countdown resumes only when the user re-engages -- types (bumpFlush) or
+    // sends (enqueue) -- both of which re-arm.
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    setPending(pendingOutbox.get(sessionId) ?? []);
 
     let cancelled = false;
     (async () => {
@@ -214,6 +270,12 @@ export default function ChatView({
     messageRefs.current[scrollToIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
+
+  // Keep the newest pending bubble in view when the stack grows (or is restored),
+  // so the pulsing "not sent yet" signal is visible even in a scrolled chat.
+  useEffect(() => {
+    if (pending.length > 0) pendingEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [pending.length]);
 
   // Scroll anchor: when the fragment carries a `msg` (a message's created_at,
   // set by clicking a past point in the tree view), scroll to that message once
@@ -279,24 +341,73 @@ export default function ChatView({
   // the network turn runs in a detached async IIFE, so a keystroke never rides
   // the streaming path -- and typing, living in the composer, no longer
   // re-renders the message list at all.
-  function sendMessage(text: string): boolean {
+  // Compose one message exactly as it will be sent/shown: a leading reply quote,
+  // the text, then attachment path refs the agent can open. Returns null when
+  // there's nothing to send.
+  function compose(text: string): string | null {
     const trimmed = text.trim();
-    if ((!trimmed && attachments.length === 0) || !sessionId || sending) return false;
-    const sid = sessionId; // the conversation this reply belongs to
-
-    // The turn is text-only: attachments ride along as workspace path references
-    // the agent (a vision model / reader skill) can open, and a reply rides as a
-    // leading markdown blockquote. The visible message shows the same, so the
-    // user sees exactly what was sent and the quote persists on reload.
+    if (!trimmed && attachments.length === 0) return null;
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
     const quote = replyTo ? buildQuote(replyTo) : "";
-    const composed = [quote, trimmed, refs].filter(Boolean).join("\n\n");
+    return [quote, trimmed, refs].filter(Boolean).join("\n\n");
+  }
 
+  // (Re)arm the debounce: after SEND_DEBOUNCE_MS with no further activity, the
+  // pending queue for `sid` flushes as one turn.
+  function armFlush(sid: string) {
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(() => flushPending(sid), SEND_DEBOUNCE_MS);
+  }
+
+  // Enqueue a composed message as PENDING (pulsing), not sent yet. Consumes the
+  // reply/attachments (as a real send would) and arms the debounce.
+  function enqueue(text: string): boolean {
+    if (!sessionId || sending) return false;
+    const composed = compose(text);
+    if (composed === null) return false;
+    const sid = sessionId;
+    setReplyTo(null);
+    setAttachments([]);
+    // The outbox (module scope) is the source of truth; mirror into state for
+    // rendering. Reading from it (not the `pending` closure) avoids stale state.
+    const next = [...(pendingOutbox.get(sid) ?? []), composed];
+    pendingOutbox.set(sid, next);
+    setPending(next);
+    armFlush(sid);
+    return true;
+  }
+
+  // A keystroke while a stack is pending pushes the flush back, so the user can
+  // keep adding messages before any of them hit the API.
+  function bumpFlush() {
+    if (sessionId && (pendingOutbox.get(sessionId)?.length ?? 0) > 0) armFlush(sessionId);
+  }
+
+  // The debounce fired: send the whole pending stack for `sid` as ONE turn. Only
+  // the actively-viewed conversation flushes (others keep their stack until the
+  // user returns to them).
+  function flushPending(sid: string) {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    // Only flush the conversation currently in view; if the user navigated away
+    // before the timer fired, leave the stack intact in the outbox for later.
+    if (sid !== activeSidRef.current) return;
+    const texts = pendingOutbox.get(sid);
+    if (!texts || texts.length === 0) return;
+    pendingOutbox.delete(sid);
+    setPending([]);
+    postTurn(texts.join("\n\n"), sid);
+  }
+
+  // POST one (already-composed) turn and stream the reply. Unchanged from the
+  // original send path other than taking the composed text + sid as arguments.
+  function postTurn(composed: string, sid: string): void {
     // The new user message's index -- scroll its *top* into view once it (and
     // the assistant placeholder after it) render.
     setScrollToIndex(messages.length);
     setMessages((prev) => [...prev, { role: "user", content: composed }, { role: "assistant", content: "" }]);
-    setReplyTo(null);
     setSending(true);
     setError(null);
 
@@ -304,8 +415,11 @@ export default function ChatView({
     // If a file was just uploaded, wait for picoclaw to settle (reload) before
     // firing the turn, so the first message after an attach doesn't hit the
     // container mid-reload. Shows a friendly "saving your file" note meanwhile.
+    // Attachments were consumed at enqueue time, so detect them from the
+    // composed text (the "[anexo: …]" refs) rather than the now-cleared array.
+    const hadUpload = composed.includes("[anexo:");
     const sinceUpload = Date.now() - lastUploadAtRef.current;
-    const settleWait = attachments.length > 0 ? Math.max(0, UPLOAD_SETTLE_MS - sinceUpload) : 0;
+    const settleWait = hadUpload ? Math.max(0, UPLOAD_SETTLE_MS - sinceUpload) : 0;
     if (settleWait > 0) {
       setSettling(true);
       await new Promise((resolve) => setTimeout(resolve, settleWait));
@@ -427,7 +541,73 @@ export default function ChatView({
       }
     }
     })();
+  }
 
+  // Slash commands operate on the CURRENT chat instead of sending a message.
+  // Returns true when the text was consumed as a command (so the composer
+  // clears). Actions are async with transient success/error feedback.
+  function runCommand(raw: string): boolean {
+    const text = raw.trim();
+    const sp = text.indexOf(" ");
+    const cmd = (sp === -1 ? text : text.slice(0, sp)).toLowerCase();
+    const arg = sp === -1 ? "" : text.slice(sp + 1).trim();
+    if (!sessionId) return false;
+
+    if (cmd === "/rename") {
+      if (!arg) {
+        flash("error", "Uso: /rename <novo título>");
+        return true;
+      }
+      renameConversation(sessionId, arg)
+        .then((saved) => {
+          notifyConversationsUpdated();
+          flash("ok", `Chat renomeado para “${saved}”.`);
+        })
+        .catch((e) => flash("error", e instanceof Error ? e.message : "Não consegui renomear."));
+      return true;
+    }
+
+    if (cmd === "/tag") {
+      if (!arg) {
+        flash("error", "Uso: /tag <nome> [valor] [#cor]");
+        return true;
+      }
+      // Peel an optional trailing "#…" color, then split name[=value] (or
+      // "name value"). The token after "#" may be a hex code (#e11d48, #f00) or
+      // a literal CSS color name (#red, #teal); names are used verbatim.
+      let rest = arg;
+      let color: string | undefined;
+      const cm = rest.match(/\s*#(\S+)\s*$/);
+      if (cm) {
+        const token = cm[1];
+        color = /^[0-9a-fA-F]{3,8}$/.test(token) ? `#${token}` : token.toLowerCase();
+        rest = rest.slice(0, cm.index).trim();
+      }
+      let name: string;
+      let val: string;
+      if (rest.includes("=")) {
+        const [n, ...v] = rest.split("=");
+        name = n.trim();
+        val = v.join("=").trim();
+      } else {
+        const parts = rest.split(/\s+/);
+        name = parts[0];
+        val = parts.slice(1).join(" ");
+      }
+      if (!name) {
+        flash("error", "Uso: /tag <nome> [valor] [#cor]");
+        return true;
+      }
+      upsertTag(sessionId, { name, value: val || name, metadata: color ? { color } : {} })
+        .then(() => {
+          notifyConversationsUpdated();
+          flash("ok", `Tag “${name}” aplicada.`);
+        })
+        .catch((e) => flash("error", e instanceof Error ? e.message : "Não consegui aplicar a tag."));
+      return true;
+    }
+
+    flash("error", `Comando desconhecido: ${cmd}. Tente /rename ou /tag.`);
     return true;
   }
 
@@ -454,7 +634,9 @@ export default function ChatView({
 
   const composer = (
     <Composer
-      onSend={sendMessage}
+      onSend={enqueue}
+      onTyping={bumpFlush}
+      onCommand={runCommand}
       sending={sending}
       loadingHistory={loadingHistory}
       sessionId={sessionId ?? ""}
@@ -476,6 +658,7 @@ export default function ChatView({
           agent {workspace.r}
         </span>
         <div className="flex items-center gap-1">
+          <ViewModeToggle view="chat" />
           <IconButton
             variant="ghost"
             size="sm"
@@ -510,6 +693,12 @@ export default function ChatView({
         </div>
       )}
 
+      {notice && (
+        <div className="px-4 pt-4">
+          <Alert severity={notice.kind === "error" ? "error" : "info"}>{notice.text}</Alert>
+        </div>
+      )}
+
       {settling && (
         <div className="px-4 pt-4">
           <Alert severity="info">Estamos guardando o arquivo para você…</Alert>
@@ -520,7 +709,7 @@ export default function ChatView({
         <div className="flex flex-1 items-center justify-center">
           <Spinner size={28} />
         </div>
-      ) : messages.length === 0 ? (
+      ) : messages.length === 0 && pending.length === 0 ? (
         // Empty conversation: center the composer with a prompt to begin, so a
         // fresh chat invites a first message instead of showing a blank column.
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
@@ -533,14 +722,19 @@ export default function ChatView({
           {composer}
         </div>
       ) : (
-        <>
-          <div className="flex-1 overflow-auto px-4 py-6">
+        <div className="relative min-h-0 flex-1">
+          <div className="absolute inset-0 overflow-auto px-4 pt-6 pb-40">
             <div className="mx-auto w-full max-w-[720px]">
               {messages.map((m, i) => {
                 const streaming = sending && i === messages.length - 1 && m.role === "assistant";
                 const { text, refs } = parseAnexos(m.content);
                 const prev = messages[i - 1];
+                const next = messages[i + 1];
                 const changed = Boolean(prev && prev.role !== m.role);
+                // A message with no same-role neighbor on either side stands alone
+                // (flanked by the other speaker, or at an edge), so it gets the
+                // roomier padding -- applied to both user and agent bands.
+                const standalone = prev?.role !== m.role && next?.role !== m.role;
                 return (
                   <div
                     key={i}
@@ -550,7 +744,7 @@ export default function ChatView({
                     className={bandGap({ changed })}
                   >
                     <div
-                      className={messageBand({ role: m.role })}
+                      className={`${messageBand({ role: m.role })} ${bandPad(standalone)}`}
                       onClick={() => {
                         // A drag-to-select ends in a click here; don't hijack it
                         // (toggling state would drop the selection). Only the
@@ -596,10 +790,45 @@ export default function ChatView({
                   </div>
                 );
               })}
+
+              {/* Stacked-but-not-yet-sent messages: same user band, its origin
+                  bar pulsing to signal "pending" until the batch flushes. */}
+              {pending.map((content, i) => {
+                const { text, refs } = parseAnexos(content);
+                // All pending are the user's; a run touches, and a lone pending
+                // after an agent message stands alone (roomier padding).
+                const prevIsUser = i > 0 || messages[messages.length - 1]?.role === "user";
+                const alone = !prevIsUser && i === pending.length - 1;
+                return (
+                  <div key={`pending-${i}`} className={bandGap({ changed: !prevIsUser })}>
+                    <div className={`${messageBand({ role: "user" })} origin-pulse ${bandPad(alone)}`}>
+                      {text && <MessageContent content={text} />}
+                      {refs.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {refs.map((r) => (
+                            <AttachmentButton
+                              key={r.path}
+                              workspace={workspace}
+                              path={r.path}
+                              name={r.name}
+                              tone="chip"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={pendingEndRef} />
             </div>
           </div>
-          <div className="px-4 pb-4">{composer}</div>
-        </>
+          {/* The composer floats, suspended over the chat; the scroll area's
+              bottom padding keeps the last messages clear of it. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-6">
+            <div className="pointer-events-auto mx-auto w-full max-w-[720px]">{composer}</div>
+          </div>
+        </div>
       )}
       </div>
 

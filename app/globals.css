@@ -67,6 +67,35 @@
   --animate-blink: blink 1s step-start infinite;
 }
 
+/* Pending (queued-but-not-yet-sent) message: its origin bar (the ::before /
+   ::after speaker stripe) pulses until the batch flushes to the gateway, so the
+   user can see a message hasn't been sent yet. Auto-neutralized by the
+   reduced-motion guard below. */
+@keyframes originPulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+.origin-pulse::before,
+.origin-pulse::after {
+  animation: originPulse 1.1s ease-in-out infinite;
+}
+
+/* The composer breathes a soft accent ring while the user is actively typing.
+   Auto-neutralized by the reduced-motion guard below. */
+@keyframes composerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+.composer-typing {
+  animation: composerPulse 1.15s ease-in-out infinite;
+}
+
 /* Respect reduced-motion everywhere without policing each transition. */
 @media (prefers-reduced-motion: reduce) {
   *,
