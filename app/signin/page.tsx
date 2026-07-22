@@ -1,15 +1,57 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Logo from "@/app/logo";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import BrandName from "@/app/brand-name";
-import { Surface } from "@/components/ui/surface";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
+import MyceliumBg from "@/components/landing/mycelium-bg";
+import styles from "@/components/landing/landing.module.css";
 
 type Step = "email" | "code";
+
+// A prominent 6-slot code mask: one real input drives entry (covering the
+// grid), while the slots render each digit with a glowing active slot.
+function CodeInput({
+  value,
+  onChange,
+  length = 6,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  length?: number;
+  autoFocus?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const chars = value.split("");
+  return (
+    <div className={styles.codeWrap} onClick={() => ref.current?.focus()}>
+      <input
+        ref={ref}
+        className={styles.codeInputHidden}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        pattern="[0-9]*"
+        maxLength={length}
+        value={value}
+        autoFocus={autoFocus}
+        aria-label="Verification code"
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, length))}
+      />
+      {Array.from({ length }).map((_, i) => (
+        <div
+          key={i}
+          className={`${styles.codeSlot} ${chars[i] ? styles.codeSlotFilled : ""} ${
+            i === value.length ? styles.codeSlotActive : ""
+          }`}
+        >
+          {chars[i] ?? ""}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function SignInPage() {
   const router = useRouter();
@@ -64,87 +106,84 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg">
-      <Surface bordered shadow="signature" className="w-[380px] p-8">
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3">
-            <Logo size={44} />
+    <MyceliumBg>
+      <div className={styles.authScreen}>
+        <div className={styles.authCard}>
+          <Link href="/" className={styles.backLink}>
+            <ArrowLeft size={14} aria-hidden />
+            Back to home
+          </Link>
+          <div className={styles.authHead}>
+            <span className={styles.brandDot} aria-hidden />
             <div>
-              <h1 className="font-display text-xl font-semibold text-fg">
+              <div className={styles.authTitle}>
                 <BrandName /> chat
-              </h1>
-              <p className="text-sm text-fg-muted">
-                Sign in with your email -- no password needed.
-              </p>
+              </div>
+              <div className={styles.authSub}>Sign in with your email — no password needed.</div>
             </div>
           </div>
 
-          {error && <Alert severity="error">{error}</Alert>}
+          {error && <div className={styles.authAlert}>{error}</div>}
 
           {step === "email" && (
-            <form onSubmit={onSubmitEmail}>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="email" className="text-sm text-fg-muted">
-                    Email
-                  </label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoFocus
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" variant="filled" shadow="signature" disabled={submitting}>
-                  {submitting ? "Sending..." : "Send magic link"}
-                </Button>
+            <form className={styles.authForm} onSubmit={onSubmitEmail}>
+              <div>
+                <label htmlFor="email" className={styles.authLabel}>
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoFocus
+                  required
+                  className={styles.authInput}
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`${styles.enter} ${styles.enterLg} ${styles.btnBlock}`}
+              >
+                {submitting ? "Sending…" : "Send magic link"}
+              </button>
             </form>
           )}
 
           {step === "code" && (
-            <form onSubmit={onSubmitCode}>
-              <div className="flex flex-col gap-4">
-                <p className="text-sm text-fg">
-                  Check <strong>{email}</strong> for a link, open it, and enter the 6-digit code
-                  it shows.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="code" className="text-sm text-fg-muted">
-                    Code
-                  </label>
-                  <Input
-                    id="code"
-                    inputMode="numeric"
-                    autoFocus
-                    required
-                    maxLength={6}
-                    pattern="[0-9]{6}"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" variant="filled" shadow="signature" disabled={submitting}>
-                  {submitting ? "Verifying..." : "Verify"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="text"
-                  onClick={() => {
-                    setStep("email");
-                    setError(null);
-                    setCode("");
-                  }}
-                >
-                  Back
-                </Button>
+            <form className={styles.authForm} onSubmit={onSubmitCode}>
+              <p className={styles.authText}>
+                Check <strong>{email}</strong> for a link, open it, and enter the 6-digit code it
+                shows.
+              </p>
+              <div>
+                <label className={styles.authLabel}>Code</label>
+                <CodeInput value={code} onChange={setCode} autoFocus />
               </div>
+              <button
+                type="submit"
+                disabled={submitting || code.length < 6}
+                className={`${styles.enter} ${styles.enterLg} ${styles.btnBlock}`}
+              >
+                {submitting ? "Verifying…" : "Verify"}
+              </button>
+              <button
+                type="button"
+                className={styles.linkBtn}
+                onClick={() => {
+                  setStep("email");
+                  setError(null);
+                  setCode("");
+                }}
+              >
+                ← Back
+              </button>
             </form>
           )}
         </div>
-      </Surface>
-    </div>
+      </div>
+    </MyceliumBg>
   );
 }

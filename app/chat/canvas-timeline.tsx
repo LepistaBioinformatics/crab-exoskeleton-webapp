@@ -39,7 +39,7 @@ const NBUCKETS = 40;
 
 const PAD_L = 30;
 const PAD_R = 190; // room for the leaf label
-const LANE_H = 34;
+const LANE_H = 48;
 const PAD_TOP = 10;
 const INNER_W = 1500; // fallback time-axis width before the stage is measured
 const FIT_MIN = 480; // narrowest the axis is allowed to fit to
@@ -306,7 +306,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                       </circle>
                     );
                   })}
-                  <text x={x2 + 10} y={y + 3.5} fontSize={11} fontWeight={700} fill={FG}>{title}</text>
+                  <text x={x1} y={y - 12} fontSize={16} fontWeight={700} fill={FG}>{title}</text>
                 </g>
               );
             })}

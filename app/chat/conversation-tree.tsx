@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { IconButton } from "@/components/ui/icon-button";
 import { setFragmentSid, type Workspace } from "./fragment";
 import { onConversationsUpdated, type ConversationSummary } from "@/lib/chatSession";
-import { TagChip, ConversationEditor } from "./conversation-enrichment";
+import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import { getHistory } from "./history-cache";
 import {
   laneColorFor,
@@ -343,17 +343,11 @@ export default function ConversationTree({
                         HEAD
                       </span>
                     )}
+                    {b.isLatest && tags.length > 0 && <TagCluster tags={tags} />}
                     <span className="shrink-0 text-xs tabular-nums text-fg-muted">{formatWhen(b.ts)}</span>
                   </span>
                   {b.isLatest && alias && (
                     <span className="w-full truncate text-xs text-fg-muted">{alias}</span>
-                  )}
-                  {b.isLatest && tags.length > 0 && (
-                    <span className="flex flex-wrap gap-1">
-                      {tags.map((tag) => (
-                        <TagChip key={tag.name} tag={tag} />
-                      ))}
-                    </span>
                   )}
                 </span>
               </button>

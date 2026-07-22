@@ -76,17 +76,15 @@
   --animate-blink: blink 1s step-start infinite;
 }
 
-/* Pending (queued-but-not-yet-sent) message: its origin bar (the ::before /
-   ::after speaker stripe) pulses until the batch flushes to the gateway, so the
-   user can see a message hasn't been sent yet. Auto-neutralized by the
-   reduced-motion guard below. */
+/* Pending (queued-but-not-yet-sent) message: the whole band pulses until the
+   batch flushes to the gateway, so the user can see a message hasn't been sent
+   yet. Auto-neutralized by the reduced-motion guard below. */
 @keyframes originPulse {
   50% {
-    opacity: 0.2;
+    opacity: 0.45;
   }
 }
-.origin-pulse::before,
-.origin-pulse::after {
+.origin-pulse {
   animation: originPulse 1.1s ease-in-out infinite;
 }
 
