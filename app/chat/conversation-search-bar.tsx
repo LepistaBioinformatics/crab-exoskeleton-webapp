@@ -119,7 +119,7 @@ export default function ConversationSearchBar({
           ref={inputRef}
           variant="subtle"
           inputSize="sm"
-          className={cn("shadow-elevated", "pl-8", searching && "pr-8")}
+          className={cn("pl-8", searching && "pr-8")}
           placeholder="Filter: tag:  alias:  text:  date:"
           value={value}
           onChange={(e) => {

@@ -34,6 +34,43 @@ export function TagChip({ tag }: { tag: Tag }) {
   );
 }
 
+// Collapsed tag affordance: just a tag icon (with a count when there's more than
+// one) so tags don't crowd the row; hovering (or focusing) expands the full
+// chips in a small popover to the icon's lower-right. Shared by the browsing
+// views.
+export function TagCluster({ tags }: { tags: Tag[] }) {
+  if (tags.length === 0) return null;
+  // Tint the mini-tag with the first colored tag's color (border + faint fill +
+  // icon), mirroring TagChip; falls back to neutral when no tag carries a color.
+  const color = tags
+    .map((t) => (typeof t.metadata.color === "string" && t.metadata.color ? t.metadata.color : undefined))
+    .find(Boolean);
+  return (
+    <span className="group/tags relative inline-flex shrink-0">
+      <span
+        tabIndex={0}
+        aria-label={`${tags.length} ${tags.length === 1 ? "tag" : "tags"}`}
+        className="inline-flex items-center gap-0.5 rounded-[4px] border border-brand/40 px-1 py-0.5 text-fg-muted transition-colors hover:border-brand hover:text-fg group-focus-within/tags:border-brand group-focus-within/tags:text-fg"
+        style={color ? { borderColor: color, backgroundColor: `${color}1a`, color } : undefined}
+      >
+        <TagIcon size={11} className="shrink-0" aria-hidden />
+        {tags.length > 1 && (
+          <span className="text-[10px] font-semibold leading-none tabular-nums">{tags.length}</span>
+        )}
+      </span>
+      {/* The pt-1 (not mt-1) bridges the icon-to-popover gap so moving the
+          cursor into the popover keeps the group hovered. */}
+      <span className="absolute right-0 top-full z-30 hidden pt-1 group-hover/tags:block group-focus-within/tags:block">
+        <span className="flex max-w-[240px] flex-wrap justify-end gap-1 rounded-lg border border-brand/30 bg-elevated p-1.5 shadow-lg">
+          {tags.map((tag) => (
+            <TagChip key={tag.name} tag={tag} />
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 // The per-conversation alias + tag editor, expanded under a row (list or tree).
 // Local state for the alias draft and the new-tag fields; writes go through the
 // owner-scoped client fns and update the parent lists optimistically via onApply.

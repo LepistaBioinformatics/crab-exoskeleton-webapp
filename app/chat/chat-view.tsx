@@ -28,24 +28,18 @@ import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 
-// Full-width bands (composer width), clearly attributed: a colored origin bar —
-// accent cyan on the RIGHT for the user (::after), violet on the LEFT for the
-// agent (::before) — plus distinct background tints and text indented to that
-// side. No soft gradient between speakers (sharp boundary); the gap does the
-// separating.
-// Chromotherapy: the agent's messages carry a warm-yellow skin so they stand
-// out and stick in memory. Light mode tints the whole band light yellow with a
-// stronger (still light) yellow origin bar; dark mode keeps the neutral band but
-// turns the text and bar yellow. The user's messages stay cyan, only shifting
-// their text to a soft blue in dark mode.
-const messageBand = cva("group relative w-full text-fg", {
+// Bands stretch the full width of the message area; the message content itself
+// stays centered at the composer width (an inner max-w wrapper in the render).
+// No borders, no origin bars: the agent's messages carry no background at all,
+// while the user's sit on a faint accent tint. Both speakers share the same
+// text color (neutral in light mode, a soft warm gray in dark).
+const messageBand = cva("group relative w-full text-fg dark:text-[#c9c7be] [container-type:inline-size]", {
   variants: {
     role: {
-      // Vertical padding is applied per-message in the render (userPad) since it
-      // depends on whether the user message stands alone between agent messages.
-      user: "border-x-[0.5px] border-accent/60 dark:border-0 bg-accent/12 px-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1 after:bg-accent after:content-['']",
-      assistant:
-        "border-x-[0.5px] border-[#ad9d67]/60 dark:border-0 bg-[#fef9e742] dark:bg-elevated/70 px-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
+      // Vertical padding is applied per-message in the render (bandPad) since it
+      // depends on whether the message stands alone between the other speaker's.
+      user: "bg-accent/8",
+      assistant: "",
     },
   },
 });
@@ -760,7 +754,7 @@ export default function ChatView({
               <button
                 type="button"
                 onClick={() => setFragmentSid(resumeCandidate.id)}
-                className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-brand/30 bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-brand/60 hover:bg-elevated"
+                className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-accent/40 bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-accent hover:bg-elevated"
               >
                 <span className="w-full truncate text-sm font-medium text-fg">
                   {resumeCandidate.title}
@@ -790,8 +784,8 @@ export default function ChatView({
         </div>
       ) : (
         <div className="relative min-h-0 flex-1">
-          <div className="absolute inset-0 overflow-auto px-4 pt-6 pb-40">
-            <div className="mx-auto w-full max-w-[720px]">
+          <div className="absolute inset-0 overflow-auto pt-6 pb-40">
+            <div className="w-full">
               {messages.map((m, i) => {
                 const streaming = sending && i === messages.length - 1 && m.role === "assistant";
                 const { text, refs } = parseAnexos(m.content);
@@ -821,31 +815,33 @@ export default function ChatView({
                         setOpenActions((cur) => (cur === i ? null : i));
                       }}
                     >
-                      {m.content.trim() !== "" && (
-                        // Desktop only: transparent toolbar at the message's
-                        // bottom-right, revealed on hover. Mobile uses the tapped
-                        // row below the card instead (rendered after the band).
-                        <div className="absolute bottom-1.5 right-1.5 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                          {renderActions(m, i)}
-                        </div>
-                      )}
-                      {text && <MessageContent content={text} />}
-                      {refs.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {refs.map((r) => (
-                            <AttachmentButton
-                              key={r.path}
-                              workspace={workspace}
-                              path={r.path}
-                              name={r.name}
-                              tone="chip"
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {streaming && (
-                        <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
-                      )}
+                      <div className="relative mx-auto w-full max-w-[720px] px-4">
+                        {m.content.trim() !== "" && (
+                          // Desktop only: transparent toolbar at the message's
+                          // top-right, in the card's top padding (above the text). Mobile uses the tapped
+                          // row below the card instead (rendered after the band).
+                          <div className="absolute right-1.5 bottom-full mb-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                            {renderActions(m, i)}
+                          </div>
+                        )}
+                        {text && <MessageContent content={text} />}
+                        {refs.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {refs.map((r) => (
+                              <AttachmentButton
+                                key={r.path}
+                                workspace={workspace}
+                                path={r.path}
+                                name={r.name}
+                                tone="chip"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {streaming && (
+                          <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                        )}
+                      </div>
                     </div>
                     {/* Mobile only: tapping the card opens this action row below
                         it (before the next message); no hover on touch. */}
@@ -869,20 +865,22 @@ export default function ChatView({
                 return (
                   <div key={`pending-${i}`} className={bandGap({ changed: !prevIsUser })}>
                     <div className={`${messageBand({ role: "user" })} origin-pulse ${bandPad(alone)}`}>
-                      {text && <MessageContent content={text} />}
-                      {refs.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {refs.map((r) => (
-                            <AttachmentButton
-                              key={r.path}
-                              workspace={workspace}
-                              path={r.path}
-                              name={r.name}
-                              tone="chip"
-                            />
-                          ))}
-                        </div>
-                      )}
+                      <div className="relative mx-auto w-full max-w-[720px] px-4">
+                        {text && <MessageContent content={text} />}
+                        {refs.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {refs.map((r) => (
+                              <AttachmentButton
+                                key={r.path}
+                                workspace={workspace}
+                                path={r.path}
+                                name={r.name}
+                                tone="chip"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -892,7 +890,7 @@ export default function ChatView({
           </div>
           {/* The composer floats, suspended over the chat; the scroll area's
               bottom padding keeps the last messages clear of it. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-6">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-[720px]">{composer}</div>
           </div>
         </div>

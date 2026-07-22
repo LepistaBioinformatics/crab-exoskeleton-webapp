@@ -29,7 +29,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, setHistoryView, type Workspace } from "./fragment";
 import ConversationTree from "./conversation-tree";
-import { TagChip, ConversationEditor } from "./conversation-enrichment";
+import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
@@ -371,25 +371,21 @@ export default function HistorySidebar({
                   <button
                     type="button"
                     onClick={() => onOpenConversation(conversation.id)}
-                    className="flex min-w-0 flex-1 flex-col items-start gap-1 px-3 py-2 text-left"
+                    className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left"
                   >
-                    <span className="w-full truncate text-sm text-fg">
-                      {conversation.title}
+                    <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                      <span className="w-full truncate text-sm text-fg">
+                        {conversation.title}
+                      </span>
+                      {conversation.alias && (
+                        // The title (derived from the message) stays primary; the
+                        // user's alias sits below it in smaller, muted type.
+                        <span className="w-full truncate text-xs text-fg-muted">
+                          {conversation.alias}
+                        </span>
+                      )}
                     </span>
-                    {conversation.alias && (
-                      // The title (derived from the message) stays primary; the
-                      // user's alias sits below it in smaller, muted type.
-                      <span className="w-full truncate text-xs text-fg-muted">
-                        {conversation.alias}
-                      </span>
-                    )}
-                    {conversation.tags.length > 0 && (
-                      <span className="flex flex-wrap gap-1">
-                        {conversation.tags.map((tag) => (
-                          <TagChip key={tag.name} tag={tag} />
-                        ))}
-                      </span>
-                    )}
+                    {conversation.tags.length > 0 && <TagCluster tags={conversation.tags} />}
                   </button>
                   {/* Mobile: an always-visible action row below the name. Desktop:
                       an absolute box on the right, revealed on hover, so it costs
