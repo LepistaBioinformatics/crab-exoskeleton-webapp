@@ -78,19 +78,22 @@ export default function MessageContent({ content }: { content: string }) {
             <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
           ),
           table: ({ children }) => (
-            // Notion-style breakout: the wrapper's left edge stays aligned with
-            // the message text, but its right edge extends past the 720px message
-            // column out to the full content-section width. cqw is measured
-            // against the band (a query container) so 50cqw is half the content
-            // section; 360px is half the message column, so the widening is zero
-            // until the content section is wider than the column, and max(0px, …)
-            // clamps it so a table never spills when the section is narrower.
-            // Negative right margin widens an auto-width block; overflow-x-auto
-            // scrolls the table when it's wider still. w-max (below) lets the
-            // table keep its natural width instead of squeezing columns.
+            // Notion-style breakout: the table area spans the FULL content
+            // section on BOTH sides, past the 720px message column. cqw is
+            // measured against the band (a query container) so 50cqw is half the
+            // content section; 360px is half the message column, so each side's
+            // widening is zero until the content section is wider than the column,
+            // and max(0px, …) clamps it so a table never spills when the section
+            // is narrower. Negative left/right margins widen an auto-width block
+            // symmetrically (~1rem gutters); overflow-x-auto scrolls the table
+            // when it's wider still. w-max (below) lets the table keep its
+            // natural width instead of squeezing columns.
             <div
               className="my-4 overflow-x-auto"
-              style={{ marginRight: "calc(0px - max(0px, 50cqw - 360px))" }}
+              style={{
+                marginLeft: "calc(0px - max(0px, 50cqw - 360px))",
+                marginRight: "calc(0px - max(0px, 50cqw - 360px))",
+              }}
             >
               {/* border-separate with a single top+left border per cell draws
                   clean single-line grid rules (right/bottom edges and rounded
