@@ -1,6 +1,62 @@
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cva } from "class-variance-authority";
+
+// Half the gap between the content section edge and the 720px message column, in
+// container-query units against the band (see chat-view's messageBand). 50cqw is
+// half the content section; 360px is half the message column, so this is zero
+// until the section is wider than the column, and max(0px, …) clamps it so a
+// table never spills when the section is narrower.
+const GUTTER = "max(0px, 50cqw - 360px)";
+
+// Applied only to tables WIDER than the message column (measured at runtime).
+// The negative left/right margins widen the scroll area out to the full content
+// section (~1rem inset each side); the matching left/right padding makes the
+// scroll extremes anchor to the message column edges -- scroll fully left and the
+// table's left edge lines up with the message text; scroll fully right and its
+// right edge does too -- while the middle of the scroll range uses the whole
+// section. Narrow tables get none of this and stay aligned in the column.
+const tableBreakout: CSSProperties = {
+  marginLeft: `calc(0px - ${GUTTER})`,
+  marginRight: `calc(0px - ${GUTTER})`,
+  paddingLeft: GUTTER,
+  paddingRight: GUTTER,
+};
+
+// Wraps a markdown table and, when the table's natural width exceeds the message
+// column, breaks it out across the content section (see tableBreakout). The
+// decision is measured -- table width vs. the column (the markdown root, whose
+// width the breakout's negative margins don't change) -- and re-measured on any
+// resize (viewport, sidebar toggles, streamed content growing the table).
+function MarkdownTable({ children }: { children?: ReactNode }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const column = wrap?.parentElement;
+    const table = wrap?.querySelector("table");
+    if (!wrap || !column || !table) return;
+    const measure = () => setWide(table.scrollWidth > column.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={wrapRef} className="my-4 overflow-x-auto" style={wide ? tableBreakout : undefined}>
+      {/* border-separate with a single top+left border per cell draws clean
+          single-line grid rules (right/bottom edges and rounded outer corners are
+          added at the table's edge cells) -- the Notion look, which
+          border-collapse can't round. w-max keeps the table's natural width so
+          columns aren't squeezed. */}
+      <table className="w-max border-separate border-spacing-0 text-left text-[0.9em] [&_thead_th]:bg-current/[0.05] [&_tr>*:last-child]:border-r [&_tr:last-child>*]:border-b [&_tr:first-child>*:first-child]:rounded-tl-md [&_tr:first-child>*:last-child]:rounded-tr-md [&_tr:last-child>*:first-child]:rounded-bl-md [&_tr:last-child>*:last-child]:rounded-br-md">
+        {children}
+      </table>
+    </div>
+  );
+}
 
 // Inline code gets a tinted chip; fenced/block code is bare (its <pre> wrapper
 // carries the surface). `bg-current/*` tints toward the text color so it reads
@@ -15,8 +71,9 @@ const codeText = cva("font-mono text-[0.85em]", {
 // Renders assistant/user message content as markdown. GitHub-flavored
 // (remark-gfm) so tables, strikethrough, task lists and autolinks work. Colors
 // inherit from the bubble; borders/fills use currentColor so they adapt to it.
-// Code blocks scroll horizontally inside the message column; tables break out to
-// the full content-section width (Notion-style) and scroll there when wider.
+// Code blocks scroll horizontally inside the message column. Tables narrower than
+// the column stay aligned with the text; wider ones break out across the full
+// content section and scroll there (Notion-style) -- see MarkdownTable.
 export default function MessageContent({ content }: { content: string }) {
   return (
     // Slightly larger than the rest of the UI (which is text-sm/xs) so the chat
@@ -78,31 +135,7 @@ export default function MessageContent({ content }: { content: string }) {
             <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
           ),
           table: ({ children }) => (
-            // Notion-style breakout: the table area spans the FULL content
-            // section on BOTH sides, past the 720px message column. cqw is
-            // measured against the band (a query container) so 50cqw is half the
-            // content section; 360px is half the message column, so each side's
-            // widening is zero until the content section is wider than the column,
-            // and max(0px, …) clamps it so a table never spills when the section
-            // is narrower. Negative left/right margins widen an auto-width block
-            // symmetrically (~1rem gutters); overflow-x-auto scrolls the table
-            // when it's wider still. w-max (below) lets the table keep its
-            // natural width instead of squeezing columns.
-            <div
-              className="my-4 overflow-x-auto"
-              style={{
-                marginLeft: "calc(0px - max(0px, 50cqw - 360px))",
-                marginRight: "calc(0px - max(0px, 50cqw - 360px))",
-              }}
-            >
-              {/* border-separate with a single top+left border per cell draws
-                  clean single-line grid rules (right/bottom edges and rounded
-                  outer corners are added at the table's edge cells) -- the Notion
-                  look, which border-collapse can't round. */}
-              <table className="w-max border-separate border-spacing-0 text-left text-[0.9em] [&_thead_th]:bg-current/[0.05] [&_tr>*:last-child]:border-r [&_tr:last-child>*]:border-b [&_tr:first-child>*:first-child]:rounded-tl-md [&_tr:first-child>*:last-child]:rounded-tr-md [&_tr:last-child>*:first-child]:rounded-bl-md [&_tr:last-child>*:last-child]:rounded-br-md">
-                {children}
-              </table>
-            </div>
+            <MarkdownTable>{children}</MarkdownTable>
           ),
           th: ({ children }) => (
             <th className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top font-semibold [overflow-wrap:break-word]">
