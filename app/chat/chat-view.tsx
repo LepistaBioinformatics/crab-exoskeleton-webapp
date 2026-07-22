@@ -38,7 +38,11 @@ import { Spinner } from "@/components/ui/spinner";
 // stronger (still light) yellow origin bar; dark mode keeps the neutral band but
 // turns the text and bar yellow. The user's messages stay cyan, only shifting
 // their text to a soft blue in dark mode.
-const messageBand = cva("group relative w-full text-fg", {
+// container-type: inline-size makes the band a query container so message
+// content (rendered inside the centered 720px column) can measure the FULL
+// content-section width via cqw units -- letting wide markdown tables break out
+// past the message column and scroll across the whole content area (Notion-style).
+const messageBand = cva("group relative w-full text-fg [container-type:inline-size]", {
   variants: {
     role: {
       // Vertical padding is applied per-message in the render (userPad) since it

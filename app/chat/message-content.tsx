@@ -15,7 +15,8 @@ const codeText = cva("font-mono text-[0.85em]", {
 // Renders assistant/user message content as markdown. GitHub-flavored
 // (remark-gfm) so tables, strikethrough, task lists and autolinks work. Colors
 // inherit from the bubble; borders/fills use currentColor so they adapt to it.
-// Wide tables and code blocks scroll horizontally inside the bubble.
+// Code blocks scroll horizontally inside the message column; tables break out to
+// the full content-section width (Notion-style) and scroll there when wider.
 export default function MessageContent({ content }: { content: string }) {
   return (
     // Slightly larger than the rest of the UI (which is text-sm/xs) so the chat
@@ -77,26 +78,36 @@ export default function MessageContent({ content }: { content: string }) {
             <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto">
-              {/* w-max: the table takes its natural (max-content) width and the
-                  wrapper scrolls horizontally, instead of squeezing columns to
-                  fit. Short cells stay on one line; only a cell longer than the
-                  per-cell cap (below) wraps. */}
-              <table className="w-max border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
+            // Notion-style breakout: the wrapper's left edge stays aligned with
+            // the message text, but its right edge extends past the 720px message
+            // column out to the full content-section width. cqw is measured
+            // against the band (a query container) so 50cqw is half the content
+            // section; 360px is half the message column, so the widening is zero
+            // until the content section is wider than the column, and max(0px, …)
+            // clamps it so a table never spills when the section is narrower.
+            // Negative right margin widens an auto-width block; overflow-x-auto
+            // scrolls the table when it's wider still. w-max (below) lets the
+            // table keep its natural width instead of squeezing columns.
+            <div
+              className="my-4 overflow-x-auto"
+              style={{ marginRight: "calc(0px - max(0px, 50cqw - 360px))" }}
+            >
+              {/* border-separate with a single top+left border per cell draws
+                  clean single-line grid rules (right/bottom edges and rounded
+                  outer corners are added at the table's edge cells) -- the Notion
+                  look, which border-collapse can't round. */}
+              <table className="w-max border-separate border-spacing-0 text-left text-[0.9em] [&_thead_th]:bg-current/[0.05] [&_tr>*:last-child]:border-r [&_tr:last-child>*]:border-b [&_tr:first-child>*:first-child]:rounded-tl-md [&_tr:first-child>*:last-child]:rounded-tr-md [&_tr:last-child>*:first-child]:rounded-bl-md [&_tr:last-child>*:last-child]:rounded-br-md">
                 {children}
               </table>
             </div>
           ),
-          thead: ({ children }) => <thead className="border-b border-current/25">{children}</thead>,
-          tbody: ({ children }) => <tbody>{children}</tbody>,
-          tr: ({ children }) => <tr className="border-b border-current/10">{children}</tr>,
           th: ({ children }) => (
-            <th className="min-w-[9rem] max-w-[40rem] px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">
+            <th className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top font-semibold [overflow-wrap:break-word]">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="min-w-[9rem] max-w-[40rem] px-3 py-1.5 align-top [overflow-wrap:break-word]">
+            <td className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top [overflow-wrap:break-word]">
               {children}
             </td>
           ),
