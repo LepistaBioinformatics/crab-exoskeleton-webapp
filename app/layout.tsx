@@ -45,15 +45,21 @@ export async function generateMetadata(): Promise<Metadata> {
   }
   return {
     title: `${appName} chat`,
-    description: "Test client for the zombie-crab-project picoclaw stack",
+    // Derived from branding, not hardcoded: the old literal named this project in
+    // the <meta> of every rebranded deployment.
+    description: `${appName} — your own private AI agent`,
     manifest: "/manifest.webmanifest",
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
       title: appName,
     },
+    // Both point at the SQUARE app icon, not the wide wordmark logo: iOS renders
+    // apple-touch-icon on the home screen at a fixed square, and a 1408x768 JPEG
+    // came out letterboxed (pwa-installability).
     icons: {
-      apple: "/api/branding/logo/light",
+      icon: "/api/branding/logo/icon",
+      apple: "/api/branding/logo/icon",
     },
   };
 }

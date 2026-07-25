@@ -1,11 +1,19 @@
 // Minimal, dependency-free service worker (no workbox). It keeps the app shell
 // installable and fast; chat itself needs the network so it is never cached.
 // Bump CACHE_VERSION to invalidate old caches on the next activate.
-const CACHE_VERSION = "zc-shell-v1";
+const CACHE_VERSION = "zc-shell-v2";
 const OFFLINE_URL = "/offline";
 
-// Core shell precached at install so a cold, offline start still renders.
-const PRECACHE_URLS = [OFFLINE_URL, "/logo-light.jpg", "/logo-dark.jpg"];
+// Core shell precached at install so a cold, offline start still renders. The
+// square PWA icons are included so an installed app keeps its icon offline.
+const PRECACHE_URLS = [
+  OFFLINE_URL,
+  "/logo-light.jpg",
+  "/logo-dark.jpg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-maskable-512.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

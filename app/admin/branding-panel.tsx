@@ -10,16 +10,23 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-type Variant = "light" | "dark";
+type Variant = "light" | "dark" | "icon";
 
 const preview = cva("h-16 w-16 rounded-lg border border-brand/30 object-contain", {
   variants: {
     tone: {
       light: "bg-white",
       dark: "bg-neutral-900",
+      icon: "bg-neutral-900",
     },
   },
 });
+
+const LABELS: Record<Variant, string> = {
+  light: "Light logo",
+  dark: "Dark logo",
+  icon: "App icon (square)",
+};
 
 // Instance branding admin panel (FR-10): edit the app name and upload / reset
 // the light and dark logos. Server-side authz is the real gate; this panel is
@@ -36,6 +43,7 @@ export default function BrandingPanel() {
   const [pendingNameReset, setPendingNameReset] = useState(false);
   const lightInput = useRef<HTMLInputElement>(null);
   const darkInput = useRef<HTMLInputElement>(null);
+  const iconInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,13 +96,14 @@ export default function BrandingPanel() {
       const res = await fetch(`/api/branding/logo/${variant}`, { method: "POST", body });
       if (!res.ok) throw new Error(await errorMessage(res));
       refreshPreviews();
-      setNotice(`${variant === "light" ? "Light" : "Dark"} logo updated.`);
+      setNotice(`${LABELS[variant]} updated.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setBusy(null);
-      if (variant === "light" && lightInput.current) lightInput.current.value = "";
-      if (variant === "dark" && darkInput.current) darkInput.current.value = "";
+      for (const ref of [lightInput, darkInput, iconInput]) {
+        if (ref.current) ref.current.value = "";
+      }
     }
   }
 
@@ -107,7 +116,7 @@ export default function BrandingPanel() {
       const res = await fetch(`/api/branding/logo/${variant}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await errorMessage(res));
       refreshPreviews();
-      setNotice(`${variant === "light" ? "Light" : "Dark"} logo reset to default.`);
+      setNotice(`${LABELS[variant]} reset to default.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Reset failed.");
     } finally {
@@ -124,8 +133,9 @@ export default function BrandingPanel() {
   }
 
   const variants: { key: Variant; label: string; ref: React.RefObject<HTMLInputElement | null> }[] = [
-    { key: "light", label: "Light logo", ref: lightInput },
-    { key: "dark", label: "Dark logo", ref: darkInput },
+    { key: "light", label: LABELS.light, ref: lightInput },
+    { key: "dark", label: LABELS.dark, ref: darkInput },
+    { key: "icon", label: LABELS.icon, ref: iconInput },
   ];
 
   return (
@@ -170,8 +180,15 @@ export default function BrandingPanel() {
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-sm font-semibold text-fg">Logos</h2>
         <p className="text-xs text-fg-muted">
-          PNG, JPEG, WebP or SVG, up to ~1MB. Served as-is; the light logo also drives the PWA icon
-          and favicon.
+          PNG, JPEG, WebP or SVG, up to ~1MB. Served as-is — there is no server-side image
+          processing, so each image has to arrive in the shape it will be shown in.
+        </p>
+        <p className="text-xs text-fg-muted">
+          The <strong className="text-fg">app icon</strong> is what an installed PWA and the browser
+          tab use, so it must be a <strong className="text-fg">square PNG or WebP, 512×512</strong>.
+          Keep the artwork inside the middle ~80% — Android crops icons to a circle. A wide logo here
+          is what stops the app from being installable, which is why it is a separate upload from the
+          wordmark logos.
         </p>
         {variants.map((v) => (
           <div
@@ -189,7 +206,11 @@ export default function BrandingPanel() {
               <input
                 ref={v.ref}
                 type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                accept={
+                  v.key === "icon"
+                    ? "image/png,image/webp"
+                    : "image/png,image/jpeg,image/webp,image/svg+xml"
+                }
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -235,7 +256,7 @@ export default function BrandingPanel() {
       <ConfirmDialog
         open={pendingLogoReset !== null}
         title="Reset logo?"
-        message="This logo will fall back to the bundled default."
+        message="This image will fall back to the bundled default."
         confirmLabel="Reset"
         onConfirm={() => pendingLogoReset && resetLogo(pendingLogoReset)}
         onCancel={() => setPendingLogoReset(null)}

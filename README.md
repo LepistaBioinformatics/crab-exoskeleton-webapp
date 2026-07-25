@@ -75,12 +75,14 @@ yarn install
 yarn dev        # http://localhost:3000
 ```
 
-Configure two things via the environment:
+Configure via the environment (all read server-side at request time, so one image
+serves every deployment):
 
 | Variable | What it is |
 |---|---|
 | `MYCELIUM_INTERNAL_URL` | Base URL of the Mycelium gateway the BFF calls upstream |
 | `DATABASE_URL` | Postgres connection string for the conversation index |
+| `START_AT_SIGNIN` | Optional. `1`/`true` → `/` redirects to `/signin` and the pre-auth landing page is never served. For deployments running under their own brand; the app name and logos themselves are set in-app, on the admin screen's **Branding** tab. |
 
 Other scripts: `yarn build` (production build), `yarn start` (serve the build), `yarn test` (Vitest). The app expects a running Mycelium gateway + `crab-shell-proxy` behind it — it is the front of the stack, not the whole stack.
 

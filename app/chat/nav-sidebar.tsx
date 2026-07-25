@@ -5,6 +5,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import LogoutButton from "./logout-button";
 import WorkspaceNav from "./workspace-nav";
 import AdminLink from "./admin-link";
+import InstallAppButton from "./install-app-button";
 
 // First sidebar (M3 navigation drawer): everything that is NOT a chat session
 // -- branding, the sectioned navigator (Workspaces now, room for more), and
@@ -42,8 +43,9 @@ export default function NavSidebar({
         <WorkspaceNav onSelect={onSelect} />
       </div>
 
-      <div className="border-t border-brand/20 px-2 py-2">
+      <div className="flex flex-col gap-0.5 border-t border-brand/20 px-2 py-2">
         <AdminLink />
+        <InstallAppButton />
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-brand/20 px-4 py-3">
