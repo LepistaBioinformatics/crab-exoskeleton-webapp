@@ -58,9 +58,14 @@ failures impossible rather than merely unlikely.
 `model_name` blank (it must be unique) and `api_key` blank (keys are never
 returned by the API).
 
-**Defaults and assignment** — the scope default for the selected
-tenant/subscription, plus the per-user list with an explicit override and an
-"inherited from ⟨scope⟩" indicator so an admin can tell a pin from a cascade.
+**Defaults and assignment** — a **level selector** covering all four cascade
+levels (`global`, `agent`, `tenant`, `subscription`) with the default for the
+selected one, plus the per-user list with an explicit pin and an "inherited from
+⟨scope⟩" indicator so an admin can tell a pin from a cascade. The level selector is
+not optional: without it there is no way to set an instance-wide default, and a
+deployment whose scope defaults are all empty refuses to provision every new
+workspace. The panel states the resolution order and that `global`/`agent` require
+instance-admin privileges and take effect on each workspace's next start.
 
 ## Behaviour requirements
 
