@@ -11,6 +11,7 @@ import {
 import {
   SECRET_FORMATS,
   SECRET_NAME_RE,
+  WEB_PROVIDERS,
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
@@ -29,8 +30,14 @@ const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
   json: "json",
   file: "file",
-  native: "native (picoclaw slot)",
+  native: "native (picoclaw search-provider key)",
 };
+
+// `file` is not env-shaped, so the proxy rejects it at scope level. The other
+// three are offered: dotenv/json cascade as sink files, and native writes into
+// each workspace's .security.yml — the admin-only path added by
+// native-secrets-admin-only.
+const SCOPE_FORMATS = SECRET_FORMATS.filter((f) => f !== "file");
 
 // Shared secrets at a scope: write / list-names / delete. Injected as env into
 // every container below the scope (FR-5). WRITE-ONLY over the API -- values are
@@ -40,6 +47,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
+  const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
 
@@ -64,10 +72,14 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     return () => {
       cancelled = true;
     };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
+  // A native secret addresses a picoclaw slot, not a free-form name: the UI only
+  // offers the `web.<provider>` family. Model keys go through the Model tab,
+  // whose registry carries the full definition (provider, base URL, key) instead
+  // of a bare `model_list.<model>.api_keys` value.
   function targetName(): string {
-    return name.trim();
+    return format === "native" ? `web.${provider}` : name.trim();
   }
 
   async function onSubmit(e: FormEvent) {
@@ -75,7 +87,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     setSubmitError(null);
     const finalName = targetName();
 
-    if (!SECRET_NAME_RE.test(finalName)) {
+    if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
       setSubmitError("Name may only contain letters, numbers, and . _ -");
       return;
     }
@@ -131,7 +143,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
             value={format}
             onChange={(e) => setFormat(e.target.value as SecretFormat)}
           >
-            {SECRET_FORMATS.filter((f) => f !== "native").map((f) => (
+            {SCOPE_FORMATS.map((f) => (
               <option key={f} value={f}>
                 {FORMAT_LABEL[f]}
               </option>
@@ -139,15 +151,36 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Name</span>
-          <Input
-            inputSize="md"
-            placeholder="e.g. SHARED_API_KEY"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
+        {format === "native" ? (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Web search provider</span>
+            <select
+              className={selectClass}
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {WEB_PROVIDERS.map((pv) => (
+                <option key={pv} value={pv}>
+                  {pv}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-fg-muted">
+              Written into each workspace&apos;s picoclaw config below this scope. To set a model
+              API key, use the Model tab instead.
+            </span>
+          </label>
+        ) : (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Name</span>
+            <Input
+              inputSize="md"
+              placeholder="e.g. SHARED_API_KEY"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+        )}
 
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-muted">Value</span>

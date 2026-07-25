@@ -13,10 +13,24 @@ export interface AdminScope {
 }
 
 // A resolved scope target passed to the shared-file / shared-secret calls.
+// `agent` narrows the target to a single agent's store; `ALL_AGENTS` (or
+// omitting it) addresses the store every agent under the scope reads.
 export interface ScopeRef {
   kind: "tenant" | "subscription";
   tenantId: string;
   subsAccId?: string;
+  agent?: string;
+}
+
+// The sentinel the proxy understands for "the store every agent reads". Kept as
+// an explicit value (rather than an empty string) so the picker has something to
+// render and the wire format is self-describing.
+export const ALL_AGENTS = "all";
+
+// One agent key this deployment runs (GET /api/admin/agents). Sourced from the
+// proxy config, so a new agent in config.yaml shows up without a webapp change.
+export interface AgentRef {
+  key: string;
 }
 
 // FileMeta from the proxy -- metadata only, never bytes. Serves both shared
@@ -41,11 +55,14 @@ export interface UserRef {
 function scopeParams(scope: ScopeRef): URLSearchParams {
   const q = new URLSearchParams({ scope: scope.kind, tenant_id: scope.tenantId });
   if (scope.kind === "subscription" && scope.subsAccId) q.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) q.set("agent", scope.agent);
   return q;
 }
 
 export function scopeKey(scope: ScopeRef): string {
-  return scope.kind === "tenant" ? `t:${scope.tenantId}` : `s:${scope.tenantId}:${scope.subsAccId}`;
+  const base =
+    scope.kind === "tenant" ? `t:${scope.tenantId}` : `s:${scope.tenantId}:${scope.subsAccId}`;
+  return scope.agent ? `${base}@${scope.agent}` : base;
 }
 
 // True when the caller may administer the given workspace scope: they hold the
@@ -72,6 +89,13 @@ export async function listScopes(): Promise<AdminScope[]> {
   return Array.isArray(data.scopes) ? (data.scopes as AdminScope[]) : [];
 }
 
+export async function listAgents(): Promise<AgentRef[]> {
+  const res = await fetch("/api/admin/agents");
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const data = await res.json();
+  return Array.isArray(data.agents) ? (data.agents as AgentRef[]) : [];
+}
+
 export async function listSharedFiles(scope: ScopeRef): Promise<FileMeta[]> {
   const res = await fetch(`/api/admin/shared?${scopeParams(scope).toString()}`);
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -84,6 +108,7 @@ export async function uploadSharedFile(scope: ScopeRef, file: File): Promise<voi
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
   if (scope.kind === "subscription" && scope.subsAccId) form.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) form.set("agent", scope.agent);
   form.set("file", file, file.name);
   const res = await fetch("/api/admin/shared", { method: "POST", body: form });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -128,6 +153,7 @@ export async function setSharedSecret(
       scope: scope.kind,
       tenant_id: scope.tenantId,
       subs_acc_id: scope.subsAccId,
+      agent: scope.agent,
       format: input.format,
       name: input.name,
       value: input.value,

@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const scope = p.get("scope");
   const tenantId = p.get("tenant_id");
   const subsAccId = p.get("subs_acc_id");
+  const agent = p.get("agent");
   const name = p.get("name");
   if ((scope !== "tenant" && scope !== "subscription") || !tenantId || !name) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   const query = new URLSearchParams({ scope, tenant_id: tenantId, name });
   if (scope === "subscription" && subsAccId) query.set("subs_acc_id", subsAccId);
+  if (agent) query.set("agent", agent);
 
   const out = await forwardAdmin(session, `/skills/archive?${query.toString()}`, { method: "GET" });
   if (out instanceof NextResponse) return out;

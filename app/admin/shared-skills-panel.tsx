@@ -59,7 +59,7 @@ export default function SharedSkillsPanel({ scope }: { scope: ScopeRef }) {
     return () => {
       cancelled = true;
     };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
   async function onUploadZip(file: File) {
     setUploading(true);

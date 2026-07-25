@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyAdminJson, requireSession } from "@/lib/adminProxy";
+import {
+  adminScopeQuery,
+  isAdminScope,
+  proxyAdminJson,
+  requireSession,
+} from "@/lib/adminProxy";
 
 // Shared skills at a scope (tenant or subscription): list / create-or-replace
 // (editor body or zip upload) / delete. Mirrors app/api/admin/shared/route.ts.
 // Preview/doc-load is a separate route (text only); download is a separate
 // route (streams a zip).
 
-const SCOPES = ["tenant", "subscription"] as const;
-type ScopeKind = (typeof SCOPES)[number];
-
-function isScope(value: unknown): value is ScopeKind {
-  return typeof value === "string" && (SCOPES as readonly string[]).includes(value);
-}
-
-// tenant scope needs only tenant_id; subscription scope needs both.
-function scopeQuery(scope: ScopeKind, tenantId: string, subsAccId: string | null): URLSearchParams | null {
-  if (scope === "subscription" && !subsAccId) return null;
-  const q = new URLSearchParams({ scope, tenant_id: tenantId });
-  if (scope === "subscription" && subsAccId) q.set("subs_acc_id", subsAccId);
-  return q;
-}
 
 export async function GET(req: NextRequest) {
   const session = await requireSession();
@@ -29,10 +20,11 @@ export async function GET(req: NextRequest) {
   const scope = p.get("scope");
   const tenantId = p.get("tenant_id");
   const subsAccId = p.get("subs_acc_id");
-  if (!isScope(scope) || !tenantId) {
+  const agent = p.get("agent");
+  if (!isAdminScope(scope) || !tenantId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const query = scopeQuery(scope, tenantId, subsAccId);
+  const query = adminScopeQuery(scope, tenantId, subsAccId, agent);
   if (!query) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
 
   return proxyAdminJson(session, `/skills?${query.toString()}`, { method: "GET" });
@@ -52,10 +44,11 @@ export async function POST(req: NextRequest) {
   const scope = form.get("scope");
   const tenantId = form.get("tenant_id");
   const subsAccId = form.get("subs_acc_id");
+  const agent = form.get("agent");
   const name = form.get("name");
   const body = form.get("body");
   const file = form.get("file");
-  if (!isScope(scope) || typeof tenantId !== "string" || typeof name !== "string" || !name) {
+  if (!isAdminScope(scope) || typeof tenantId !== "string" || typeof name !== "string" || !name) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   if (scope === "subscription" && typeof subsAccId !== "string") {
@@ -73,6 +66,9 @@ export async function POST(req: NextRequest) {
   upstream.set("tenant_id", tenantId);
   if (scope === "subscription" && typeof subsAccId === "string") {
     upstream.set("subs_acc_id", subsAccId);
+  }
+  if (typeof agent === "string" && agent) {
+    upstream.set("agent", agent);
   }
   upstream.set("name", name);
   if (hasFile) {
@@ -94,11 +90,12 @@ export async function DELETE(req: NextRequest) {
   const scope = p.get("scope");
   const tenantId = p.get("tenant_id");
   const subsAccId = p.get("subs_acc_id");
+  const agent = p.get("agent");
   const name = p.get("name");
-  if (!isScope(scope) || !tenantId || !name) {
+  if (!isAdminScope(scope) || !tenantId || !name) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const query = scopeQuery(scope, tenantId, subsAccId);
+  const query = adminScopeQuery(scope, tenantId, subsAccId, agent);
   if (!query) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   query.set("name", name);
 

@@ -8,7 +8,7 @@ import {
   setSecret,
   deleteSecret,
   SECRET_FORMATS,
-  WEB_PROVIDERS,
+  USER_SECRET_FORMATS,
   SECRET_NAME_RE,
   type SecretNames,
   type SecretFormat,
@@ -53,7 +53,6 @@ export default function SecretsDrawer({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
-  const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
 
@@ -81,11 +80,9 @@ export default function SecretsDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, workspace.t, workspace.s, workspace.r]);
 
-  // The slot/name actually submitted, built from the format-specific inputs.
+  // The name actually submitted. Native slots are no longer writable here — they
+  // are published by scope administrators — so every writable format is name-based.
   function targetName(): string {
-    if (format === "native") {
-      return `web.${provider}`;
-    }
     return name.trim();
   }
 
@@ -94,7 +91,7 @@ export default function SecretsDrawer({
     setSubmitError(null);
     const finalName = targetName();
 
-    if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
+    if (!SECRET_NAME_RE.test(finalName)) {
       setSubmitError("Name may only contain letters, numbers, and . _ -");
       return;
     }
@@ -171,7 +168,7 @@ export default function SecretsDrawer({
                 value={format}
                 onChange={(e) => setFormat(e.target.value as SecretFormat)}
               >
-                {SECRET_FORMATS.map((f) => (
+                {USER_SECRET_FORMATS.map((f) => (
                   <option key={f} value={f}>
                     {FORMAT_LABEL[f]}
                   </option>
@@ -179,32 +176,15 @@ export default function SecretsDrawer({
               </select>
             </label>
 
-            {format === "native" ? (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Web search provider</span>
-                <select
-                  className={selectClass}
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  {WEB_PROVIDERS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Name</span>
-                <Input
-                  inputSize="md"
-                  placeholder="e.g. OPENAI_API_KEY"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-            )}
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-fg-muted">Name</span>
+              <Input
+                inputSize="md"
+                placeholder="e.g. OPENAI_API_KEY"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
 
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-fg-muted">Value</span>
@@ -249,6 +229,12 @@ export default function SecretsDrawer({
               <div className="mb-1">
                 <Badge tone="neutral">{group.fmt}</Badge>
               </div>
+              {group.fmt === "native" && (
+                <p className="mb-1 text-[11px] leading-relaxed text-fg-muted">
+                  Picoclaw credentials are now set by your tenant or subscription administrator. You
+                  can still remove one you saved earlier; new ones have to come from them.
+                </p>
+              )}
               <ul className="flex flex-col gap-1">
                 {group.names.map((secretName) => (
                   <li

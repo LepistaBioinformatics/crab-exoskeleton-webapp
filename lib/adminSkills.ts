@@ -16,6 +16,7 @@ export interface SkillMeta {
 function scopeParams(scope: ScopeRef): URLSearchParams {
   const q = new URLSearchParams({ scope: scope.kind, tenant_id: scope.tenantId });
   if (scope.kind === "subscription" && scope.subsAccId) q.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) q.set("agent", scope.agent);
   return q;
 }
 
@@ -42,6 +43,7 @@ export async function saveSharedSkillDoc(scope: ScopeRef, name: string, body: st
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
   if (scope.kind === "subscription" && scope.subsAccId) form.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) form.set("agent", scope.agent);
   form.set("name", name);
   form.set("body", body);
   const res = await fetch("/api/admin/skills", { method: "POST", body: form });
@@ -53,6 +55,7 @@ export async function uploadSharedSkillZip(scope: ScopeRef, name: string, file: 
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
   if (scope.kind === "subscription" && scope.subsAccId) form.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) form.set("agent", scope.agent);
   form.set("name", name);
   form.set("file", file, file.name);
   const res = await fetch("/api/admin/skills", { method: "POST", body: form });

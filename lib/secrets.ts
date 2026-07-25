@@ -11,6 +11,12 @@ export interface SecretNames {
 export const SECRET_FORMATS = ["dotenv", "json", "file", "native"] as const;
 export type SecretFormat = (typeof SECRET_FORMATS)[number];
 
+// The formats an end user may WRITE. `native` targets picoclaw's own
+// .security.yml slots (search-provider and model keys) and moved to the admin
+// surface — see native-secrets-admin-only. Users can still see and delete a
+// native entry they set before the change; they just cannot create one.
+export const USER_SECRET_FORMATS = SECRET_FORMATS.filter((f) => f !== "native");
+
 // Fixed picoclaw web-search slots (crab-shell-proxy secrets.go webProviders).
 // A native web slot is `web.<provider>`; the proxy rejects anything else.
 export const WEB_PROVIDERS = [

@@ -46,7 +46,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
     return () => {
       cancelled = true;
     };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
   async function onUpload(file: File) {
     setUploading(true);

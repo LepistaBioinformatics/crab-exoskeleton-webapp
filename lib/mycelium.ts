@@ -6,11 +6,10 @@ export const MYCELIUM_INTERNAL_URL =
 // With the gateway rename (service name == guest-role name) the set of agents
 // is no longer a fixed allowlist -- any subscribed role is a chattable agent,
 // and routing uses the role directly (`/<role>/v1/...`). `Instance` is thus a
-// plain role string, and `isInstance` is now only a non-empty guard (it no
-// longer gates which roles are allowed). INSTANCES survives solely as the seed
-// list for the admin model-registry dropdown; it does not gate routing or
-// subscription discovery.
-export const INSTANCES = ["alpha", "beta"] as const;
+// plain role string, and `isInstance` is only a non-empty guard (it does not gate
+// which roles are allowed). The former `INSTANCES = ["alpha","beta"]` seed is
+// gone: the admin panels now read the agent list from GET /api/admin/agents, so
+// nothing in the webapp hardcodes which agents exist.
 export type Instance = string;
 
 export function isInstance(value: string): boolean {

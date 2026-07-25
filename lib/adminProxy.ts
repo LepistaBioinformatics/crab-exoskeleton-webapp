@@ -11,6 +11,30 @@ import type { SessionCookie } from "@/lib/session";
 // this BFF only forwards the session JWT and surfaces the real status.
 const ADMIN_BASE = "/alpha/v1/admin";
 
+export const ADMIN_SCOPES = ["tenant", "subscription"] as const;
+export type AdminScopeKind = (typeof ADMIN_SCOPES)[number];
+
+export function isAdminScope(value: unknown): value is AdminScopeKind {
+  return typeof value === "string" && (ADMIN_SCOPES as readonly string[]).includes(value);
+}
+
+// The shared-content query every scope-addressed admin route builds: tenant scope
+// needs only tenant_id, subscription scope needs both, and `agent` narrows the
+// target to one agent ("all", or omitted, addresses the store every agent reads).
+// Returns null when the combination is invalid, which callers map to a 400.
+export function adminScopeQuery(
+  scope: AdminScopeKind,
+  tenantId: string,
+  subsAccId: string | null,
+  agent?: string | null,
+): URLSearchParams | null {
+  if (scope === "subscription" && !subsAccId) return null;
+  const q = new URLSearchParams({ scope, tenant_id: tenantId });
+  if (scope === "subscription" && subsAccId) q.set("subs_acc_id", subsAccId);
+  if (agent) q.set("agent", agent);
+  return q;
+}
+
 export async function requireSession(): Promise<SessionCookie | NextResponse> {
   const session = await getSession();
   if (!session) {
