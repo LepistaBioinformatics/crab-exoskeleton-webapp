@@ -29,17 +29,24 @@ panel.
 
 **Inventory** — two lists.
 
-- *Active*: reorderable, and the order **is** the fallback chain. Reordering
-  `PUT`s the new sequence and takes effect on each workspace's next
-  materialization — it must not restart the fleet. A separate "apply now" action
-  is offered for admins who want it immediately, labelled with that consequence.
+- *Active*: reorderable. The order is **presentation only** — it must not be
+  labelled or implied to be the fallback chain, and reordering triggers no
+  re-materialization and no restart.
 - *Inactive*: `disabled` and `deprecated` together, each badged with its reason
   and, for deprecated, `→ replaced by X`.
 
 Every row shows the model name, `provider · api_base`, a `key` badge when a key is
-stored, and its usage count. Delete and disable render unavailable — with the
-reason — while the model is in use. Deprecate prompts for the replacement,
-offering only `active` models.
+stored, its usage count, and its **declared fallback chain** — the chain is what
+determines which keys land in a workspace, so it must be legible on the row, not
+buried in an edit form. Delete and disable render unavailable — with the reason —
+while the model is in use, and "in use" includes being named in another model's
+fallback list. Deprecate prompts for the replacement, offering only `active`
+models.
+
+**Fallback chain editor** — a model's `fallbacks` is an ordered selection of other
+`active` models, editable per model. The UI must state plainly that this list, not
+the listing order, becomes `agents.defaults.model_fallbacks`. A model cannot be
+offered itself.
 
 **Register / edit** — a select fed by `GET /api/admin/model-catalog` prefills
 `provider`, `model` and `api_base`, with a manual option for anything not in the
@@ -72,10 +79,11 @@ tenant/subscription, plus the per-user list with an explicit override and an
 ## Verification gate
 
 `next build` and `tsc` clean; `vitest` green. New tests: the listing splits
-active from inactive and orders the active group by position; duplicate blanks
-`model_name` and `api_key`; a 409 version conflict renders the reload banner; an
-in-use delete renders the referrers; delete and disable are unavailable while in
-use.
+active from inactive and orders the active group by position; each row shows its
+declared fallback chain; duplicate blanks `model_name` and `api_key`; a 409 version
+conflict renders the reload banner; an in-use delete renders the referrers,
+including a fallback-list referrer; delete and disable are unavailable while in
+use; the fallback editor never offers the model itself or a non-`active` model.
 
 ## Status
 
