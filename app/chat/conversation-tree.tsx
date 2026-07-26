@@ -258,7 +258,7 @@ export default function ConversationTree({
     uniformLit ? false : spotlightId != null ? id !== spotlightId : true;
 
   return (
-    <div role="tree" aria-label="Conversation tree" className="flex min-h-full flex-col">
+    <div role="tree" aria-label={t.history.treeAria} className="flex min-h-full flex-col">
       {bursts.map((b, i) => {
         const dotLane = dotLaneOf.get(b.conversationId)!;
         const conv = convById.get(b.conversationId);
