@@ -6,6 +6,7 @@ import {
   listSharedSecrets,
   setSharedSecret,
   deleteSharedSecret,
+  ALL_AGENTS,
   type ScopeRef,
 } from "@/lib/admin";
 import {
@@ -15,6 +16,7 @@ import {
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
+import { listModels, type InventoryModel } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,7 @@ const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
   json: "json",
   file: "file",
-  native: "native (picoclaw search-provider key)",
+  native: "native (picoclaw search-provider / model key)",
 };
 
 // `file` is not env-shaped, so the proxy rejects it at scope level. The other
@@ -47,9 +49,18 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
+  const [nativeKind, setNativeKind] = useState<"web" | "model">("web");
   const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
+  const [modelName, setModelName] = useState("");
+  const [models, setModels] = useState<InventoryModel[] | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+
+  // A model_list slot must name a single agent (the proxy rejects it for an
+  // all-agents scope): the inventory itself is per-agent, so there is no
+  // catalog to offer without one.
+  const routedAgent = scope.agent && scope.agent !== ALL_AGENTS ? scope.agent : null;
+  const availableModels = models?.filter((m) => m.status !== "disabled") ?? [];
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -74,12 +85,29 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     };
   }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
-  // A native secret addresses a picoclaw slot, not a free-form name: the UI only
-  // offers the `web.<provider>` family. Model keys go through the Model tab,
-  // whose registry carries the full definition (provider, base URL, key) instead
-  // of a bare `model_list.<model>.api_keys` value.
+  useEffect(() => {
+    setModelName("");
+    if (!routedAgent) {
+      setModels(null);
+      return;
+    }
+    let cancelled = false;
+    listModels(routedAgent)
+      .then((m) => !cancelled && setModels(m))
+      .catch(() => !cancelled && setModels([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [routedAgent]);
+
+  // A native secret addresses a picoclaw slot, not a free-form name. The web
+  // family is the fixed `web.<provider>` enum; the model family reads
+  // `model_list.<model>.api_keys`, where `<model>` must be a name the
+  // inventory (T17's listModels) actually knows -- the proxy validates this
+  // slot against the inventory, so a hand-typed name would only 400.
   function targetName(): string {
-    return format === "native" ? `web.${provider}` : name.trim();
+    if (format !== "native") return name.trim();
+    return nativeKind === "web" ? `web.${provider}` : `model_list.${modelName}.api_keys`;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -89,6 +117,10 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
 
     if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
       setSubmitError("Name may only contain letters, numbers, and . _ -");
+      return;
+    }
+    if (format === "native" && nativeKind === "model" && !modelName) {
+      setSubmitError("Select a model.");
       return;
     }
     if (!value) {
@@ -152,24 +184,60 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
         </label>
 
         {format === "native" ? (
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">Web search provider</span>
-            <select
-              className={selectClass}
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            >
-              {WEB_PROVIDERS.map((pv) => (
-                <option key={pv} value={pv}>
-                  {pv}
-                </option>
-              ))}
-            </select>
-            <span className="text-[11px] text-fg-muted">
-              Written into each workspace&apos;s picoclaw config below this scope. To set a model
-              API key, use the Model tab instead.
-            </span>
-          </label>
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-fg-muted">Slot</span>
+              <select
+                className={selectClass}
+                value={nativeKind}
+                onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
+              >
+                <option value="web">Web search provider</option>
+                <option value="model">Model API key</option>
+              </select>
+            </label>
+            {nativeKind === "web" ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-fg-muted">Web search provider</span>
+                <select
+                  className={selectClass}
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                >
+                  {WEB_PROVIDERS.map((pv) => (
+                    <option key={pv} value={pv}>
+                      {pv}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-fg-muted">
+                  Written into each workspace&apos;s picoclaw config below this scope.
+                </span>
+              </label>
+            ) : !routedAgent ? (
+              <Alert severity="info">Pick a single agent above to set a model API key.</Alert>
+            ) : (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-fg-muted">Model</span>
+                <select
+                  className={selectClass}
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                >
+                  <option value="">Select a model…</option>
+                  {availableModels.map((m) => (
+                    <option key={m.model_name} value={m.model_name}>
+                      {m.model_name}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-fg-muted">
+                  Setting a key here overrides the inventory&apos;s own key for this model, in this
+                  scope only.
+                </span>
+              </label>
+            )}
+          </>
         ) : (
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-fg-muted">Name</span>
