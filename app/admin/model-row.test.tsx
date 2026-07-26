@@ -55,11 +55,20 @@ describe("ModelRow", () => {
     expect(html).not.toContain("in use by");
   });
 
-  it("badges a deprecated model with its replacement", () => {
+  it("badges a retiring model with the successor new workspaces will get", () => {
     const html = renderToStaticMarkup(
       <ModelRow model={model({ status: "deprecated", replaced_by: "gpt-6" })} busy={false} {...handlers} />,
     );
-    expect(html).toContain("replaced by gpt-6");
+    // "retiring" rather than "deprecated": the row says what is happening to the
+    // model, and names the successor as an identifier so it reads as a model name
+    // and not as prose.
+    expect(html).toContain("retiring");
+    expect(html).toContain("gpt-6");
+  });
+
+  it("says plainly when an active model has no fallbacks", () => {
+    const html = renderToStaticMarkup(<ModelRow model={model({ fallbacks: [] })} busy={false} {...handlers} />);
+    expect(html).toContain("nowhere to go");
   });
 
   it("badges an imported orphan so the admin reviews it", () => {

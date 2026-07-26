@@ -102,19 +102,6 @@ export function reorderPayload(
   return [...next, ...inactive].map((m) => m.model_name);
 }
 
-// inactiveReason is the badge text for the inactive group. Deprecated names its
-// replacement, because "where do new users go instead" is the first thing an admin
-// looking at a retired model needs to know.
-export function inactiveReason(m: InventoryModel): string {
-  if (m.status === "deprecated") {
-    return `deprecated → replaced by ${m.replaced_by ?? "?"}`;
-  }
-  if (m.status === "disabled") {
-    return "disabled";
-  }
-  return "";
-}
-
 export function draftFromCatalog(entry: CatalogEntry): ModelDraft {
   return {
     ...emptyDraft(),
@@ -414,4 +401,115 @@ export async function clearModelAssignment(agent: Instance, target: AssignmentTa
     }),
     method: "DELETE",
   });
+}
+
+// ── The resolution ladder ────────────────────────────────────────────────────
+//
+// The cascade is the product's central fact: a workspace's model comes from the
+// most specific level that has one, and the levels below stay set and take over
+// when a level above is cleared. The old panel showed exactly ONE level at a
+// time, so an admin could not see what their write would override, nor what
+// clearing it would fall back to — which is the same blindness the two competing
+// model systems had before this feature replaced them.
+//
+// buildLadder turns the four scope reads plus the pin count into rungs, ordered
+// most specific first. Pure so the precedence logic is testable without mounting
+// the panel.
+
+export type LadderLevel = "user" | "subscription" | "tenant" | "agent" | "global";
+
+export interface LadderRung {
+  level: LadderLevel;
+  /** What the admin calls this level, in their own vocabulary. */
+  label: string;
+  /** The model this level names, or null when the level is unset. */
+  modelName: string | null;
+  /** Extra context for the value — a date, a count, "instance-wide". */
+  detail?: string;
+  /** True for the one level that decides what new workspaces get. */
+  inEffect: boolean;
+  /** Set when the level has a value that a more specific level overrides. */
+  overridden: boolean;
+  /** True when the caller's privileges do not let them read this level. */
+  unreadable: boolean;
+}
+
+export interface LadderInput {
+  /** How many people in this subscription are pinned to a specific model. */
+  pinnedCount: number;
+  /** null = level is unset; undefined = the caller may not read it. */
+  subscription: ScopeDefault | null | undefined;
+  tenant: ScopeDefault | null | undefined;
+  agent: ScopeDefault | null | undefined;
+  global: ScopeDefault | null | undefined;
+  /** Names the levels: "Pesquisa", "Biotrop", "alpha". */
+  names: { subscription?: string; tenant?: string; agent?: string };
+}
+
+export function buildLadder(input: LadderInput): LadderRung[] {
+  const agentName = input.names.agent ?? "this agent";
+  const raw: {
+    level: LadderLevel;
+    label: string;
+    d: ScopeDefault | null | undefined;
+    detail?: string;
+  }[] = [
+    {
+      level: "user",
+      label: "Pinned to one person",
+      // A pin is per person, so it never resolves for the scope as a whole — it
+      // is shown because it OUTRANKS everything below, which is the fact an
+      // admin needs when a scope change appears not to reach someone.
+      d: null,
+      detail:
+        input.pinnedCount > 0
+          ? `${input.pinnedCount} pinned — a pin outranks every level below`
+          : "Nobody here is pinned",
+    },
+    {
+      level: "subscription",
+      label: input.names.subscription ? `This subscription — ${input.names.subscription}` : "This subscription",
+      d: input.subscription,
+    },
+    {
+      level: "tenant",
+      label: input.names.tenant ? `Tenant — ${input.names.tenant}` : "Tenant",
+      d: input.tenant,
+    },
+    { level: "agent", label: `Agent — ${agentName}`, d: input.agent, detail: "instance-wide" },
+    { level: "global", label: "Everything else", d: input.global, detail: "instance-wide" },
+  ];
+
+  // The first level with a readable value wins. A level the caller cannot read
+  // is skipped rather than treated as empty: claiming "not set" for something we
+  // were refused would be a lie, and would make the fallback prediction wrong.
+  let decided = false;
+  return raw.map((r) => {
+    const unreadable = r.d === undefined;
+    const modelName = r.d?.model_name ?? null;
+    const inEffect = !decided && !unreadable && modelName !== null;
+    if (inEffect) decided = true;
+    return {
+      level: r.level,
+      label: r.label,
+      modelName,
+      detail: r.detail,
+      inEffect,
+      overridden: !inEffect && !unreadable && modelName !== null,
+      unreadable,
+    };
+  });
+}
+
+// fallbackIfCleared answers the question the ladder exists to answer: if the
+// level currently in effect were cleared, what would these workspaces move to?
+// null means nothing below is set, so clearing would leave them with no
+// resolvable model — which refuses to provision rather than defaulting.
+export function fallbackIfCleared(rungs: LadderRung[]): string | null {
+  const winner = rungs.findIndex((r) => r.inEffect);
+  if (winner === -1) return null;
+  for (const r of rungs.slice(winner + 1)) {
+    if (r.modelName) return r.modelName;
+  }
+  return null;
 }

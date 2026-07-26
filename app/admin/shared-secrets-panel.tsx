@@ -19,10 +19,10 @@ import {
 import { listModels, describeError, type InventoryModel } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, fieldControlClass } from "./field";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const selectClass =
@@ -168,10 +168,14 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
       </p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Format</span>
+        <Field
+          label="How the agent receives it"
+          job="Environment variable, a JSON entry, a file on disk, or a slot in picoclaw's own config."
+          htmlFor="s-format"
+        >
           <select
-            className={selectClass}
+            id="s-format"
+            className={fieldControlClass()}
             value={format}
             onChange={(e) => setFormat(e.target.value as SecretFormat)}
           >
@@ -181,26 +185,35 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
               </option>
             ))}
           </select>
-        </label>
+        </Field>
 
         {format === "native" ? (
           <>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">Slot</span>
+            <Field
+              label="Which picoclaw setting"
+              job="The two config slots a scope admin may write. Everything else in picoclaw's config is off limits."
+              htmlFor="s-slot"
+            >
               <select
-                className={selectClass}
+                id="s-slot"
+                className={fieldControlClass()}
                 value={nativeKind}
                 onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
               >
-                <option value="web">Web search provider</option>
-                <option value="model">Model API key</option>
+                <option value="web">A web search provider&apos;s key</option>
+                <option value="model">A model&apos;s API key</option>
               </select>
-            </label>
+            </Field>
             {nativeKind === "web" ? (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Web search provider</span>
+              <Field
+                label="Which search provider"
+                job="Picoclaw's web tool uses whichever provider has a key."
+                htmlFor="s-provider"
+                consequence={<>Written into every workspace below this scope, on their next start.</>}
+              >
                 <select
-                  className={selectClass}
+                  id="s-provider"
+                  className={fieldControlClass(true)}
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                 >
@@ -210,10 +223,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
                     </option>
                   ))}
                 </select>
-                <span className="text-[11px] text-fg-muted">
-                  Written into each workspace&apos;s picoclaw config below this scope.
-                </span>
-              </label>
+              </Field>
             ) : !routedAgent ? (
               <Alert severity="info">Pick a single agent above to set a model API key.</Alert>
             ) : modelsError ? (
@@ -227,10 +237,20 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
                 {routedAgent} has no registered models yet — register one in the Model tab first.
               </Alert>
             ) : (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Model</span>
+              <Field
+                label="Which model"
+                job={`Only models registered for ${routedAgent}. A name typed by hand would be rejected.`}
+                htmlFor="s-model"
+                consequence={
+                  <>
+                    A key here <b>overrides the one stored on the model itself</b>, for this scope
+                    only. Workspaces below this scope that resolve to a different model are skipped.
+                  </>
+                }
+              >
                 <select
-                  className={selectClass}
+                  id="s-model"
+                  className={fieldControlClass(true)}
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
                 >
@@ -241,36 +261,41 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
                     </option>
                   ))}
                 </select>
-                <span className="text-[11px] text-fg-muted">
-                  Setting a key here overrides the inventory&apos;s own key for this model, in this
-                  scope only.
-                </span>
-              </label>
+              </Field>
             )}
           </>
         ) : (
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">Name</span>
-            <Input
-              inputSize="md"
-              placeholder="e.g. SHARED_API_KEY"
+          <Field
+            label="Name the agent will read it by"
+            job="Exactly as the agent's code expects it — case and underscores included."
+            htmlFor="s-name"
+          >
+            <input
+              id="s-name"
+              className={fieldControlClass(true)}
+              placeholder="SHARED_API_KEY"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-          </label>
+          </Field>
         )}
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Value</span>
-          <Input
-            inputSize="md"
+        <Field
+          label="Value"
+          job="Write-only. It is never shown or retrieved after you save it."
+          htmlFor="s-value"
+          consequence={<>Saving restarts the running containers under this scope so they pick it up.</>}
+        >
+          <input
+            id="s-value"
+            className={fieldControlClass()}
             type="password"
             autoComplete="off"
-            placeholder="Secret value (write-only)"
+            placeholder="paste the value"
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-        </label>
+        </Field>
 
         {submitError && <Alert severity="error">{submitError}</Alert>}
 

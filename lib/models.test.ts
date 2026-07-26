@@ -8,12 +8,14 @@ import {
   reorderPayload,
   draftFromCatalog,
   draftFromDuplicate,
-  inactiveReason,
   modelsApiError,
   describeError,
   serializeDraft,
   emptyDraft,
+  buildLadder,
+  fallbackIfCleared,
 } from "./models";
+import type { ScopeDefault } from "./models";
 import type { InventoryModel, ModelAssignment } from "./models";
 
 function model(over: Partial<InventoryModel> = {}): InventoryModel {
@@ -89,22 +91,6 @@ describe("reorderPayload", () => {
     expect(order).not.toBeNull();
     expect(new Set(order)).toEqual(new Set(["first", "second", "third", "retired", "gone"]));
     expect(order).toHaveLength(active.length + inactive.length);
-  });
-});
-
-describe("inactiveReason", () => {
-  it("names the replacement for a deprecated model", () => {
-    expect(inactiveReason(model({ status: "deprecated", replaced_by: "successor" }))).toBe(
-      "deprecated → replaced by successor",
-    );
-  });
-
-  it("labels a disabled model", () => {
-    expect(inactiveReason(model({ status: "disabled" }))).toBe("disabled");
-  });
-
-  it("says nothing for an active model", () => {
-    expect(inactiveReason(model())).toBe("");
   });
 });
 
@@ -336,5 +322,96 @@ describe("defaultOptions", () => {
 
   it("does not duplicate a current default that is still active", () => {
     expect(defaultOptions(models, "live")).toEqual([{ name: "live", inactive: false }]);
+  });
+});
+
+describe("buildLadder", () => {
+  const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
+  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+
+  it("puts the most specific readable value in effect and marks the rest overridden", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: def("claude-sonnet-4.6"),
+      tenant: def("gpt-5.4"),
+      agent: def("glm-4.7"),
+      global: null,
+      names,
+    });
+    expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
+    expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["tenant", "agent"]);
+  });
+
+  it("falls through an unset level to the next one that has a value", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: null,
+      tenant: null,
+      agent: def("glm-4.7"),
+      global: def("gpt-5.4"),
+      names,
+    });
+    expect(rungs.find((r) => r.inEffect)?.level).toBe("agent");
+  });
+
+  it("skips a level the caller may not read rather than calling it unset", () => {
+    // A tenant admin is refused the instance-wide levels. Reporting those as
+    // "not set" would be a lie, and would make the fallback prediction wrong.
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: null,
+      tenant: null,
+      agent: undefined,
+      global: undefined,
+      names,
+    });
+    expect(rungs.find((r) => r.level === "agent")?.unreadable).toBe(true);
+    expect(rungs.find((r) => r.level === "agent")?.overridden).toBe(false);
+    expect(rungs.some((r) => r.inEffect)).toBe(false);
+  });
+
+  it("reports pins as outranking without ever resolving for the scope", () => {
+    const rungs = buildLadder({
+      pinnedCount: 3,
+      subscription: def("gpt-5.4"),
+      tenant: null,
+      agent: null,
+      global: null,
+      names,
+    });
+    const pin = rungs[0];
+    expect(pin.level).toBe("user");
+    expect(pin.inEffect).toBe(false);
+    expect(pin.detail).toContain("3 pinned");
+    expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
+  });
+});
+
+describe("fallbackIfCleared", () => {
+  const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
+  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+
+  it("names what the workspaces would move to", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: def("claude-sonnet-4.6"),
+      tenant: def("gpt-5.4"),
+      agent: null,
+      global: null,
+      names,
+    });
+    expect(fallbackIfCleared(rungs)).toBe("gpt-5.4");
+  });
+
+  it("returns null when nothing below is set, because that refuses to provision", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: def("claude-sonnet-4.6"),
+      tenant: null,
+      agent: null,
+      global: null,
+      names,
+    });
+    expect(fallbackIfCleared(rungs)).toBeNull();
   });
 });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cva } from "class-variance-authority";
-import { ArrowLeft, Cpu, FileBox, KeyRound, Palette, ShieldCheck, Users, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, Cpu, FileBox, KeyRound, Palette, ShieldCheck, Users, Wrench } from "lucide-react";
 import {
   ALL_AGENTS,
   listAgents,
@@ -215,6 +215,22 @@ export default function AdminScreen() {
   const tabTarget =
     agentTarget !== ALL_AGENTS && !tabAgents.includes(agentTarget) ? ALL_AGENTS : agentTarget;
 
+  // The selected scope in the admin's own words. Falls back to the id when names
+  // have not resolved — an id is worse to read than a name, but far better than a
+  // strip that says "a write here reaches undefined".
+  const selectedScope = scopes?.find(
+    (sc) =>
+      sc.kind === selected?.kind &&
+      sc.tenantId === selected?.tenantId &&
+      sc.subsAccId === selected?.subsAccId,
+  );
+  const scopeLabel =
+    selected === null
+      ? ""
+      : selected.kind === "subscription"
+        ? (selectedScope?.accName ?? selected.subsAccId ?? "this subscription")
+        : (selectedScope?.tenantName ?? selected.tenantId);
+
   const visibleTabs = [
     ...(scopes && scopes.length > 0 ? TABS : []),
     ...(canEditBranding ? [BRANDING_TAB] : []),
@@ -258,16 +274,29 @@ export default function AdminScreen() {
             className="mb-5 flex gap-1 overflow-x-auto border-b border-brand/30"
             aria-label="Admin sections"
           >
-            {visibleTabs.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                className={tabButton({ active: tab === t.key }) + " shrink-0"}
-                onClick={() => setTab(t.key)}
-              >
-                {t.icon}
-                {t.label}
-              </button>
+            {visibleTabs.map((t, i) => (
+              <Fragment key={t.key}>
+                {/* The divider is not decoration: everything before it is targeted
+                    by BOTH the scope rail and the agent picker, Members by the rail
+                    alone, and Branding by neither. That is why the rail appears and
+                    disappears as you switch tabs — which a flat row left
+                    unexplained. */}
+                {i > 0 && AGENT_TABS.includes(visibleTabs[i - 1].key) && !AGENT_TABS.includes(t.key) && (
+                  <span
+                    role="separator"
+                    aria-orientation="vertical"
+                    className="mx-2 h-[18px] w-px shrink-0 self-center bg-brand/40"
+                  />
+                )}
+                <button
+                  type="button"
+                  className={tabButton({ active: tab === t.key }) + " shrink-0"}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              </Fragment>
             ))}
           </nav>
 
@@ -310,13 +339,37 @@ export default function AdminScreen() {
                     // the hint copy differs (content stores vs the per-agent model
                     // registry). Members is not agent-scoped, so it has none.
                     <div className="flex flex-col gap-4">
-                      <div className="max-w-sm">
-                        <AgentTargetSelect
-                          agents={tabAgents}
-                          value={tabTarget}
-                          onChange={setAgentTarget}
-                          purpose={modelTab ? "registry" : "content"}
-                        />
+                      {/* Scope and agent were two mute controls that never stated
+                          their combined effect, so an admin had to hold "which
+                          tenant" and "which agent" in their head and infer the
+                          reach of a write. They now compose one sentence. */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-brand/25 bg-elevated px-3.5 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
+                            Scope
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand bg-surface px-2.5 py-0.5 text-[12.5px] font-medium text-fg">
+                            <Building2 size={12} aria-hidden />
+                            {scopeLabel}
+                          </span>
+                        </div>
+                        <div className="min-w-0 max-w-xs flex-1">
+                          <AgentTargetSelect
+                            agents={tabAgents}
+                            value={tabTarget}
+                            onChange={setAgentTarget}
+                            purpose={modelTab ? "registry" : "content"}
+                          />
+                        </div>
+                        <p className="min-w-[16rem] flex-1 border-l border-brand/30 pl-3.5 text-xs text-fg-muted">
+                          A write here reaches <b className="font-semibold text-fg">{scopeLabel}</b>
+                          {tabTarget === ALL_AGENTS ? (
+                            <> through <b className="font-semibold text-fg">every agent</b></>
+                          ) : (
+                            <> through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only</>
+                          )}
+                          {selected.kind === "tenant" ? " and every subscription under it." : "."}
+                        </p>
                       </div>
                       {tab === "files" ? (
                         <SharedFilesPanel scope={{ ...selected, agent: tabTarget }} />

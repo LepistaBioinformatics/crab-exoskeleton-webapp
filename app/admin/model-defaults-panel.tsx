@@ -11,6 +11,10 @@ import {
   assignmentKey,
   pinnedModel,
   defaultOptions,
+  buildLadder,
+  fallbackIfCleared,
+  type LadderLevel,
+  type LadderRung,
   type DefaultScope,
   type InventoryModel,
   type ModelAssignment,
@@ -21,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldGroup, Ident } from "./field";
+import { ResolutionLadder } from "./resolution-ladder";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
 
@@ -62,6 +68,13 @@ export default function ModelDefaultsPanel({
   const [assignments, setAssignments] = useState<Record<string, ModelAssignment>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Every cascade level's value, for the ladder. undefined per key = refused.
+  const [levels, setLevels] = useState<{
+    subscription?: ScopeDefault | null;
+    tenant?: ScopeDefault | null;
+    agent?: ScopeDefault | null;
+    global?: ScopeDefault | null;
+  } | null>(null);
 
   const assignable = models.filter((m) => m.status !== "disabled");
 
@@ -103,6 +116,47 @@ export default function ModelDefaultsPanel({
     setCurrent(await getModelDefault(routed, JSON.parse(scopeKey) as DefaultScope));
     setLoaded(true);
   }, [routed, scopeKey]);
+
+  // Every level at once, so the ladder can show what a write overrides and what
+  // clearing it falls back to. Four reads rather than a new proxy endpoint: the
+  // routes already exist and are already gated, and adding one would have meant a
+  // handler, a BFF route and tests for a read the client can already perform.
+  //
+  // A refusal is NOT an empty level. `global` and `agent` need instance-admin, so a
+  // tenant admin is legitimately 403'd — recording that as "not set" would both lie
+  // and make the fallback prediction wrong, which is why buildLadder distinguishes
+  // undefined (unreadable) from null (unset).
+  const readLevel = useCallback(
+    async (s: DefaultScope): Promise<ScopeDefault | null | undefined> => {
+      try {
+        return await getModelDefault(routed, s);
+      } catch {
+        return undefined;
+      }
+    },
+    [routed],
+  );
+
+  const loadLadder = useCallback(async () => {
+    if (!routed) return;
+    const tenantScope = scope.tenantId ? ({ kind: "tenant", tenantId: scope.tenantId } as const) : null;
+    const subsScope =
+      scope.kind === "subscription" && scope.subsAccId
+        ? ({ kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId } as const)
+        : null;
+    const [sub, ten, ag, glob] = await Promise.all([
+      subsScope ? readLevel(subsScope) : Promise.resolve(null),
+      tenantScope ? readLevel(tenantScope) : Promise.resolve(null),
+      readLevel({ kind: "agent" }),
+      readLevel({ kind: "global" }),
+    ]);
+    setLevels({ subscription: sub, tenant: ten, agent: ag, global: glob });
+  }, [routed, readLevel, scope.kind, scope.tenantId, scope.subsAccId]);
+
+  useEffect(() => {
+    setLevels(null);
+    loadLadder().catch(() => setLevels({}));
+  }, [loadLadder]);
 
   useEffect(() => {
     setLoaded(false);
@@ -158,76 +212,109 @@ export default function ModelDefaultsPanel({
     }
   }
 
+  const pinnedCount = Object.values(assignments).filter((a) => a.source === "explicit").length;
+  const rungs: LadderRung[] = buildLadder({
+    pinnedCount,
+    subscription: scope.kind === "subscription" ? levels?.subscription : null,
+    tenant: levels?.tenant,
+    agent: levels?.agent,
+    global: levels?.global,
+    // Only the agent is named. Which tenant and subscription are selected is
+    // already the left rail's job, and repeating it on the rung would be
+    // decoration — the rung's work is to say what that level RESOLVES to.
+    names: { agent: routed },
+  });
+  const clearedFallback = fallbackIfCleared(rungs);
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {error && <Alert severity="error">{error}</Alert>}
 
-      <div className="flex flex-col gap-2">
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Default model
-        </span>
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-fg-muted">Level</span>
-          <select className={selectClass} value={level} disabled={busy}
-            onChange={(e) => setLevel(e.target.value as DefaultScope["kind"])}>
-            <option value="global">global (whole instance)</option>
-            <option value="agent">agent (this agent, all tenants)</option>
-            <option value="tenant">tenant</option>
-            <option value="subscription">subscription</option>
-          </select>
-        </label>
-        <p className="text-[11px] text-fg-muted">
-          Resolution order, most specific first: per-user pin → subscription → tenant → agent → global.
-        </p>
-        {!defaultScope ? (
-          <p className="py-2 text-sm text-fg-muted">
-            Select a {level} on the left to set its default.
-          </p>
-        ) : !loaded ? (
-          <div className="flex justify-center py-3">
+      <FieldGroup
+        title="Which model this scope resolves to"
+        intro="Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it."
+        count={<><span className="tabular-nums">{rungs.length}</span> levels</>}
+      >
+        {levels === null ? (
+          <div className="flex justify-center py-4">
             <Spinner size={18} />
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <select className={selectClass} value={current?.model_name ?? ""} disabled={busy}
-              onChange={(e) =>
-                run(async () => {
-                  await setModelDefault(routed, defaultScope, e.target.value);
-                  await load();
-                })
-              }>
-              <option value="" disabled>
-                no default set
-              </option>
-              {/* The current default is offered even when it is no longer active:
-                  filtering to active models made a deprecated default match no
-                  option, so the control read "no default set" while one WAS set. */}
-              {defaultOptions(models, current?.model_name ?? null).map((o) => (
-                <option key={o.name} value={o.name}>
-                  {o.inactive ? `${o.name} (retired — current default)` : o.name}
-                </option>
-              ))}
-            </select>
-            {current && (
-              <Button variant="text" size="sm" disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    await clearModelDefault(routed, defaultScope);
-                    await load();
-                  })
-                }>
-                Clear
-              </Button>
+          <>
+            <ResolutionLadder rungs={rungs} selected={level} onSelect={(l) => setLevel(l as DefaultScope["kind"])} />
+
+            {!defaultScope ? (
+              <p className="text-sm text-fg-muted">
+                Select a {level} on the left to set its default.
+              </p>
+            ) : (
+              <Field
+                label={`Set the ${level} level`}
+                job={
+                  level === "global" || level === "agent"
+                    ? "Instance-wide. Needs instance-admin, and reaches each workspace on its next start rather than restarting the fleet."
+                    : "New workspaces at this level land on this model unless a more specific level or a per-user pin overrides it."
+                }
+                htmlFor="default-model"
+                consequence={
+                  clearedFallback !== null ? (
+                    <>
+                      Clearing the level in effect would move its workspaces to{" "}
+                      <Ident>{clearedFallback}</Ident> on their next start.
+                    </>
+                  ) : rungs.some((r) => r.inEffect) ? (
+                    <>Nothing is set below this. Clearing it would leave new workspaces with <b>no resolvable model</b>, which refuses to provision.</>
+                  ) : undefined
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <select
+                    id="default-model"
+                    className={selectClass + " flex-1"}
+                    value={current?.model_name ?? ""}
+                    disabled={busy || !loaded}
+                    onChange={(e) =>
+                      run(async () => {
+                        await setModelDefault(routed, defaultScope, e.target.value);
+                        await load();
+                        await loadLadder();
+                      })
+                    }
+                  >
+                    <option value="" disabled>
+                      nothing set at this level
+                    </option>
+                    {/* The current default is offered even when it is no longer active:
+                        filtering to active models made a deprecated default match no
+                        option, so the control read "no default set" while one WAS set. */}
+                    {defaultOptions(models, current?.model_name ?? null).map((o) => (
+                      <option key={o.name} value={o.name}>
+                        {o.inactive ? `${o.name} (retired — current default)` : o.name}
+                      </option>
+                    ))}
+                  </select>
+                  {current && (
+                    <Button
+                      variant="text"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await clearModelDefault(routed, defaultScope);
+                          await load();
+                          await loadLadder();
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </Field>
             )}
-          </div>
+          </>
         )}
-        <p className="text-[11px] text-fg-muted">
-          New workspaces at this level land on this model unless a more specific level or a per-user
-          pin overrides it. Setting a <span className="font-mono">global</span> or{" "}
-          <span className="font-mono">agent</span> default requires instance-admin privileges, and takes
-          effect on each workspace&apos;s next start rather than restarting the fleet.
-        </p>
-      </div>
+      </FieldGroup>
 
       <div className="flex flex-col gap-2">
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">

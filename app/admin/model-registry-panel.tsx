@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { KeyRound, Plus } from "lucide-react";
 import {
   listModels,
   modelCatalog,
@@ -24,9 +24,9 @@ import {
 } from "@/lib/models";
 import { ALL_AGENTS, type ScopeRef } from "@/lib/admin";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, fieldControlClass, Ident } from "./field";
 import { ModelRow } from "./model-row";
 import ModelDefaultsPanel from "./model-defaults-panel";
 import { FallbackEditor } from "./fallback-editor";
@@ -220,10 +220,18 @@ export default function ModelRegistryPanel({
       </div>
 
       {showForm && (
-        <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">Start from a known model</span>
-            <select className={selectClass} defaultValue="" onChange={(e) => onCatalogPick(e.target.value)}>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4">
+          <Field
+            label="Start from a known model"
+            job="Fills the provider fields below. Choose the last option to type them yourself."
+            htmlFor="m-catalog"
+          >
+            <select
+              id="m-catalog"
+              className={fieldControlClass()}
+              defaultValue=""
+              onChange={(e) => onCatalogPick(e.target.value)}
+            >
               <option value="" disabled>
                 pick one to prefill…
               </option>
@@ -232,31 +240,141 @@ export default function ModelRegistryPanel({
                   {c.provider} · {c.model}
                 </option>
               ))}
-              <option value={CUSTOM}>custom (fill everything by hand)</option>
+              <option value={CUSTOM}>Something else — fill it in by hand</option>
             </select>
-          </label>
-          <Input inputSize="sm" placeholder="model name (unique, e.g. team-gpt)" value={draft.model_name}
-            disabled={!!editing}
-            onChange={(e) => setDraft({ ...draft, model_name: e.target.value })} />
-          <Input inputSize="sm" placeholder="provider (e.g. openai)" value={draft.provider}
-            onChange={(e) => setDraft({ ...draft, provider: e.target.value })} />
-          <Input inputSize="sm" placeholder="model (e.g. gpt-5.4)" value={draft.model}
-            onChange={(e) => setDraft({ ...draft, model: e.target.value })} />
-          <Input inputSize="sm" placeholder="api_base" value={draft.api_base}
-            onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
-          <Input inputSize="sm" placeholder="auth_method (optional, e.g. oauth)" value={draft.auth_method}
-            onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })} />
-          <Input inputSize="sm" type="password" autoComplete="off"
-            placeholder={editing ? "api_key (leave blank to keep the stored key)" : "api_key (write-only)"}
-            value={draft.api_key}
-            onChange={(e) => setDraft({ ...draft, api_key: e.target.value })} />
+          </Field>
+
+          {/* The derivation pair. model_name and model were two adjacent inputs
+              labelled only by placeholder, with nothing saying that one is the
+              admin's alias and the other is the id the provider expects — the
+              single worst thing to read in this panel. They are now a pair with
+              the emitted entry underneath, so the relationship is shown rather
+              than left to be inferred. */}
+          <div className="grid gap-3 rounded-lg border border-brand/25 bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
+            <Field
+              label="What you call it here"
+              job="Your name for it, used everywhere in this screen. Must be unique."
+              htmlFor="m-alias"
+            >
+              <input
+                id="m-alias"
+                className={fieldControlClass(true)}
+                placeholder="team-gpt"
+                value={draft.model_name}
+                disabled={!!editing}
+                onChange={(e) => setDraft({ ...draft, model_name: e.target.value })}
+              />
+            </Field>
+            <span aria-hidden className="hidden self-center pt-5 text-center text-fg-muted sm:block">
+              →
+            </span>
+            <Field
+              label="What the provider calls it"
+              job="The exact id the provider expects. It often differs from your name."
+              htmlFor="m-id"
+            >
+              <input
+                id="m-id"
+                className={fieldControlClass(true)}
+                placeholder="gpt-5.4"
+                value={draft.model}
+                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+              />
+            </Field>
+
+            <div className="sm:col-span-3">
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
+                  Written to each workspace as
+                </span>
+                <span className="text-[11px] text-fg-muted">config.json</span>
+              </div>
+              <pre className="overflow-x-auto rounded-md border border-brand/25 bg-bg p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
+{`"model_name": ${JSON.stringify(draft.model_name || "…")},
+"provider":   ${JSON.stringify(draft.provider || "…")},
+"model":      ${JSON.stringify(draft.model || "…")}`}
+              </pre>
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+                <KeyRound size={12} aria-hidden />
+                The key goes to <Ident>.security.yml</Ident> instead — never to{" "}
+                <Ident>config.json</Ident>.
+              </p>
+            </div>
+          </div>
+
+          <Field
+            label="Provider"
+            job="Who serves the model. Picoclaw uses it to choose how to talk to them."
+            htmlFor="m-provider"
+          >
+            <input
+              id="m-provider"
+              className={fieldControlClass(true)}
+              placeholder="openai"
+              value={draft.provider}
+              onChange={(e) => setDraft({ ...draft, provider: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label="Where to send requests"
+            job="The provider's API address. Leave empty to use their default."
+            htmlFor="m-base"
+          >
+            <input
+              id="m-base"
+              className={fieldControlClass(true)}
+              placeholder="https://api.openai.com/v1"
+              value={draft.api_base}
+              onChange={(e) => setDraft({ ...draft, api_base: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label="Sign-in method"
+            job="Only for providers that use OAuth instead of a key. Leave empty otherwise."
+            htmlFor="m-auth"
+          >
+            <input
+              id="m-auth"
+              className={fieldControlClass(true)}
+              placeholder="oauth"
+              value={draft.auth_method}
+              onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label="API key"
+            job="Write-only. Stored once here and reused by every scope that points at this model."
+            htmlFor="m-key"
+            consequence={
+              editing ? (
+                <>
+                  Leave it blank to <b>keep the key already stored</b>. This screen never shows a
+                  key back, so it cannot be re-typed from what you see.
+                </>
+              ) : undefined
+            }
+          >
+            <input
+              id="m-key"
+              className={fieldControlClass()}
+              type="password"
+              autoComplete="off"
+              placeholder={editing ? "unchanged" : "paste the key"}
+              value={draft.api_key}
+              onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
+            />
+          </Field>
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="text" size="sm"
               onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
               Cancel
             </Button>
             <Button type="submit" variant="filled" size="sm" disabled={busy}>
-              {busy ? "Saving…" : editing ? "Save" : "Register"}
+              {busy ? "Saving…" : editing ? "Save changes" : "Add model"}
             </Button>
           </div>
         </form>

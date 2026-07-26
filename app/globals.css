@@ -22,6 +22,13 @@
   --brand: #663a88;      /* structural violet border (brand-600) */
   --fg: #0a2933;         /* text primary */
   --fg-muted: #5a6b72;   /* secondary text */
+  /* Semantic state, deliberately NOT the accent: the accent means "interactive"
+     or "in effect", so a blocked or retiring state must not compete with it.
+     Desaturated to sit on teal ink without shouting. */
+  --blocked: #b4544a;    /* an action the data forbids (in use, referenced) */
+  --blocked-weak: #fbeceb;
+  --retiring: #7a6a1f;   /* deprecated: still serving, no longer offered */
+  --retiring-weak: #f7f2df;
   /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
      A plain dark shadow vanishes on a dark background, so dark mode adds a
      faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
@@ -39,6 +46,10 @@
     --brand: #a988c9;
     --fg: #e6eef2;
     --fg-muted: #9fb0b7;
+    --blocked: #e0857c;
+    --blocked-weak: #35211f;
+    --retiring: #c9b45f;
+    --retiring-weak: #2c2718;
     --shadow-e: 0 2px 8px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 }
@@ -53,6 +64,10 @@
   --color-brand: var(--brand);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
+  --color-blocked: var(--blocked);
+  --color-blocked-weak: var(--blocked-weak);
+  --color-retiring: var(--retiring);
+  --color-retiring-weak: var(--retiring-weak);
 
   /* Theme-aware elevation utility -> `shadow-elevated`. Uses the runtime var so
      it flips with prefers-color-scheme (a baked literal here would not). */
