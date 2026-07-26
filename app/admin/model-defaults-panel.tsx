@@ -27,6 +27,9 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, FieldGroup, Ident } from "./field";
 import { ResolutionLadder } from "./resolution-ladder";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
 
@@ -58,6 +61,8 @@ export default function ModelDefaultsPanel({
   routed: string;
   models: InventoryModel[];
 }) {
+  const t = useT(adminCopy);
+  const err = useT(errorCopy);
   const [current, setCurrent] = useState<ScopeDefault | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [users, setUsers] = useState<UserRef[] | null>(null);
@@ -206,7 +211,7 @@ export default function ModelDefaultsPanel({
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(false);
     }
@@ -231,8 +236,8 @@ export default function ModelDefaultsPanel({
       {error && <Alert severity="error">{error}</Alert>}
 
       <FieldGroup
-        title="Which model this scope resolves to"
-        intro="Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it."
+        title={t.defaults.title}
+        intro={t.defaults.intro}
         count={<><span className="tabular-nums">{rungs.length}</span> levels</>}
       >
         {levels === null ? (
@@ -249,11 +254,11 @@ export default function ModelDefaultsPanel({
               </p>
             ) : (
               <Field
-                label={`Set the ${level} level`}
+                label={t.defaults.setLevel.replace("{level}", level)}
                 job={
                   level === "global" || level === "agent"
-                    ? "Instance-wide. Needs instance-admin, and reaches each workspace on its next start rather than restarting the fleet."
-                    : "New workspaces at this level land on this model unless a more specific level or a per-user pin overrides it."
+                    ? t.defaults.instanceJob
+                    : t.defaults.scopeJob
                 }
                 htmlFor="default-model"
                 consequence={
@@ -263,7 +268,11 @@ export default function ModelDefaultsPanel({
                       <Ident>{clearedFallback}</Ident> on their next start.
                     </>
                   ) : rungs.some((r) => r.inEffect) ? (
-                    <>Nothing is set below this. Clearing it would leave new workspaces with <b>no resolvable model</b>, which refuses to provision.</>
+                    <>
+                      {t.defaults.clearWarnBefore}
+                      <b>{t.defaults.clearWarnBold}</b>
+                      {t.defaults.clearWarnAfter}
+                    </>
                   ) : undefined
                 }
               >

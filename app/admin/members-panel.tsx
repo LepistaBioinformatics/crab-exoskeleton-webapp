@@ -16,6 +16,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { BCP47 } from "@/lib/i18n/format";
+import { useLocale } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // Members of the subscription selected in the rail (the scope is owned by the
 // admin screen, same as the shared-files / shared-secrets panels). Per user we
@@ -25,6 +31,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 // so this panel exposes no content affordance. Do not add a link, download icon,
 // or row click handler to the file rows.
 export default function MembersPanel({ scope }: { scope: ScopeRef }) {
+  const t = useT(adminCopy);
   const [users, setUsers] = useState<UserRef[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -49,7 +56,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
 
   if (scope.kind !== "subscription" || !scope.subsAccId) {
     return (
-      <p className="py-3 text-sm text-fg-muted">Select a subscription to see its members.</p>
+      <p className="py-3 text-sm text-fg-muted">{t.members.selectSubscription}</p>
     );
   }
 
@@ -67,7 +74,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
           <Spinner size={22} />
         </div>
       ) : users && users.length === 0 ? (
-        <p className="py-3 text-sm text-fg-muted">No members under this subscription yet.</p>
+        <p className="py-3 text-sm text-fg-muted">{t.members.none}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {users?.map((u) => {
@@ -126,6 +133,10 @@ function UserFiles({
   const [files, setFiles] = useState<FileMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
+  const tag = BCP47[useLocale().locale];
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const refresh = () => listUserFiles(tenantId, subsAccId, userAccId).then(setFiles);
@@ -154,7 +165,7 @@ function UserFiles({
       await deleteUserFile(tenantId, subsAccId, userAccId, name);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
     }
@@ -168,11 +179,11 @@ function UserFiles({
           <Spinner size={18} />
         </div>
       ) : files && files.length === 0 ? (
-        <p className="py-1 text-xs text-fg-muted">No private files.</p>
+        <p className="py-1 text-xs text-fg-muted">{t.members.noPrivateFiles}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {files?.map((f) => {
-            const modified = formatModified(f.modifiedAt);
+            const modified = formatModified(f.modifiedAt, tag);
             return (
               <li key={f.name} className="flex items-center gap-2 py-1">
                 <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
@@ -184,7 +195,7 @@ function UserFiles({
                 <IconButton
                   variant="ghost"
                   size="sm"
-                  aria-label={`Delete ${f.name}`}
+                  aria-label={`${t.members.deletePrefix} ${f.name}`}
                   disabled={busy === f.name}
                   onClick={() => setPendingDelete(f.name)}
                 >
@@ -198,13 +209,13 @@ function UserFiles({
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete member's file?"
+        title={t.members.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete}" will be permanently removed from this member's private workspace.`
+            ? t.members.deleteMessage.replace("{name}", pendingDelete)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
       />

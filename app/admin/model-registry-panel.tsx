@@ -30,6 +30,8 @@ import { Field, fieldControlClass, Ident } from "./field";
 import { ModelRow } from "./model-row";
 import ModelDefaultsPanel from "./model-defaults-panel";
 import { FallbackEditor } from "./fallback-editor";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -48,6 +50,7 @@ export default function ModelRegistryPanel({
   agents: string[];
   target: string;
 }) {
+  const t = useT(adminCopy);
   const routed = target === ALL_AGENTS ? agents[0] ?? "" : target;
 
   const [models, setModels] = useState<InventoryModel[] | null>(null);
@@ -148,7 +151,7 @@ export default function ModelRegistryPanel({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
-      setError({ message: "Fill model name, provider and model.", referrers: [] });
+      setError({ message: t.models.incomplete, referrers: [] });
       return;
     }
     await run(async () => {
@@ -205,7 +208,7 @@ export default function ModelRegistryPanel({
       )}
 
       {!routed && (
-        <Alert severity="info">No agents reported by the gateway, so the inventory cannot be reached.</Alert>
+        <Alert severity="info">{t.models.noAgents}</Alert>
       )}
 
       <div className="flex items-center gap-2">
@@ -222,8 +225,8 @@ export default function ModelRegistryPanel({
       {showForm && (
         <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4">
           <Field
-            label="Start from a known model"
-            job="Fills the provider fields below. Choose the last option to type them yourself."
+            label={t.models.startFrom}
+            job={t.models.startFromJob}
             htmlFor="m-catalog"
           >
             <select
@@ -240,7 +243,7 @@ export default function ModelRegistryPanel({
                   {c.provider} · {c.model}
                 </option>
               ))}
-              <option value={CUSTOM}>Something else — fill it in by hand</option>
+              <option value={CUSTOM}>{t.models.custom}</option>
             </select>
           </Field>
 
@@ -252,8 +255,8 @@ export default function ModelRegistryPanel({
               than left to be inferred. */}
           <div className="grid gap-3 rounded-lg border border-brand/25 bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
             <Field
-              label="What you call it here"
-              job="Your name for it, used everywhere in this screen. Must be unique."
+              label={t.models.yourName}
+              job={t.models.yourNameJob}
               htmlFor="m-alias"
             >
               <input
@@ -269,8 +272,8 @@ export default function ModelRegistryPanel({
               →
             </span>
             <Field
-              label="What the provider calls it"
-              job="The exact id the provider expects. It often differs from your name."
+              label={t.models.providerName}
+              job={t.models.providerNameJob}
               htmlFor="m-id"
             >
               <input
@@ -303,8 +306,8 @@ export default function ModelRegistryPanel({
           </div>
 
           <Field
-            label="Provider"
-            job="Who serves the model. Picoclaw uses it to choose how to talk to them."
+            label={t.models.provider}
+            job={t.models.providerJob}
             htmlFor="m-provider"
           >
             <input
@@ -317,8 +320,8 @@ export default function ModelRegistryPanel({
           </Field>
 
           <Field
-            label="Where to send requests"
-            job="The provider's API address. Leave empty to use their default."
+            label={t.models.apiBase}
+            job={t.models.apiBaseJob}
             htmlFor="m-base"
           >
             <input
@@ -331,8 +334,8 @@ export default function ModelRegistryPanel({
           </Field>
 
           <Field
-            label="Sign-in method"
-            job="Only for providers that use OAuth instead of a key. Leave empty otherwise."
+            label={t.models.authMethod}
+            job={t.models.authMethodJob}
             htmlFor="m-auth"
           >
             <input
@@ -345,8 +348,8 @@ export default function ModelRegistryPanel({
           </Field>
 
           <Field
-            label="API key"
-            job="Write-only. Stored once here and reused by every scope that points at this model."
+            label={t.models.apiKey}
+            job={t.models.apiKeyJob}
             htmlFor="m-key"
             consequence={
               editing ? (
@@ -374,7 +377,7 @@ export default function ModelRegistryPanel({
               Cancel
             </Button>
             <Button type="submit" variant="filled" size="sm" disabled={busy}>
-              {busy ? "Saving…" : editing ? "Save changes" : "Add model"}
+              {busy ? t.models.saving : editing ? t.models.saveChanges : t.models.addModel}
             </Button>
           </div>
         </form>
@@ -386,7 +389,7 @@ export default function ModelRegistryPanel({
         </div>
       ) : (
         <>
-          <Section title="Active">
+          <Section title={t.models.active}>
             {active.length === 0 ? (
               <p className="py-2 text-sm text-fg-muted">No active models. Register one to get started.</p>
             ) : (
@@ -456,7 +459,7 @@ export default function ModelRegistryPanel({
             )}
           </Section>
 
-          <Section title="Inactive">
+          <Section title={t.models.inactive}>
             {inactive.length === 0 ? (
               <p className="py-2 text-sm text-fg-muted">Nothing disabled or deprecated.</p>
             ) : (

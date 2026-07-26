@@ -11,9 +11,11 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`;
 }
 
-export function formatModified(iso?: string): string | null {
+// Takes the BCP 47 tag rather than relying on the browser default, so the
+// timestamp matches the language the rest of the panel is in.
+export function formatModified(iso: string | undefined, tag: string): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
+  return d.toLocaleString(tag);
 }
