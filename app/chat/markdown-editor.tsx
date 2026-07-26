@@ -131,7 +131,7 @@ export default function MarkdownEditor({
       >
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-brand/20 px-4 py-2.5">
-          <span className="flex-1 font-display text-sm font-semibold text-fg">Markdown editor</span>
+          <span className="flex-1 font-display text-sm font-semibold text-fg">{t.markdownEditor.heading}</span>
           <IconButton
             variant="ghost"
             size="sm"
@@ -180,7 +180,7 @@ export default function MarkdownEditor({
               {text.trim() ? (
                 <MessageContent content={text} />
               ) : (
-                <p className="text-sm text-fg-muted">Preview appears here.</p>
+                <p className="text-sm text-fg-muted">{t.markdownEditor.previewEmpty}</p>
               )}
             </div>
           )}

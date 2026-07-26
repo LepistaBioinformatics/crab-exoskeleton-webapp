@@ -755,7 +755,7 @@ export default function ChatView({
             <div className="flex w-full flex-col items-center gap-4">
               <div className="text-center">
                 <h2 className="font-display text-2xl font-bold text-fg">
-                  Continue where you left off
+                  {t.view.resumeHeading}
                 </h2>
                 <p className="mt-2 text-sm text-fg-muted">
                   Jump back into your most recent conversation with agent {workspace.r}.
@@ -785,9 +785,9 @@ export default function ChatView({
             </div>
           )}
           <div className="text-center">
-            <h2 className="font-display text-2xl font-bold text-fg">Start a new chat</h2>
+            <h2 className="font-display text-2xl font-bold text-fg">{t.view.startHeading}</h2>
             <p className="mt-2 text-sm text-fg-muted">
-              Ask agent {workspace.r} anything to get going.
+              {t.view.startBody.replace("{agent}", workspace.r)}
             </p>
           </div>
           {composer}

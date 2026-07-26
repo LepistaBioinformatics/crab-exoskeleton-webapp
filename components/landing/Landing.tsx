@@ -162,7 +162,7 @@ export default function Landing() {
             </div>
           </div>
           <div className={styles.artCol}>
-            <HeroArt />
+            <HeroArt label={t.diagrams.hero} />
           </div>
         </section>
 
@@ -179,12 +179,12 @@ export default function Landing() {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <CanvasMini />
+                <CanvasMini label={t.diagrams.canvas} />
                 <div className={styles.panelCaption}>{t.thought.canvasCaption}</div>
               </div>
               <div style={{ height: "1rem" }} />
               <div className={styles.panel}>
-                <TreeMini />
+                <TreeMini label={t.diagrams.tree} />
                 <div className={styles.panelCaption}>{t.thought.treeCaption}</div>
               </div>
             </div>
@@ -204,7 +204,7 @@ export default function Landing() {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <MemoryMock dict={t.memory} />
+                <MemoryMock dict={t.memory} samples={t.diagrams.sampleConversations} />
               </div>
             </div>
           </div>
@@ -247,7 +247,7 @@ export default function Landing() {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <ComponentMap doorLabel={t.defense.doorLabel} />
+                <ComponentMap doorLabel={t.defense.doorLabel} label={t.diagrams.map} />
                 <ComponentLegend groups={t.defense.groups} />
                 <div className={styles.panelCaption}>{t.defense.caption}</div>
               </div>

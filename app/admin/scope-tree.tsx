@@ -128,7 +128,7 @@ export function ScopeTree({
               {open && (
                 <div className="ml-[15px] mt-0.5 min-w-0 space-y-0.5 border-l border-brand/25 pl-2">
                   {g.subscriptions.length === 0 ? (
-                    <p className="py-1 pl-1.5 text-xs text-fg-muted">No subscriptions yet.</p>
+                    <p className="py-1 pl-1.5 text-xs text-fg-muted">{t.scope.noSubscriptions}</p>
                   ) : (
                     g.subscriptions.map((sub) => {
                       const key = scopeKey(sub);

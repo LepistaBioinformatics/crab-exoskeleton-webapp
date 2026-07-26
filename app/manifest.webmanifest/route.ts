@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppName, getLogo, DEFAULT_APP_NAME } from "@/lib/db";
+import { commonCopy } from "@/lib/i18n/common";
+import { getLocale } from "@/lib/i18n/server";
 
 // Force-dynamic: this GET takes no request arg and would otherwise be cached /
 // prerendered at build (running a DB query at build time). The manifest must
@@ -45,6 +47,7 @@ export async function GET() {
     // keep the default
   }
   const custom = await getLogo("icon").catch(() => null);
+  const t = commonCopy[await getLocale()];
 
   const icons = custom
     ? [
@@ -57,7 +60,7 @@ export async function GET() {
     id: "/",
     name: appName,
     short_name: appName,
-    description: `${appName} — your own private AI agent`,
+    description: `${appName} — ${t.metadata.description}`,
     display: "standalone",
     start_url: "/chat",
     scope: "/",

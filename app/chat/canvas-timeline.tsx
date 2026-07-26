@@ -351,6 +351,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 
 // Aggregate message volume bucketed over the time range -- the agent's "pulse".
 function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number; width: number }) {
+  const t = useT(chatCopy);
   const { area, line, total } = useMemo(() => {
     if (bursts.length === 0) return { area: "", line: "", total: 0 };
     const times = bursts.map((b) => b.ts);
@@ -378,8 +379,10 @@ function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number
   return (
     <div className="pt-2">
       <div className="mb-1 flex items-baseline gap-2 px-4">
-        <span className="font-display text-[11px] font-semibold text-fg">Agent pulse</span>
-        <span className="text-[10px] uppercase tracking-wider text-fg-muted">message volume over time · {total} total</span>
+        <span className="font-display text-[11px] font-semibold text-fg">{t.view.agentPulse}</span>
+        <span className="text-[10px] uppercase tracking-wider text-fg-muted">
+          {t.canvas.volumeOverTime.replace("{n}", String(total))}
+        </span>
       </div>
       <svg viewBox={`0 0 ${width} ${PULSE_H}`} width={width} height={PULSE_H} style={{ display: "block" }}>
         <defs>

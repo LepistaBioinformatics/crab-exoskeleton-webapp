@@ -141,6 +141,7 @@ rendering. Measured against the base commit `f3f7438`:
 | `/`, `/chat`, `/admin`, `/onboarding` | ƒ dynamic | ƒ dynamic (unchanged — they already call `getSession()`) |
 | `/signin` | ○ static | **ƒ dynamic** |
 | `/offline` | ○ static | **ƒ dynamic** |
+| `/_not-found` | ○ static | **ƒ dynamic** |
 
 Accepted deliberately. The reasoning:
 

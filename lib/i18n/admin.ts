@@ -40,6 +40,7 @@ const en = {
   },
   scope: {
     label: "Scope",
+    noSubscriptions: "No subscriptions yet.",
     collapseTenant: "Collapse tenant",
     expandTenant: "Expand tenant",
     tenantPrefix: "Tenant",
@@ -80,6 +81,9 @@ const en = {
     saving: "Saving…",
     saveChanges: "Save changes",
     addModel: "Add model",
+    noneActive: "No active models. Register one to get started.",
+    noneInactive: "Nothing disabled or deprecated.",
+    noFallbacks: "No fallbacks. Requests that fail have nowhere to go.",
     active: "Active",
     inactive: "Inactive",
   },
@@ -112,6 +116,7 @@ const en = {
   },
   defaults: {
     title: "Which model this scope resolves to",
+    selectSubscription: "Select a subscription to pin models to its users.",
     intro:
       "Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it.",
     setLevel: "Set the {level} level",
@@ -275,6 +280,7 @@ const pt: AdminDict = {
   },
   scope: {
     label: "Escopo",
+    noSubscriptions: "Nenhuma assinatura ainda.",
     collapseTenant: "Recolher tenant",
     expandTenant: "Expandir tenant",
     tenantPrefix: "Tenant",
@@ -313,6 +319,9 @@ const pt: AdminDict = {
     saving: "Salvando…",
     saveChanges: "Salvar alterações",
     addModel: "Adicionar modelo",
+    noneActive: "Nenhum modelo ativo. Registre um para começar.",
+    noneInactive: "Nada desativado ou aposentado.",
+    noFallbacks: "Sem fallbacks. Requisições que falham não têm para onde ir.",
     active: "Ativos",
     inactive: "Inativos",
   },
@@ -344,6 +353,7 @@ const pt: AdminDict = {
   },
   defaults: {
     title: "Para qual modelo este escopo resolve",
+    selectSubscription: "Selecione uma assinatura para fixar modelos aos seus usuários.",
     intro:
       "O mais específico vence. Escolha um nível para mudar onde novos workspaces caem; os níveis abaixo continuam definidos e assumem se você limpar este.",
     setLevel: "Definir o nível {level}",

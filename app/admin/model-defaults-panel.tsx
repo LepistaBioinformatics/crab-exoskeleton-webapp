@@ -330,7 +330,7 @@ export default function ModelDefaultsPanel({
           Per-user pins
         </span>
         {scope.kind !== "subscription" ? (
-          <p className="py-2 text-sm text-fg-muted">Select a subscription to pin models to its users.</p>
+          <p className="py-2 text-sm text-fg-muted">{t.defaults.selectSubscription}</p>
         ) : users === null ? (
           <div className="flex justify-center py-3">
             <Spinner size={18} />

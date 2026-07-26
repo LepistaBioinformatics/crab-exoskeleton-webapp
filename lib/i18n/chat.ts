@@ -70,6 +70,8 @@ const en = {
   },
   markdownEditor: {
     aria: "Markdown editor",
+    heading: "Markdown editor",
+    previewEmpty: "Preview appears here.",
     hidePreview: "Hide preview",
     showPreview: "Show preview",
     closeTitle: "Close (Esc)",
@@ -104,6 +106,10 @@ const en = {
     // "…retrying… (attempt 2 of 3)"
     retrying: "Couldn't reach the gateway — retrying… (attempt {n} of {total})",
     settling: "We're storing your file…",
+    resumeHeading: "Continue where you left off",
+    startHeading: "Start a new chat",
+    startBody: "Ask agent {agent} anything to get going.",
+    agentPulse: "Agent pulse",
   },
   commands: {
     renameUsage: "Usage: /rename <new title>",
@@ -175,6 +181,7 @@ const en = {
     dayAgo: "1d ago",
     daysAgo: "{n}d ago",
     laneSummary: "{msgs} messages · {bursts} bursts · last {ago}",
+    volumeOverTime: "message volume over time · {n} total",
   },
   secrets: {
     title: "Agent secrets",
@@ -283,6 +290,8 @@ const pt: ChatDict = {
   },
   markdownEditor: {
     aria: "Editor markdown",
+    heading: "Editor markdown",
+    previewEmpty: "A prévia aparece aqui.",
     hidePreview: "Ocultar prévia",
     showPreview: "Mostrar prévia",
     closeTitle: "Fechar (Esc)",
@@ -315,6 +324,10 @@ const pt: ChatDict = {
     files: "Arquivos do workspace",
     retrying: "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
     settling: "Estamos guardando o arquivo para você…",
+    resumeHeading: "Continue de onde parou",
+    startHeading: "Comece uma nova conversa",
+    startBody: "Pergunte qualquer coisa ao agente {agent} para começar.",
+    agentPulse: "Pulso do agente",
   },
   commands: {
     renameUsage: "Uso: /rename <novo título>",
@@ -382,6 +395,7 @@ const pt: ChatDict = {
     dayAgo: "há 1d",
     daysAgo: "há {n}d",
     laneSummary: "{msgs} mensagens · {bursts} rajadas · última {ago}",
+    volumeOverTime: "volume de mensagens ao longo do tempo · {n} no total",
   },
   secrets: {
     title: "Segredos do agente",

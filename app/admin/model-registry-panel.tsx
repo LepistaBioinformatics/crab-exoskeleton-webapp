@@ -391,7 +391,7 @@ export default function ModelRegistryPanel({
         <>
           <Section title={t.models.active}>
             {active.length === 0 ? (
-              <p className="py-2 text-sm text-fg-muted">No active models. Register one to get started.</p>
+              <p className="py-2 text-sm text-fg-muted">{t.models.noneActive}</p>
             ) : (
               <ul className="flex flex-col gap-1">
                 {active.map((m, i) => (
@@ -461,7 +461,7 @@ export default function ModelRegistryPanel({
 
           <Section title={t.models.inactive}>
             {inactive.length === 0 ? (
-              <p className="py-2 text-sm text-fg-muted">Nothing disabled or deprecated.</p>
+              <p className="py-2 text-sm text-fg-muted">{t.models.noneInactive}</p>
             ) : (
               <ul className="flex flex-col gap-1">
                 {inactive.map((m) => (

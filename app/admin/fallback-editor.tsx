@@ -7,6 +7,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import type { InventoryModel } from "@/lib/models";
 import { commonCopy } from "@/lib/i18n/common";
 import { useT } from "@/lib/i18n/context";
+import { adminCopy } from "@/lib/i18n/admin";
 
 const selectClass =
   "h-9 w-full rounded-lg border border-brand bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -30,6 +31,7 @@ export function FallbackEditor({
   onSave: (chain: string[]) => void;
 }) {
   const c = useT(commonCopy);
+  const t = useT(adminCopy);
   const [chain, setChain] = useState<string[]>([...model.fallbacks]);
   const candidates = fallbackCandidates(all, model.model_name).filter((m) => !chain.includes(m.model_name));
 
@@ -53,7 +55,7 @@ export function FallbackEditor({
       </p>
 
       {chain.length === 0 ? (
-        <p className="text-sm text-fg-muted">No fallbacks. Requests that fail have nowhere to go.</p>
+        <p className="text-sm text-fg-muted">{t.models.noFallbacks}</p>
       ) : (
         <ol className="flex flex-col gap-1">
           {chain.map((name, i) => (
