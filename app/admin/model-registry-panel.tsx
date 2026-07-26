@@ -15,7 +15,9 @@ import {
   draftFromCatalog,
   draftFromDuplicate,
   emptyDraft,
+  describeError,
   type CatalogEntry,
+  type DisplayError,
   type InventoryModel,
   type ModelDraft,
 } from "@/lib/models";
@@ -47,7 +49,7 @@ export default function ModelRegistryPanel({
 
   const [models, setModels] = useState<InventoryModel[] | null>(null);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayError | null>(null);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ModelDraft>(emptyDraft());
@@ -72,7 +74,7 @@ export default function ModelRegistryPanel({
     setError(null);
     listModels(routed)
       .then((m) => !cancelled && setModels(m))
-      .catch((e: Error) => !cancelled && setError(e.message));
+      .catch((e: Error) => !cancelled && setError(describeError(e)));
     modelCatalog(routed)
       .then((c) => !cancelled && setCatalog(c))
       .catch(() => !cancelled && setCatalog([]));
@@ -87,7 +89,7 @@ export default function ModelRegistryPanel({
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -128,7 +130,7 @@ export default function ModelRegistryPanel({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
-      setError("Fill model name, provider and model.");
+      setError({ message: "Fill model name, provider and model.", referrers: [] });
       return;
     }
     await run(async () => {
@@ -176,7 +178,20 @@ export default function ModelRegistryPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && (
+        <Alert severity="error">
+          {error.message}
+          {error.referrers.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-[11px]">
+              {error.referrers.map((r) => (
+                <li key={`${r.kind}:${r.id}`}>
+                  {r.kind}: <span className="font-mono">{r.id}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Alert>
+      )}
 
       {!routed && (
         <Alert severity="info">No agents reported by the gateway, so the inventory cannot be reached.</Alert>
@@ -256,7 +271,7 @@ export default function ModelRegistryPanel({
                       await setModelStatus(routed, mm.model_name, mm.version, "disabled");
                       await refresh();
                     })}
-                    onDeprecate={setDeprecating}
+                    onDeprecate={(mm) => { setDeprecating(mm); setReplacement(""); }}
                     onDelete={(mm) => run(async () => {
                       await deleteModel(routed, mm.model_name);
                       await refresh();

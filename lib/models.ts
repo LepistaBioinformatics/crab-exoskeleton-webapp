@@ -149,6 +149,25 @@ export async function modelsApiError(res: Response): Promise<ModelsError> {
   return { message, versionConflict, referrers };
 }
 
+// DisplayError is what a panel actually renders: a message plus whatever
+// referrers a 409 in-use rejection carried, if any.
+export interface DisplayError {
+  message: string;
+  referrers: Referrer[];
+}
+
+// describeError turns a caught error into a DisplayError. request() throws an
+// Error carrying modelsApiError's fields (see below), so e.message already has
+// the right wording for a version conflict — this only needs to pull the
+// referrers back off safely, and to give a non-Error throw a generic message.
+export function describeError(e: unknown): DisplayError {
+  if (e instanceof Error) {
+    const referrers = (e as Partial<ModelsError>).referrers;
+    return { message: e.message, referrers: Array.isArray(referrers) ? referrers : [] };
+  }
+  return { message: "Something went wrong.", referrers: [] };
+}
+
 // request throws an Error carrying the ModelsError fields, so a caller can render
 // a version conflict or an in-use referrer list without a second round trip.
 async function request(path: string, init?: RequestInit): Promise<unknown> {

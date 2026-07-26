@@ -5,6 +5,7 @@ import {
   draftFromDuplicate,
   inactiveReason,
   modelsApiError,
+  describeError,
   serializeDraft,
   emptyDraft,
 } from "./models";
@@ -158,6 +159,35 @@ describe("modelsApiError", () => {
     const err = await modelsApiError(new Response("<html>500</html>", { status: 500 }));
     expect(err.message).toBe("Something went wrong.");
     expect(err.referrers).toEqual([]);
+  });
+});
+
+describe("describeError", () => {
+  it("carries the message and referrers off a thrown ModelsError", () => {
+    // Mirrors what request() actually throws: Object.assign(new Error(...), modelsApiError(res)).
+    const err = Object.assign(new Error("in use"), {
+      versionConflict: false,
+      referrers: [{ kind: "fallback", id: "main" }],
+    });
+    const d = describeError(err);
+    expect(d.message).toBe("in use");
+    expect(d.referrers).toEqual([{ kind: "fallback", id: "main" }]);
+  });
+
+  it("carries the reload wording for a version conflict, with no referrers", () => {
+    const err = Object.assign(new Error("Another admin changed this model — reload before saving."), {
+      versionConflict: true,
+      referrers: [],
+    });
+    const d = describeError(err);
+    expect(d.message).toBe("Another admin changed this model — reload before saving.");
+    expect(d.referrers).toEqual([]);
+  });
+
+  it("falls back to a generic message and no referrers for a non-Error throw", () => {
+    const d = describeError("boom");
+    expect(d.message).toBe("Something went wrong.");
+    expect(d.referrers).toEqual([]);
   });
 });
 
