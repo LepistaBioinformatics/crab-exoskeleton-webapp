@@ -246,7 +246,12 @@ export default function ModelDefaultsPanel({
         ) : (
           <ul className="flex flex-col gap-1">
             {users.map((u) => {
-              const stored = assignments[assignmentKey(u.role ?? routed, u.accId)];
+              // Keyed by agent AND user everywhere, including the local pick
+              // state: the same person can have a workspace under two agents, and
+              // a user-only key would let a selection on one row bleed into the
+              // other.
+              const rowKey = assignmentKey(u.role ?? routed, u.accId);
+              const stored = assignments[rowKey];
               const pinned = pinnedModel(stored);
               return (
                 <li key={`${u.role}|${u.accId}`}
@@ -266,8 +271,8 @@ export default function ModelDefaultsPanel({
                   ) : (
                     <Badge tone="neutral">not materialized yet</Badge>
                   )}
-                  <select className={selectClass} value={pick[u.accId] ?? pinned ?? ""} disabled={busy}
-                    onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}>
+                  <select className={selectClass} value={pick[rowKey] ?? pinned ?? ""} disabled={busy}
+                    onChange={(e) => setPick((prev) => ({ ...prev, [rowKey]: e.target.value }))}>
                     <option value="" disabled>
                       inherited from scope
                     </option>
@@ -277,13 +282,13 @@ export default function ModelDefaultsPanel({
                       </option>
                     ))}
                   </select>
-                  <Button variant="tonal" size="sm" disabled={busy || !(pick[u.accId] ?? pinned)}
+                  <Button variant="tonal" size="sm" disabled={busy || !(pick[rowKey] ?? pinned)}
                     onClick={() =>
                       run(async () => {
                         await setModelAssignment(
                           u.role ?? routed,
                           { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
-                          pick[u.accId] ?? pinned!,
+                          pick[rowKey] ?? pinned!,
                         );
                         await loadAssignments();
                       })
@@ -298,7 +303,7 @@ export default function ModelDefaultsPanel({
                           subsAccId: scope.subsAccId!,
                           userAccId: u.accId,
                         });
-                        setPick((prev) => ({ ...prev, [u.accId]: "" }));
+                        setPick((prev) => ({ ...prev, [rowKey]: "" }));
                         await loadAssignments();
                       })
                     }>
