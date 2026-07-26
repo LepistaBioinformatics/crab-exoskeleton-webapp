@@ -21,6 +21,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
 import type { ReplyTo } from "@/app/chat/chat-view";
 import MarkdownEditor from "@/app/chat/markdown-editor";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
 const MIN_HEIGHT = 44; // a taller resting height so the box feels roomy
@@ -72,6 +74,7 @@ export default function Composer({
   replyTo,
   onCancelReply,
 }: ComposerProps) {
+  const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -184,13 +187,16 @@ export default function Composer({
           <Reply size={14} className="shrink-0 text-fg-muted" aria-hidden />
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-fg">
-              Respondendo a {replyTo.role === "user" ? "você" : "agente"}
+              {t.composer.replyingToBefore}
+              {replyTo.role === "user" ? t.composer.replyingToUser : t.composer.replyingToAgent}
             </div>
-            <div className="truncate text-xs text-fg-muted">{replyPreview || "(sem texto)"}</div>
+            <div className="truncate text-xs text-fg-muted">
+              {replyPreview || t.composer.replyNoText}
+            </div>
           </div>
           <button
             type="button"
-            aria-label="Cancelar resposta"
+            aria-label={t.composer.cancelReply}
             onClick={onCancelReply}
             className="shrink-0 text-fg-muted transition-colors hover:text-fg"
           >
@@ -210,7 +216,7 @@ export default function Composer({
               <span className="max-w-[160px] truncate">{a.name}</span>
               <button
                 type="button"
-                aria-label={`Remove ${a.name}`}
+                aria-label={`${t.composer.removeAttachment} ${a.name}`}
                 onClick={() => onRemoveAttachment(a.path)}
                 className="text-fg-muted transition-colors hover:text-fg"
               >
@@ -230,7 +236,7 @@ export default function Composer({
         <div
           className="mb-2 overflow-hidden rounded-xl border border-accent/40 bg-surface shadow-lg"
           role="listbox"
-          aria-label="Slash commands"
+          aria-label={t.composer.slashCommands}
         >
           {slashMatches.map((s, i) => (
             <button
@@ -316,8 +322,8 @@ export default function Composer({
           }}
           placeholder={
             coarsePointer
-              ? "Message your agent…"
-              : "Message your agent…  (Shift+Enter for a new line)"
+              ? t.composer.placeholder
+              : t.composer.placeholderHint
           }
           className="max-h-[200px] py-1.5 text-base leading-relaxed"
         />
@@ -329,8 +335,8 @@ export default function Composer({
           <IconButton
             variant="ghost"
             size="md"
-            aria-label="Attach file"
-            title="Attach file"
+            aria-label={t.composer.attach}
+            title={t.composer.attach}
             disabled={sending || loadingHistory}
             onClick={() => setMenuOpen((o) => !o)}
             className="shrink-0"
@@ -373,8 +379,8 @@ export default function Composer({
         <IconButton
           variant="ghost"
           size="md"
-          aria-label="Advanced markdown editor"
-          title="Advanced markdown editor"
+          aria-label={t.composer.advancedEditor}
+          title={t.composer.advancedEditor}
           disabled={sending || loadingHistory}
           onClick={() => setAdvancedOpen(true)}
           className="shrink-0"
@@ -387,7 +393,7 @@ export default function Composer({
         <IconButton
           variant="filled"
           size="md"
-          aria-label="Send message"
+          aria-label={t.composer.send}
           disabled={!canSend}
           onClick={submit}
           className="shrink-0"

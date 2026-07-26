@@ -20,6 +20,9 @@ import {
 import { IconButton } from "@/components/ui/icon-button";
 import { Button } from "@/components/ui/button";
 import MessageContent from "@/app/chat/message-content";
+import { commonCopy } from "@/lib/i18n/common";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 // A full-screen-ish modal for composing a rich markdown message: a formatting
 // toolbar that wraps/prefixes the selection, a live GFM preview (same renderer
@@ -36,6 +39,8 @@ export default function MarkdownEditor({
   onClose: (draft: string) => void;
   onSubmit: (text: string) => void;
 }) {
+  const t = useT(chatCopy);
+  const c = useT(commonCopy);
   const [text, setText] = useState(initialValue);
   const [showPreview, setShowPreview] = useState(true);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -85,16 +90,16 @@ export default function MarkdownEditor({
   const TABLE = "| Col A | Col B |\n| --- | --- |\n| a | b |\n";
 
   const tools = [
-    { icon: Heading, label: "Heading", run: () => prefixLines("## ") },
-    { icon: Bold, label: "Bold", run: () => wrap("**", "bold") },
-    { icon: Italic, label: "Italic", run: () => wrap("*", "italic") },
-    { icon: Code, label: "Inline code", run: () => wrap("`", "code") },
-    { icon: SquareCode, label: "Code block", run: () => insert("```\n\n```", 4, 4) },
-    { icon: List, label: "Bulleted list", run: () => prefixLines("- ") },
-    { icon: ListOrdered, label: "Numbered list", run: () => prefixLines("1. ") },
-    { icon: Quote, label: "Quote", run: () => prefixLines("> ") },
-    { icon: Link2, label: "Link", run: () => insert("[text](url)", 1, 5) },
-    { icon: Table, label: "Table", run: () => insert(TABLE, 0, TABLE.length) },
+    { icon: Heading, label: t.markdownEditor.tools.heading, run: () => prefixLines("## ") },
+    { icon: Bold, label: t.markdownEditor.tools.bold, run: () => wrap("**", "bold") },
+    { icon: Italic, label: t.markdownEditor.tools.italic, run: () => wrap("*", "italic") },
+    { icon: Code, label: t.markdownEditor.tools.inlineCode, run: () => wrap("`", "code") },
+    { icon: SquareCode, label: t.markdownEditor.tools.codeBlock, run: () => insert("```\n\n```", 4, 4) },
+    { icon: List, label: t.markdownEditor.tools.bulletedList, run: () => prefixLines("- ") },
+    { icon: ListOrdered, label: t.markdownEditor.tools.numberedList, run: () => prefixLines("1. ") },
+    { icon: Quote, label: t.markdownEditor.tools.quote, run: () => prefixLines("> ") },
+    { icon: Link2, label: t.markdownEditor.tools.link, run: () => insert("[text](url)", 1, 5) },
+    { icon: Table, label: t.markdownEditor.tools.table, run: () => insert(TABLE, 0, TABLE.length) },
   ];
 
   const canSend = text.trim().length > 0;
@@ -112,7 +117,7 @@ export default function MarkdownEditor({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Markdown editor"
+        aria-label={t.markdownEditor.aria}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();
@@ -130,31 +135,31 @@ export default function MarkdownEditor({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label={showPreview ? "Hide preview" : "Show preview"}
-            title={showPreview ? "Hide preview" : "Show preview"}
+            aria-label={showPreview ? t.markdownEditor.hidePreview : t.markdownEditor.showPreview}
+            title={showPreview ? t.markdownEditor.hidePreview : t.markdownEditor.showPreview}
             onClick={() => setShowPreview((p) => !p)}
           >
             {showPreview ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
           </IconButton>
-          <IconButton variant="ghost" size="sm" aria-label="Close" title="Close (Esc)" onClick={() => onClose(text)}>
+          <IconButton variant="ghost" size="sm" aria-label={c.actions.close} title={t.markdownEditor.closeTitle} onClick={() => onClose(text)}>
             <X size={16} aria-hidden />
           </IconButton>
         </div>
 
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-0.5 border-b border-brand/20 px-2 py-1.5">
-          {tools.map((t) => (
+          {tools.map((tool) => (
             <IconButton
-              key={t.label}
+              key={tool.label}
               variant="ghost"
               size="sm"
-              aria-label={t.label}
-              title={t.label}
+              aria-label={tool.label}
+              title={tool.label}
               // Keep focus/selection in the textarea for the transform.
               onMouseDown={(e) => e.preventDefault()}
-              onClick={t.run}
+              onClick={tool.run}
             >
-              <t.icon size={16} aria-hidden />
+              <tool.icon size={16} aria-hidden />
             </IconButton>
           ))}
         </div>
@@ -167,7 +172,7 @@ export default function MarkdownEditor({
             onChange={(e) => setText(e.target.value)}
             lang={lang}
             spellCheck
-            placeholder="Write in markdown…  (Ctrl/⌘+Enter to send, Esc to close)"
+            placeholder={t.markdownEditor.placeholder}
             className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 font-mono text-sm leading-relaxed text-fg placeholder:text-fg-muted focus:outline-none"
           />
           {showPreview && (

@@ -20,7 +20,17 @@ Each task is one atomic commit.
 | T13 | Admin — branding & members | `branding-panel`, `members-panel` | pending |
 | T14 | Admin — shared resources | `shared-files-panel`, `shared-secrets-panel`, `shared-skills-panel` | pending |
 | T15 | Landing diagram gap + metadata | `components/landing/diagrams.tsx`, `lib/i18n/landing.ts`, `app/layout.tsx` metadata, `app/manifest.webmanifest/route.ts` | pending |
-| T16 | Final sweep | grep gate for leftover literals, `npx next build`, test updates | pending |
+| T16 | Final sweep | grep gates below, `npx next build`, test updates | pending |
+
+### T16 gates
+
+1. **Leftover literals** — sweep the touched files for hardcoded prose.
+2. **Raw error codes** — `grep -rn "instanceof Error" app --include=*.tsx`;
+   every hit must resolve through `errorText(err, …)`. A file can have every
+   literal translated and still pass a raw `invalid_request` to the user, so
+   the literal sweep alone does not cover this.
+3. **Render modes** — `npx next build`; only `/signin` and `/offline` may have
+   moved from static to dynamic (see design.md).
 
 ## Error-code consumers (must all be converted before T16)
 

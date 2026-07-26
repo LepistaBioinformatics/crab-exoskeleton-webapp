@@ -131,6 +131,37 @@ time, whereas the provider re-resolves on hydration.
 3. In the component: `const t = useT(chatCopy)`, replace literals with `t.*`.
 4. `npx tsc --noEmit && npx vitest run`.
 
+## Consequence: `/signin` and `/offline` become dynamic
+
+Reading the cookie in the **root** layout opts every route into dynamic
+rendering. Measured against the base commit `f3f7438`:
+
+| Route | Before | After |
+|---|---|---|
+| `/`, `/chat`, `/admin`, `/onboarding` | ƒ dynamic | ƒ dynamic (unchanged — they already call `getSession()`) |
+| `/signin` | ○ static | **ƒ dynamic** |
+| `/offline` | ○ static | **ƒ dynamic** |
+
+Accepted deliberately. The reasoning:
+
+- The app ships as a standalone Next server behind the gateway
+  (`output: "standalone"`); nothing serves these routes from a CDN, so losing
+  the prerender costs a cheap server render, not a deployment capability.
+- `/offline` still works. The service worker precaches it with
+  `cache.addAll(PRECACHE_URLS)` — a runtime fetch performed at install time,
+  while the network is up — so it caches a real response either way. The
+  provider's on-mount cookie re-read then corrects the language if the user
+  switches after that fetch.
+- The one build-time worry the code already recorded — "the DB is unreachable
+  during build-time prerender … so static pages like /signin export" — is
+  *removed* by dynamic rendering, not aggravated by it. A route that is never
+  prerendered cannot fail to prerender.
+
+The alternative — keeping the layout static and resolving the locale purely
+client-side — was rejected: it trades two prerendered auth pages for a
+first-paint flash of English on `/chat` and `/admin`, which is where users
+actually spend their time.
+
 ## Verification
 
 | Gate | Command |
