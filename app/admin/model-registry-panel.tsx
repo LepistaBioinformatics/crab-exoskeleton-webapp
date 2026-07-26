@@ -1,45 +1,39 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
-  listRegisteredModels,
-  registerModel,
-  deleteRegisteredModel,
-  applyRegisteredModel,
-  type RegisteredModel,
-} from "@/lib/registeredModels";
-import { ALL_AGENTS, listSubscriptionUsers, type ScopeRef, type UserRef } from "@/lib/admin";
+  listModels,
+  modelCatalog,
+  createModel,
+  updateModel,
+  deleteModel,
+  setModelStatus,
+  deprecateModel,
+  reorderModels,
+  splitInventory,
+  draftFromCatalog,
+  draftFromDuplicate,
+  emptyDraft,
+  type CatalogEntry,
+  type InventoryModel,
+  type ModelDraft,
+} from "@/lib/models";
+import { ALL_AGENTS, type ScopeRef } from "@/lib/admin";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { ModelRow } from "./model-row";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
-const emptyForm = { provider: "", name: "", model: "", api_base: "", api_key: "" };
-const modelKey = (provider: string, name: string) => `${provider}|${name}`;
+const CUSTOM = "__custom__";
 
-// A registry entry always belongs to exactly one agent's catalog, so the agent it
-// came from travels with it — that is what makes the aggregated "all agents" view
-// able to delete and assign correctly.
-interface OwnedModel {
-  agent: string;
-  model: RegisteredModel;
-}
-
-// Admin per-agent model registry + per-user assignment. Register a model
-// (definition + key) into an agent's catalog, then assign it to individual users
-// of the selected subscription, one by one.
-//
-// `target` is the shared agent picker's value (see agent-target-select.tsx). Unlike
-// the shared-content tabs, ALL_AGENTS here is an **aggregated read**, not a write
-// target: a catalog entry and its API key live in one agent's config, so the
-// register form always names a single agent. Assignment likewise uses each user's
-// OWN agent, which is the only catalog their workspace can resolve a model from.
+// Admin model inventory. The inventory is PROXY-WIDE — not per agent — so the
+// agent picker only decides which service the request is routed through, and
+// ALL_AGENTS resolves to the first agent rather than fanning out.
 export default function ModelRegistryPanel({
   scope,
   agents,
@@ -49,73 +43,43 @@ export default function ModelRegistryPanel({
   agents: string[];
   target: string;
 }) {
-  const [models, setModels] = useState<OwnedModel[] | null>(null);
-  const [users, setUsers] = useState<UserRef[] | null>(null);
+  const routed = target === ALL_AGENTS ? agents[0] ?? "" : target;
+
+  const [models, setModels] = useState<InventoryModel[] | null>(null);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  // Which agent's catalog a NEW model goes into. Only surfaced while the target is
-  // ALL_AGENTS; otherwise the target itself is the destination.
-  const [formAgent, setFormAgent] = useState<string>("");
-  const [pick, setPick] = useState<Record<string, string>>({});
-  const [applied, setApplied] = useState<Record<string, string>>({});
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState<ModelDraft>(emptyDraft());
+  // editing holds the model_name + version being edited; null means "create".
+  const [editing, setEditing] = useState<{ name: string; version: number } | null>(null);
+  // deprecating holds the model being retired while the admin picks its
+  // replacement. An inline picker rather than window.prompt: the replacement must
+  // be an existing ACTIVE model, and a free-text prompt cannot offer that list —
+  // the admin would type a name and get a 400 with no way to see the valid ones.
+  const [deprecating, setDeprecating] = useState<InventoryModel | null>(null);
+  const [replacement, setReplacement] = useState("");
 
-  const aggregated = target === ALL_AGENTS;
-
-  // Reads every catalog in range, tagging each entry with the agent it came from.
-  // The agent list is resolved inside so the dependencies are exactly the two
-  // inputs, with no derived array to memoize.
-  const loadModels = useCallback(async (): Promise<OwnedModel[]> => {
-    const inRange = target === ALL_AGENTS ? agents : [target];
-    const perAgent = await Promise.all(
-      inRange.map(async (a) => (await listRegisteredModels(a)).map((model) => ({ agent: a, model }))),
-    );
-    return perAgent.flat();
-  }, [target, agents]);
-
-  const refreshModels = () =>
-    loadModels()
-      .then(setModels)
-      .catch((e: Error) => setError(e.message));
+  const refresh = useCallback(async () => {
+    if (!routed) return;
+    setModels(await listModels(routed));
+  }, [routed]);
 
   useEffect(() => {
+    if (!routed) return;
     let cancelled = false;
     setModels(null);
     setError(null);
-    loadModels()
+    listModels(routed)
       .then((m) => !cancelled && setModels(m))
       .catch((e: Error) => !cancelled && setError(e.message));
+    modelCatalog(routed)
+      .then((c) => !cancelled && setCatalog(c))
+      .catch(() => !cancelled && setCatalog([]));
     return () => {
       cancelled = true;
     };
-  }, [loadModels]);
-
-  // Keep the register form's destination valid as the target and the agent list
-  // settle: it follows a single-agent target, and in the aggregated view it keeps
-  // whatever the admin picked as long as that agent still exists.
-  useEffect(() => {
-    if (!aggregated) {
-      setFormAgent(target);
-      return;
-    }
-    setFormAgent((prev) => (prev && agents.includes(prev) ? prev : agents[0] ?? ""));
-  }, [aggregated, target, agents]);
-
-  useEffect(() => {
-    if (scope.kind !== "subscription" || !scope.subsAccId) {
-      setUsers(null);
-      return;
-    }
-    let cancelled = false;
-    setUsers(null);
-    listSubscriptionUsers(scope.tenantId, scope.subsAccId)
-      .then((u) => !cancelled && setUsers(u))
-      .catch(() => !cancelled && setUsers([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [routed]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -129,236 +93,256 @@ export default function ModelRegistryPanel({
     }
   }
 
-  async function onAdd(e: FormEvent) {
+  function openCreate() {
+    setDraft(emptyDraft());
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openEdit(m: InventoryModel) {
+    // api_key stays blank: the API never returns it, and leaving it blank means
+    // saving keeps the stored key rather than clearing it.
+    setDraft({
+      model_name: m.model_name,
+      provider: m.provider,
+      model: m.model,
+      api_base: m.api_base ?? "",
+      auth_method: m.auth_method ?? "",
+      api_key: "",
+      fallbacks: [...m.fallbacks],
+      // Carried opaquely. PUT is a full replace for every readable field, so a
+      // draft that dropped extra_body would silently clear it on an unrelated
+      // edit — the MiniMax catalog entry's reasoning_split is a real instance.
+      extra_body: m.extra_body,
+    });
+    setEditing({ name: m.model_name, version: m.version });
+    setShowForm(true);
+  }
+
+  function openDuplicate(m: InventoryModel) {
+    setDraft(draftFromDuplicate(m));
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const f = {
-      provider: form.provider.trim(),
-      name: form.name.trim(),
-      model: form.model.trim(),
-      api_base: form.api_base.trim(),
-      api_key: form.api_key,
-    };
-    if (!f.provider || !f.name || !f.model || !f.api_base || !f.api_key) {
-      setError("Fill provider, name, model, api_base and api_key.");
-      return;
-    }
-    if (!formAgent) {
-      setError("Pick the agent whose catalog this model belongs to.");
+    if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
+      setError("Fill model name, provider and model.");
       return;
     }
     await run(async () => {
-      await registerModel(formAgent, f);
-      setForm(emptyForm);
-      setShowAdd(false);
-      await refreshModels();
+      if (editing) {
+        await updateModel(routed, editing.name, editing.version, draft);
+      } else {
+        await createModel(routed, draft);
+      }
+      setShowForm(false);
+      setDraft(emptyDraft());
+      setEditing(null);
+      await refresh();
     });
   }
 
-  // A user's workspace can only resolve a model from its OWN agent's catalog, so a
-  // row offers exactly those and applies with that agent.
-  function modelsForUser(user: UserRef): OwnedModel[] {
-    return (models ?? []).filter((m) => m.agent === user.role);
+  function onCatalogPick(value: string) {
+    if (value === CUSTOM) {
+      setDraft((d) => ({ ...d, provider: "", model: "", api_base: "", auth_method: "" }));
+      return;
+    }
+    const entry = catalog[Number(value)];
+    if (!entry) return;
+    // Keep whatever name and key the admin already typed; only the definition
+    // fields are prefilled.
+    setDraft((d) => ({ ...draftFromCatalog(entry), model_name: d.model_name, api_key: d.api_key, fallbacks: d.fallbacks }));
   }
 
-  async function onApply(user: UserRef) {
-    const sel = pick[user.accId];
-    if (!sel || !user.role || scope.kind !== "subscription" || !scope.subsAccId) return;
-    const [provider, name] = sel.split("|");
-    await run(async () => {
-      await applyRegisteredModel(user.role!, {
-        tenantId: scope.tenantId,
-        subsAccId: scope.subsAccId!,
-        userAccId: user.accId,
-        provider,
-        name,
-      });
-      setApplied((prev) => ({ ...prev, [user.accId]: name }));
+  const { active, inactive } = splitInventory(models ?? []);
+
+  function move(list: InventoryModel[], index: number, delta: number) {
+    const next = [...list];
+    const to = index + delta;
+    if (to < 0 || to >= next.length) return;
+    [next[index], next[to]] = [next[to], next[index]];
+    // Send BOTH groups: SetPositions renumbers 1..N over exactly the names it
+    // receives, so sending only the active ones would leave inactive models holding
+    // stale positions that collide with active ones — and a reactivated model would
+    // no longer land back in its old place.
+    const order = [...next, ...inactive].map((m) => m.model_name);
+    void run(async () => {
+      await reorderModels(routed, order);
+      await refresh();
     });
   }
-
-  // In the aggregated view every user of the subscription is listed (each with its
-  // own agent's models); with a single agent targeted, only that agent's users are.
-  const listedUsers = (users ?? []).filter((u) => aggregated || u.role === target);
 
   return (
     <div className="flex flex-col gap-5">
       {error && <Alert severity="error">{error}</Alert>}
 
-      {agents.length === 0 && (
-        <Alert severity="info">
-          No agents reported by the gateway, so there is nothing to register models for.
-        </Alert>
+      {!routed && (
+        <Alert severity="info">No agents reported by the gateway, so the inventory cannot be reached.</Alert>
       )}
 
-      {/* Registry */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-          <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            {aggregated ? "Registered models — all agents" : `Registered models — ${target}`}
-          </span>
-          <Button
-            variant="text"
-            size="sm"
-            className="gap-1.5 px-1 text-accent"
-            disabled={agents.length === 0}
-            onClick={() => setShowAdd((v) => !v)}
-          >
-            <Plus size={16} />
-            Register model
-          </Button>
-        </div>
-
-        {showAdd && (
-          <form onSubmit={onAdd} className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
-            {aggregated && (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-fg-muted">Register into</span>
-                <select
-                  className={selectClass}
-                  value={formAgent}
-                  onChange={(e) => setFormAgent(e.target.value)}
-                >
-                  {agents.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[11px] text-fg-muted">
-                  A model and its key live in one agent&apos;s catalog, so a new entry needs a single
-                  agent even while you are viewing all of them.
-                </span>
-              </label>
-            )}
-            <Input inputSize="sm" placeholder="provider (e.g. zhipu)" value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} />
-            <Input inputSize="sm" placeholder="model_name (e.g. glm-4.7)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Input inputSize="sm" placeholder="litellm model (e.g. glm-4.7)" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-            <Input inputSize="sm" placeholder="api_base (e.g. https://open.bigmodel.cn/api/paas/v4)" value={form.api_base} onChange={(e) => setForm({ ...form, api_base: e.target.value })} />
-            <Input inputSize="sm" type="password" autoComplete="off" placeholder="api_key (write-only)" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="text" size="sm" onClick={() => { setShowAdd(false); setForm(emptyForm); }}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="filled" size="sm" disabled={busy}>
-                {busy ? "Saving…" : "Register"}
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {models === null && !error ? (
-          <div className="flex justify-center py-3">
-            <Spinner size={18} />
-          </div>
-        ) : models && models.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">
-            {aggregated
-              ? "No models registered for any agent yet."
-              : `No models registered for ${target} yet.`}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {models?.map((m) => (
-              <li
-                key={`${m.agent}|${modelKey(m.model.provider, m.model.name)}`}
-                className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5"
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-mono text-xs text-fg">{m.model.name}</span>
-                  <span className="truncate text-[11px] text-fg-muted">
-                    {m.model.provider} · {m.model.api_base}
-                  </span>
-                </div>
-                {aggregated && <Badge tone="accent">{m.agent}</Badge>}
-                {m.model.has_key && <Badge tone="neutral">key</Badge>}
-                <IconButton
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Delete ${m.model.name} from ${m.agent}`}
-                  title="Delete"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      await deleteRegisteredModel(m.agent, m.model.provider, m.model.name);
-                      await refreshModels();
-                    })
-                  }
-                >
-                  <Trash2 size={15} aria-hidden />
-                </IconButton>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+        <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Model inventory
+        </span>
+        <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
+          <Plus size={16} />
+          Register model
+        </Button>
       </div>
 
-      {/* Assignment */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-          <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Assign to users
-          </span>
-        </div>
-
-        {scope.kind !== "subscription" ? (
-          <p className="py-2 text-sm text-fg-muted">Select a subscription on the left to assign models to its users.</p>
-        ) : !models || models.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">Register a model first.</p>
-        ) : users === null ? (
-          <div className="flex justify-center py-3">
-            <Spinner size={18} />
+      {showForm && (
+        <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Start from a known model</span>
+            <select className={selectClass} defaultValue="" onChange={(e) => onCatalogPick(e.target.value)}>
+              <option value="" disabled>
+                pick one to prefill…
+              </option>
+              {catalog.map((c, i) => (
+                <option key={`${c.provider}|${c.model}`} value={String(i)}>
+                  {c.provider} · {c.model}
+                </option>
+              ))}
+              <option value={CUSTOM}>custom (fill everything by hand)</option>
+            </select>
+          </label>
+          <Input inputSize="sm" placeholder="model name (unique, e.g. team-gpt)" value={draft.model_name}
+            disabled={!!editing}
+            onChange={(e) => setDraft({ ...draft, model_name: e.target.value })} />
+          <Input inputSize="sm" placeholder="provider (e.g. openai)" value={draft.provider}
+            onChange={(e) => setDraft({ ...draft, provider: e.target.value })} />
+          <Input inputSize="sm" placeholder="model (e.g. gpt-5.4)" value={draft.model}
+            onChange={(e) => setDraft({ ...draft, model: e.target.value })} />
+          <Input inputSize="sm" placeholder="api_base" value={draft.api_base}
+            onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
+          <Input inputSize="sm" placeholder="auth_method (optional, e.g. oauth)" value={draft.auth_method}
+            onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })} />
+          <Input inputSize="sm" type="password" autoComplete="off"
+            placeholder={editing ? "api_key (leave blank to keep the stored key)" : "api_key (write-only)"}
+            value={draft.api_key}
+            onChange={(e) => setDraft({ ...draft, api_key: e.target.value })} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="text" size="sm"
+              onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="filled" size="sm" disabled={busy}>
+              {busy ? "Saving…" : editing ? "Save" : "Register"}
+            </Button>
           </div>
-        ) : listedUsers.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">
-            {aggregated ? (
-              "No users have a workspace under this subscription yet (they must start a chat first)."
+        </form>
+      )}
+
+      {models === null && !error ? (
+        <div className="flex justify-center py-3">
+          <Spinner size={18} />
+        </div>
+      ) : (
+        <>
+          <Section title="Active">
+            {active.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">No active models. Register one to get started.</p>
             ) : (
-              <>
-                No users have a <span className="font-mono">{target}</span> workspace yet (they must
-                start a chat first).
-              </>
+              <ul className="flex flex-col gap-1">
+                {active.map((m, i) => (
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onMoveUp={i === 0 ? undefined : () => move(active, i, -1)}
+                    onMoveDown={i === active.length - 1 ? undefined : () => move(active, i, 1)}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "disabled");
+                      await refresh();
+                    })}
+                    onDeprecate={setDeprecating}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })} />
+                ))}
+              </ul>
             )}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {listedUsers.map((u) => {
-              const options = modelsForUser(u);
-              return (
-                <li key={`${u.role}|${u.accId}`} className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
-                    {u.name || u.email || u.accId}
-                  </span>
-                  {aggregated && u.role && <Badge tone="accent">{u.role}</Badge>}
-                  {applied[u.accId] && <Badge tone="accent">set: {applied[u.accId]}</Badge>}
-                  <select
-                    className="h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg"
-                    value={pick[u.accId] ?? ""}
-                    disabled={options.length === 0}
-                    onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}
-                  >
-                    <option value="" disabled>
-                      {options.length === 0 ? "no models for this agent" : "model…"}
-                    </option>
-                    {options.map((m) => (
-                      <option
-                        key={modelKey(m.model.provider, m.model.name)}
-                        value={modelKey(m.model.provider, m.model.name)}
-                      >
-                        {m.model.name}
+            <p className="text-[11px] text-fg-muted">
+              This order is for reading only. A model&apos;s fallback chain is the{" "}
+              <span className="font-mono">fallbacks</span> list on the model itself.
+            </p>
+
+            {deprecating && (
+              <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+                <span className="text-xs font-medium text-fg-muted">
+                  Retire <span className="font-mono">{deprecating.model_name}</span>
+                </span>
+                <p className="text-[11px] text-fg-muted">
+                  Everyone already using it keeps it. New users get the replacement instead.
+                </p>
+                <select className={selectClass} value={replacement}
+                  onChange={(e) => setReplacement(e.target.value)}>
+                  <option value="" disabled>
+                    replacement for new users…
+                  </option>
+                  {active
+                    .filter((m) => m.model_name !== deprecating.model_name)
+                    .map((m) => (
+                      <option key={m.model_name} value={m.model_name}>
+                        {m.model_name}
                       </option>
                     ))}
-                  </select>
-                  <Button variant="tonal" size="sm" disabled={busy || !pick[u.accId]} onClick={() => onApply(u)}>
-                    Apply
+                </select>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="text" size="sm"
+                    onClick={() => { setDeprecating(null); setReplacement(""); }}>
+                    Cancel
                   </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+                  <Button variant="filled" size="sm" disabled={busy || !replacement}
+                    onClick={() =>
+                      run(async () => {
+                        await deprecateModel(routed, deprecating.model_name, deprecating.version, replacement);
+                        setDeprecating(null);
+                        setReplacement("");
+                        await refresh();
+                      })
+                    }>
+                    Deprecate
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          <Section title="Inactive">
+            {inactive.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">Nothing disabled or deprecated.</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {inactive.map((m) => (
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "active");
+                      await refresh();
+                    })}
+                    onDeprecate={() => {}}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })} />
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</span>
+      {children}
     </div>
   );
 }
