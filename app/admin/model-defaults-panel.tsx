@@ -19,6 +19,22 @@ import { Spinner } from "@/components/ui/spinner";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
 
+// The level -> DefaultScope derivation, extracted and tested (see
+// model-defaults-panel.test.ts) rather than left as an inline ladder in the
+// component body: it's exactly the kind of branching that hides a desync bug,
+// and Task 20's chain-editor `key` fix showed that shape is easy to miss without
+// a test that exercises the target-changed case directly.
+export function resolveDefaultScope(level: DefaultScope["kind"], scope: ScopeRef): DefaultScope | null {
+  if (level === "global") return { kind: "global" };
+  if (level === "agent") return { kind: "agent" };
+  if (level === "subscription") {
+    return scope.kind === "subscription" && scope.subsAccId
+      ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
+      : null;
+  }
+  return scope.tenantId ? { kind: "tenant", tenantId: scope.tenantId } : null;
+}
+
 // Scope defaults plus per-user pins. A pin wins over every default (the proxy's
 // cascade is user > subscription > tenant > agent > global), so the UI has to make
 // the difference between a pin and a cascade visible.
@@ -49,16 +65,21 @@ export default function ModelDefaultsPanel({
     scope.kind === "subscription" ? "subscription" : "tenant",
   );
 
-  const defaultScope: DefaultScope | null =
-    level === "global"
-      ? { kind: "global" }
-      : level === "agent"
-        ? { kind: "agent" }
-        : level === "subscription" && scope.kind === "subscription" && scope.subsAccId
-          ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
-          : level === "tenant" && scope.tenantId
-            ? { kind: "tenant", tenantId: scope.tenantId }
-            : null;
+  // Resync when the admin navigates to a different scope in the tree. Without
+  // this, a level picked for the previous scope stays selected — and if it's
+  // still satisfiable in the new scope (e.g. "tenant" survives moving from that
+  // tenant into one of its subscriptions), the panel silently reads and writes
+  // the wrong-scope default: the dropdown still says "tenant" while the
+  // per-user pins below it show one subscription's users. Same
+  // stale-state-across-targets shape as FallbackEditor's missing `key`; the fix
+  // here is a resync effect rather than a remount, since this component must
+  // keep reacting to prop changes in place (see its other effects below). Scoped
+  // to scope *identity* so it cannot fight a manual level choice within one scope.
+  useEffect(() => {
+    setLevel(scope.kind === "subscription" ? "subscription" : "tenant");
+  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+
+  const defaultScope = resolveDefaultScope(level, scope);
 
   // One serialized dependency instead of picking fields off a union: the scope's
   // identity IS its serialization, and casting to read optional fields would be a
