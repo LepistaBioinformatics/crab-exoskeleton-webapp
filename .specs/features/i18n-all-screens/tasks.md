@@ -22,6 +22,20 @@ Each task is one atomic commit.
 | T15 | Landing diagram gap + metadata | `components/landing/diagrams.tsx`, `lib/i18n/landing.ts`, `app/layout.tsx` metadata, `app/manifest.webmanifest/route.ts` | pending |
 | T16 | Final sweep | grep gate for leftover literals, `npx next build`, test updates | pending |
 
+## Error-code consumers (must all be converted before T16)
+
+T2 changes the `lib/*` fetch wrappers to throw an error **code** instead of an
+English sentence. Until a component is converted it would render the raw code,
+so every one of these must use `errorText(useT(errorCopy), …)` by the end:
+
+`admin-screen`, `branding-panel`, `members-panel`, `model-defaults-panel`,
+`model-registry-panel`, `shared-files-panel`, `shared-secrets-panel`,
+`shared-skills-panel`, `attachment-button`, `chat-view`,
+`conversation-enrichment`, `history-sidebar`, `memory-editor`,
+`secrets-drawer`, `uploads-sidebar`.
+
+All 15 are covered by T7–T14. T16 greps to confirm none was missed.
+
 ## Dependencies
 
 T1 blocks everything. T2 blocks T8 and T13. T3–T15 are otherwise independent and

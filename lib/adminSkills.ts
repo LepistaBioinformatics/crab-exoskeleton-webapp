@@ -1,3 +1,4 @@
+import { errorCode } from "@/lib/i18n/errors";
 import type { ScopeRef } from "@/lib/admin";
 
 // SkillMeta from the proxy -- metadata only; content is fetched separately via
@@ -22,7 +23,7 @@ function scopeParams(scope: ScopeRef): URLSearchParams {
 
 export async function listSharedSkills(scope: ScopeRef): Promise<SkillMeta[]> {
   const res = await fetch(`/api/admin/skills?${scopeParams(scope).toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   return Array.isArray(data.skills) ? (data.skills as SkillMeta[]) : [];
 }
@@ -34,7 +35,7 @@ export async function sharedSkillDoc(
   const q = scopeParams(scope);
   q.set("name", name);
   const res = await fetch(`/api/admin/skills/doc?${q.toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   return res.json();
 }
 
@@ -47,7 +48,7 @@ export async function saveSharedSkillDoc(scope: ScopeRef, name: string, body: st
   form.set("name", name);
   form.set("body", body);
   const res = await fetch("/api/admin/skills", { method: "POST", body: form });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function uploadSharedSkillZip(scope: ScopeRef, name: string, file: File): Promise<void> {
@@ -59,7 +60,7 @@ export async function uploadSharedSkillZip(scope: ScopeRef, name: string, file: 
   form.set("name", name);
   form.set("file", file, file.name);
   const res = await fetch("/api/admin/skills", { method: "POST", body: form });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 // URL for a shared-skill zip download (bytes stream back through the BFF).
@@ -74,15 +75,6 @@ export async function deleteSharedSkill(scope: ScopeRef, name: string): Promise<
   const q = scopeParams(scope);
   q.set("name", name);
   const res = await fetch(`/api/admin/skills?${q.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
-async function errorMessage(res: Response): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const e = data?.error;
-  if (e === "connectivity") return "Can't reach the gateway right now.";
-  if (e === "session_expired") return "Your session expired — sign in again.";
-  if (typeof e === "string" && e.trim()) return e;
-  if (res.status === 413) return "File is too large.";
-  return "Something went wrong.";
-}
