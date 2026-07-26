@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_LOCALE, LOCALE_COOKIE, type Locale } from "./config";
+import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, type Locale } from "./config";
 
 // The landing page can hold its locale in plain useState because it owns its
 // whole tree. Every other screen is a forest of sibling client components
@@ -37,6 +37,19 @@ export function LocaleProvider({
     },
     [router],
   );
+
+  // `initialLocale` is baked into the HTML at render time, which is wrong for
+  // any response the service worker replays from its precache -- notably
+  // /offline, whose whole job is to be served without a server. Re-read the
+  // cookie once on mount so a stale shell corrects itself after hydration.
+  // Normally the two already agree and this is a no-op.
+  useEffect(() => {
+    const fromCookie = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+      ?.slice(LOCALE_COOKIE.length + 1);
+    if (isLocale(fromCookie) && fromCookie !== initialLocale) set(fromCookie);
+  }, [initialLocale]);
 
   const value = useMemo(() => ({ locale, setLocale }), [locale, setLocale]);
 
