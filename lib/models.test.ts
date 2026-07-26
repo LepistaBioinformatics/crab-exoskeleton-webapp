@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   splitInventory,
+  reorderPayload,
   draftFromCatalog,
   draftFromDuplicate,
   inactiveReason,
@@ -50,6 +51,40 @@ describe("splitInventory", () => {
 
   it("returns empty groups for an empty inventory rather than throwing", () => {
     expect(splitInventory([])).toEqual({ active: [], inactive: [] });
+  });
+});
+
+describe("reorderPayload", () => {
+  const active = [
+    model({ model_name: "first", position: 1 }),
+    model({ model_name: "second", position: 2 }),
+    model({ model_name: "third", position: 3 }),
+  ];
+  const inactive = [
+    model({ model_name: "retired", status: "disabled", position: 4 }),
+    model({ model_name: "gone", status: "deprecated", replaced_by: "first", position: 5 }),
+  ];
+
+  it("moves one active entry and appends the active group's new order", () => {
+    const order = reorderPayload(active, inactive, 0, 1);
+    expect(order?.slice(0, 3)).toEqual(["second", "first", "third"]);
+  });
+
+  it("returns null for a move above the top or below the bottom", () => {
+    expect(reorderPayload(active, inactive, 0, -1)).toBeNull();
+    expect(reorderPayload(active, inactive, active.length - 1, 1)).toBeNull();
+  });
+
+  // The invariant the constraints file names explicitly: the server renumbers
+  // 1..N over exactly what it receives, so an active-only payload would leave
+  // inactive models holding stale positions that collide with active ones, and
+  // a reactivated model would not land back in its place. This test fails if
+  // `...inactive` is ever dropped from the implementation.
+  it("contains every model from both groups, not just the active one being reordered", () => {
+    const order = reorderPayload(active, inactive, 0, 1);
+    expect(order).not.toBeNull();
+    expect(new Set(order)).toEqual(new Set(["first", "second", "third", "retired", "gone"]));
+    expect(order).toHaveLength(active.length + inactive.length);
   });
 });
 

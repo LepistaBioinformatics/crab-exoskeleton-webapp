@@ -83,6 +83,25 @@ export function splitInventory(models: InventoryModel[]): {
   return { active, inactive };
 }
 
+// reorderPayload returns the full name list to submit for a reorder: the active
+// group with one entry moved, followed by every inactive model. Both groups must
+// be present — the server renumbers 1..N over exactly what it receives, so an
+// active-only payload would leave inactive models holding stale positions that
+// collide with active ones, and a reactivated model would not land back in its
+// place. Returns null when the move is out of bounds.
+export function reorderPayload(
+  active: InventoryModel[],
+  inactive: InventoryModel[],
+  index: number,
+  delta: number,
+): string[] | null {
+  const next = [...active];
+  const to = index + delta;
+  if (to < 0 || to >= next.length) return null;
+  [next[index], next[to]] = [next[to], next[index]];
+  return [...next, ...inactive].map((m) => m.model_name);
+}
+
 // inactiveReason is the badge text for the inactive group. Deprecated names its
 // replacement, because "where do new users go instead" is the first thing an admin
 // looking at a retired model needs to know.

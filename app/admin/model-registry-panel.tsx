@@ -12,6 +12,7 @@ import {
   deprecateModel,
   reorderModels,
   splitInventory,
+  reorderPayload,
   draftFromCatalog,
   draftFromDuplicate,
   emptyDraft,
@@ -37,6 +38,9 @@ const CUSTOM = "__custom__";
 // agent picker only decides which service the request is routed through, and
 // ALL_AGENTS resolves to the first agent rather than fanning out.
 export default function ModelRegistryPanel({
+  // Unused by this task's inventory view — the tab wiring already passes it,
+  // and Task 20's per-scope defaults panel (global/agent/tenant/subscription)
+  // reads it to know which scope it is setting a default for.
   scope,
   agents,
   target,
@@ -161,15 +165,8 @@ export default function ModelRegistryPanel({
   const { active, inactive } = splitInventory(models ?? []);
 
   function move(list: InventoryModel[], index: number, delta: number) {
-    const next = [...list];
-    const to = index + delta;
-    if (to < 0 || to >= next.length) return;
-    [next[index], next[to]] = [next[to], next[index]];
-    // Send BOTH groups: SetPositions renumbers 1..N over exactly the names it
-    // receives, so sending only the active ones would leave inactive models holding
-    // stale positions that collide with active ones — and a reactivated model would
-    // no longer land back in its old place.
-    const order = [...next, ...inactive].map((m) => m.model_name);
+    const order = reorderPayload(list, inactive, index, delta);
+    if (!order) return;
     void run(async () => {
       await reorderModels(routed, order);
       await refresh();

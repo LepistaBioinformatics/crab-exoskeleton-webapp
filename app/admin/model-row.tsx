@@ -50,6 +50,7 @@ export function ModelRow({
   // Deprecation is the tool for retiring something in use, so it stays available.
   const lockReason = inUse ? `in use by ${model.in_use_count}` : "";
   const reason = inactiveReason(model);
+  const toggleLabel = model.status === "active" ? "Disable" : "Enable";
 
   return (
     <li className={row({ state: model.status === "active" ? "active" : "inactive" })}>
@@ -94,8 +95,8 @@ export function ModelRow({
       <IconButton
         variant="ghost"
         size="sm"
-        aria-label={`${model.status === "active" ? "Disable" : "Enable"} ${model.model_name}`}
-        title={inUse && model.status === "active" ? `Cannot disable: ${lockReason}` : "Enable / disable"}
+        aria-label={`${toggleLabel} ${model.model_name}`}
+        title={inUse && model.status === "active" ? `Cannot disable: ${lockReason}` : toggleLabel}
         disabled={busy || (inUse && model.status === "active")}
         onClick={() => onToggle(model)}
       >
