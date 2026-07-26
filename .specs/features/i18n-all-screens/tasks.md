@@ -57,7 +57,15 @@ admin surface.
 All 16 tasks done. Final gates, run on the complete branch:
 
 - `npx tsc --noEmit` — clean (this is also the en↔pt parity proof)
-- `npx vitest run` — 119 passing, same as the baseline; no test needed changing
+- `npx vitest run` — 121 passing (119 baseline, unchanged, + 2 new parity
+  tests); no existing test needed changing
+- **en↔pt value diff** — `tsc` proves every *key* exists in both locales but
+  cannot prove the pt *value* was actually translated. A walk over all 497 leaf
+  strings found 29 identical pairs, every one deliberate (loanwords Portuguese
+  uses as-is — chat, tag, link, workspace, logos; product names — Canvas,
+  Skills; the `tag:`/`alias:` query syntax; section numerals; sample
+  identifiers). `lib/i18n/parity.test.ts` now enforces this with that set as an
+  explicit allowlist, so a future untranslated key fails the suite
 - leftover-literal sweep — one hit, `placeholder="SHARED_API_KEY"`, an example
   identifier and intentionally left
 - raw-error-code sweep — every `instanceof Error` site resolves through

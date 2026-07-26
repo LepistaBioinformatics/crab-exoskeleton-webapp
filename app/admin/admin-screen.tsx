@@ -30,6 +30,7 @@ import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
+import { LanguageSwitcher } from "@/components/ui/language-switcher";
 
 
 // Level 2: the sections OF a scope. Subordinate to the mode switch above, and
@@ -282,6 +283,9 @@ export default function AdminScreen() {
       <div className="mb-5 flex items-center gap-2">
         <ShieldCheck size={22} className="text-accent" aria-hidden />
         <h1 className="font-display text-xl font-semibold text-fg">{t.shell.heading}</h1>
+        {/* /admin is its own route with its own header -- it never renders the
+            chat nav sidebar, so it needs its own switcher. */}
+        <LanguageSwitcher className="ml-auto" />
       </div>
 
       {error ? (
