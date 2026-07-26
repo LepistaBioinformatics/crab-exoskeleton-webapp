@@ -8,9 +8,11 @@ const selectClass =
 
 // The one agent picker every admin tab uses. Two hint texts because the choice
 // means different things: for shared content it selects which STORE is written,
-// while the model registry is per-agent by construction (each agent keeps its own
-// catalog, and a key is registered into one of them), so there "all" is an
-// aggregated read — registering still names a single agent.
+// while the model inventory is PROXY-WIDE — one inventory shared by every
+// picoclaw agent — so there the choice only decides which agent's route the
+// request travels, plus which agent a per-user pin addresses. Only picoclaw
+// agents are offered: hermes reads its model from the proxy's own configuration,
+// so a pin or an agent default written for one would be a record nothing reads.
 const HINTS: Record<"content" | "registry", { all: string; one: (a: string) => string }> = {
   content: {
     all: "Every agent under this scope reads this content.",
@@ -18,8 +20,8 @@ const HINTS: Record<"content" | "registry", { all: string; one: (a: string) => s
       `Only ${a} workspaces read this content. An entry here overrides the all-agents one with the same name.`,
   },
   registry: {
-    all: "Showing every agent's catalog. Registering a model still targets one agent — pick it in the form.",
-    one: (a) => `Showing ${a}'s catalog. New models and assignments apply to ${a}.`,
+    all: "The model inventory is shared by every picoclaw agent. This picker only chooses the route the request takes; a per-user pin addresses the agent that user's workspace runs under.",
+    one: (a) => `Requests go through ${a}. The inventory itself is the same one every picoclaw agent shares.`,
   },
 };
 

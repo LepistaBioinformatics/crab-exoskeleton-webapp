@@ -7,8 +7,13 @@ import {
   clearModelDefault,
   setModelAssignment,
   clearModelAssignment,
+  listModelAssignments,
+  assignmentKey,
+  pinnedModel,
+  defaultOptions,
   type DefaultScope,
   type InventoryModel,
+  type ModelAssignment,
   type ScopeDefault,
 } from "@/lib/models";
 import { listSubscriptionUsers, type ScopeRef, type UserRef } from "@/lib/admin";
@@ -51,6 +56,10 @@ export default function ModelDefaultsPanel({
   const [loaded, setLoaded] = useState(false);
   const [users, setUsers] = useState<UserRef[] | null>(null);
   const [pick, setPick] = useState<Record<string, string>>({});
+  // The STORED pins, keyed "<agent>|<userAccId>". Without reading these the panel
+  // renders every user as "inherited from scope" even when explicitly pinned, so an
+  // admin cannot see who is pinned, or to what, or that "Unpin" means anything.
+  const [assignments, setAssignments] = useState<Record<string, ModelAssignment>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -118,6 +127,25 @@ export default function ModelDefaultsPanel({
     };
   }, [scope.kind, scope.tenantId, scope.subsAccId]);
 
+  const loadAssignments = useCallback(async () => {
+    if (!routed || scope.kind !== "subscription" || !scope.subsAccId) {
+      setAssignments({});
+      return;
+    }
+    setAssignments(
+      await listModelAssignments(routed, {
+        tenantId: scope.tenantId,
+        subsAccId: scope.subsAccId,
+      }),
+    );
+  }, [routed, scope.kind, scope.tenantId, scope.subsAccId]);
+
+  useEffect(() => {
+    // A failure here must not blank the panel: the pins are an indicator, and the
+    // pin/unpin controls still work without them.
+    loadAssignments().catch(() => setAssignments({}));
+  }, [loadAssignments]);
+
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError(null);
@@ -171,9 +199,12 @@ export default function ModelDefaultsPanel({
               <option value="" disabled>
                 no default set
               </option>
-              {models.filter((m) => m.status === "active").map((m) => (
-                <option key={m.model_name} value={m.model_name}>
-                  {m.model_name}
+              {/* The current default is offered even when it is no longer active:
+                  filtering to active models made a deprecated default match no
+                  option, so the control read "no default set" while one WAS set. */}
+              {defaultOptions(models, current?.model_name ?? null).map((o) => (
+                <option key={o.name} value={o.name}>
+                  {o.inactive ? `${o.name} (retired — current default)` : o.name}
                 </option>
               ))}
             </select>
@@ -214,51 +245,68 @@ export default function ModelDefaultsPanel({
           </p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {users.map((u) => (
-              <li key={`${u.role}|${u.accId}`}
-                className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
-                  {u.name || u.email || u.accId}
-                </span>
-                {u.role && <Badge tone="accent">{u.role}</Badge>}
-                <select className={selectClass} value={pick[u.accId] ?? ""} disabled={busy}
-                  onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}>
-                  <option value="" disabled>
-                    inherited from scope
-                  </option>
-                  {assignable.map((m) => (
-                    <option key={m.model_name} value={m.model_name}>
-                      {m.model_name}
+            {users.map((u) => {
+              const stored = assignments[assignmentKey(u.role ?? routed, u.accId)];
+              const pinned = pinnedModel(stored);
+              return (
+                <li key={`${u.role}|${u.accId}`}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
+                    {u.name || u.email || u.accId}
+                  </span>
+                  {u.role && <Badge tone="accent">{u.role}</Badge>}
+                  {/* What this user actually resolves to today, and whether it is a
+                      pin or the cascade. Both halves matter: "pinned" says a scope
+                      change will NOT move them, which is the whole reason a pin
+                      exists. */}
+                  {pinned ? (
+                    <Badge tone="accent">pinned · {pinned}</Badge>
+                  ) : stored ? (
+                    <Badge tone="neutral">inherited · {stored.model_name}</Badge>
+                  ) : (
+                    <Badge tone="neutral">not materialized yet</Badge>
+                  )}
+                  <select className={selectClass} value={pick[u.accId] ?? pinned ?? ""} disabled={busy}
+                    onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}>
+                    <option value="" disabled>
+                      inherited from scope
                     </option>
-                  ))}
-                </select>
-                <Button variant="tonal" size="sm" disabled={busy || !pick[u.accId]}
-                  onClick={() =>
-                    run(async () => {
-                      await setModelAssignment(
-                        u.role ?? routed,
-                        { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
-                        pick[u.accId],
-                      );
-                    })
-                  }>
-                  Pin
-                </Button>
-                <Button variant="text" size="sm" disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      await clearModelAssignment(u.role ?? routed, {
-                        tenantId: scope.tenantId,
-                        subsAccId: scope.subsAccId!,
-                        userAccId: u.accId,
-                      });
-                      setPick((prev) => ({ ...prev, [u.accId]: "" }));
-                    })
-                  }>
-                  Unpin
-                </Button>
-              </li>
-            ))}
+                    {assignable.map((m) => (
+                      <option key={m.model_name} value={m.model_name}>
+                        {m.model_name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="tonal" size="sm" disabled={busy || !(pick[u.accId] ?? pinned)}
+                    onClick={() =>
+                      run(async () => {
+                        await setModelAssignment(
+                          u.role ?? routed,
+                          { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
+                          pick[u.accId] ?? pinned!,
+                        );
+                        await loadAssignments();
+                      })
+                    }>
+                    Pin
+                  </Button>
+                  <Button variant="text" size="sm" disabled={busy || !stored}
+                    onClick={() =>
+                      run(async () => {
+                        await clearModelAssignment(u.role ?? routed, {
+                          tenantId: scope.tenantId,
+                          subsAccId: scope.subsAccId!,
+                          userAccId: u.accId,
+                        });
+                        setPick((prev) => ({ ...prev, [u.accId]: "" }));
+                        await loadAssignments();
+                      })
+                    }>
+                    Unpin
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

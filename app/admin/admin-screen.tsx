@@ -9,8 +9,10 @@ import {
   ALL_AGENTS,
   listAgents,
   listScopes,
+  picoclawAgentKeys,
   resolveScopeNames,
   type AdminScope,
+  type AgentRef,
   type ScopeRef,
 } from "@/lib/admin";
 import Logo from "@/app/logo";
@@ -74,7 +76,7 @@ export default function AdminScreen() {
   // The agent an admin action targets. Shared by every agent-scoped tab so the
   // choice survives switching between them; "all agents" is the default, which
   // reproduces the pre-per-agent behaviour exactly.
-  const [agents, setAgents] = useState<string[]>([]);
+  const [agents, setAgents] = useState<AgentRef[]>([]);
   const [agentTarget, setAgentTarget] = useState<string>(ALL_AGENTS);
 
   // The URL is the single source of truth for the active tab — deliberately NOT
@@ -127,7 +129,7 @@ export default function AdminScreen() {
     let cancelled = false;
     listAgents()
       .then((list) => {
-        if (!cancelled) setAgents(list.map((a) => a.key));
+        if (!cancelled) setAgents(list);
       })
       .catch(() => {});
     return () => {
@@ -200,6 +202,18 @@ export default function AdminScreen() {
   }, [scopes, canEditBranding, tab, setTab]);
 
   const subscriptionScopes = (scopes ?? []).filter((s) => s.kind === "subscription");
+
+  // The Model tab offers only the agents the inventory governs. Hermes agents read
+  // their model from the proxy's config.yaml, so pinning one writes a record nothing
+  // reads — the proxy rejects it, and the picker should not offer it in the first
+  // place. If the shared choice is a hermes agent, this tab falls back to "all",
+  // which resolves to the first picoclaw agent.
+  const agentKeys = agents.map((a) => a.key);
+  const modelAgentKeys = picoclawAgentKeys(agents);
+  const modelTab = tab === "model";
+  const tabAgents = modelTab ? modelAgentKeys : agentKeys;
+  const tabTarget =
+    agentTarget !== ALL_AGENTS && !tabAgents.includes(agentTarget) ? ALL_AGENTS : agentTarget;
 
   const visibleTabs = [
     ...(scopes && scopes.length > 0 ? TABS : []),
@@ -298,20 +312,20 @@ export default function AdminScreen() {
                     <div className="flex flex-col gap-4">
                       <div className="max-w-sm">
                         <AgentTargetSelect
-                          agents={agents}
-                          value={agentTarget}
+                          agents={tabAgents}
+                          value={tabTarget}
                           onChange={setAgentTarget}
-                          purpose={tab === "model" ? "registry" : "content"}
+                          purpose={modelTab ? "registry" : "content"}
                         />
                       </div>
                       {tab === "files" ? (
-                        <SharedFilesPanel scope={{ ...selected, agent: agentTarget }} />
+                        <SharedFilesPanel scope={{ ...selected, agent: tabTarget }} />
                       ) : tab === "secrets" ? (
-                        <SharedSecretsPanel scope={{ ...selected, agent: agentTarget }} />
+                        <SharedSecretsPanel scope={{ ...selected, agent: tabTarget }} />
                       ) : tab === "skills" ? (
-                        <SharedSkillsPanel scope={{ ...selected, agent: agentTarget }} />
+                        <SharedSkillsPanel scope={{ ...selected, agent: tabTarget }} />
                       ) : (
-                        <ModelRegistryPanel scope={selected} agents={agents} target={agentTarget} />
+                        <ModelRegistryPanel scope={selected} agents={modelAgentKeys} target={tabTarget} />
                       )}
                     </div>
                   ) : (
