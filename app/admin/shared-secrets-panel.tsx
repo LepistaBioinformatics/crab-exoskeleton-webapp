@@ -16,7 +16,7 @@ import {
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
-import { listModels, type InventoryModel } from "@/lib/models";
+import { listModels, describeError, type InventoryModel } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
   const [modelName, setModelName] = useState("");
   const [models, setModels] = useState<InventoryModel[] | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
 
@@ -87,14 +88,13 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
 
   useEffect(() => {
     setModelName("");
-    if (!routedAgent) {
-      setModels(null);
-      return;
-    }
+    setModels(null);
+    setModelsError(null);
+    if (!routedAgent) return;
     let cancelled = false;
     listModels(routedAgent)
       .then((m) => !cancelled && setModels(m))
-      .catch(() => !cancelled && setModels([]));
+      .catch((e) => !cancelled && setModelsError(describeError(e).message));
     return () => {
       cancelled = true;
     };
@@ -216,6 +216,16 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
               </label>
             ) : !routedAgent ? (
               <Alert severity="info">Pick a single agent above to set a model API key.</Alert>
+            ) : modelsError ? (
+              <Alert severity="error">{modelsError}</Alert>
+            ) : models === null ? (
+              <div className="flex justify-center py-2">
+                <Spinner size={16} />
+              </div>
+            ) : availableModels.length === 0 ? (
+              <Alert severity="info">
+                {routedAgent} has no registered models yet — register one in the Model tab first.
+              </Alert>
             ) : (
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-fg-muted">Model</span>
