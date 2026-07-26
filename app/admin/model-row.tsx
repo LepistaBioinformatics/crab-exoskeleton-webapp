@@ -31,6 +31,7 @@ export function ModelRow({
   onDelete,
   onMoveUp,
   onMoveDown,
+  onEditChain,
 }: {
   model: InventoryModel;
   busy: boolean;
@@ -44,6 +45,9 @@ export function ModelRow({
   // <li> inside it, which is invalid markup. Absent means not reorderable.
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  // Absent on inactive rows: a model that is not active is not materialized
+  // anywhere, so editing its chain has no effect worth offering.
+  onEditChain?: (m: InventoryModel) => void;
 }) {
   const inUse = model.in_use_count > 0;
   // Delete and disable share one precondition — nothing may reference the model.
@@ -107,6 +111,12 @@ export function ModelRow({
           title="Deprecate (retire while keeping existing users on it)"
           disabled={busy} onClick={() => onDeprecate(model)}>
           <Archive size={15} aria-hidden />
+        </IconButton>
+      )}
+      {onEditChain && (
+        <IconButton variant="ghost" size="sm" aria-label={`Edit fallback chain for ${model.model_name}`}
+          title="Fallback chain" disabled={busy} onClick={() => onEditChain(model)}>
+          <span aria-hidden className="text-xs">⛓</span>
         </IconButton>
       )}
       <IconButton

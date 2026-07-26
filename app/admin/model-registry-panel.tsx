@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ModelRow } from "./model-row";
+import ModelDefaultsPanel from "./model-defaults-panel";
+import { FallbackEditor } from "./fallback-editor";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -38,9 +40,6 @@ const CUSTOM = "__custom__";
 // agent picker only decides which service the request is routed through, and
 // ALL_AGENTS resolves to the first agent rather than fanning out.
 export default function ModelRegistryPanel({
-  // Unused by this task's inventory view — the tab wiring already passes it,
-  // and Task 20's per-scope defaults panel (global/agent/tenant/subscription)
-  // reads it to know which scope it is setting a default for.
   scope,
   agents,
   target,
@@ -65,6 +64,10 @@ export default function ModelRegistryPanel({
   // the admin would type a name and get a 400 with no way to see the valid ones.
   const [deprecating, setDeprecating] = useState<InventoryModel | null>(null);
   const [replacement, setReplacement] = useState("");
+  // chainFor holds the model whose fallback chain editor is open. Opening the
+  // edit form closes it and vice versa: two panels open on different models at
+  // once is how someone saves a chain onto the wrong model.
+  const [chainFor, setChainFor] = useState<InventoryModel | null>(null);
 
   const refresh = useCallback(async () => {
     if (!routed) return;
@@ -99,13 +102,18 @@ export default function ModelRegistryPanel({
     }
   }
 
+  // Opening the edit form closes the chain editor and vice versa (see openChain
+  // below): two panels open on different models at once is how someone saves a
+  // chain onto the wrong model.
   function openCreate() {
+    setChainFor(null);
     setDraft(emptyDraft());
     setEditing(null);
     setShowForm(true);
   }
 
   function openEdit(m: InventoryModel) {
+    setChainFor(null);
     // api_key stays blank: the API never returns it, and leaving it blank means
     // saving keeps the stored key rather than clearing it.
     setDraft({
@@ -126,9 +134,15 @@ export default function ModelRegistryPanel({
   }
 
   function openDuplicate(m: InventoryModel) {
+    setChainFor(null);
     setDraft(draftFromDuplicate(m));
     setEditing(null);
     setShowForm(true);
+  }
+
+  function openChain(m: InventoryModel) {
+    setShowForm(false);
+    setChainFor(m);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -272,7 +286,8 @@ export default function ModelRegistryPanel({
                     onDelete={(mm) => run(async () => {
                       await deleteModel(routed, mm.model_name);
                       await refresh();
-                    })} />
+                    })}
+                    onEditChain={openChain} />
                 ))}
               </ul>
             )}
@@ -346,6 +361,38 @@ export default function ModelRegistryPanel({
           </Section>
         </>
       )}
+
+      {chainFor && (
+        <FallbackEditor
+          // Keyed on the model name so switching chainFor from one model to
+          // another remounts the editor instead of updating it in place — it
+          // owns its chain in local state, so without a fresh mount the
+          // ordered list would keep showing the PREVIOUS model's chain under
+          // the new model's name, and Save would write it onto the wrong model.
+          key={chainFor.model_name}
+          model={chainFor}
+          all={models ?? []}
+          busy={busy}
+          onSave={(chain) =>
+            run(async () => {
+              await updateModel(routed, chainFor.model_name, chainFor.version, {
+                model_name: chainFor.model_name,
+                provider: chainFor.provider,
+                model: chainFor.model,
+                api_base: chainFor.api_base ?? "",
+                auth_method: chainFor.auth_method ?? "",
+                api_key: "",
+                fallbacks: chain,
+                extra_body: chainFor.extra_body,
+              });
+              setChainFor(null);
+              await refresh();
+            })
+          }
+        />
+      )}
+
+      {routed && <ModelDefaultsPanel scope={scope} routed={routed} models={models ?? []} />}
     </div>
   );
 }
