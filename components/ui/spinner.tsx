@@ -1,8 +1,13 @@
+"use client";
+
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n/context";
+import { commonCopy } from "@/lib/i18n/common";
 
 // CSS-spin loading indicator (respects reduced-motion via the global guard in
 // globals.css). Replaces MUI's CircularProgress.
 export function Spinner({ size = 20, className }: { size?: number; className?: string }) {
+  const t = useT(commonCopy);
   return (
     <svg
       className={cn("animate-spin text-accent", className)}
@@ -11,7 +16,7 @@ export function Spinner({ size = 20, className }: { size?: number; className?: s
       viewBox="0 0 24 24"
       fill="none"
       role="status"
-      aria-label="Loading"
+      aria-label={t.state.loading}
     >
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />

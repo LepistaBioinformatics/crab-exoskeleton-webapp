@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
+import { useT } from "@/lib/i18n/context";
+import { commonCopy } from "@/lib/i18n/common";
 
 // Small confirmation modal. Rendered only when open; Escape and backdrop click
 // cancel. Used to guard accidental destructive actions (e.g. logout).
@@ -11,8 +13,8 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
 }: {
@@ -24,6 +26,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT(commonCopy);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -53,10 +56,10 @@ export function ConfirmDialog({
         {message && <p className="mt-2 text-sm text-fg-muted">{message}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="text" onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t.actions.cancel}
           </Button>
           <Button variant="filled" onClick={onConfirm} autoFocus>
-            {confirmLabel}
+            {confirmLabel ?? t.actions.confirm}
           </Button>
         </div>
       </Surface>

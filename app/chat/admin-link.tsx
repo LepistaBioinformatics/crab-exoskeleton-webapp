@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
 
 // Entry point to the admin screen, shown ONLY when the caller has manage
 // authority over at least one scope (FR-9). Probes GET /api/admin/scopes once;
 // renders nothing until it confirms a non-empty result, so a member with no
 // authority never sees the link. The proxy is still the real gate (NFR-1).
 export default function AdminLink() {
+  const t = useT(chatCopy);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -33,7 +36,7 @@ export default function AdminLink() {
       className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg-muted transition-colors hover:bg-elevated/60 hover:text-fg"
     >
       <ShieldCheck size={16} className="shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">Administration</span>
+      <span className="min-w-0 flex-1 truncate">{t.adminLink.label}</span>
     </Link>
   );
 }

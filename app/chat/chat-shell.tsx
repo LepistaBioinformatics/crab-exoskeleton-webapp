@@ -11,6 +11,9 @@ import EmptyState from "./empty-state";
 import ResizablePane from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
+import BrandName from "@/app/brand-name";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const NAV_MIN = 220;
 const NAV_DEFAULT = 280;
@@ -23,6 +26,7 @@ const LAYOUT_KEY = "chat-sidebars";
 // workspace. On desktop each sidebar collapses/resizes independently (persisted
 // in localStorage); on mobile they are hamburger-toggled overlay drawers.
 export default function ChatShell({ email }: { email: string }) {
+  const t = useT(chatCopy);
   const fragment = useFragment();
   const resolved = fragment !== null;
   const workspace = fragment ? toWorkspace(fragment) : null;
@@ -82,14 +86,14 @@ export default function ChatShell({ email }: { email: string }) {
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Mobile top bar */}
       <div className="flex items-center gap-2 border-b border-brand/30 bg-surface px-3 py-2 md:hidden">
-        <IconButton variant="ghost" size="sm" aria-label="Open workspaces" onClick={() => setNavOpen(true)}>
+        <IconButton variant="ghost" size="sm" aria-label={t.shell.openWorkspaces} onClick={() => setNavOpen(true)}>
           <Menu size={20} aria-hidden />
         </IconButton>
         <span className="flex-1 truncate font-display text-sm font-semibold text-fg">
-          {workspace ? `agente ${workspace.r}` : "zombie-crab"}
+          {workspace ? `${t.shell.agentPrefix} ${workspace.r}` : <BrandName />}
         </span>
         {workspace && (
-          <IconButton variant="ghost" size="sm" aria-label="Conversations" onClick={() => setHistoryOpen(true)}>
+          <IconButton variant="ghost" size="sm" aria-label={t.shell.conversations} onClick={() => setHistoryOpen(true)}>
             <MessageSquare size={20} aria-hidden />
           </IconButton>
         )}
@@ -102,7 +106,7 @@ export default function ChatShell({ email }: { email: string }) {
         )}
 
         <ResizablePane
-          ariaLabel="Workspaces"
+          ariaLabel={t.shell.workspaces}
           open={navOpen}
           collapsed={navCollapsed}
           width={navWidth}
@@ -119,7 +123,7 @@ export default function ChatShell({ email }: { email: string }) {
 
         {workspace && !canvas && (
           <ResizablePane
-            ariaLabel="Conversations"
+            ariaLabel={t.shell.conversations}
             open={historyOpen}
             collapsed={historyCollapsed}
             width={historyWidth}

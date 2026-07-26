@@ -22,6 +22,7 @@ const en = {
   native_is_admin_only: "Only an administrator can change this.",
   invalid_email: "That email address doesn't look right.",
   invalid_code: "Invalid code. Try again.",
+  workspaces_load_failed: "Couldn't load your workspaces.",
   unknown: "Something went wrong.",
 };
 
@@ -40,6 +41,7 @@ const pt: ErrorDict = {
   native_is_admin_only: "Apenas um administrador pode alterar isso.",
   invalid_email: "Esse e-mail não parece válido.",
   invalid_code: "Código inválido. Tente de novo.",
+  workspaces_load_failed: "Não foi possível carregar seus workspaces.",
   unknown: "Algo deu errado.",
 };
 

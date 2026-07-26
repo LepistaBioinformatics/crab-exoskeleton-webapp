@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Download, Share } from "lucide-react";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 // The subset of BeforeInstallPromptEvent this component needs. It is not in
 // lib.dom.d.ts (non-standard, Chromium-only), so it is declared locally rather
@@ -34,6 +36,7 @@ function isIOS(): boolean {
 // install criteria, so this button doubles as a live signal: if it never appears
 // on a supported browser, the manifest or service worker is still failing.
 export default function InstallAppButton() {
+  const t = useT(chatCopy);
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
@@ -89,14 +92,16 @@ export default function InstallAppButton() {
         ) : (
           <Download size={16} className="shrink-0" aria-hidden />
         )}
-        <span className="min-w-0 flex-1 truncate text-left">Install app</span>
+        <span className="min-w-0 flex-1 truncate text-left">{t.install.action}</span>
       </button>
 
       {showIosHelp && (
         <p className="px-2 pb-1 text-[11px] leading-relaxed text-fg-muted">
-          On iPhone and iPad, tap <strong className="text-fg">Share</strong> in Safari, then{" "}
-          <strong className="text-fg">Add to Home Screen</strong>. Safari has no install button of
-          its own — that flow is the install.
+          {t.install.iosHelpBefore}
+          <strong className="text-fg">{t.install.iosShare}</strong>
+          {t.install.iosHelpMiddle}
+          <strong className="text-fg">{t.install.iosAddToHome}</strong>
+          {t.install.iosHelpAfter}
         </p>
       )}
     </div>

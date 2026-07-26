@@ -19,6 +19,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { TenantAvatar } from "@/components/ui/avatar";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 type TenantBrand = { logo?: string; color?: string };
 
@@ -70,9 +73,13 @@ type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 // permission-duplicated rows, and renders a tenant -> account -> agent tree.
 // The agent leaf is the selectable workspace.
 export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
+  const t = useT(chatCopy);
+  const err = useT(errorCopy);
   const router = useRouter();
   const fragment = useFragment();
   const [groups, setGroups] = useState<TenantGroup[] | null>(null);
+  // An error *code*, not a sentence: resolving at render time means a locale
+  // switch while the banner is up re-renders it.
   const [error, setError] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -91,14 +98,14 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
         }
         if (!res.ok) {
           const data = await res.json().catch(() => null);
-          setError(data?.error ? String(data.error) : "Couldn't load your workspaces.");
+          setError(typeof data?.error === "string" ? data.error : "workspaces_load_failed");
           return;
         }
         const data = await res.json();
         const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
         setGroups(groupWorkspaces(subs));
       } catch {
-        setError("Can't reach the gateway right now.");
+        setError("connectivity");
       }
     })();
   }, [router]);
@@ -183,7 +190,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
             variant="subtle"
             inputSize="sm"
             className="pl-9"
-            placeholder="Filter workspaces"
+            placeholder={t.workspaceNav.filterPlaceholder}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -199,7 +206,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
 
       <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
         {error ? (
-          <Alert severity="error">{error}</Alert>
+          <Alert severity="error">{errorText(err, error)}</Alert>
         ) : groups === null ? (
           <div className="flex justify-center py-4">
             <Spinner size={20} />
@@ -209,7 +216,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
             You aren&apos;t in any workspaces yet — ask an operator to add you to one.
           </p>
         ) : visibleGroups!.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-fg-muted">No workspaces match your filter.</p>
+          <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>
         ) : (
           <div className="flex flex-col gap-1">
             {visibleGroups!.map((tenant) => {
