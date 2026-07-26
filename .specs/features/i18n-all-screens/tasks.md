@@ -52,6 +52,28 @@ T1 blocks everything. T2 blocks T8 and T13. T3–T15 are otherwise independent a
 ordered smallest-first so the pattern is proven on `/signin` before the 250-string
 admin surface.
 
+## T17 — correction after review
+
+The T16 literal sweep was **wrong**, and CodeRabbit caught it on PR #8. Its
+regex required `>` and `<` on the same line and only scanned `.tsx`, so
+multi-line JSX text and every `.ts` file went unexamined. It reported "one
+intentional hit" when **45 strings were untranslated**, concentrated in
+`model-registry-panel` (10), `lib/models.ts` (9), `model-defaults-panel` (6)
+and `secrets-drawer` (5) — plus a Portuguese-only "Outros tipos" still sitting
+in the composer.
+
+Fixed, and the gate is now durable:
+
+- `scripts/i18n-sweep.py` — the corrected detector, multi-line and `.ts`-aware,
+  with the two failure modes written into its docstring.
+- `lib/models.ts` stops emitting UI text. `modelsApiError`/`describeError`
+  return an error **code** (`ModelsError.message` → `.code`), and `buildLadder`
+  takes its rung wording through `LadderInput.copy`. Both were rendering
+  English inside panels that were otherwise pt-BR — the resolution ladder was
+  literally half-translated.
+- `parity.test.ts` earned its keep here: it failed on four newly added keys
+  before this was committed, all legitimately shared, now allowlisted.
+
 ## Result
 
 All 16 tasks done. Final gates, run on the complete branch:
@@ -66,8 +88,9 @@ All 16 tasks done. Final gates, run on the complete branch:
   Skills; the `tag:`/`alias:` query syntax; section numerals; sample
   identifiers). `lib/i18n/parity.test.ts` now enforces this with that set as an
   explicit allowlist, so a future untranslated key fails the suite
-- leftover-literal sweep — one hit, `placeholder="SHARED_API_KEY"`, an example
-  identifier and intentionally left
+- leftover-literal sweep (`scripts/i18n-sweep.py`) — 4 hits, all known noise:
+  two TypeScript generics parsed as JSX, and the `Mycelium WebApp`/`Mycelium
+  API` product names in the landing diagram
 - raw-error-code sweep — every `instanceof Error` site resolves through
   `errorText`
 - `npx next build` — clean

@@ -228,6 +228,7 @@ export default function ModelDefaultsPanel({
     // already the left rail's job, and repeating it on the rung would be
     // decoration — the rung's work is to say what that level RESOLVES to.
     names: { agent: routed },
+    copy: t.ladderRungs,
   });
   const clearedFallback = fallbackIfCleared(rungs);
 
@@ -264,8 +265,9 @@ export default function ModelDefaultsPanel({
                 consequence={
                   clearedFallback !== null ? (
                     <>
-                      Clearing the level in effect would move its workspaces to{" "}
-                      <Ident>{clearedFallback}</Ident> on their next start.
+                      {t.defaults.clearingMovesBefore}
+                      <Ident>{clearedFallback}</Ident>
+                      {t.defaults.onNextStart}
                     </>
                   ) : rungs.some((r) => r.inEffect) ? (
                     <>
@@ -291,14 +293,14 @@ export default function ModelDefaultsPanel({
                     }
                   >
                     <option value="" disabled>
-                      nothing set at this level
+                      {t.defaults.nothingSetHere}
                     </option>
                     {/* The current default is offered even when it is no longer active:
                         filtering to active models made a deprecated default match no
                         option, so the control read "no default set" while one WAS set. */}
                     {defaultOptions(models, current?.model_name ?? null).map((o) => (
                       <option key={o.name} value={o.name}>
-                        {o.inactive ? `${o.name} (retired — current default)` : o.name}
+                        {o.inactive ? t.defaults.retiredCurrent.replace("{name}", o.name) : o.name}
                       </option>
                     ))}
                   </select>
@@ -315,7 +317,7 @@ export default function ModelDefaultsPanel({
                         })
                       }
                     >
-                      Clear
+                      {t.defaults.clear}
                     </Button>
                   )}
                 </div>
@@ -327,7 +329,7 @@ export default function ModelDefaultsPanel({
 
       <div className="flex flex-col gap-2">
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Per-user pins
+          {t.defaults.perUserPins}
         </span>
         {scope.kind !== "subscription" ? (
           <p className="py-2 text-sm text-fg-muted">{t.defaults.selectSubscription}</p>
@@ -337,7 +339,7 @@ export default function ModelDefaultsPanel({
           </div>
         ) : users.length === 0 ? (
           <p className="py-2 text-sm text-fg-muted">
-            No users have a workspace under this subscription yet (they must start a chat first).
+            {t.defaults.noUsersYet}
           </p>
         ) : (
           <ul className="flex flex-col gap-1">
@@ -361,16 +363,16 @@ export default function ModelDefaultsPanel({
                       change will NOT move them, which is the whole reason a pin
                       exists. */}
                   {pinned ? (
-                    <Badge tone="accent">pinned · {pinned}</Badge>
+                    <Badge tone="accent">{t.defaults.pinnedTo.replace("{model}", pinned)}</Badge>
                   ) : stored ? (
                     <Badge tone="neutral">inherited · {stored.model_name}</Badge>
                   ) : (
-                    <Badge tone="neutral">not materialized yet</Badge>
+                    <Badge tone="neutral">{t.defaults.notMaterialized}</Badge>
                   )}
                   <select className={selectClass} value={pick[rowKey] ?? pinned ?? ""} disabled={busy}
                     onChange={(e) => setPick((prev) => ({ ...prev, [rowKey]: e.target.value }))}>
                     <option value="" disabled>
-                      inherited from scope
+                      {t.defaults.inheritedFromScope}
                     </option>
                     {assignable.map((m) => (
                       <option key={m.model_name} value={m.model_name}>

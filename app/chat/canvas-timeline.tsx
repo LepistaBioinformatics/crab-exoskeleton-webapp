@@ -228,10 +228,10 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
       {/* Time band + pager */}
       <div className="flex shrink-0 items-center gap-2 border-b border-brand/20 px-4 py-1.5 text-xs text-fg-muted">
         <span className="font-semibold text-fg">{fmtDate(tMin, tag)} → {fmtDate(model.tMax, tag)}</span>
-        <span>· time flows right →</span>
+        <span>{t.canvas.timeFlowsRight}</span>
         {soloId && (
           <Button variant="text" size="sm" className="h-6 gap-1 px-1 text-accent" onClick={() => setSoloId(null)}>
-            <X size={13} /> show all
+            <X size={13} /> {t.canvas.showAllLanes}
           </Button>
         )}
         {overflow > 0 && <span className="text-fg-muted">· {overflow} quieter conversation(s) hidden</span>}

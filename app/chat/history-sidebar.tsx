@@ -260,7 +260,7 @@ export default function HistorySidebar({
           onClick={onNewChat}
         >
           <MessageSquarePlus size={16} />
-          New chat
+          {t.history.newChat}
         </Button>
       </div>
 

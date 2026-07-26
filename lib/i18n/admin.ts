@@ -12,6 +12,11 @@ import type { Locale } from "./config";
 const en = {
   shell: {
     heading: "Administration",
+    backToChat: "Back to chat",
+    noSubscriptionsManaged:
+      "You don't manage any subscriptions directly, so there are no member workspaces to list here.",
+    selectScope: "Select a scope on the left to manage it.",
+
     areaAria: "Admin area",
     scopedActions: "Scoped actions",
     branding: "Branding",
@@ -62,7 +67,6 @@ const en = {
   },
   models: {
     noAgents: "No agents reported by the gateway, so the inventory cannot be reached.",
-    incomplete: "Fill model name, provider and model.",
     startFrom: "Start from a known model",
     startFromJob: "Fills the provider fields below. Choose the last option to type them yourself.",
     custom: "Something else — fill it in by hand",
@@ -84,6 +88,29 @@ const en = {
     noneActive: "No active models. Register one to get started.",
     noneInactive: "Nothing disabled or deprecated.",
     noFallbacks: "No fallbacks. Requests that fail have nowhere to go.",
+    inventory: "Model inventory",
+    register: "Register model",
+    catalogPlaceholder: "pick one to prefill…",
+    writtenAs: "Written to each workspace as",
+    keyGoesToBefore: "The key goes to ",
+    keyGoesToMiddle: " instead — never to ",
+    keyGoesToAfter: ".",
+    leaveBlankBefore: "Leave it blank to ",
+    leaveBlankBold: "keep the key already stored",
+    leaveBlankAfter:
+      ". This screen never shows a key back, so it cannot be re-typed from what you see.",
+    readingOrderBefore: "This order is for reading only. A model's fallback chain is the ",
+    readingOrderAfter: " list on the model itself.",
+    retirePrefix: "Retire",
+    retireExplain: "Everyone already using it keeps it. New users get the replacement instead.",
+    replacementPlaceholder: "replacement for new users…",
+    chainFor: "Fallback chain for",
+    chainExplainBefore: "This ordered list — not the inventory listing order — becomes ",
+    chainExplainMiddle: ". Every model here also gets its key written into each workspace that uses ",
+    chainExplainAfter: ".",
+    noOtherActive: "no other active models",
+    addFallback: "add a fallback…",
+    saveChain: "Save chain",
     active: "Active",
     inactive: "Inactive",
   },
@@ -117,6 +144,17 @@ const en = {
   defaults: {
     title: "Which model this scope resolves to",
     selectSubscription: "Select a subscription to pin models to its users.",
+    clearingMovesBefore: "Clearing the level in effect would move its workspaces to ",
+    onNextStart: " on their next start.",
+    nothingSetHere: "nothing set at this level",
+    retiredCurrent: "{name} (retired — current default)",
+    clear: "Clear",
+    perUserPins: "Per-user pins",
+    noUsersYet:
+      "No users have a workspace under this subscription yet (they must start a chat first).",
+    pinnedTo: "pinned · {model}",
+    notMaterialized: "not materialized yet",
+    inheritedFromScope: "inherited from scope",
     intro:
       "Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it.",
     setLevel: "Set the {level} level",
@@ -131,6 +169,8 @@ const en = {
   members: {
     selectSubscription: "Select a subscription to see its members.",
     none: "No members under this subscription yet.",
+    privacyNote:
+      "You can list and delete a member's private files, but never open or edit their contents — a member's private content never leaves their workspace (FR-7).",
     noPrivateFiles: "No private files.",
     deletePrefix: "Delete",
     deleteTitle: "Delete member's file?",
@@ -182,6 +222,13 @@ const en = {
   },
   sharedSecrets: {
     invalidName: "Name may only contain letters, numbers, and . _ -",
+    formatNative: "native (picoclaw search-provider / model key)",
+    slotWeb: "A web search provider's key",
+    slotModel: "A model's API key",
+    noRegisteredModels:
+      "{agent} has no registered models yet — register one in the Model tab first.",
+    injectedAs:
+      "Injected as environment into every container below this scope, merged under each user's own secrets.",
     selectModel: "Select a model.",
     valueRequired: "Enter a value.",
     howReceived: "How the agent receives it",
@@ -237,6 +284,20 @@ const en = {
     deleteMessage:
       "“{name}” will be removed for everyone below this scope. Containers restart to pick up the change.",
   },
+  // Passed into buildLadder so that pure helper stops emitting English UI text.
+  ladderRungs: {
+    pinned: "Pinned to one person",
+    pinnedDetail: "{n} pinned — a pin outranks every level below",
+    nobodyPinned: "Nobody here is pinned",
+    subscription: "This subscription",
+    subscriptionNamed: "This subscription — {name}",
+    tenant: "Tenant",
+    tenantNamed: "Tenant — {name}",
+    agentNamed: "Agent — {name}",
+    thisAgent: "this agent",
+    everythingElse: "Everything else",
+    instanceWide: "instance-wide",
+  },
   ladder: {
     editing: "editing",
     unreadable: "Instance-wide levels need instance-admin privileges",
@@ -253,6 +314,11 @@ export type AdminDict = typeof en;
 const pt: AdminDict = {
   shell: {
     heading: "Administração",
+    backToChat: "Voltar ao chat",
+    noSubscriptionsManaged:
+      "Você não administra nenhuma assinatura diretamente, então não há workspaces de membros para listar aqui.",
+    selectScope: "Selecione um escopo à esquerda para administrá-lo.",
+
     areaAria: "Área administrativa",
     scopedActions: "Ações por escopo",
     branding: "Marca",
@@ -300,7 +366,6 @@ const pt: AdminDict = {
   },
   models: {
     noAgents: "O gateway não reportou nenhum agente, então o inventário não pode ser acessado.",
-    incomplete: "Preencha o nome do modelo, o provedor e o modelo.",
     startFrom: "Começar de um modelo conhecido",
     startFromJob: "Preenche os campos do provedor abaixo. Escolha a última opção para digitá-los você mesmo.",
     custom: "Outra coisa — preencher à mão",
@@ -322,6 +387,29 @@ const pt: AdminDict = {
     noneActive: "Nenhum modelo ativo. Registre um para começar.",
     noneInactive: "Nada desativado ou aposentado.",
     noFallbacks: "Sem fallbacks. Requisições que falham não têm para onde ir.",
+    inventory: "Inventário de modelos",
+    register: "Registrar modelo",
+    catalogPlaceholder: "escolha um para preencher…",
+    writtenAs: "Escrito em cada workspace como",
+    keyGoesToBefore: "A chave vai para ",
+    keyGoesToMiddle: " em vez disso — nunca para ",
+    keyGoesToAfter: ".",
+    leaveBlankBefore: "Deixe em branco para ",
+    leaveBlankBold: "manter a chave já guardada",
+    leaveBlankAfter:
+      ". Esta tela nunca exibe a chave de volta, então ela não pode ser redigitada a partir do que você vê.",
+    readingOrderBefore: "Esta ordem é só para leitura. A cadeia de fallback de um modelo é a lista ",
+    readingOrderAfter: " no próprio modelo.",
+    retirePrefix: "Aposentar",
+    retireExplain: "Quem já usa continua com ele. Novos usuários recebem o substituto.",
+    replacementPlaceholder: "substituto para novos usuários…",
+    chainFor: "Cadeia de fallback de",
+    chainExplainBefore: "Esta lista ordenada — não a ordem de listagem do inventário — vira ",
+    chainExplainMiddle: ". Todo modelo aqui também tem sua chave escrita em cada workspace que usa ",
+    chainExplainAfter: ".",
+    noOtherActive: "nenhum outro modelo ativo",
+    addFallback: "adicionar um fallback…",
+    saveChain: "Salvar cadeia",
     active: "Ativos",
     inactive: "Inativos",
   },
@@ -354,6 +442,17 @@ const pt: AdminDict = {
   defaults: {
     title: "Para qual modelo este escopo resolve",
     selectSubscription: "Selecione uma assinatura para fixar modelos aos seus usuários.",
+    clearingMovesBefore: "Limpar o nível em vigor moveria os workspaces dele para ",
+    onNextStart: " na próxima inicialização.",
+    nothingSetHere: "nada definido neste nível",
+    retiredCurrent: "{name} (aposentado — padrão atual)",
+    clear: "Limpar",
+    perUserPins: "Pins por usuário",
+    noUsersYet:
+      "Nenhum usuário tem workspace nesta assinatura ainda (é preciso iniciar uma conversa primeiro).",
+    pinnedTo: "fixado · {model}",
+    notMaterialized: "ainda não materializado",
+    inheritedFromScope: "herdado do escopo",
     intro:
       "O mais específico vence. Escolha um nível para mudar onde novos workspaces caem; os níveis abaixo continuam definidos e assumem se você limpar este.",
     setLevel: "Definir o nível {level}",
@@ -368,6 +467,8 @@ const pt: AdminDict = {
   members: {
     selectSubscription: "Selecione uma assinatura para ver seus membros.",
     none: "Nenhum membro nesta assinatura ainda.",
+    privacyNote:
+      "Você pode listar e excluir os arquivos privados de um membro, mas nunca abrir ou editar o conteúdo — o conteúdo privado de um membro nunca sai do workspace dele (FR-7).",
     noPrivateFiles: "Nenhum arquivo privado.",
     deletePrefix: "Excluir",
     deleteTitle: "Excluir o arquivo do membro?",
@@ -419,6 +520,13 @@ const pt: AdminDict = {
   },
   sharedSecrets: {
     invalidName: "O nome só pode conter letras, números e . _ -",
+    formatNative: "native (chave de provedor de busca / modelo do picoclaw)",
+    slotWeb: "A chave de um provedor de busca web",
+    slotModel: "A chave de API de um modelo",
+    noRegisteredModels:
+      "{agent} ainda não tem modelos registrados — registre um na aba Modelos primeiro.",
+    injectedAs:
+      "Injetado como ambiente em todo container abaixo deste escopo, mesclado sob os segredos de cada usuário.",
     selectModel: "Selecione um modelo.",
     valueRequired: "Informe um valor.",
     howReceived: "Como o agente recebe",
@@ -473,6 +581,19 @@ const pt: AdminDict = {
     deleteTitle: "Excluir skill compartilhada?",
     deleteMessage:
       "“{name}” será removida para todos abaixo deste escopo. Os containers reiniciam para aplicar a mudança.",
+  },
+  ladderRungs: {
+    pinned: "Fixado em uma pessoa",
+    pinnedDetail: "{n} fixados — um pin supera todos os níveis abaixo",
+    nobodyPinned: "Ninguém aqui está fixado",
+    subscription: "Esta assinatura",
+    subscriptionNamed: "Esta assinatura — {name}",
+    tenant: "Tenant",
+    tenantNamed: "Tenant — {name}",
+    agentNamed: "Agente — {name}",
+    thisAgent: "este agente",
+    everythingElse: "Todo o resto",
+    instanceWide: "toda a instância",
   },
   ladder: {
     editing: "editando",

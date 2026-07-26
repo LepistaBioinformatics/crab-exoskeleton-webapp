@@ -36,7 +36,7 @@ const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
   json: "json",
   file: "file",
-  native: "native (picoclaw search-provider / model key)",
+  native: "native",
 };
 
 // `file` is not env-shaped, so the proxy rejects it at scope level. The other
@@ -101,7 +101,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     let cancelled = false;
     listModels(routedAgent)
       .then((m) => !cancelled && setModels(m))
-      .catch((e) => !cancelled && setModelsError(describeError(e).message));
+      .catch((e) => !cancelled && setModelsError(describeError(e).code));
     return () => {
       cancelled = true;
     };
@@ -169,8 +169,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        Injected as environment into every container below this scope, merged under each user&apos;s
-        own secrets. Values are write-only: never shown or retrieved. Writing or deleting restarts
+        {t.sharedSecrets.injectedAs} Values are write-only: never shown or retrieved. Writing or deleting restarts
         running containers under the scope.
       </p>
 
@@ -188,7 +187,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
           >
             {SCOPE_FORMATS.map((f) => (
               <option key={f} value={f}>
-                {FORMAT_LABEL[f]}
+                {f === "native" ? t.sharedSecrets.formatNative : FORMAT_LABEL[f]}
               </option>
             ))}
           </select>
@@ -207,8 +206,8 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
                 value={nativeKind}
                 onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
               >
-                <option value="web">A web search provider&apos;s key</option>
-                <option value="model">A model&apos;s API key</option>
+                <option value="web">{t.sharedSecrets.slotWeb}</option>
+                <option value="model">{t.sharedSecrets.slotModel}</option>
               </select>
             </Field>
             {nativeKind === "web" ? (
@@ -234,14 +233,14 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
             ) : !routedAgent ? (
               <Alert severity="info">{t.sharedSecrets.pickAgentFirst}</Alert>
             ) : modelsError ? (
-              <Alert severity="error">{modelsError}</Alert>
+              <Alert severity="error">{errorText(errs, modelsError)}</Alert>
             ) : models === null ? (
               <div className="flex justify-center py-2">
                 <Spinner size={16} />
               </div>
             ) : availableModels.length === 0 ? (
               <Alert severity="info">
-                {routedAgent} has no registered models yet — register one in the Model tab first.
+                {t.sharedSecrets.noRegisteredModels.replace("{agent}", routedAgent)}
               </Alert>
             ) : (
               <Field

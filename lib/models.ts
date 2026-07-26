@@ -129,49 +129,50 @@ export function draftFromDuplicate(m: InventoryModel): ModelDraft {
 }
 
 export interface ModelsError {
-  message: string;
+  /** An error CODE, resolved to text by lib/i18n/errors at the point of
+   *  display. This module stays locale-free. */
+  code: string;
   versionConflict: boolean;
   referrers: Referrer[];
 }
 
 // modelsApiError turns a failed response into something the panel can render
 // specifically: a stale version says "reload", an in-use rejection names what to
-// detach. A generic conflict message would leave the admin with no next action.
+// detach. A generic conflict code would leave the admin with no next action.
 export async function modelsApiError(res: Response): Promise<ModelsError> {
   const data = await res.json().catch(() => null);
   const referrers: Referrer[] = Array.isArray(data?.referrers) ? data.referrers : [];
   const versionConflict = data?.version_conflict === true;
   const e = data?.error;
-  let message = "Something went wrong.";
-  if (e === "connectivity") {
-    message = "Can't reach the gateway right now.";
-  } else if (e === "session_expired") {
-    message = "Your session expired — sign in again.";
-  } else if (versionConflict) {
-    message = "Another admin changed this model — reload before saving.";
+  let code = "unknown";
+  if (versionConflict) {
+    code = "version_conflict";
   } else if (typeof e === "string" && e.trim()) {
-    message = e;
+    code = e.trim();
   }
-  return { message, versionConflict, referrers };
+  return { code, versionConflict, referrers };
 }
 
 // DisplayError is what a panel actually renders: a message plus whatever
 // referrers a 409 in-use rejection carried, if any.
 export interface DisplayError {
-  message: string;
+  code: string;
   referrers: Referrer[];
 }
 
 // describeError turns a caught error into a DisplayError. request() throws an
-// Error carrying modelsApiError's fields (see below), so e.message already has
-// the right wording for a version conflict — this only needs to pull the
-// referrers back off safely, and to give a non-Error throw a generic message.
+// Error carrying modelsApiError's fields (see below), so the code rides on the
+// error itself — this only needs to pull it and the referrers back off safely,
+// and to give a non-Error throw a generic code.
 export function describeError(e: unknown): DisplayError {
   if (e instanceof Error) {
-    const referrers = (e as Partial<ModelsError>).referrers;
-    return { message: e.message, referrers: Array.isArray(referrers) ? referrers : [] };
+    const { code, referrers } = e as Partial<ModelsError>;
+    return {
+      code: typeof code === "string" && code ? code : "unknown",
+      referrers: Array.isArray(referrers) ? referrers : [],
+    };
   }
-  return { message: "Something went wrong.", referrers: [] };
+  return { code: "unknown", referrers: [] };
 }
 
 // request throws an Error carrying the ModelsError fields, so a caller can render
@@ -444,10 +445,27 @@ export interface LadderInput {
   global: ScopeDefault | null | undefined;
   /** Names the levels: "Pesquisa", "Biotrop", "alpha". */
   names: { subscription?: string; tenant?: string; agent?: string };
+  /** Rung wording, injected so this module emits no UI text of its own. */
+  copy: LadderCopy;
+}
+
+export interface LadderCopy {
+  pinned: string;
+  pinnedDetail: string;
+  nobodyPinned: string;
+  subscription: string;
+  subscriptionNamed: string;
+  tenant: string;
+  tenantNamed: string;
+  agentNamed: string;
+  thisAgent: string;
+  everythingElse: string;
+  instanceWide: string;
 }
 
 export function buildLadder(input: LadderInput): LadderRung[] {
-  const agentName = input.names.agent ?? "this agent";
+  const c = input.copy;
+  const agentName = input.names.agent ?? c.thisAgent;
   const raw: {
     level: LadderLevel;
     label: string;
@@ -456,28 +474,35 @@ export function buildLadder(input: LadderInput): LadderRung[] {
   }[] = [
     {
       level: "user",
-      label: "Pinned to one person",
+      label: c.pinned,
       // A pin is per person, so it never resolves for the scope as a whole — it
       // is shown because it OUTRANKS everything below, which is the fact an
       // admin needs when a scope change appears not to reach someone.
       d: null,
       detail:
         input.pinnedCount > 0
-          ? `${input.pinnedCount} pinned — a pin outranks every level below`
-          : "Nobody here is pinned",
+          ? c.pinnedDetail.replace("{n}", String(input.pinnedCount))
+          : c.nobodyPinned,
     },
     {
       level: "subscription",
-      label: input.names.subscription ? `This subscription — ${input.names.subscription}` : "This subscription",
+      label: input.names.subscription
+        ? c.subscriptionNamed.replace("{name}", input.names.subscription)
+        : c.subscription,
       d: input.subscription,
     },
     {
       level: "tenant",
-      label: input.names.tenant ? `Tenant — ${input.names.tenant}` : "Tenant",
+      label: input.names.tenant ? c.tenantNamed.replace("{name}", input.names.tenant) : c.tenant,
       d: input.tenant,
     },
-    { level: "agent", label: `Agent — ${agentName}`, d: input.agent, detail: "instance-wide" },
-    { level: "global", label: "Everything else", d: input.global, detail: "instance-wide" },
+    {
+      level: "agent",
+      label: c.agentNamed.replace("{name}", agentName),
+      d: input.agent,
+      detail: c.instanceWide,
+    },
+    { level: "global", label: c.everythingElse, d: input.global, detail: c.instanceWide },
   ];
 
   // The first level with a readable value wins. A level the caller cannot read

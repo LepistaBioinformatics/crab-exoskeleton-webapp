@@ -63,8 +63,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        You can list and delete a member&apos;s private files, but never open or edit their contents
-        — a member&apos;s private content never leaves their workspace (FR-7).
+        {t.members.privacyNote}
       </p>
 
       {error && <Alert severity="error">{error}</Alert>}

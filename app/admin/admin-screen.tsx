@@ -272,7 +272,7 @@ export default function AdminScreen() {
           className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-fg-muted transition-colors hover:text-fg"
         >
           <ArrowLeft size={16} aria-hidden />
-          Back to chat
+          {t.shell.backToChat}
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <Logo size={26} />
@@ -381,8 +381,7 @@ export default function AdminScreen() {
 
                 {tab === "members" && subscriptionScopes.length === 0 ? (
                   <Alert severity="info">
-                    You don&apos;t manage any subscriptions directly, so there are no member
-                    workspaces to list here.
+                    {t.shell.noSubscriptionsManaged}
                   </Alert>
                 ) : selected ? (
                   AGENT_TABS.includes(tab) ? (
@@ -432,7 +431,7 @@ export default function AdminScreen() {
                   )
                 ) : (
                   <p className="py-3 text-sm text-fg-muted">
-                    Select a scope on the left to manage it.
+                    {t.shell.selectScope}
                   </p>
                 )}
               </section>

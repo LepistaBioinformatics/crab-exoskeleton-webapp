@@ -213,7 +213,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
           </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">
-            You aren&apos;t in any workspaces yet — ask an operator to add you to one.
+            {t.workspaceNav.none}
           </p>
         ) : visibleGroups!.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>

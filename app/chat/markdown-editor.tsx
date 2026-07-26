@@ -189,7 +189,7 @@ export default function MarkdownEditor({
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t border-brand/20 px-4 py-2.5">
           <Button variant="text" size="sm" onClick={() => onClose(text)}>
-            Save draft
+            {t.markdownEditor.saveDraft}
           </Button>
           <Button variant="filled" size="sm" disabled={!canSend} onClick={send} className="gap-1.5">
             <Send size={15} aria-hidden />

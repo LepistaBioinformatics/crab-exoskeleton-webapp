@@ -154,11 +154,15 @@ export default function SecretsDrawer({
 
         <div className="flex-1 overflow-auto px-4 py-4">
           <p className="mb-4 text-xs leading-relaxed text-fg-muted">
-            Saved for <strong className="text-fg">you</strong> on{" "}
-            <strong className="text-fg">agent {workspace.r}</strong> — kept across this agent&apos;s
-            subscriptions and future sessions, not per conversation. Values are write-only: they are
-            never shown or retrieved. Saving or deleting <strong className="text-fg">restarts the
-            agent</strong> (a live turn is briefly interrupted).
+            {t.secrets.savedForBefore}
+            <strong className="text-fg">{t.secrets.savedForYou}</strong>
+            {t.secrets.savedForOn}
+            <strong className="text-fg">
+              {t.view.agentPrefix} {workspace.r}
+            </strong>
+            {t.secrets.savedForAfter}
+            <strong className="text-fg">{t.secrets.restartsAgent}</strong>
+            {t.secrets.restartsAfter}
           </p>
 
           {applying && (
@@ -215,7 +219,7 @@ export default function SecretsDrawer({
           <div className="mb-2 flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
             <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Set secrets
+              {t.secrets.setSecrets}
             </span>
           </div>
 

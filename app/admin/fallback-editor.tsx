@@ -46,12 +46,14 @@ export function FallbackEditor({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
       <span className="text-xs font-medium text-fg-muted">
-        Fallback chain for <span className="font-mono">{model.model_name}</span>
+        {t.models.chainFor} <span className="font-mono">{model.model_name}</span>
       </span>
       <p className="text-[11px] text-fg-muted">
-        This ordered list — not the inventory listing order — becomes{" "}
-        <span className="font-mono">agents.defaults.model_fallbacks</span>. Every model here also gets its key
-        written into each workspace that uses <span className="font-mono">{model.model_name}</span>.
+        {t.models.chainExplainBefore}
+        <span className="font-mono">agents.defaults.model_fallbacks</span>
+        {t.models.chainExplainMiddle}
+        <span className="font-mono">{model.model_name}</span>
+        {t.models.chainExplainAfter}
       </p>
 
       {chain.length === 0 ? (
@@ -63,11 +65,11 @@ export function FallbackEditor({
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
                 {i + 1}. {name}
               </span>
-              <button type="button" aria-label={`Move ${name} up`} className="text-xs text-fg-muted"
+              <button type="button" aria-label={`${t.modelRow.movePrefix} ${name} ${t.modelRow.moveUpSuffix}`} className="text-xs text-fg-muted"
                 disabled={busy || i === 0} onClick={() => move(i, -1)}>
                 ↑
               </button>
-              <button type="button" aria-label={`Move ${name} down`} className="text-xs text-fg-muted"
+              <button type="button" aria-label={`${t.modelRow.movePrefix} ${name} ${t.modelRow.moveDownSuffix}`} className="text-xs text-fg-muted"
                 disabled={busy || i === chain.length - 1} onClick={() => move(i, 1)}>
                 ↓
               </button>
@@ -83,7 +85,7 @@ export function FallbackEditor({
       <select className={selectClass} value="" disabled={busy || candidates.length === 0}
         onChange={(e) => e.target.value && setChain([...chain, e.target.value])}>
         <option value="" disabled>
-          {candidates.length === 0 ? "no other active models" : "add a fallback…"}
+          {candidates.length === 0 ? t.models.noOtherActive : t.models.addFallback}
         </option>
         {candidates.map((m) => (
           <option key={m.model_name} value={m.model_name}>
@@ -94,7 +96,7 @@ export function FallbackEditor({
 
       <div className="flex justify-end">
         <Button variant="tonal" size="sm" disabled={busy} onClick={() => onSave(chain)}>
-          Save chain
+          {t.models.saveChain}
         </Button>
       </div>
     </div>

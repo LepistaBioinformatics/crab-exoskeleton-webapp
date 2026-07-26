@@ -32,6 +32,7 @@ import ModelDefaultsPanel from "./model-defaults-panel";
 import { FallbackEditor } from "./fallback-editor";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -51,6 +52,7 @@ export default function ModelRegistryPanel({
   target: string;
 }) {
   const t = useT(adminCopy);
+  const err = useT(errorCopy);
   const routed = target === ALL_AGENTS ? agents[0] ?? "" : target;
 
   const [models, setModels] = useState<InventoryModel[] | null>(null);
@@ -151,7 +153,7 @@ export default function ModelRegistryPanel({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
-      setError({ message: t.models.incomplete, referrers: [] });
+      setError({ code: "models_incomplete", referrers: [] });
       return;
     }
     await run(async () => {
@@ -194,7 +196,7 @@ export default function ModelRegistryPanel({
     <div className="flex flex-col gap-5">
       {error && (
         <Alert severity="error">
-          {error.message}
+          {errorText(err, error.code)}
           {error.referrers.length > 0 && (
             <ul className="mt-1 list-disc pl-4 text-[11px]">
               {error.referrers.map((r) => (
@@ -214,11 +216,11 @@ export default function ModelRegistryPanel({
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
         <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Model inventory
+          {t.models.inventory}
         </span>
         <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
           <Plus size={16} />
-          Register model
+          {t.models.register}
         </Button>
       </div>
 
@@ -236,7 +238,7 @@ export default function ModelRegistryPanel({
               onChange={(e) => onCatalogPick(e.target.value)}
             >
               <option value="" disabled>
-                pick one to prefill…
+                {t.models.catalogPlaceholder}
               </option>
               {catalog.map((c, i) => (
                 <option key={`${c.provider}|${c.model}`} value={String(i)}>
@@ -288,7 +290,7 @@ export default function ModelRegistryPanel({
             <div className="sm:col-span-3">
               <div className="mb-1.5 flex items-baseline gap-2">
                 <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
-                  Written to each workspace as
+                  {t.models.writtenAs}
                 </span>
                 <span className="text-[11px] text-fg-muted">config.json</span>
               </div>
@@ -299,8 +301,11 @@ export default function ModelRegistryPanel({
               </pre>
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
                 <KeyRound size={12} aria-hidden />
-                The key goes to <Ident>.security.yml</Ident> instead — never to{" "}
-                <Ident>config.json</Ident>.
+                {t.models.keyGoesToBefore}
+                <Ident>.security.yml</Ident>
+                {t.models.keyGoesToMiddle}
+                <Ident>config.json</Ident>
+                {t.models.keyGoesToAfter}
               </p>
             </div>
           </div>
@@ -354,8 +359,9 @@ export default function ModelRegistryPanel({
             consequence={
               editing ? (
                 <>
-                  Leave it blank to <b>keep the key already stored</b>. This screen never shows a
-                  key back, so it cannot be re-typed from what you see.
+                  {t.models.leaveBlankBefore}
+                  <b>{t.models.leaveBlankBold}</b>
+                  {t.models.leaveBlankAfter}
                 </>
               ) : undefined
             }
@@ -413,22 +419,23 @@ export default function ModelRegistryPanel({
               </ul>
             )}
             <p className="text-[11px] text-fg-muted">
-              This order is for reading only. A model&apos;s fallback chain is the{" "}
-              <span className="font-mono">fallbacks</span> list on the model itself.
+              {t.models.readingOrderBefore}
+              <span className="font-mono">fallbacks</span>
+              {t.models.readingOrderAfter}
             </p>
 
             {deprecating && (
               <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
                 <span className="text-xs font-medium text-fg-muted">
-                  Retire <span className="font-mono">{deprecating.model_name}</span>
+                  {t.models.retirePrefix} <span className="font-mono">{deprecating.model_name}</span>
                 </span>
                 <p className="text-[11px] text-fg-muted">
-                  Everyone already using it keeps it. New users get the replacement instead.
+                  {t.models.retireExplain}
                 </p>
                 <select className={selectClass} value={replacement}
                   onChange={(e) => setReplacement(e.target.value)}>
                   <option value="" disabled>
-                    replacement for new users…
+                    {t.models.replacementPlaceholder}
                   </option>
                   {active
                     .filter((m) => m.model_name !== deprecating.model_name)
