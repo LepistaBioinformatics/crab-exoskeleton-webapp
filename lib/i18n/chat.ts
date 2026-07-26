@@ -92,6 +92,28 @@ const en = {
     hint: "Saved to MEMORY_CUSTOM.md — the agent reads it on every message.",
     placeholder: "e.g. Always answer in Portuguese. Our stack is Next.js + Go…",
   },
+  view: {
+    // Attribution inside the blockquote a reply inserts into the message.
+    quoteUser: "You",
+    quoteAgent: "Agent",
+    replyAria: "Reply to this message",
+    reply: "Reply",
+    agentPrefix: "agent",
+    secrets: "Agent secrets",
+    files: "Workspace files",
+    // "…retrying… (attempt 2 of 3)"
+    retrying: "Couldn't reach the gateway — retrying… (attempt {n} of {total})",
+    settling: "We're storing your file…",
+  },
+  commands: {
+    renameUsage: "Usage: /rename <new title>",
+    renamed: "Chat renamed to “{title}”.",
+    renameFailed: "Couldn't rename it.",
+    tagUsage: "Usage: /tag <name> [value] [#color]",
+    tagApplied: "Tag “{name}” applied.",
+    tagFailed: "Couldn't apply the tag.",
+    unknown: "Unknown command: {cmd}. Try /rename or /tag.",
+  },
   install: {
     action: "Install app",
     // Split around the two <strong> control names Safari itself uses.
@@ -188,6 +210,26 @@ const pt: ChatDict = {
     title: "Memória do workspace",
     hint: "Salvo em MEMORY_CUSTOM.md — o agente lê a cada mensagem.",
     placeholder: "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
+  },
+  view: {
+    quoteUser: "Você",
+    quoteAgent: "Agente",
+    replyAria: "Responder a esta mensagem",
+    reply: "Responder",
+    agentPrefix: "agente",
+    secrets: "Segredos do agente",
+    files: "Arquivos do workspace",
+    retrying: "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
+    settling: "Estamos guardando o arquivo para você…",
+  },
+  commands: {
+    renameUsage: "Uso: /rename <novo título>",
+    renamed: "Chat renomeado para “{title}”.",
+    renameFailed: "Não consegui renomear.",
+    tagUsage: "Uso: /tag <nome> [valor] [#cor]",
+    tagApplied: "Tag “{name}” aplicada.",
+    tagFailed: "Não consegui aplicar a tag.",
+    unknown: "Comando desconhecido: {cmd}. Tente /rename ou /tag.",
   },
   install: {
     action: "Instalar app",

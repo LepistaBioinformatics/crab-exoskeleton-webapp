@@ -23,6 +23,8 @@ const en = {
   invalid_email: "That email address doesn't look right.",
   invalid_code: "Invalid code. Try again.",
   workspaces_load_failed: "Couldn't load your workspaces.",
+  gateway_retries_exhausted:
+    "Still can't reach the gateway after several attempts. Try again shortly.",
   unknown: "Something went wrong.",
 };
 
@@ -42,6 +44,8 @@ const pt: ErrorDict = {
   invalid_email: "Esse e-mail não parece válido.",
   invalid_code: "Código inválido. Tente de novo.",
   workspaces_load_failed: "Não foi possível carregar seus workspaces.",
+  gateway_retries_exhausted:
+    "Ainda não foi possível falar com o gateway após várias tentativas. Tente daqui a pouco.",
   unknown: "Algo deu errado.",
 };
 
