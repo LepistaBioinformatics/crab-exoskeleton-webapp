@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cva } from "class-variance-authority";
-import { ArrowLeft, Building2, Cpu, FileBox, KeyRound, Palette, ShieldCheck, Users, Wrench } from "lucide-react";
+import { ArrowLeft, Cpu, FileBox, KeyRound, Palette, ShieldCheck, Users, Wrench } from "lucide-react";
 import {
   ALL_AGENTS,
   listAgents,
@@ -21,7 +21,7 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ScopeTree } from "./scope-tree";
 import { AgentTargetSelect } from "./agent-target-select";
-import { AGENT_TABS, parseTab, type Tab } from "./tabs";
+import { AGENT_TABS, DEFAULT_TAB, parseTab, type Tab } from "./tabs";
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
 import SharedSkillsPanel from "./shared-skills-panel";
@@ -30,8 +30,11 @@ import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
 
 
+// Level 2: the sections OF a scope. Subordinate to the mode switch above, and
+// nested beside the scope rail, so they read as "sections of what is selected on
+// the left" rather than as a peer of the mode.
 const tabButton = cva(
-  "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
+  "flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-[13px] font-medium transition-colors",
   {
     variants: {
       active: {
@@ -43,22 +46,30 @@ const tabButton = cva(
   },
 );
 
-const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: "files", label: "Shared files", icon: <FileBox size={16} aria-hidden /> },
-  { key: "secrets", label: "Shared secrets", icon: <KeyRound size={16} aria-hidden /> },
-  { key: "skills", label: "Shared skills", icon: <Wrench size={16} aria-hidden /> },
-  { key: "model", label: "Model", icon: <Cpu size={16} aria-hidden /> },
-  { key: "members", label: "Members", icon: <Users size={16} aria-hidden /> },
-];
+// Level 1: which world you are in. A segmented control rather than more tabs,
+// because the two are not siblings — one of them CONTAINS a whole navigation, and
+// a flat row of six made a scope-wide section look like a peer of an instance-wide
+// one. Everything except Branding acts on a selected tenant or subscription.
+const modeButton = cva("rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors", {
+  variants: {
+    active: {
+      true: "bg-surface text-fg shadow-elevated",
+      false: "text-fg-muted hover:text-fg",
+    },
+  },
+  defaultVariants: { active: false },
+});
 
-// Instance-wide branding (FR-10) is a separate tab, appended only when the
-// caller can edit branding (GET /api/branding/can-edit). It renders full-width,
-// outside the per-scope rail every other tab shares.
-const BRANDING_TAB = {
-  key: "branding" as const,
-  label: "Branding",
-  icon: <Palette size={16} aria-hidden />,
-};
+// Labels drop the "Shared" prefix: everything in this row is shared across the
+// selected scope by definition, so the word was on every item and distinguished
+// none of them.
+const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: "files", label: "Files", icon: <FileBox size={15} aria-hidden /> },
+  { key: "secrets", label: "Secrets", icon: <KeyRound size={15} aria-hidden /> },
+  { key: "skills", label: "Skills", icon: <Wrench size={15} aria-hidden /> },
+  { key: "model", label: "Models", icon: <Cpu size={15} aria-hidden /> },
+  { key: "members", label: "Members", icon: <Users size={15} aria-hidden /> },
+];
 
 // The administrative screen (FR-9). Server-side authz in the proxy is the real
 // gate (NFR-1); this screen is convenience. On load it fetches the caller's
@@ -78,6 +89,9 @@ export default function AdminScreen() {
   // reproduces the pre-per-agent behaviour exactly.
   const [agents, setAgents] = useState<AgentRef[]>([]);
   const [agentTarget, setAgentTarget] = useState<string>(ALL_AGENTS);
+  // Which section to return to when the admin switches back out of Branding.
+  // Without it the mode switch always dumps you on Files, losing your place.
+  const lastScopedTab = useRef<Tab>(DEFAULT_TAB);
 
   // The URL is the single source of truth for the active tab — deliberately NOT
   // mirrored into state, which would let the two drift after one of the snapping
@@ -201,6 +215,10 @@ export default function AdminScreen() {
     }
   }, [scopes, canEditBranding, tab, setTab]);
 
+  useEffect(() => {
+    if (tab !== "branding") lastScopedTab.current = tab;
+  }, [tab]);
+
   const subscriptionScopes = (scopes ?? []).filter((s) => s.kind === "subscription");
 
   // The Model tab offers only the agents the inventory governs. Hermes agents read
@@ -231,10 +249,16 @@ export default function AdminScreen() {
         ? (selectedScope?.accName ?? selected.subsAccId ?? "this subscription")
         : (selectedScope?.tenantName ?? selected.tenantId);
 
-  const visibleTabs = [
-    ...(scopes && scopes.length > 0 ? TABS : []),
-    ...(canEditBranding ? [BRANDING_TAB] : []),
-  ];
+  const hasScopes = !!scopes && scopes.length > 0;
+  const scopedTabs = hasScopes ? TABS : [];
+  // The mode is derived from the tab rather than kept beside it: two sources for
+  // one piece of state is how they drift, and `?tab=` already survives a reload,
+  // a shared link and Back.
+  // `?tab=` is user-editable, so a hand-typed `?tab=branding` must not render the
+  // branding panel to someone without branding access. The proxy is the real gate
+  // (NFR-1), but a screen that shows a panel the caller cannot use is a worse
+  // answer than one that shows the sections they can.
+  const mode: "scoped" | "branding" = tab === "branding" && canEditBranding ? "branding" : "scoped";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6">
@@ -270,47 +294,51 @@ export default function AdminScreen() {
         </Alert>
       ) : (
         <>
-          <nav
-            className="mb-5 flex gap-1 overflow-x-auto border-b border-brand/30"
-            aria-label="Admin sections"
-          >
-            {visibleTabs.map((t, i) => (
-              <Fragment key={t.key}>
-                {/* The divider is not decoration: everything before it is targeted
-                    by BOTH the scope rail and the agent picker, Members by the rail
-                    alone, and Branding by neither. That is why the rail appears and
-                    disappears as you switch tabs — which a flat row left
-                    unexplained. */}
-                {i > 0 && AGENT_TABS.includes(visibleTabs[i - 1].key) && !AGENT_TABS.includes(t.key) && (
-                  <span
-                    role="separator"
-                    aria-orientation="vertical"
-                    className="mx-2 h-[18px] w-px shrink-0 self-center bg-brand/40"
-                  />
-                )}
-                <button
-                  type="button"
-                  className={tabButton({ active: tab === t.key }) + " shrink-0"}
-                  onClick={() => setTab(t.key)}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              </Fragment>
-            ))}
-          </nav>
+          {/* Level 1 — which world. Only rendered when both exist; with one of
+              them there is nothing to switch between. */}
+          {hasScopes && canEditBranding && (
+            <div
+              className="mb-5 inline-flex gap-1 rounded-lg border border-brand/25 bg-elevated p-1"
+              role="tablist"
+              aria-label="Admin area"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "scoped"}
+                className={modeButton({ active: mode === "scoped" })}
+                onClick={() => setTab(lastScopedTab.current)}
+              >
+                Scoped actions
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "branding"}
+                className={modeButton({ active: mode === "branding" })}
+                onClick={() => setTab("branding")}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Palette size={14} aria-hidden />
+                  Branding
+                </span>
+              </button>
+            </div>
+          )}
 
-          {tab === "branding" ? (
-            <BrandingPanel />
-          ) : tab === "members" && subscriptionScopes.length === 0 ? (
-            <Alert severity="info">
-              You don&apos;t manage any subscriptions directly, so there are no member workspaces to
-              list here.
-            </Alert>
+          {mode === "branding" ? (
+            <>
+              <p className="mb-4 max-w-[62ch] text-xs text-fg-muted">
+                Instance-wide. Branding applies to everyone on this deployment, so it has no
+                scope to select.
+              </p>
+              <BrandingPanel />
+            </>
           ) : (
-            // Shared shell for every tab: a scope rail beside the panel. Stacks
-            // vertically on mobile (rail full-width above the panel) so the two
-            // columns never sit side-by-side and overflow the screen.
+            // The scope rail and the sections OF that scope, side by side. The
+            // sections sit INSIDE the scope column so containment says what they
+            // act on — which is why no section needs to restate the scope in its
+            // own header any more. Stacks on mobile, rail above.
             <div className="flex flex-col gap-4 md:flex-row md:gap-6">
               <aside
                 style={{ width: railWidth }}
@@ -330,29 +358,38 @@ export default function AdminScreen() {
                   className="absolute inset-y-0 right-0 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
                 />
               </aside>
-              <section className="min-w-0 flex-1">
-                {selected ? (
+
+              <section className="flex min-w-0 flex-1 flex-col gap-4">
+                {/* Level 2 — sections of the selected scope. */}
+                <nav
+                  className="flex gap-1 overflow-x-auto border-b border-brand/30"
+                  aria-label="Sections of this scope"
+                >
+                  {scopedTabs.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      className={tabButton({ active: tab === t.key }) + " shrink-0"}
+                      onClick={() => setTab(t.key)}
+                    >
+                      {t.icon}
+                      {t.label}
+                    </button>
+                  ))}
+                </nav>
+
+                {tab === "members" && subscriptionScopes.length === 0 ? (
+                  <Alert severity="info">
+                    You don&apos;t manage any subscriptions directly, so there are no member
+                    workspaces to list here.
+                  </Alert>
+                ) : selected ? (
                   AGENT_TABS.includes(tab) ? (
-                    // Every agent-scoped tab shares ONE picker, rendered once
-                    // above the panel, so the choice carries across tabs and the
-                    // control looks and behaves identically in all of them. Only
-                    // the hint copy differs (content stores vs the per-agent model
-                    // registry). Members is not agent-scoped, so it has none.
                     <div className="flex flex-col gap-4">
-                      {/* Scope and agent were two mute controls that never stated
-                          their combined effect, so an admin had to hold "which
-                          tenant" and "which agent" in their head and infer the
-                          reach of a write. They now compose one sentence. */}
+                      {/* The agent picker and what the combination reaches. The
+                          scope itself is no longer restated here — the rail on the
+                          left holds it, and these sections are drawn inside it. */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-brand/25 bg-elevated px-3.5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
-                            Scope
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand bg-surface px-2.5 py-0.5 text-[12.5px] font-medium text-fg">
-                            <Building2 size={12} aria-hidden />
-                            {scopeLabel}
-                          </span>
-                        </div>
                         <div className="min-w-0 max-w-xs flex-1">
                           <AgentTargetSelect
                             agents={tabAgents}
@@ -362,13 +399,13 @@ export default function AdminScreen() {
                           />
                         </div>
                         <p className="min-w-[16rem] flex-1 border-l border-brand/30 pl-3.5 text-xs text-fg-muted">
-                          A write here reaches <b className="font-semibold text-fg">{scopeLabel}</b>
+                          Reaches <b className="font-semibold text-fg">{scopeLabel}</b>
+                          {selected.kind === "tenant" ? " and every subscription under it" : ""}
                           {tabTarget === ALL_AGENTS ? (
-                            <> through <b className="font-semibold text-fg">every agent</b></>
+                            <>, through <b className="font-semibold text-fg">every agent</b>.</>
                           ) : (
-                            <> through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only</>
+                            <>, through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only.</>
                           )}
-                          {selected.kind === "tenant" ? " and every subscription under it." : "."}
                         </p>
                       </div>
                       {tab === "files" ? (
@@ -386,7 +423,7 @@ export default function AdminScreen() {
                   )
                 ) : (
                   <p className="py-3 text-sm text-fg-muted">
-                    Select a scope to manage its shared content.
+                    Select a scope on the left to manage it.
                   </p>
                 )}
               </section>
