@@ -2,7 +2,7 @@
 // out-of-band rollback. The last case was completed by inference — verify this
 // matches your original intent (there may have been additional cases below).
 import { describe, it, expect } from "vitest";
-import { ALL_AGENTS, canManageWorkspaceScope, scopeKey } from "./admin";
+import { ALL_AGENTS, canManageWorkspaceScope, picoclawAgentKeys, scopeKey } from "./admin";
 import type { AdminScope } from "./admin";
 import { SECRET_FORMATS, USER_SECRET_FORMATS } from "./secrets";
 
@@ -61,5 +61,22 @@ describe("USER_SECRET_FORMATS", () => {
     // The full list still carries native: a user's pre-gate entries must remain
     // listable and deletable.
     expect(SECRET_FORMATS).toContain("native");
+  });
+});
+
+describe("picoclawAgentKeys", () => {
+  it("drops agents running another harness", () => {
+    expect(
+      picoclawAgentKeys([
+        { key: "alpha", harness: "picoclaw" },
+        { key: "nous", harness: "hermes" },
+      ]),
+    ).toEqual(["alpha"]);
+  });
+
+  // An older proxy reports no harness at all, and picoclaw was the only harness
+  // then — treating that as "not picoclaw" would empty the model picker entirely.
+  it("treats an absent harness as picoclaw", () => {
+    expect(picoclawAgentKeys([{ key: "alpha" }])).toEqual(["alpha"]);
   });
 });

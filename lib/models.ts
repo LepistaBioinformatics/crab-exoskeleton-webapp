@@ -341,6 +341,69 @@ export async function setModelAssignment(
   );
 }
 
+// ModelAssignment is one recorded materialization. `source` is what tells a
+// deliberate pin apart from a cascade result: "explicit" means an admin pinned this
+// user, "inherited" means it came from a scope default and a scope change still
+// moves it.
+export interface ModelAssignment {
+  agent: string;
+  user_acc_id: string;
+  model_name: string;
+  source: "explicit" | "inherited";
+}
+
+// listModelAssignments returns the assignments under one subscription keyed by
+// "<agent>|<userAccId>" — a user with a workspace under more than one agent has one
+// record per agent, exactly as listSubscriptionUsers reports them.
+export async function listModelAssignments(
+  agent: Instance,
+  target: Omit<AssignmentTarget, "userAccId">,
+): Promise<Record<string, ModelAssignment>> {
+  const data = (await request(
+    `/api/admin/model-assignments?${q(agent, {
+      tenant_id: target.tenantId,
+      subs_acc_id: target.subsAccId,
+    })}`,
+  )) as { assignments?: ModelAssignment[] };
+  return assignmentIndex(Array.isArray(data.assignments) ? data.assignments : []);
+}
+
+export function assignmentKey(agent: string, userAccId: string): string {
+  return `${agent}|${userAccId}`;
+}
+
+export function assignmentIndex(list: ModelAssignment[]): Record<string, ModelAssignment> {
+  const out: Record<string, ModelAssignment> = {};
+  for (const a of list) {
+    out[assignmentKey(a.agent, a.user_acc_id)] = a;
+  }
+  return out;
+}
+
+// pinnedModel is the model name an admin explicitly pinned to a workspace, or null
+// when the workspace resolves through the cascade. An inherited record is NOT a
+// pin: it only says what was materialized, and the next scope-default change moves
+// it — which is exactly the distinction the panel has to render.
+export function pinnedModel(a: ModelAssignment | undefined): string | null {
+  return a && a.source === "explicit" ? a.model_name : null;
+}
+
+// defaultOptions is the option list for the scope-default select: the active
+// models, plus the current default when it is no longer active. Without that
+// addition a deprecated default matches no option and the control reads "no default
+// set" while one IS set.
+export function defaultOptions(
+  models: InventoryModel[],
+  current: string | null,
+): { name: string; inactive: boolean }[] {
+  const active = models.filter((m) => m.status === "active");
+  const options = active.map((m) => ({ name: m.model_name, inactive: false }));
+  if (current && !active.some((m) => m.model_name === current)) {
+    options.unshift({ name: current, inactive: true });
+  }
+  return options;
+}
+
 export async function clearModelAssignment(agent: Instance, target: AssignmentTarget): Promise<void> {
   await request("/api/admin/model-assignments", {
     ...json({

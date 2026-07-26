@@ -31,5 +31,25 @@ async function forward(req: NextRequest, method: "POST" | "DELETE") {
   });
 }
 
+// GET reports which users under a subscription are pinned and to what, so the
+// panel can show a pin and distinguish it from a cascade. It takes its target from
+// the query string (no body), and forwards only the two scope identifiers — the
+// proxy decides the gate from them.
+export async function GET(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const p = req.nextUrl.searchParams;
+  const agent = p.get("agent");
+  const tenantId = p.get("tenant_id");
+  const subsAccId = p.get("subs_acc_id");
+  if (!agent || !isInstance(agent) || !tenantId || !subsAccId) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  return proxyAdminJsonAgent(session, agent, `/model-assignments?${query.toString()}`, {
+    method: "GET",
+  });
+}
+
 export const POST = (req: NextRequest) => forward(req, "POST");
 export const DELETE = (req: NextRequest) => forward(req, "DELETE");

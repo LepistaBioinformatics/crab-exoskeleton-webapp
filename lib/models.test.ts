@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   splitInventory,
+  assignmentIndex,
+  assignmentKey,
+  pinnedModel,
+  defaultOptions,
   reorderPayload,
   draftFromCatalog,
   draftFromDuplicate,
@@ -10,7 +14,7 @@ import {
   serializeDraft,
   emptyDraft,
 } from "./models";
-import type { InventoryModel } from "./models";
+import type { InventoryModel, ModelAssignment } from "./models";
 
 function model(over: Partial<InventoryModel> = {}): InventoryModel {
   return {
@@ -269,5 +273,68 @@ describe("serializeDraft", () => {
   it("omits extra_body entirely when the draft never had one", () => {
     const body = serializeDraft(emptyDraft());
     expect("extra_body" in body).toBe(false);
+  });
+});
+
+describe("pinnedModel", () => {
+  const explicit: ModelAssignment = {
+    agent: "alpha",
+    user_acc_id: "u1",
+    model_name: "pinned",
+    source: "explicit",
+  };
+
+  it("reports the model an admin explicitly pinned", () => {
+    expect(pinnedModel(explicit)).toBe("pinned");
+  });
+
+  // An inherited record is NOT a pin: it only says what was materialized, and the
+  // next scope-default change moves it. Rendering it as a pin would tell an admin
+  // that a user is protected from a scope change when they are not.
+  it("reports no pin for an inherited record", () => {
+    expect(pinnedModel({ ...explicit, source: "inherited" })).toBeNull();
+  });
+
+  it("reports no pin when the workspace has no record at all", () => {
+    expect(pinnedModel(undefined)).toBeNull();
+  });
+});
+
+describe("assignmentIndex", () => {
+  // A user with a workspace under two agents has one record per agent, and
+  // listSubscriptionUsers reports them the same way — so the key must carry the
+  // agent or one agent's pin would render on the other agent's row.
+  it("keys by agent and user so one user under two agents does not collide", () => {
+    const idx = assignmentIndex([
+      { agent: "alpha", user_acc_id: "u1", model_name: "a", source: "explicit" },
+      { agent: "beta", user_acc_id: "u1", model_name: "b", source: "inherited" },
+    ]);
+    expect(idx[assignmentKey("alpha", "u1")].model_name).toBe("a");
+    expect(idx[assignmentKey("beta", "u1")].model_name).toBe("b");
+  });
+});
+
+describe("defaultOptions", () => {
+  const models = [
+    model({ model_name: "live", status: "active" }),
+    model({ model_name: "retired", status: "deprecated", replaced_by: "live" }),
+  ];
+
+  it("offers the active models", () => {
+    expect(defaultOptions(models, null)).toEqual([{ name: "live", inactive: false }]);
+  });
+
+  // Filtering the options to active models made a deprecated CURRENT default match
+  // no option, so the select fell back to its placeholder and read "no default set"
+  // while one was set — the admin could not even see what to replace.
+  it("includes a current default that is no longer active, flagged", () => {
+    expect(defaultOptions(models, "retired")).toEqual([
+      { name: "retired", inactive: true },
+      { name: "live", inactive: false },
+    ]);
+  });
+
+  it("does not duplicate a current default that is still active", () => {
+    expect(defaultOptions(models, "live")).toEqual([{ name: "live", inactive: false }]);
   });
 });
