@@ -9,22 +9,37 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCode } from "@/lib/i18n/errors";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
-type Variant = "light" | "dark";
+type Variant = "light" | "dark" | "icon";
 
 const preview = cva("h-16 w-16 rounded-lg border border-brand/30 object-contain", {
   variants: {
     tone: {
       light: "bg-white",
       dark: "bg-neutral-900",
+      icon: "bg-neutral-900",
     },
   },
 });
+
+const LABEL_KEY: Record<Variant, "lightLogo" | "darkLogo" | "appIcon"> = {
+  light: "lightLogo",
+  dark: "darkLogo",
+  icon: "appIcon",
+};
 
 // Instance branding admin panel (FR-10): edit the app name and upload / reset
 // the light and dark logos. Server-side authz is the real gate; this panel is
 // only reachable when /api/branding/can-edit is true.
 export default function BrandingPanel() {
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
   const [appName, setAppName] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
@@ -36,6 +51,7 @@ export default function BrandingPanel() {
   const [pendingNameReset, setPendingNameReset] = useState(false);
   const lightInput = useRef<HTMLInputElement>(null);
   const darkInput = useRef<HTMLInputElement>(null);
+  const iconInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,12 +83,12 @@ export default function BrandingPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ appName: name }),
       });
-      if (!res.ok) throw new Error(await errorMessage(res));
+      if (!res.ok) throw new Error(await errorCode(res));
       const data = await res.json();
       setAppName((data?.appName as string) ?? "");
-      setNotice(resetting ? "App name reset to default." : "App name saved.");
+      setNotice(resetting ? t.branding.nameReset : t.branding.nameSaved);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the app name.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setSavingName(false);
     }
@@ -86,15 +102,16 @@ export default function BrandingPanel() {
       const body = new FormData();
       body.append("file", file);
       const res = await fetch(`/api/branding/logo/${variant}`, { method: "POST", body });
-      if (!res.ok) throw new Error(await errorMessage(res));
+      if (!res.ok) throw new Error(await errorCode(res));
       refreshPreviews();
-      setNotice(`${variant === "light" ? "Light" : "Dark"} logo updated.`);
+      setNotice(t.branding.logoUpdated.replace("{label}", t.branding[LABEL_KEY[variant]]));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
-      if (variant === "light" && lightInput.current) lightInput.current.value = "";
-      if (variant === "dark" && darkInput.current) darkInput.current.value = "";
+      for (const ref of [lightInput, darkInput, iconInput]) {
+        if (ref.current) ref.current.value = "";
+      }
     }
   }
 
@@ -105,11 +122,11 @@ export default function BrandingPanel() {
     setNotice(null);
     try {
       const res = await fetch(`/api/branding/logo/${variant}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await errorMessage(res));
+      if (!res.ok) throw new Error(await errorCode(res));
       refreshPreviews();
-      setNotice(`${variant === "light" ? "Light" : "Dark"} logo reset to default.`);
+      setNotice(t.branding.logoReset.replace("{label}", t.branding[LABEL_KEY[variant]]));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Reset failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
     }
@@ -124,8 +141,9 @@ export default function BrandingPanel() {
   }
 
   const variants: { key: Variant; label: string; ref: React.RefObject<HTMLInputElement | null> }[] = [
-    { key: "light", label: "Light logo", ref: lightInput },
-    { key: "dark", label: "Dark logo", ref: darkInput },
+    { key: "light", label: t.branding.lightLogo, ref: lightInput },
+    { key: "dark", label: t.branding.darkLogo, ref: darkInput },
+    { key: "icon", label: t.branding.appIcon, ref: iconInput },
   ];
 
   return (
@@ -134,11 +152,8 @@ export default function BrandingPanel() {
       {notice && <Alert severity="info">{notice}</Alert>}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-display text-sm font-semibold text-fg">App name</h2>
-        <p className="text-xs text-fg-muted">
-          Shown across the UI, the document title and the PWA. Leave empty to fall back to the
-          default.
-        </p>
+        <h2 className="font-display text-sm font-semibold text-fg">{t.branding.appNameHeading}</h2>
+        <p className="text-xs text-fg-muted">{t.branding.appNameIntro}</p>
         <div className="flex items-center gap-2">
           <Input
             value={appName}
@@ -153,7 +168,7 @@ export default function BrandingPanel() {
             onClick={() => saveName(appName, false)}
           >
             <Save size={16} aria-hidden />
-            Save
+            {c.actions.save}
           </Button>
           <Button
             variant="outlined"
@@ -162,16 +177,20 @@ export default function BrandingPanel() {
             onClick={() => setPendingNameReset(true)}
           >
             <RotateCcw size={16} aria-hidden />
-            Reset
+            {c.actions.reset}
           </Button>
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-sm font-semibold text-fg">Logos</h2>
+        <h2 className="font-display text-sm font-semibold text-fg">{t.branding.logosHeading}</h2>
+        <p className="text-xs text-fg-muted">{t.branding.logosIntro}</p>
         <p className="text-xs text-fg-muted">
-          PNG, JPEG, WebP or SVG, up to ~1MB. Served as-is; the light logo also drives the PWA icon
-          and favicon.
+          {t.branding.iconNoteBefore}
+          <strong className="text-fg">{t.branding.iconNoteAppIcon}</strong>
+          {t.branding.iconNoteMiddle}
+          <strong className="text-fg">{t.branding.iconNoteSquare}</strong>
+          {t.branding.iconNoteAfter}
         </p>
         {variants.map((v) => (
           <div
@@ -181,7 +200,7 @@ export default function BrandingPanel() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/branding/logo/${v.key}?t=${bust}`}
-              alt={`${v.label} preview`}
+              alt={`${v.label} ${t.branding.previewSuffix}`}
               className={preview({ tone: v.key })}
             />
             <div className="min-w-0 flex-1">
@@ -189,7 +208,11 @@ export default function BrandingPanel() {
               <input
                 ref={v.ref}
                 type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                accept={
+                  v.key === "icon"
+                    ? "image/png,image/webp"
+                    : "image/png,image/jpeg,image/webp,image/svg+xml"
+                }
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -204,13 +227,13 @@ export default function BrandingPanel() {
               onClick={() => v.ref.current?.click()}
             >
               <Upload size={16} aria-hidden />
-              {busy === v.key ? "Working…" : "Upload"}
+              {busy === v.key ? t.branding.working : t.branding.upload}
             </Button>
             <IconButton
               variant="ghost"
               size="sm"
-              aria-label={`Reset ${v.label} to default`}
-              title="Reset to default"
+              aria-label={`${t.branding.resetPrefix} ${v.label} ${t.branding.resetSuffix}`}
+              title={t.branding.resetToDefault}
               disabled={busy === v.key}
               onClick={() => setPendingLogoReset(v.key)}
             >
@@ -222,9 +245,9 @@ export default function BrandingPanel() {
 
       <ConfirmDialog
         open={pendingNameReset}
-        title="Reset app name?"
-        message="The app name will fall back to the default (zombie-crab) everywhere."
-        confirmLabel="Reset"
+        title={t.branding.resetNameTitle}
+        message={t.branding.resetNameMessage}
+        confirmLabel={c.actions.reset}
         onConfirm={() => {
           setPendingNameReset(false);
           saveName("", true);
@@ -234,9 +257,9 @@ export default function BrandingPanel() {
 
       <ConfirmDialog
         open={pendingLogoReset !== null}
-        title="Reset logo?"
-        message="This logo will fall back to the bundled default."
-        confirmLabel="Reset"
+        title={t.branding.resetLogoTitle}
+        message={t.branding.resetLogoMessage}
+        confirmLabel={c.actions.reset}
         onConfirm={() => pendingLogoReset && resetLogo(pendingLogoReset)}
         onCancel={() => setPendingLogoReset(null)}
       />
@@ -244,14 +267,4 @@ export default function BrandingPanel() {
   );
 }
 
-async function errorMessage(res: Response): Promise<string> {
-  try {
-    const data = await res.json();
-    if (typeof data?.error === "string") return data.error;
-  } catch {
-    // fall through to status text
-  }
-  if (res.status === 401) return "Your session expired. Sign in again.";
-  if (res.status === 403) return "You don't have permission to edit branding.";
-  return `Request failed (${res.status}).`;
-}
+

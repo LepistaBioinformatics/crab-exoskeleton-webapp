@@ -3,6 +3,8 @@
 import { cva } from "class-variance-authority";
 import { MessagesSquare, GanttChartSquare } from "lucide-react";
 import { setView } from "./fragment";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
 
 // The workspace-level Traditional | Canvas switch, shared by the chat header
 // (enter Canvas) and the canvas header (leave Canvas) so both stay identical.
@@ -18,6 +20,7 @@ const seg = cva(
 );
 
 export default function ViewModeToggle({ view }: { view: "chat" | "canvas" }) {
+  const t = useT(chatCopy);
   return (
     <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
       <button
@@ -25,20 +28,20 @@ export default function ViewModeToggle({ view }: { view: "chat" | "canvas" }) {
         onClick={() => setView("chat")}
         className={seg({ active: view === "chat" })}
         aria-pressed={view === "chat"}
-        title="Traditional chat"
+        title={t.viewMode.chatTitle}
       >
         <MessagesSquare size={13} aria-hidden />
-        Chat
+        {t.viewMode.chat}
       </button>
       <button
         type="button"
         onClick={() => setView("canvas")}
         className={seg({ active: view === "canvas" })}
         aria-pressed={view === "canvas"}
-        title="Canvas timeline"
+        title={t.viewMode.canvasTitle}
       >
         <GanttChartSquare size={13} aria-hidden />
-        Canvas
+        {t.viewMode.canvas}
       </button>
     </div>
   );

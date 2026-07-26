@@ -1,12 +1,61 @@
-import { NextResponse } from "next/server";
-import { proxyAdminJson, requireSession } from "@/lib/adminProxy";
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
 
-// Selectable models for the caller's agent -- provider/name only, never a key
-// (CTX-AMO-06). No scope: the allowlist is declared per-agent in config.yaml,
-// not per tenant/subscription. Mirrors app/api/admin/skills/route.ts.
-export async function GET() {
+// Model inventory (admin). The inventory itself is proxy-wide, but requests are
+// still routed through an agent's service because that is how the gateway
+// addresses the proxy at all.
+export async function GET(req: NextRequest) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
+  const agent = req.nextUrl.searchParams.get("agent");
+  if (!agent || !isInstance(agent)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, "/models", { method: "GET" });
+}
 
-  return proxyAdminJson(session, "/models", { method: "GET" });
+export async function POST(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  if (!agent || !isInstance(agent) || typeof body?.model_name !== "string" || !body.model_name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const { agent: _agent, ...payload } = body;
+  return proxyAdminJsonAgent(session, agent, "/models", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function PUT(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  const name = req.nextUrl.searchParams.get("name");
+  if (!agent || !isInstance(agent) || !name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const { agent: _agent, name: _name, ...payload } = body;
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const p = req.nextUrl.searchParams;
+  const agent = p.get("agent");
+  const name = p.get("name");
+  if (!agent || !isInstance(agent) || !name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}`, { method: "DELETE" });
 }

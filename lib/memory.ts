@@ -1,18 +1,14 @@
 import type { Workspace } from "@/app/chat/fragment";
+import { errorCode } from "@/lib/i18n/errors";
 
 // Client wrapper for the workspace-memory file (MEMORY_CUSTOM.md), a document
 // the user edits directly for the agent to read at turn time. Goes through the
 // BFF (/api/memory), which attaches the session and picks the gateway path by
 // role.
 
-async function errorMessage(res: Response): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const e = data?.error;
-  if (e === "connectivity") return "Can't reach the gateway right now.";
-  if (e === "session_expired") return "Your session expired — sign in again.";
-  if (typeof e === "string" && e.trim()) return e;
-  if (res.status === 413) return "This note is too long.";
-  return "Couldn't save the workspace memory.";
+// A 413 here is an over-long note, not an over-large file.
+async function memoryErrorCode(res: Response): Promise<string> {
+  return res.status === 413 ? "note_too_long" : errorCode(res);
 }
 
 export async function readMemory(workspace: Workspace): Promise<string> {
@@ -22,7 +18,7 @@ export async function readMemory(workspace: Workspace): Promise<string> {
     role: workspace.r,
   });
   const res = await fetch(`/api/memory?${query.toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await memoryErrorCode(res));
   const data = await res.json();
   return typeof data.content === "string" ? data.content : "";
 }
@@ -38,5 +34,5 @@ export async function writeMemory(workspace: Workspace, content: string): Promis
       content,
     }),
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await memoryErrorCode(res));
 }

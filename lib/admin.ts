@@ -1,3 +1,4 @@
+import { errorCode } from "@/lib/i18n/errors";
 import type { SecretNames, SecretFormat } from "@/lib/secrets";
 
 // A scope the caller may administer (GET /api/admin/scopes). Modeled on the
@@ -13,10 +14,34 @@ export interface AdminScope {
 }
 
 // A resolved scope target passed to the shared-file / shared-secret calls.
+// `agent` narrows the target to a single agent's store; `ALL_AGENTS` (or
+// omitting it) addresses the store every agent under the scope reads.
 export interface ScopeRef {
   kind: "tenant" | "subscription";
   tenantId: string;
   subsAccId?: string;
+  agent?: string;
+}
+
+// The sentinel the proxy understands for "the store every agent reads". Kept as
+// an explicit value (rather than an empty string) so the picker has something to
+// render and the wire format is self-describing.
+export const ALL_AGENTS = "all";
+
+// One agent key this deployment runs (GET /api/admin/agents). Sourced from the
+// proxy config, so a new agent in config.yaml shows up without a webapp change.
+// harness says which runtime it orchestrates; the model inventory governs
+// picoclaw agents only (hermes reads its model from the proxy's config.yaml).
+export interface AgentRef {
+  key: string;
+  harness?: string;
+}
+
+// Agents the model inventory actually governs. An older proxy reports no harness
+// at all, and picoclaw was the only harness then, so an absent value counts as
+// picoclaw rather than hiding every agent from the picker.
+export function picoclawAgentKeys(agents: AgentRef[]): string[] {
+  return agents.filter((a) => !a.harness || a.harness === "picoclaw").map((a) => a.key);
 }
 
 // FileMeta from the proxy -- metadata only, never bytes. Serves both shared
@@ -41,11 +66,14 @@ export interface UserRef {
 function scopeParams(scope: ScopeRef): URLSearchParams {
   const q = new URLSearchParams({ scope: scope.kind, tenant_id: scope.tenantId });
   if (scope.kind === "subscription" && scope.subsAccId) q.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) q.set("agent", scope.agent);
   return q;
 }
 
 export function scopeKey(scope: ScopeRef): string {
-  return scope.kind === "tenant" ? `t:${scope.tenantId}` : `s:${scope.tenantId}:${scope.subsAccId}`;
+  const base =
+    scope.kind === "tenant" ? `t:${scope.tenantId}` : `s:${scope.tenantId}:${scope.subsAccId}`;
+  return scope.agent ? `${base}@${scope.agent}` : base;
 }
 
 // True when the caller may administer the given workspace scope: they hold the
@@ -67,14 +95,21 @@ export function canManageWorkspaceScope(
 
 export async function listScopes(): Promise<AdminScope[]> {
   const res = await fetch("/api/admin/scopes");
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   return Array.isArray(data.scopes) ? (data.scopes as AdminScope[]) : [];
 }
 
+export async function listAgents(): Promise<AgentRef[]> {
+  const res = await fetch("/api/admin/agents");
+  if (!res.ok) throw new Error(await errorCode(res));
+  const data = await res.json();
+  return Array.isArray(data.agents) ? (data.agents as AgentRef[]) : [];
+}
+
 export async function listSharedFiles(scope: ScopeRef): Promise<FileMeta[]> {
   const res = await fetch(`/api/admin/shared?${scopeParams(scope).toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   return Array.isArray(data.files) ? (data.files as FileMeta[]) : [];
 }
@@ -84,9 +119,10 @@ export async function uploadSharedFile(scope: ScopeRef, file: File): Promise<voi
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
   if (scope.kind === "subscription" && scope.subsAccId) form.set("subs_acc_id", scope.subsAccId);
+  if (scope.agent) form.set("agent", scope.agent);
   form.set("file", file, file.name);
   const res = await fetch("/api/admin/shared", { method: "POST", body: form });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 // URL for a shared-file download (bytes stream back through the BFF). Used as
@@ -101,12 +137,12 @@ export async function deleteSharedFile(scope: ScopeRef, name: string): Promise<v
   const q = scopeParams(scope);
   q.set("name", name);
   const res = await fetch(`/api/admin/shared?${q.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function listSharedSecrets(scope: ScopeRef): Promise<SecretNames> {
   const res = await fetch(`/api/admin/shared-secrets?${scopeParams(scope).toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   const s = data.secrets ?? {};
   return {
@@ -128,12 +164,13 @@ export async function setSharedSecret(
       scope: scope.kind,
       tenant_id: scope.tenantId,
       subs_acc_id: scope.subsAccId,
+      agent: scope.agent,
       format: input.format,
       name: input.name,
       value: input.value,
     }),
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function deleteSharedSecret(
@@ -144,7 +181,7 @@ export async function deleteSharedSecret(
   q.set("format", input.format);
   q.set("name", input.name);
   const res = await fetch(`/api/admin/shared-secrets?${q.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function listSubscriptionUsers(
@@ -153,7 +190,7 @@ export async function listSubscriptionUsers(
 ): Promise<UserRef[]> {
   const q = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
   const res = await fetch(`/api/admin/users?${q.toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   return Array.isArray(data.users) ? (data.users as UserRef[]) : [];
 }
@@ -170,7 +207,7 @@ export async function listUserFiles(
     user_acc_id: userAccId,
   });
   const res = await fetch(`/api/admin/users/files?${q.toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   return Array.isArray(data.files) ? (data.files as FileMeta[]) : [];
 }
@@ -188,7 +225,7 @@ export async function deleteUserFile(
     name,
   });
   const res = await fetch(`/api/admin/users/files?${q.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 // Resolves display names before the scope tree renders (no uuid flash). Tenant
@@ -248,12 +285,3 @@ function tenantDisplayName(tenant: unknown): string | null {
   return null;
 }
 
-async function errorMessage(res: Response): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const e = data?.error;
-  if (e === "connectivity") return "Can't reach the gateway right now.";
-  if (e === "session_expired") return "Your session expired — sign in again.";
-  if (typeof e === "string" && e.trim()) return e;
-  if (res.status === 413) return "File is too large.";
-  return "Something went wrong.";
-}

@@ -1,10 +1,16 @@
+"use client";
+
 import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
 import { IconButton } from "@/components/ui/icon-button";
+import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import LogoutButton from "./logout-button";
 import WorkspaceNav from "./workspace-nav";
 import AdminLink from "./admin-link";
+import InstallAppButton from "./install-app-button";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
 
 // First sidebar (M3 navigation drawer): everything that is NOT a chat session
 // -- branding, the sectioned navigator (Workspaces now, room for more), and
@@ -19,6 +25,7 @@ export default function NavSidebar({
   onSelect?: () => void;
   onCollapse?: () => void;
 }) {
+  const t = useT(chatCopy);
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex h-16 shrink-0 items-center gap-2 px-4">
@@ -28,8 +35,8 @@ export default function NavSidebar({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Collapse Workspaces"
-            title="Collapse"
+            aria-label={t.nav.collapseWorkspaces}
+            title={t.nav.collapse}
             onClick={onCollapse}
             className="hidden md:inline-flex"
           >
@@ -42,15 +49,21 @@ export default function NavSidebar({
         <WorkspaceNav onSelect={onSelect} />
       </div>
 
-      <div className="border-t border-brand/20 px-2 py-2">
+      <div className="flex flex-col gap-0.5 border-t border-brand/20 px-2 py-2">
         <AdminLink />
+        <InstallAppButton />
       </div>
 
+      {/* The account footer is the one piece of chrome present on every /chat
+          and /admin view, so the language toggle lives here. */}
       <div className="flex items-center justify-between gap-2 border-t border-brand/20 px-4 py-3">
         <span className="min-w-0 truncate text-sm text-fg-muted" title={email}>
           {email}
         </span>
-        <LogoutButton />
+        <div className="flex shrink-0 items-center gap-1">
+          <LanguageSwitcher />
+          <LogoutButton />
+        </div>
       </div>
     </div>
   );

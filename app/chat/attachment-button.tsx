@@ -6,6 +6,9 @@ import { cva } from "class-variance-authority";
 import { Download, Paperclip } from "lucide-react";
 import { downloadMedia } from "@/lib/media";
 import type { Workspace } from "./fragment";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 // A clickable file reference. Clicking does NOT download directly — it opens a
 // small menu offering "Baixar arquivo". The menu is portaled to <body> with
@@ -32,6 +35,8 @@ export default function AttachmentButton({
   name: string;
   tone?: "chip" | "row";
 }) {
+  const t = useT(chatCopy);
+  const err = useT(errorCopy);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -54,7 +59,7 @@ export default function AttachmentButton({
       await downloadMedia(workspace, path, name);
       setOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao baixar o arquivo.");
+      setError(e instanceof Error ? e.message : "unknown");
     } finally {
       setBusy(false);
     }
@@ -82,9 +87,9 @@ export default function AttachmentButton({
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated disabled:opacity-60"
               >
                 <Download size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                {busy ? "Baixando…" : "Baixar arquivo"}
+                {busy ? t.attachment.downloading : t.attachment.download}
               </button>
-              {error && <p className="px-2 py-1 text-xs text-red-500">{error}</p>}
+              {error && <p className="px-2 py-1 text-xs text-red-500">{errorText(err, error)}</p>}
             </div>
           </>,
           document.body,

@@ -6,6 +6,9 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import BrandName from "@/app/brand-name";
 import MyceliumBg from "@/components/landing/mycelium-bg";
+import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { useT } from "@/lib/i18n/context";
+import { signInCopy } from "@/lib/i18n/signin";
 import styles from "@/components/landing/landing.module.css";
 
 type Step = "email" | "code";
@@ -25,6 +28,7 @@ function CodeInput({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const chars = value.split("");
+  const t = useT(signInCopy);
   return (
     <div className={styles.codeWrap} onClick={() => ref.current?.focus()}>
       <input
@@ -36,7 +40,7 @@ function CodeInput({
         maxLength={length}
         value={value}
         autoFocus={autoFocus}
-        aria-label="Verification code"
+        aria-label={t.codeAria}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, length))}
       />
       {Array.from({ length }).map((_, i) => (
@@ -55,10 +59,13 @@ function CodeInput({
 
 export default function SignInPage() {
   const router = useRouter();
+  const t = useT(signInCopy);
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // The key, not the sentence: a locale switch while an error is on screen has
+  // to re-render the message, and a stored string wouldn't.
+  const [error, setError] = useState<"gatewayDown" | "invalidCode" | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmitEmail(e: FormEvent) {
@@ -72,7 +79,7 @@ export default function SignInPage() {
         body: JSON.stringify({ email }),
       });
       if (!res.ok) {
-        setError("Could not reach the gateway. Is the stack running?");
+        setError("gatewayDown");
         return;
       }
       setStep("code");
@@ -92,11 +99,11 @@ export default function SignInPage() {
         body: JSON.stringify({ email, code }),
       });
       if (res.status === 401) {
-        setError("Invalid code. Try again.");
+        setError("invalidCode");
         return;
       }
       if (!res.ok) {
-        setError("Could not reach the gateway. Is the stack running?");
+        setError("gatewayDown");
         return;
       }
       router.push("/chat");
@@ -109,27 +116,32 @@ export default function SignInPage() {
     <MyceliumBg>
       <div className={styles.authScreen}>
         <div className={styles.authCard}>
-          <Link href="/" className={styles.backLink}>
-            <ArrowLeft size={14} aria-hidden />
-            Back to home
-          </Link>
+          <div className="flex items-center justify-between gap-2">
+            <Link href="/" className={styles.backLink}>
+              <ArrowLeft size={14} aria-hidden />
+              {t.back}
+            </Link>
+            {/* With START_AT_SIGNIN the landing is unreachable, so this is the
+                only place a visitor can pick a language before signing in. */}
+            <LanguageSwitcher />
+          </div>
           <div className={styles.authHead}>
             <span className={styles.brandDot} aria-hidden />
             <div>
               <div className={styles.authTitle}>
-                <BrandName /> chat
+                <BrandName /> {t.titleSuffix}
               </div>
-              <div className={styles.authSub}>Sign in with your email — no password needed.</div>
+              <div className={styles.authSub}>{t.subtitle}</div>
             </div>
           </div>
 
-          {error && <div className={styles.authAlert}>{error}</div>}
+          {error && <div className={styles.authAlert}>{t[error]}</div>}
 
           {step === "email" && (
             <form className={styles.authForm} onSubmit={onSubmitEmail}>
               <div>
                 <label htmlFor="email" className={styles.authLabel}>
-                  Email
+                  {t.emailLabel}
                 </label>
                 <input
                   id="email"
@@ -137,7 +149,7 @@ export default function SignInPage() {
                   autoFocus
                   required
                   className={styles.authInput}
-                  placeholder="you@company.com"
+                  placeholder={t.emailPlaceholder}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -147,7 +159,7 @@ export default function SignInPage() {
                 disabled={submitting}
                 className={`${styles.enter} ${styles.enterLg} ${styles.btnBlock}`}
               >
-                {submitting ? "Sending…" : "Send magic link"}
+                {submitting ? t.sending : t.sendLink}
               </button>
             </form>
           )}
@@ -155,11 +167,12 @@ export default function SignInPage() {
           {step === "code" && (
             <form className={styles.authForm} onSubmit={onSubmitCode}>
               <p className={styles.authText}>
-                Check <strong>{email}</strong> for a link, open it, and enter the 6-digit code it
-                shows.
+                {t.checkMailBefore}
+                <strong>{email}</strong>
+                {t.checkMailAfter}
               </p>
               <div>
-                <label className={styles.authLabel}>Code</label>
+                <label className={styles.authLabel}>{t.codeLabel}</label>
                 <CodeInput value={code} onChange={setCode} autoFocus />
               </div>
               <button
@@ -167,7 +180,7 @@ export default function SignInPage() {
                 disabled={submitting || code.length < 6}
                 className={`${styles.enter} ${styles.enterLg} ${styles.btnBlock}`}
               >
-                {submitting ? "Verifying…" : "Verify"}
+                {submitting ? t.verifying : t.verify}
               </button>
               <button
                 type="button"
@@ -178,7 +191,7 @@ export default function SignInPage() {
                   setCode("");
                 }}
               >
-                ← Back
+                {t.backToEmail}
               </button>
             </form>
           )}

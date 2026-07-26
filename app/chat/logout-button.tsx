@@ -5,9 +5,12 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { IconButton } from "@/components/ui/icon-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
 
 export default function LogoutButton() {
   const router = useRouter();
+  const t = useT(chatCopy);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -22,17 +25,17 @@ export default function LogoutButton() {
       <IconButton
         variant="ghost"
         size="sm"
-        aria-label="Log out"
-        title="Log out"
+        aria-label={t.logout.action}
+        title={t.logout.action}
         onClick={() => setOpen(true)}
       >
         <LogOut size={18} aria-hidden />
       </IconButton>
       <ConfirmDialog
         open={open}
-        title="Log out?"
-        message="You'll need to sign in again with a magic link."
-        confirmLabel={loading ? "Logging out…" : "Log out"}
+        title={t.logout.confirmTitle}
+        message={t.logout.confirmMessage}
+        confirmLabel={loading ? t.logout.pending : t.logout.action}
         onConfirm={onLogout}
         onCancel={() => setOpen(false)}
       />

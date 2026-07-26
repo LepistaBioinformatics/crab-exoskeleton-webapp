@@ -17,12 +17,19 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // Shared files at a scope: pick tenant/subscription, then list / upload /
 // download / delete. Shared content is scope-owned and cascades read-only to
 // every container below (FR-4), so download here is expected (FR-7.1) --
 // distinct from user private files, which never expose bytes.
 export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
   const [files, setFiles] = useState<FileMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -46,7 +53,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
     return () => {
       cancelled = true;
     };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
   async function onUpload(file: File) {
     setUploading(true);
@@ -55,7 +62,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
       await uploadSharedFile(scope, file);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -70,7 +77,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
       await deleteSharedFile(scope, name);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
     }
@@ -95,11 +102,9 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
           onClick={() => fileInput.current?.click()}
         >
           <Upload size={16} aria-hidden />
-          {uploading ? "Uploading…" : "Upload file"}
+          {uploading ? t.sharedFiles.uploading : t.sharedFiles.upload}
         </Button>
-        <span className="text-xs text-fg-muted">
-          Cascades read-only to every container below this scope.
-        </span>
+        <span className="text-xs text-fg-muted">{t.sharedFiles.cascades}</span>
       </div>
 
       {error && <Alert severity="error">{error}</Alert>}
@@ -109,7 +114,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
           <Spinner size={22} />
         </div>
       ) : files && files.length === 0 ? (
-        <p className="py-3 text-sm text-fg-muted">No shared files at this scope yet.</p>
+        <p className="py-3 text-sm text-fg-muted">{t.sharedFiles.none}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {files?.map((f) => (
@@ -125,7 +130,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
               <a
                 href={sharedFileDownloadUrl(scope, f.name)}
                 download={f.name}
-                aria-label={`Download ${f.name}`}
+                aria-label={`${t.sharedFiles.downloadPrefix} ${f.name}`}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
                 <Download size={15} aria-hidden />
@@ -133,7 +138,7 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
               <IconButton
                 variant="ghost"
                 size="sm"
-                aria-label={`Delete ${f.name}`}
+                aria-label={`${t.sharedFiles.deletePrefix} ${f.name}`}
                 disabled={busy === f.name}
                 onClick={() => setPendingDelete(f.name)}
               >
@@ -146,13 +151,13 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete shared file?"
+        title={t.sharedFiles.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete}" will be removed for everyone below this scope. Containers restart to pick up the change.`
+            ? t.sharedFiles.deleteMessage.replace("{name}", pendingDelete)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
       />

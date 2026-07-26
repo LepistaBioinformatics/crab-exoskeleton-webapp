@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Logo from "@/app/logo";
+import BrandName from "@/app/brand-name";
 import { Surface } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { useT } from "@/lib/i18n/context";
+import { onboardingCopy } from "@/lib/i18n/onboarding";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 export default function OnboardingWelcome({ email }: { email: string }) {
   const router = useRouter();
+  const t = useT(onboardingCopy);
+  const err = useT(errorCopy);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,16 +25,12 @@ export default function OnboardingWelcome({ email }: { email: string }) {
       const res = await fetch("/api/onboarding", { method: "POST" });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(
-          data?.error === "connectivity"
-            ? "Não foi possível falar com o gateway. O sistema está no ar?"
-            : data?.error || "Algo deu errado ao criar a sua conta. Tente novamente.",
-        );
+        setError(errorText(err, data?.error));
         return;
       }
       router.push("/chat");
     } catch {
-      setError("Algo deu errado ao criar a sua conta. Tente novamente.");
+      setError(t.failed);
     } finally {
       setSubmitting(false);
     }
@@ -42,7 +44,7 @@ export default function OnboardingWelcome({ email }: { email: string }) {
             <Logo size={44} />
             <div>
               <h1 className="font-display text-xl font-semibold text-fg">
-                Bem-vindo ao zombie-crab
+                {t.welcomePrefix} <BrandName />
               </h1>
               <p className="text-sm text-fg-muted">{email}</p>
             </div>
@@ -50,13 +52,12 @@ export default function OnboardingWelcome({ email }: { email: string }) {
 
           <div className="flex flex-col gap-3 text-sm leading-relaxed text-fg">
             <p>
-              Estamos quase lá. Ao clicar em <strong>Vamos começar</strong>, a sua
-              conta será criada e você entrará no aplicativo.
+              {t.leadBefore}
+              <strong>{t.start}</strong>
+              {t.leadAfter}
             </p>
             <p className="text-fg-muted">
-              Uma dica sobre o que vem a seguir: os seus workspaces e agentes só
-              aparecem depois que um administrador convidar você para um deles. Até
-              lá, é normal ver a lista vazia — não é um erro.
+              {t.hintTitle} {t.hint}
             </p>
           </div>
 
@@ -69,7 +70,7 @@ export default function OnboardingWelcome({ email }: { email: string }) {
             disabled={submitting}
             onClick={onStart}
           >
-            {submitting ? "Criando a sua conta..." : "Vamos começar"}
+            {submitting ? t.creating : t.start}
           </Button>
         </div>
       </Surface>

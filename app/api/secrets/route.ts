@@ -74,6 +74,14 @@ export async function POST(req: NextRequest) {
   if (!tenantId || !subsAccId || !role || !isInstance(role) || !format || !name || value === null) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
+  // Native slots (picoclaw's own search-provider and model keys) are published by
+  // scope administrators, not by end users (native-secrets-admin-only FR-1). The
+  // proxy is the real gate; this mirrors it so the request never leaves the BFF.
+  // DELETE is deliberately NOT gated: a pre-gate entry is the user's own data and
+  // they must be able to remove it.
+  if (format === "native") {
+    return NextResponse.json({ error: "native_is_admin_only" }, { status: 403 });
+  }
 
   return callSecrets(session, role, "", {
     method: "POST",

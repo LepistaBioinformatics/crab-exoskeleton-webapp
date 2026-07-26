@@ -1,3 +1,4 @@
+import { errorCode } from "@/lib/i18n/errors";
 import type { Workspace } from "@/app/chat/fragment";
 
 // Names only -- values are write-only and never returned by the proxy.
@@ -10,6 +11,12 @@ export interface SecretNames {
 
 export const SECRET_FORMATS = ["dotenv", "json", "file", "native"] as const;
 export type SecretFormat = (typeof SECRET_FORMATS)[number];
+
+// The formats an end user may WRITE. `native` targets picoclaw's own
+// .security.yml slots (search-provider and model keys) and moved to the admin
+// surface — see native-secrets-admin-only. Users can still see and delete a
+// native entry they set before the change; they just cannot create one.
+export const USER_SECRET_FORMATS = SECRET_FORMATS.filter((f) => f !== "native");
 
 // Fixed picoclaw web-search slots (crab-shell-proxy secrets.go webProviders).
 // A native web slot is `web.<provider>`; the proxy rejects anything else.
@@ -37,7 +44,7 @@ function workspaceQuery(workspace: Workspace): URLSearchParams {
 
 export async function listSecrets(workspace: Workspace): Promise<SecretNames> {
   const res = await fetch(`/api/secrets?${workspaceQuery(workspace).toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   const s = data.secrets ?? {};
   return {
@@ -64,7 +71,7 @@ export async function setSecret(
       value: input.value,
     }),
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function deleteSecret(
@@ -75,16 +82,8 @@ export async function deleteSecret(
   query.set("format", input.format);
   query.set("name", input.name);
   const res = await fetch(`/api/secrets?${query.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 // Surfaces the proxy's real reason (400 bad name/slot, 403 unlicensed) rather
 // than a masked "connectivity".
-async function errorMessage(res: Response): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const e = data?.error;
-  if (e === "connectivity") return "Can't reach the gateway right now.";
-  if (e === "session_expired") return "Your session expired — sign in again.";
-  if (typeof e === "string" && e.trim()) return e;
-  return "Something went wrong.";
-}

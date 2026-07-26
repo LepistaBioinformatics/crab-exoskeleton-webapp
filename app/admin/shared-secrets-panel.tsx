@@ -6,21 +6,28 @@ import {
   listSharedSecrets,
   setSharedSecret,
   deleteSharedSecret,
+  ALL_AGENTS,
   type ScopeRef,
 } from "@/lib/admin";
 import {
   SECRET_FORMATS,
   SECRET_NAME_RE,
+  WEB_PROVIDERS,
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
+import { listModels, describeError, type InventoryModel } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, fieldControlClass } from "./field";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -29,19 +36,39 @@ const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
   json: "json",
   file: "file",
-  native: "native (picoclaw slot)",
+  native: "native",
 };
+
+// `file` is not env-shaped, so the proxy rejects it at scope level. The other
+// three are offered: dotenv/json cascade as sink files, and native writes into
+// each workspace's .security.yml — the admin-only path added by
+// native-secrets-admin-only.
+const SCOPE_FORMATS = SECRET_FORMATS.filter((f) => f !== "file");
 
 // Shared secrets at a scope: write / list-names / delete. Injected as env into
 // every container below the scope (FR-5). WRITE-ONLY over the API -- values are
 // never listed or retrieved (FR-5.1), only names.
 export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const errs = useT(errorCopy);
   const [secrets, setSecrets] = useState<SecretNames | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
+  const [nativeKind, setNativeKind] = useState<"web" | "model">("web");
+  const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
+  const [modelName, setModelName] = useState("");
+  const [models, setModels] = useState<InventoryModel[] | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+
+  // A model_list slot must name a single agent (the proxy rejects it for an
+  // all-agents scope): the inventory itself is per-agent, so there is no
+  // catalog to offer without one.
+  const routedAgent = scope.agent && scope.agent !== ALL_AGENTS ? scope.agent : null;
+  const availableModels = models?.filter((m) => m.status !== "disabled") ?? [];
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -64,10 +91,30 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     return () => {
       cancelled = true;
     };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
+  useEffect(() => {
+    setModelName("");
+    setModels(null);
+    setModelsError(null);
+    if (!routedAgent) return;
+    let cancelled = false;
+    listModels(routedAgent)
+      .then((m) => !cancelled && setModels(m))
+      .catch((e) => !cancelled && setModelsError(describeError(e).code));
+    return () => {
+      cancelled = true;
+    };
+  }, [routedAgent]);
+
+  // A native secret addresses a picoclaw slot, not a free-form name. The web
+  // family is the fixed `web.<provider>` enum; the model family reads
+  // `model_list.<model>.api_keys`, where `<model>` must be a name the
+  // inventory (T17's listModels) actually knows -- the proxy validates this
+  // slot against the inventory, so a hand-typed name would only 400.
   function targetName(): string {
-    return name.trim();
+    if (format !== "native") return name.trim();
+    return nativeKind === "web" ? `web.${provider}` : `model_list.${modelName}.api_keys`;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -75,12 +122,16 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     setSubmitError(null);
     const finalName = targetName();
 
-    if (!SECRET_NAME_RE.test(finalName)) {
-      setSubmitError("Name may only contain letters, numbers, and . _ -");
+    if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
+      setSubmitError(t.sharedSecrets.invalidName);
+      return;
+    }
+    if (format === "native" && nativeKind === "model" && !modelName) {
+      setSubmitError(t.sharedSecrets.selectModel);
       return;
     }
     if (!value) {
-      setSubmitError("Enter a value.");
+      setSubmitError(t.sharedSecrets.valueRequired);
       return;
     }
 
@@ -90,7 +141,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
       setValue("");
       await refresh();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
+      setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +155,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
       await deleteSharedSecret(scope, { format: fmt, name: secretName });
       await refresh();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Something went wrong.");
+      setLoadError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setBusy(null);
     }
@@ -118,60 +169,152 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        Injected as environment into every container below this scope, merged under each user&apos;s
-        own secrets. Values are write-only: never shown or retrieved. Writing or deleting restarts
+        {t.sharedSecrets.injectedAs} Values are write-only: never shown or retrieved. Writing or deleting restarts
         running containers under the scope.
       </p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Format</span>
+        <Field
+          label={t.sharedSecrets.howReceived}
+          job={t.sharedSecrets.howReceivedJob}
+          htmlFor="s-format"
+        >
           <select
-            className={selectClass}
+            id="s-format"
+            className={fieldControlClass()}
             value={format}
             onChange={(e) => setFormat(e.target.value as SecretFormat)}
           >
-            {SECRET_FORMATS.filter((f) => f !== "native").map((f) => (
+            {SCOPE_FORMATS.map((f) => (
               <option key={f} value={f}>
-                {FORMAT_LABEL[f]}
+                {f === "native" ? t.sharedSecrets.formatNative : FORMAT_LABEL[f]}
               </option>
             ))}
           </select>
-        </label>
+        </Field>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Name</span>
-          <Input
-            inputSize="md"
-            placeholder="e.g. SHARED_API_KEY"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
+        {format === "native" ? (
+          <>
+            <Field
+              label={t.sharedSecrets.whichSetting}
+              job={t.sharedSecrets.whichSettingJob}
+              htmlFor="s-slot"
+            >
+              <select
+                id="s-slot"
+                className={fieldControlClass()}
+                value={nativeKind}
+                onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
+              >
+                <option value="web">{t.sharedSecrets.slotWeb}</option>
+                <option value="model">{t.sharedSecrets.slotModel}</option>
+              </select>
+            </Field>
+            {nativeKind === "web" ? (
+              <Field
+                label={t.sharedSecrets.whichSearch}
+                job={t.sharedSecrets.whichSearchJob}
+                htmlFor="s-provider"
+                consequence={t.sharedSecrets.whichSearchConsequence}
+              >
+                <select
+                  id="s-provider"
+                  className={fieldControlClass(true)}
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                >
+                  {WEB_PROVIDERS.map((pv) => (
+                    <option key={pv} value={pv}>
+                      {pv}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : !routedAgent ? (
+              <Alert severity="info">{t.sharedSecrets.pickAgentFirst}</Alert>
+            ) : modelsError ? (
+              <Alert severity="error">{errorText(errs, modelsError)}</Alert>
+            ) : models === null ? (
+              <div className="flex justify-center py-2">
+                <Spinner size={16} />
+              </div>
+            ) : availableModels.length === 0 ? (
+              <Alert severity="info">
+                {t.sharedSecrets.noRegisteredModels.replace("{agent}", routedAgent)}
+              </Alert>
+            ) : (
+              <Field
+                label={t.sharedSecrets.whichModel}
+                job={t.sharedSecrets.whichModelJob.replace("{agent}", routedAgent)}
+                htmlFor="s-model"
+                consequence={
+                  <>
+                    {t.sharedSecrets.modelConsequenceBefore}
+                    <b>{t.sharedSecrets.modelConsequenceBold}</b>
+                    {t.sharedSecrets.modelConsequenceAfter}
+                  </>
+                }
+              >
+                <select
+                  id="s-model"
+                  className={fieldControlClass(true)}
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                >
+                  <option value="">{t.sharedSecrets.selectModelOption}</option>
+                  {availableModels.map((m) => (
+                    <option key={m.model_name} value={m.model_name}>
+                      {m.model_name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+          </>
+        ) : (
+          <Field
+            label={t.sharedSecrets.nameLabel}
+            job={t.sharedSecrets.nameJob}
+            htmlFor="s-name"
+          >
+            <input
+              id="s-name"
+              className={fieldControlClass(true)}
+              placeholder="SHARED_API_KEY"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+        )}
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Value</span>
-          <Input
-            inputSize="md"
+        <Field
+          label={t.sharedSecrets.valueLabel}
+          job={t.sharedSecrets.valueJob}
+          htmlFor="s-value"
+          consequence={t.sharedSecrets.valueConsequence}
+        >
+          <input
+            id="s-value"
+            className={fieldControlClass()}
             type="password"
             autoComplete="off"
-            placeholder="Secret value (write-only)"
+            placeholder={t.sharedSecrets.valuePlaceholder}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-        </label>
+        </Field>
 
         {submitError && <Alert severity="error">{submitError}</Alert>}
 
         <Button type="submit" variant="filled" disabled={submitting}>
-          {submitting ? "Saving…" : "Save shared secret"}
+          {submitting ? t.sharedSecrets.saving : t.sharedSecrets.save}
         </Button>
       </form>
 
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Set secrets
+          {t.sharedSecrets.setSecrets}
         </span>
       </div>
 
@@ -183,7 +326,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
         </div>
       )}
 
-      {isEmpty && <p className="py-3 text-sm text-fg-muted">No shared secrets at this scope yet.</p>}
+      {isEmpty && <p className="py-3 text-sm text-fg-muted">{t.sharedSecrets.none}</p>}
 
       {groups.map((group) => (
         <div key={group.fmt}>
@@ -202,7 +345,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
                 <IconButton
                   variant="ghost"
                   size="sm"
-                  aria-label={`Delete ${secretName}`}
+                  aria-label={`${t.sharedSecrets.deletePrefix} ${secretName}`}
                   disabled={busy === secretName}
                   onClick={() => setPendingDelete({ fmt: group.fmt, name: secretName })}
                 >
@@ -216,13 +359,13 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete shared secret?"
+        title={t.sharedSecrets.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete.name}" will be removed. Containers below this scope restart to drop it.`
+            ? t.sharedSecrets.deleteMessage.replace("{name}", pendingDelete.name)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete.fmt, pendingDelete.name)}
         onCancel={() => setPendingDelete(null)}
       />

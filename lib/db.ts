@@ -69,6 +69,12 @@ function ensureSchema(): Promise<void> {
         logo_dark  BYTEA, logo_dark_type  TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
+      -- The PWA app icon is a THIRD image, not a reuse of the logos: a manifest
+      -- icon must be SQUARE at its declared size, and both logos are wide
+      -- wordmarks (1408x768). Declaring a wide image as 192x192 is what kept the
+      -- app from being installable (pwa-installability).
+      ALTER TABLE branding ADD COLUMN IF NOT EXISTS app_icon BYTEA;
+      ALTER TABLE branding ADD COLUMN IF NOT EXISTS app_icon_type TEXT;
     `).then(() => undefined);
   }
   return globalForDb.schemaReady;
@@ -317,12 +323,20 @@ export async function setAppName(name: string | null): Promise<void> {
   );
 }
 
+// The three brand images: two wordmark logos plus the square PWA app icon.
+export type BrandImage = "light" | "dark" | "icon";
+
+const IMAGE_COLUMNS: Record<BrandImage, { col: string; typeCol: string }> = {
+  light: { col: "logo_light", typeCol: "logo_light_type" },
+  dark: { col: "logo_dark", typeCol: "logo_dark_type" },
+  icon: { col: "app_icon", typeCol: "app_icon_type" },
+};
+
 export async function getLogo(
-  variant: "light" | "dark",
+  variant: BrandImage,
 ): Promise<{ bytes: Buffer; type: string } | null> {
   await ensureSchema();
-  const col = variant === "light" ? "logo_light" : "logo_dark";
-  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  const { col, typeCol } = IMAGE_COLUMNS[variant];
   const { rows } = await getPool().query(
     `SELECT ${col} AS bytes, ${typeCol} AS type FROM branding WHERE id = 1`,
   );
@@ -332,13 +346,12 @@ export async function getLogo(
 }
 
 export async function setLogo(
-  variant: "light" | "dark",
+  variant: BrandImage,
   bytes: Buffer,
   type: string,
 ): Promise<void> {
   await ensureSchema();
-  const col = variant === "light" ? "logo_light" : "logo_dark";
-  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  const { col, typeCol } = IMAGE_COLUMNS[variant];
   await getPool().query(
     `INSERT INTO branding (id, ${col}, ${typeCol}, updated_at)
      VALUES (1, $1, $2, now())
@@ -347,10 +360,9 @@ export async function setLogo(
   );
 }
 
-export async function clearLogo(variant: "light" | "dark"): Promise<void> {
+export async function clearLogo(variant: BrandImage): Promise<void> {
   await ensureSchema();
-  const col = variant === "light" ? "logo_light" : "logo_dark";
-  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  const { col, typeCol } = IMAGE_COLUMNS[variant];
   await getPool().query(
     `UPDATE branding SET ${col} = NULL, ${typeCol} = NULL, updated_at = now() WHERE id = 1`,
   );

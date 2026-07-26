@@ -16,6 +16,9 @@ import {
   type TreeEvent,
   type Burst,
 } from "./conversation-bursts";
+import { useT, useLocale } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
+import { BCP47 } from "@/lib/i18n/format";
 
 // The "Tree" view: a single vertical timeline where each conversation is a
 // colored lane and each *visit* is a node -- a visit ("burst") is a run of
@@ -33,12 +36,14 @@ import {
 // interleaving, where the last column is shared as graceful degradation.
 const MAX_LANE_COLUMNS = 8;
 
-function formatWhen(ts: number): string {
+// Takes the BCP 47 tag rather than reading the browser default, so a pt-BR
+// reader on an en-US machine gets Portuguese dates next to Portuguese copy.
+function formatWhen(ts: number, tag: string): string {
   const d = new Date(ts);
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
-    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString([], { day: "2-digit", month: "short" });
+    ? d.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(tag, { day: "2-digit", month: "short" });
 }
 
 const eventRow = cva(
@@ -70,6 +75,8 @@ export default function ConversationTree({
   // the tree updates the shared list the same way the list view does.
   onApply?: (id: string, fn: (c: ConversationSummary) => ConversationSummary) => void;
 }) {
+  const t = useT(chatCopy);
+  const tag = BCP47[useLocale().locale];
   const [events, setEvents] = useState<TreeEvent[] | null>(null);
 
   // Conversation metadata (alias/title/tags) by id, for identity lines, tag
@@ -237,7 +244,7 @@ export default function ConversationTree({
     );
   }
   if (model.bursts.length === 0) {
-    return <p className="py-4 text-center text-sm text-fg-muted">No conversations yet.</p>;
+    return <p className="py-4 text-center text-sm text-fg-muted">{t.history.noneYet}</p>;
   }
 
   const { bursts, dotLaneOf, laneCount, laneSegments } = model;
@@ -251,7 +258,7 @@ export default function ConversationTree({
     uniformLit ? false : spotlightId != null ? id !== spotlightId : true;
 
   return (
-    <div role="tree" aria-label="Conversation tree" className="flex min-h-full flex-col">
+    <div role="tree" aria-label={t.history.treeAria} className="flex min-h-full flex-col">
       {bursts.map((b, i) => {
         const dotLane = dotLaneOf.get(b.conversationId)!;
         const conv = convById.get(b.conversationId);
@@ -334,7 +341,7 @@ export default function ConversationTree({
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm text-fg">{b.text}</span>
                     {b.count > 1 && (
-                      <span className="shrink-0 text-xs tabular-nums text-fg-muted" title={`${b.count} messages`}>
+                      <span className="shrink-0 text-xs tabular-nums text-fg-muted" title={t.history.messagesOther.replace("{n}", String(b.count))}>
                         ·{b.count}
                       </span>
                     )}
@@ -344,7 +351,7 @@ export default function ConversationTree({
                       </span>
                     )}
                     {b.isLatest && tags.length > 0 && <TagCluster tags={tags} />}
-                    <span className="shrink-0 text-xs tabular-nums text-fg-muted">{formatWhen(b.ts)}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-fg-muted">{formatWhen(b.ts, tag)}</span>
                   </span>
                   {b.isLatest && alias && (
                     <span className="w-full truncate text-xs text-fg-muted">{alias}</span>
@@ -357,8 +364,8 @@ export default function ConversationTree({
                   <IconButton
                     variant="ghost"
                     size="sm"
-                    aria-label="Alias and tags"
-                    title="Alias and tags"
+                    aria-label={t.history.aliasAndTags}
+                    title={t.history.aliasAndTags}
                     onClick={() => setEnrichingId(editing ? null : key)}
                     aria-expanded={editing}
                   >

@@ -12,6 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 // A tag drawn as a mini label: a tag icon + name + (required) value. When the
 // tag carries a `metadata.color` it tints the border, a faint fill, and the
@@ -39,17 +42,20 @@ export function TagChip({ tag }: { tag: Tag }) {
 // chips in a small popover to the icon's lower-right. Shared by the browsing
 // views.
 export function TagCluster({ tags }: { tags: Tag[] }) {
+  const t = useT(chatCopy);
   if (tags.length === 0) return null;
   // Tint the mini-tag with the first colored tag's color (border + faint fill +
   // icon), mirroring TagChip; falls back to neutral when no tag carries a color.
   const color = tags
-    .map((t) => (typeof t.metadata.color === "string" && t.metadata.color ? t.metadata.color : undefined))
+    .map((tg) => (typeof tg.metadata.color === "string" && tg.metadata.color ? tg.metadata.color : undefined))
     .find(Boolean);
   return (
     <span className="group/tags relative inline-flex shrink-0">
       <span
         tabIndex={0}
-        aria-label={`${tags.length} ${tags.length === 1 ? "tag" : "tags"}`}
+        aria-label={
+          tags.length === 1 ? t.enrichment.tagsOne : t.enrichment.tagsOther.replace("{n}", String(tags.length))
+        }
         className="inline-flex items-center gap-0.5 rounded-[4px] border border-brand/40 px-1 py-0.5 text-fg-muted transition-colors hover:border-brand hover:text-fg group-focus-within/tags:border-brand group-focus-within/tags:text-fg"
         style={color ? { borderColor: color, backgroundColor: `${color}1a`, color } : undefined}
       >
@@ -83,6 +89,8 @@ export function ConversationEditor({
   onApply: (fn: (c: ConversationSummary) => ConversationSummary) => void;
   onClose: () => void;
 }) {
+  const t = useT(chatCopy);
+  const e = useT(errorCopy);
   const [aliasDraft, setAliasDraft] = useState(conversation.alias ?? "");
   const [tagName, setTagName] = useState("");
   const [tagValue, setTagValue] = useState("");
@@ -99,7 +107,7 @@ export function ConversationEditor({
       onApply((c) => ({ ...c, alias: alias || null }));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the alias.");
+      setError(errorText(e, err instanceof Error ? err.message : null));
       return false;
     } finally {
       setBusy(false);
@@ -110,11 +118,11 @@ export function ConversationEditor({
     const name = tagName.trim();
     const value = tagValue.trim();
     if (!name) {
-      setError("Tag name can't be empty.");
+      setError(t.enrichment.nameEmpty);
       return false;
     }
     if (!value) {
-      setError("Tag value is required.");
+      setError(t.enrichment.valueRequired);
       return false;
     }
     const tag: Tag = {
@@ -132,7 +140,7 @@ export function ConversationEditor({
       setTagColor("");
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add the tag.");
+      setError(errorText(e, err instanceof Error ? err.message : null));
       return false;
     } finally {
       setBusy(false);
@@ -159,7 +167,7 @@ export function ConversationEditor({
       await deleteTag(conversation.id, name);
       onApply((c) => ({ ...c, tags: c.tags.filter((t) => t.name !== name) }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't remove the tag.");
+      setError(errorText(e, err instanceof Error ? err.message : null));
     } finally {
       setBusy(false);
     }
@@ -183,13 +191,13 @@ export function ConversationEditor({
                 saveAlias();
               }
             }}
-            aria-label="Conversation alias"
+            aria-label={t.enrichment.aliasAria}
           />
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Save alias"
-            title="Save alias"
+            aria-label={t.enrichment.saveAlias}
+            title={t.enrichment.saveAlias}
             onClick={saveAlias}
             disabled={busy}
           >
@@ -210,8 +218,8 @@ export function ConversationEditor({
                 <IconButton
                   variant="ghost"
                   size="sm"
-                  aria-label={`Remove tag ${tag.name}`}
-                  title="Remove tag"
+                  aria-label={`${t.enrichment.removeTagPrefix} ${tag.name}`}
+                  title={t.enrichment.removeTag}
                   onClick={() => removeTag(tag.name)}
                   disabled={busy}
                   className="h-6 w-6"
@@ -226,30 +234,30 @@ export function ConversationEditor({
           <Input
             inputSize="sm"
             value={tagName}
-            placeholder="name"
+            placeholder={t.enrichment.namePlaceholder}
             onChange={(e) => setTagName(e.target.value)}
-            aria-label="Tag name"
+            aria-label={t.enrichment.tagNameAria}
           />
           <Input
             inputSize="sm"
             value={tagValue}
-            placeholder="value (required)"
+            placeholder={t.enrichment.valuePlaceholder}
             onChange={(e) => setTagValue(e.target.value)}
-            aria-label="Tag value"
+            aria-label={t.enrichment.tagValueAria}
           />
           <input
             type="color"
             value={tagColor || "#888888"}
             onChange={(e) => setTagColor(e.target.value)}
-            aria-label="Tag color"
-            title="Tag color"
+            aria-label={t.enrichment.tagColor}
+            title={t.enrichment.tagColor}
             className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-brand bg-elevated"
           />
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Add tag"
-            title="Add tag"
+            aria-label={t.enrichment.addTag}
+            title={t.enrichment.addTag}
             onClick={addTag}
             disabled={busy}
           >

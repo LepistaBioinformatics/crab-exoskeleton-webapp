@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk, Space_Mono } from "next/font/google";
 import { getAppName, DEFAULT_APP_NAME } from "@/lib/db";
+import { getLocale } from "@/lib/i18n/server";
+import { BCP47 } from "@/lib/i18n/format";
+import { commonCopy } from "@/lib/i18n/common";
+import { LocaleProvider } from "@/lib/i18n/context";
 import SwRegister from "./sw-register";
 import "./globals.css";
 
@@ -43,17 +47,24 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     // keep the default
   }
+  const t = commonCopy[await getLocale()];
   return {
-    title: `${appName} chat`,
-    description: "Test client for the zombie-crab-project picoclaw stack",
+    title: `${appName} ${t.metadata.titleSuffix}`,
+    // Derived from branding, not hardcoded: the old literal named this project in
+    // the <meta> of every rebranded deployment.
+    description: `${appName} — ${t.metadata.description}`,
     manifest: "/manifest.webmanifest",
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
       title: appName,
     },
+    // Both point at the SQUARE app icon, not the wide wordmark logo: iOS renders
+    // apple-touch-icon on the home screen at a fixed square, and a 1408x768 JPEG
+    // came out letterboxed (pwa-installability).
     icons: {
-      apple: "/api/branding/logo/light",
+      icon: "/api/branding/logo/icon",
+      apple: "/api/branding/logo/icon",
     },
   };
 }
@@ -65,15 +76,16 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale();
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang={BCP47[locale]} className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="bg-bg text-fg font-sans antialiased">
-        {children}
+        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
         <SwRegister />
       </body>
     </html>

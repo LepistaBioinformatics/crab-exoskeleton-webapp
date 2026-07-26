@@ -1,74 +1,99 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { INSTANCES, type Instance } from "@/lib/mycelium";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { KeyRound, Plus } from "lucide-react";
 import {
-  listRegisteredModels,
-  registerModel,
-  deleteRegisteredModel,
-  applyRegisteredModel,
-  type RegisteredModel,
-} from "@/lib/registeredModels";
-import { listSubscriptionUsers, type ScopeRef, type UserRef } from "@/lib/admin";
+  listModels,
+  modelCatalog,
+  createModel,
+  updateModel,
+  deleteModel,
+  setModelStatus,
+  deprecateModel,
+  reorderModels,
+  splitInventory,
+  reorderPayload,
+  draftFromCatalog,
+  draftFromDuplicate,
+  emptyDraft,
+  describeError,
+  type CatalogEntry,
+  type DisplayError,
+  type InventoryModel,
+  type ModelDraft,
+} from "@/lib/models";
+import { ALL_AGENTS, type ScopeRef } from "@/lib/admin";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, fieldControlClass, Ident } from "./field";
+import { ModelRow } from "./model-row";
+import ModelDefaultsPanel from "./model-defaults-panel";
+import { FallbackEditor } from "./fallback-editor";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
-const emptyForm = { provider: "", name: "", model: "", api_base: "", api_key: "" };
-const modelKey = (provider: string, name: string) => `${provider}|${name}`;
+const CUSTOM = "__custom__";
 
-// Admin per-agent model registry + per-user assignment. Register a model
-// (definition + key) for an agent (alpha/beta separately), then assign it to
-// individual users of the selected subscription, one by one.
-export default function ModelRegistryPanel({ scope }: { scope: ScopeRef }) {
-  const [agent, setAgent] = useState<Instance>(INSTANCES[0]);
-  const [models, setModels] = useState<RegisteredModel[] | null>(null);
-  const [users, setUsers] = useState<UserRef[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// Admin model inventory. The inventory is PROXY-WIDE — not per agent — so the
+// agent picker only decides which service the request is routed through, and
+// ALL_AGENTS resolves to the first agent rather than fanning out.
+export default function ModelRegistryPanel({
+  scope,
+  agents,
+  target,
+}: {
+  scope: ScopeRef;
+  agents: string[];
+  target: string;
+}) {
+  const t = useT(adminCopy);
+  const err = useT(errorCopy);
+  const routed = target === ALL_AGENTS ? agents[0] ?? "" : target;
+
+  const [models, setModels] = useState<InventoryModel[] | null>(null);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [error, setError] = useState<DisplayError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [pick, setPick] = useState<Record<string, string>>({});
-  const [applied, setApplied] = useState<Record<string, string>>({});
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState<ModelDraft>(emptyDraft());
+  // editing holds the model_name + version being edited; null means "create".
+  const [editing, setEditing] = useState<{ name: string; version: number } | null>(null);
+  // deprecating holds the model being retired while the admin picks its
+  // replacement. An inline picker rather than window.prompt: the replacement must
+  // be an existing ACTIVE model, and a free-text prompt cannot offer that list —
+  // the admin would type a name and get a 400 with no way to see the valid ones.
+  const [deprecating, setDeprecating] = useState<InventoryModel | null>(null);
+  const [replacement, setReplacement] = useState("");
+  // chainFor holds the model whose fallback chain editor is open. Opening the
+  // edit form closes it and vice versa: two panels open on different models at
+  // once is how someone saves a chain onto the wrong model.
+  const [chainFor, setChainFor] = useState<InventoryModel | null>(null);
 
-  const refreshModels = () =>
-    listRegisteredModels(agent)
-      .then(setModels)
-      .catch((e: Error) => setError(e.message));
+  const refresh = useCallback(async () => {
+    if (!routed) return;
+    setModels(await listModels(routed));
+  }, [routed]);
 
   useEffect(() => {
+    if (!routed) return;
     let cancelled = false;
     setModels(null);
     setError(null);
-    listRegisteredModels(agent)
+    listModels(routed)
       .then((m) => !cancelled && setModels(m))
-      .catch((e: Error) => !cancelled && setError(e.message));
+      .catch((e: Error) => !cancelled && setError(describeError(e)));
+    modelCatalog(routed)
+      .then((c) => !cancelled && setCatalog(c))
+      .catch(() => !cancelled && setCatalog([]));
     return () => {
       cancelled = true;
     };
-  }, [agent]);
-
-  useEffect(() => {
-    if (scope.kind !== "subscription" || !scope.subsAccId) {
-      setUsers(null);
-      return;
-    }
-    let cancelled = false;
-    setUsers(null);
-    listSubscriptionUsers(scope.tenantId, scope.subsAccId)
-      .then((u) => !cancelled && setUsers(u))
-      .catch(() => !cancelled && setUsers([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+  }, [routed]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -76,172 +101,435 @@ export default function ModelRegistryPanel({ scope }: { scope: ScopeRef }) {
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }
   }
 
-  async function onAdd(e: FormEvent) {
+  // Opening the edit form closes the chain editor and vice versa (see openChain
+  // below): two panels open on different models at once is how someone saves a
+  // chain onto the wrong model.
+  function openCreate() {
+    setChainFor(null);
+    setDraft(emptyDraft());
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openEdit(m: InventoryModel) {
+    setChainFor(null);
+    // api_key stays blank: the API never returns it, and leaving it blank means
+    // saving keeps the stored key rather than clearing it.
+    setDraft({
+      model_name: m.model_name,
+      provider: m.provider,
+      model: m.model,
+      api_base: m.api_base ?? "",
+      auth_method: m.auth_method ?? "",
+      api_key: "",
+      fallbacks: [...m.fallbacks],
+      // Carried opaquely. PUT is a full replace for every readable field, so a
+      // draft that dropped extra_body would silently clear it on an unrelated
+      // edit — the MiniMax catalog entry's reasoning_split is a real instance.
+      extra_body: m.extra_body,
+    });
+    setEditing({ name: m.model_name, version: m.version });
+    setShowForm(true);
+  }
+
+  function openDuplicate(m: InventoryModel) {
+    setChainFor(null);
+    setDraft(draftFromDuplicate(m));
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openChain(m: InventoryModel) {
+    setShowForm(false);
+    setChainFor(m);
+  }
+
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const f = {
-      provider: form.provider.trim(),
-      name: form.name.trim(),
-      model: form.model.trim(),
-      api_base: form.api_base.trim(),
-      api_key: form.api_key,
-    };
-    if (!f.provider || !f.name || !f.model || !f.api_base || !f.api_key) {
-      setError("Fill provider, name, model, api_base and api_key.");
+    if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
+      setError({ code: "models_incomplete", referrers: [] });
       return;
     }
     await run(async () => {
-      await registerModel(agent, f);
-      setForm(emptyForm);
-      setShowAdd(false);
-      await refreshModels();
+      if (editing) {
+        await updateModel(routed, editing.name, editing.version, draft);
+      } else {
+        await createModel(routed, draft);
+      }
+      setShowForm(false);
+      setDraft(emptyDraft());
+      setEditing(null);
+      await refresh();
     });
   }
 
-  async function onApply(user: UserRef) {
-    const sel = pick[user.accId];
-    if (!sel || scope.kind !== "subscription" || !scope.subsAccId) return;
-    const [provider, name] = sel.split("|");
-    await run(async () => {
-      await applyRegisteredModel(agent, {
-        tenantId: scope.tenantId,
-        subsAccId: scope.subsAccId!,
-        userAccId: user.accId,
-        provider,
-        name,
-      });
-      setApplied((prev) => ({ ...prev, [user.accId]: name }));
+  function onCatalogPick(value: string) {
+    if (value === CUSTOM) {
+      setDraft((d) => ({ ...d, provider: "", model: "", api_base: "", auth_method: "" }));
+      return;
+    }
+    const entry = catalog[Number(value)];
+    if (!entry) return;
+    // Keep whatever name and key the admin already typed; only the definition
+    // fields are prefilled.
+    setDraft((d) => ({ ...draftFromCatalog(entry), model_name: d.model_name, api_key: d.api_key, fallbacks: d.fallbacks }));
+  }
+
+  const { active, inactive } = splitInventory(models ?? []);
+
+  function move(list: InventoryModel[], index: number, delta: number) {
+    const order = reorderPayload(list, inactive, index, delta);
+    if (!order) return;
+    void run(async () => {
+      await reorderModels(routed, order);
+      await refresh();
     });
   }
 
   return (
     <div className="flex flex-col gap-5">
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-fg-muted">Agent</span>
-        <select className={selectClass} value={agent} onChange={(e) => setAgent(e.target.value as Instance)}>
-          {INSTANCES.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-      </label>
+      {error && (
+        <Alert severity="error">
+          {errorText(err, error.code)}
+          {error.referrers.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-[11px]">
+              {error.referrers.map((r) => (
+                <li key={`${r.kind}:${r.id}`}>
+                  {r.kind}: <span className="font-mono">{r.id}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Alert>
+      )}
 
-      {error && <Alert severity="error">{error}</Alert>}
+      {!routed && (
+        <Alert severity="info">{t.models.noAgents}</Alert>
+      )}
 
-      {/* Registry */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-          <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Registered models — {agent}
-          </span>
-          <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" onClick={() => setShowAdd((v) => !v)}>
-            <Plus size={16} />
-            Register model
-          </Button>
-        </div>
-
-        {showAdd && (
-          <form onSubmit={onAdd} className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
-            <Input inputSize="sm" placeholder="provider (e.g. zhipu)" value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} />
-            <Input inputSize="sm" placeholder="model_name (e.g. glm-4.7)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Input inputSize="sm" placeholder="litellm model (e.g. glm-4.7)" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-            <Input inputSize="sm" placeholder="api_base (e.g. https://open.bigmodel.cn/api/paas/v4)" value={form.api_base} onChange={(e) => setForm({ ...form, api_base: e.target.value })} />
-            <Input inputSize="sm" type="password" autoComplete="off" placeholder="api_key (write-only)" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="text" size="sm" onClick={() => { setShowAdd(false); setForm(emptyForm); }}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="filled" size="sm" disabled={busy}>
-                {busy ? "Saving…" : "Register"}
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {models === null && !error ? (
-          <div className="flex justify-center py-3">
-            <Spinner size={18} />
-          </div>
-        ) : models && models.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">No models registered for {agent} yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {models?.map((m) => (
-              <li key={modelKey(m.provider, m.name)} className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-mono text-xs text-fg">{m.name}</span>
-                  <span className="truncate text-[11px] text-fg-muted">{m.provider} · {m.api_base}</span>
-                </div>
-                {m.has_key && <Badge tone="neutral">key</Badge>}
-                <IconButton variant="ghost" size="sm" aria-label={`Delete ${m.name}`} title="Delete" disabled={busy} onClick={() => run(async () => { await deleteRegisteredModel(agent, m.provider, m.name); await refreshModels(); })}>
-                  <Trash2 size={15} aria-hidden />
-                </IconButton>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+        <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          {t.models.inventory}
+        </span>
+        <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
+          <Plus size={16} />
+          {t.models.register}
+        </Button>
       </div>
 
-      {/* Assignment */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-          <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Assign to users
-          </span>
-        </div>
+      {showForm && (
+        <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4">
+          <Field
+            label={t.models.startFrom}
+            job={t.models.startFromJob}
+            htmlFor="m-catalog"
+          >
+            <select
+              id="m-catalog"
+              className={fieldControlClass()}
+              defaultValue=""
+              onChange={(e) => onCatalogPick(e.target.value)}
+            >
+              <option value="" disabled>
+                {t.models.catalogPlaceholder}
+              </option>
+              {catalog.map((c, i) => (
+                <option key={`${c.provider}|${c.model}`} value={String(i)}>
+                  {c.provider} · {c.model}
+                </option>
+              ))}
+              <option value={CUSTOM}>{t.models.custom}</option>
+            </select>
+          </Field>
 
-        {scope.kind !== "subscription" ? (
-          <p className="py-2 text-sm text-fg-muted">Select a subscription on the left to assign models to its users.</p>
-        ) : !models || models.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">Register a model first.</p>
-        ) : users === null ? (
-          <div className="flex justify-center py-3">
-            <Spinner size={18} />
-          </div>
-        ) : users.filter((u) => u.role === agent).length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">
-            No users have a <span className="font-mono">{agent}</span> workspace yet (they must start a chat first).
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {users
-              .filter((u) => u.role === agent)
-              .map((u) => (
-              <li key={u.accId} className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
-                  {u.name || u.email || u.accId}
+          {/* The derivation pair. model_name and model were two adjacent inputs
+              labelled only by placeholder, with nothing saying that one is the
+              admin's alias and the other is the id the provider expects — the
+              single worst thing to read in this panel. They are now a pair with
+              the emitted entry underneath, so the relationship is shown rather
+              than left to be inferred. */}
+          <div className="grid gap-3 rounded-lg border border-brand/25 bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
+            <Field
+              label={t.models.yourName}
+              job={t.models.yourNameJob}
+              htmlFor="m-alias"
+            >
+              <input
+                id="m-alias"
+                className={fieldControlClass(true)}
+                placeholder="team-gpt"
+                value={draft.model_name}
+                disabled={!!editing}
+                onChange={(e) => setDraft({ ...draft, model_name: e.target.value })}
+              />
+            </Field>
+            <span aria-hidden className="hidden self-center pt-5 text-center text-fg-muted sm:block">
+              →
+            </span>
+            <Field
+              label={t.models.providerName}
+              job={t.models.providerNameJob}
+              htmlFor="m-id"
+            >
+              <input
+                id="m-id"
+                className={fieldControlClass(true)}
+                placeholder="gpt-5.4"
+                value={draft.model}
+                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+              />
+            </Field>
+
+            <div className="sm:col-span-3">
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
+                  {t.models.writtenAs}
                 </span>
-                {applied[u.accId] && <Badge tone="accent">set: {applied[u.accId]}</Badge>}
-                <select
-                  className="h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg"
-                  value={pick[u.accId] ?? ""}
-                  onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}
-                >
+                <span className="text-[11px] text-fg-muted">config.json</span>
+              </div>
+              <pre className="overflow-x-auto rounded-md border border-brand/25 bg-bg p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
+{`"model_name": ${JSON.stringify(draft.model_name || "…")},
+"provider":   ${JSON.stringify(draft.provider || "…")},
+"model":      ${JSON.stringify(draft.model || "…")}`}
+              </pre>
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+                <KeyRound size={12} aria-hidden />
+                {t.models.keyGoesToBefore}
+                <Ident>.security.yml</Ident>
+                {t.models.keyGoesToMiddle}
+                <Ident>config.json</Ident>
+                {t.models.keyGoesToAfter}
+              </p>
+            </div>
+          </div>
+
+          <Field
+            label={t.models.provider}
+            job={t.models.providerJob}
+            htmlFor="m-provider"
+          >
+            <input
+              id="m-provider"
+              className={fieldControlClass(true)}
+              placeholder="openai"
+              value={draft.provider}
+              onChange={(e) => setDraft({ ...draft, provider: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label={t.models.apiBase}
+            job={t.models.apiBaseJob}
+            htmlFor="m-base"
+          >
+            <input
+              id="m-base"
+              className={fieldControlClass(true)}
+              placeholder="https://api.openai.com/v1"
+              value={draft.api_base}
+              onChange={(e) => setDraft({ ...draft, api_base: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label={t.models.authMethod}
+            job={t.models.authMethodJob}
+            htmlFor="m-auth"
+          >
+            <input
+              id="m-auth"
+              className={fieldControlClass(true)}
+              placeholder="oauth"
+              value={draft.auth_method}
+              onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label={t.models.apiKey}
+            job={t.models.apiKeyJob}
+            htmlFor="m-key"
+            consequence={
+              editing ? (
+                <>
+                  {t.models.leaveBlankBefore}
+                  <b>{t.models.leaveBlankBold}</b>
+                  {t.models.leaveBlankAfter}
+                </>
+              ) : undefined
+            }
+          >
+            <input
+              id="m-key"
+              className={fieldControlClass()}
+              type="password"
+              autoComplete="off"
+              placeholder={editing ? "unchanged" : "paste the key"}
+              value={draft.api_key}
+              onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
+            />
+          </Field>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="text" size="sm"
+              onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="filled" size="sm" disabled={busy}>
+              {busy ? t.models.saving : editing ? t.models.saveChanges : t.models.addModel}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {models === null && !error ? (
+        <div className="flex justify-center py-3">
+          <Spinner size={18} />
+        </div>
+      ) : (
+        <>
+          <Section title={t.models.active}>
+            {active.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">{t.models.noneActive}</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {active.map((m, i) => (
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onMoveUp={i === 0 ? undefined : () => move(active, i, -1)}
+                    onMoveDown={i === active.length - 1 ? undefined : () => move(active, i, 1)}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "disabled");
+                      await refresh();
+                    })}
+                    onDeprecate={(mm) => { setDeprecating(mm); setReplacement(""); }}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })}
+                    onEditChain={openChain} />
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-fg-muted">
+              {t.models.readingOrderBefore}
+              <span className="font-mono">fallbacks</span>
+              {t.models.readingOrderAfter}
+            </p>
+
+            {deprecating && (
+              <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+                <span className="text-xs font-medium text-fg-muted">
+                  {t.models.retirePrefix} <span className="font-mono">{deprecating.model_name}</span>
+                </span>
+                <p className="text-[11px] text-fg-muted">
+                  {t.models.retireExplain}
+                </p>
+                <select className={selectClass} value={replacement}
+                  onChange={(e) => setReplacement(e.target.value)}>
                   <option value="" disabled>
-                    model…
+                    {t.models.replacementPlaceholder}
                   </option>
-                  {models.map((m) => (
-                    <option key={modelKey(m.provider, m.name)} value={modelKey(m.provider, m.name)}>
-                      {m.name}
-                    </option>
-                  ))}
+                  {active
+                    .filter((m) => m.model_name !== deprecating.model_name)
+                    .map((m) => (
+                      <option key={m.model_name} value={m.model_name}>
+                        {m.model_name}
+                      </option>
+                    ))}
                 </select>
-                <Button variant="tonal" size="sm" disabled={busy || !pick[u.accId]} onClick={() => onApply(u)}>
-                  Apply
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="text" size="sm"
+                    onClick={() => { setDeprecating(null); setReplacement(""); }}>
+                    Cancel
+                  </Button>
+                  <Button variant="filled" size="sm" disabled={busy || !replacement}
+                    onClick={() =>
+                      run(async () => {
+                        await deprecateModel(routed, deprecating.model_name, deprecating.version, replacement);
+                        setDeprecating(null);
+                        setReplacement("");
+                        await refresh();
+                      })
+                    }>
+                    Deprecate
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          <Section title={t.models.inactive}>
+            {inactive.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">{t.models.noneInactive}</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {inactive.map((m) => (
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "active");
+                      await refresh();
+                    })}
+                    onDeprecate={() => {}}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })} />
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+
+      {chainFor && (
+        <FallbackEditor
+          // Keyed on the model name so switching chainFor from one model to
+          // another remounts the editor instead of updating it in place — it
+          // owns its chain in local state, so without a fresh mount the
+          // ordered list would keep showing the PREVIOUS model's chain under
+          // the new model's name, and Save would write it onto the wrong model.
+          key={chainFor.model_name}
+          model={chainFor}
+          all={models ?? []}
+          busy={busy}
+          onSave={(chain) =>
+            run(async () => {
+              await updateModel(routed, chainFor.model_name, chainFor.version, {
+                model_name: chainFor.model_name,
+                provider: chainFor.provider,
+                model: chainFor.model,
+                api_base: chainFor.api_base ?? "",
+                auth_method: chainFor.auth_method ?? "",
+                api_key: "",
+                fallbacks: chain,
+                extra_body: chainFor.extra_body,
+              });
+              setChainFor(null);
+              await refresh();
+            })
+          }
+        />
+      )}
+
+      {routed && <ModelDefaultsPanel scope={scope} routed={routed} models={models ?? []} />}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</span>
+      {children}
     </div>
   );
 }
