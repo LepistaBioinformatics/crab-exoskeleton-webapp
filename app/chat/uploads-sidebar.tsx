@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 480;
@@ -36,6 +40,9 @@ export default function UploadsSidebar({
   refreshSignal: number;
   onClose: () => void;
 }) {
+  const t = useT(chatCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
   const [files, setFiles] = useState<Attachment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localRefresh, setLocalRefresh] = useState(0);
@@ -96,7 +103,7 @@ export default function UploadsSidebar({
       setFiles((prev) => (prev ? prev.filter((f) => f.path !== path) : prev));
       setDeletingPath(null);
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Couldn't delete this file.");
+      setDeleteError(errorText(err, e instanceof Error ? e.message : null));
     }
   }
 
@@ -115,14 +122,14 @@ export default function UploadsSidebar({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize Workspace files"
+        aria-label={t.uploads.resize}
         onMouseDown={startResize}
         className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
       />
 
       <div className="flex items-center gap-2 border-b border-brand/30 px-3 py-2">
-        <h2 className="flex-1 font-display text-sm font-semibold text-fg">Workspace</h2>
-        <IconButton variant="ghost" size="sm" aria-label="Close panel" onClick={onClose}>
+        <h2 className="flex-1 font-display text-sm font-semibold text-fg">{t.uploads.workspace}</h2>
+        <IconButton variant="ghost" size="sm" aria-label={t.uploads.closePanel} onClick={onClose}>
           <X size={16} aria-hidden />
         </IconButton>
       </div>
@@ -131,12 +138,12 @@ export default function UploadsSidebar({
 
       <div className="flex items-center gap-2 px-3 pt-3">
         <FileText size={16} className="text-accent" aria-hidden />
-        <h3 className="flex-1 font-display text-sm font-semibold text-fg">Files</h3>
+        <h3 className="flex-1 font-display text-sm font-semibold text-fg">{t.uploads.files}</h3>
         <IconButton
           variant="ghost"
           size="sm"
-          aria-label="Refresh files"
-          title="Refresh"
+          aria-label={t.uploads.refreshAria}
+          title={t.uploads.refresh}
           onClick={() => setLocalRefresh((n) => n + 1)}
         >
           <RefreshCw size={15} aria-hidden />
@@ -153,7 +160,7 @@ export default function UploadsSidebar({
             variant="subtle"
             inputSize="sm"
             className="pl-9"
-            placeholder="Filter files"
+            placeholder={t.uploads.filterPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -171,7 +178,7 @@ export default function UploadsSidebar({
 
         {files !== null && visible.length === 0 && (
           <p className="py-3 text-center text-sm text-fg-muted">
-            {q ? "No matches." : "No files uploaded yet."}
+            {q ? t.uploads.noMatches : t.uploads.noneYet}
           </p>
         )}
 
@@ -187,8 +194,8 @@ export default function UploadsSidebar({
               <IconButton
                 variant="ghost"
                 size="sm"
-                aria-label={`Delete ${f.name}`}
-                title="Delete"
+                aria-label={`${t.uploads.deletePrefix} ${f.name}`}
+                title={c.actions.delete}
                 onClick={() => {
                   setDeleteError(null);
                   setDeletingPath(f.path);
@@ -204,12 +211,12 @@ export default function UploadsSidebar({
 
       <ConfirmDialog
         open={deletingPath !== null}
-        title="Delete file?"
+        title={t.uploads.deleteTitle}
         message={
           deleteError ??
-          `"${pending?.name ?? "This file"}" is removed from the workspace. The agent can no longer read it.`
+          t.uploads.deleteMessage.replace("{name}", pending?.name ?? t.uploads.deleteFallbackName)
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => deletingPath && onDelete(deletingPath)}
         onCancel={() => {
           setDeletingPath(null);

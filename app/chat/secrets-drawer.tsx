@@ -20,6 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const backdrop = cva("fixed inset-0 z-40 bg-black/40 transition-opacity", {
   variants: { open: { true: "opacity-100", false: "pointer-events-none opacity-0" } },
@@ -49,6 +53,9 @@ export default function SecretsDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useT(chatCopy);
+  const c = useT(commonCopy);
+  const errs = useT(errorCopy);
   const [secrets, setSecrets] = useState<SecretNames | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -92,11 +99,11 @@ export default function SecretsDrawer({
     const finalName = targetName();
 
     if (!SECRET_NAME_RE.test(finalName)) {
-      setSubmitError("Name may only contain letters, numbers, and . _ -");
+      setSubmitError(t.secrets.invalidName);
       return;
     }
     if (!value) {
-      setSubmitError("Enter a value.");
+      setSubmitError(t.secrets.valueRequired);
       return;
     }
 
@@ -106,7 +113,7 @@ export default function SecretsDrawer({
       setValue(""); // never keep the value around after submit
       await refresh();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
+      setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setSubmitting(false);
     }
@@ -120,7 +127,7 @@ export default function SecretsDrawer({
       await deleteSecret(workspace, { format: fmt, name: secretName });
       await refresh();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Something went wrong.");
+      setLoadError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setBusy(null);
     }
@@ -136,11 +143,11 @@ export default function SecretsDrawer({
     <>
       <div className={backdrop({ open })} onClick={onClose} aria-hidden />
 
-      <aside className={panel({ open })} role="dialog" aria-label="Agent secrets">
+      <aside className={panel({ open })} role="dialog" aria-label={t.secrets.title}>
         <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-3">
           <KeyRound size={18} className="text-accent" aria-hidden />
-          <h2 className="flex-1 font-display text-base font-semibold text-fg">Agent secrets</h2>
-          <IconButton variant="ghost" size="sm" aria-label="Close" onClick={onClose}>
+          <h2 className="flex-1 font-display text-base font-semibold text-fg">{t.secrets.title}</h2>
+          <IconButton variant="ghost" size="sm" aria-label={c.actions.close} onClick={onClose}>
             <X size={18} aria-hidden />
           </IconButton>
         </div>
@@ -156,13 +163,13 @@ export default function SecretsDrawer({
 
           {applying && (
             <div className="mb-3">
-              <Alert severity="info">Applying — the agent is restarting…</Alert>
+              <Alert severity="info">{t.secrets.applying}</Alert>
             </div>
           )}
 
           <form onSubmit={onSubmit} className="mb-6 flex flex-col gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">Format</span>
+              <span className="text-xs font-medium text-fg-muted">{t.secrets.formatLabel}</span>
               <select
                 className={selectClass}
                 value={format}
@@ -177,10 +184,10 @@ export default function SecretsDrawer({
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">Name</span>
+              <span className="text-xs font-medium text-fg-muted">{t.secrets.nameLabel}</span>
               <Input
                 inputSize="md"
-                placeholder="e.g. OPENAI_API_KEY"
+                placeholder={t.secrets.namePlaceholder}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -192,7 +199,7 @@ export default function SecretsDrawer({
                 inputSize="md"
                 type="password"
                 autoComplete="off"
-                placeholder="Secret value (write-only)"
+                placeholder={t.secrets.valuePlaceholder}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
               />
@@ -201,7 +208,7 @@ export default function SecretsDrawer({
             {submitError && <Alert severity="error">{submitError}</Alert>}
 
             <Button type="submit" variant="filled" disabled={submitting}>
-              {submitting ? "Saving…" : "Save secret"}
+              {submitting ? t.secrets.saving : t.secrets.save}
             </Button>
           </form>
 
@@ -221,7 +228,7 @@ export default function SecretsDrawer({
           )}
 
           {isEmpty && (
-            <p className="py-3 text-sm text-fg-muted">No secrets set for this agent yet.</p>
+            <p className="py-3 text-sm text-fg-muted">{t.secrets.none}</p>
           )}
 
           {groups.map((group) => (
@@ -230,10 +237,7 @@ export default function SecretsDrawer({
                 <Badge tone="neutral">{group.fmt}</Badge>
               </div>
               {group.fmt === "native" && (
-                <p className="mb-1 text-[11px] leading-relaxed text-fg-muted">
-                  Picoclaw credentials are now set by your tenant or subscription administrator. You
-                  can still remove one you saved earlier; new ones have to come from them.
-                </p>
+                <p className="mb-1 text-[11px] leading-relaxed text-fg-muted">{t.secrets.nativeNote}</p>
               )}
               <ul className="flex flex-col gap-1">
                 {group.names.map((secretName) => (
@@ -247,7 +251,7 @@ export default function SecretsDrawer({
                     <IconButton
                       variant="ghost"
                       size="sm"
-                      aria-label={`Delete ${secretName}`}
+                      aria-label={`${t.secrets.deletePrefix} ${secretName}`}
                       disabled={busy === secretName}
                       onClick={() => onDelete(group.fmt, secretName)}
                     >
