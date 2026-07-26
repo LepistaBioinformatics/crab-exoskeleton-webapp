@@ -52,6 +52,7 @@ export interface ModelDraft {
   auth_method: string;
   api_key: string;
   fallbacks: string[];
+  extra_body?: unknown;
 }
 
 // A factory, not a shared const: a shared object would hand every draft the SAME
@@ -102,6 +103,7 @@ export function draftFromCatalog(entry: CatalogEntry): ModelDraft {
     model: entry.model,
     api_base: entry.api_base ?? "",
     auth_method: entry.auth_method ?? "",
+    extra_body: entry.extra_body,
   };
 }
 
@@ -116,6 +118,7 @@ export function draftFromDuplicate(m: InventoryModel): ModelDraft {
     auth_method: m.auth_method ?? "",
     api_key: "",
     fallbacks: [...m.fallbacks],
+    extra_body: m.extra_body,
   };
 }
 
@@ -199,6 +202,9 @@ export function serializeDraft(draft: ModelDraft): Record<string, unknown> {
   };
   if (draft.api_key) {
     body.api_key = draft.api_key;
+  }
+  if (draft.extra_body !== undefined) {
+    body.extra_body = draft.extra_body;
   }
   return body;
 }

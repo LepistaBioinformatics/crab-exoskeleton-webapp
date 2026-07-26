@@ -89,17 +89,38 @@ describe("draftFromCatalog", () => {
     expect(draft.auth_method).toBe("oauth");
     expect(draft.api_base).toBe("");
   });
+
+  // MiniMax-M2.5 in the embedded catalog carries extra_body: { reasoning_split: true }.
+  // Dropping it here means a model registered from the catalog never gets it in the
+  // first place, and PUT full-replaces the field on every later edit.
+  it("preserves extra_body from the catalog entry", () => {
+    const draft = draftFromCatalog({
+      provider: "minimax",
+      model: "MiniMax-M2.5",
+      extra_body: { reasoning_split: true },
+    });
+    expect(draft.extra_body).toEqual({ reasoning_split: true });
+  });
 });
 
 describe("draftFromDuplicate", () => {
   it("copies every field except the name and the key", () => {
     const draft = draftFromDuplicate(
-      model({ model_name: "original", api_base: "https://x/v1", fallbacks: ["fb"], auth_method: "oauth" }),
+      model({
+        model_name: "original",
+        api_base: "https://x/v1",
+        fallbacks: ["fb"],
+        auth_method: "oauth",
+        extra_body: { reasoning_split: true },
+      }),
     );
     expect(draft.provider).toBe("openai");
     expect(draft.api_base).toBe("https://x/v1");
     expect(draft.auth_method).toBe("oauth");
     expect(draft.fallbacks).toEqual(["fb"]);
+    // extra_body is a readable field like any other: PUT full-replaces it, so a
+    // draft that dropped it here would silently null it out on the next save.
+    expect(draft.extra_body).toEqual({ reasoning_split: true });
     // The name must be unique, and the key is never returned by the API — so both
     // are blank and the admin has to supply them.
     expect(draft.model_name).toBe("");
@@ -169,5 +190,19 @@ describe("serializeDraft", () => {
       auth_method: "",
       fallbacks: ["fb"],
     });
+  });
+
+  // extra_body is readable on InventoryModel and full-replaced on PUT (proxy:
+  // admin_models.go does `cur.ExtraBody = req.ExtraBody` unconditionally). A draft
+  // that loaded one but omitted it here would silently null it out on save — the
+  // same failure mode as the api_key check above, against a different field.
+  it("includes extra_body when the draft carries one", () => {
+    const body = serializeDraft({ ...emptyDraft(), extra_body: { reasoning_split: true } });
+    expect(body.extra_body).toEqual({ reasoning_split: true });
+  });
+
+  it("omits extra_body entirely when the draft never had one", () => {
+    const body = serializeDraft(emptyDraft());
+    expect("extra_body" in body).toBe(false);
   });
 });
