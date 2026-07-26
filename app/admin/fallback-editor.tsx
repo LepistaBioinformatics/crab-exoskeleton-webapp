@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import type { InventoryModel } from "@/lib/models";
+import { commonCopy } from "@/lib/i18n/common";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-9 w-full rounded-lg border border-brand bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -27,6 +29,7 @@ export function FallbackEditor({
   busy: boolean;
   onSave: (chain: string[]) => void;
 }) {
+  const c = useT(commonCopy);
   const [chain, setChain] = useState<string[]>([...model.fallbacks]);
   const candidates = fallbackCandidates(all, model.model_name).filter((m) => !chain.includes(m.model_name));
 
@@ -66,7 +69,7 @@ export function FallbackEditor({
                 disabled={busy || i === chain.length - 1} onClick={() => move(i, 1)}>
                 ↓
               </button>
-              <IconButton variant="ghost" size="sm" aria-label={`Remove ${name}`} title="Remove"
+              <IconButton variant="ghost" size="sm" aria-label={`${c.actions.remove} ${name}`} title={c.actions.remove}
                 disabled={busy} onClick={() => setChain(chain.filter((n) => n !== name))}>
                 <X size={14} aria-hidden />
               </IconButton>

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Building2, ChevronDown, ChevronRight, FolderClosed } from "lucide-react";
 import { cva } from "class-variance-authority";
 import { scopeKey, type AdminScope, type ScopeRef } from "@/lib/admin";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // A selectable node (tenant header when it carries a tenant scope, or a
 // subscription leaf): active = tonal selected fill, matching the workspace nav.
@@ -56,13 +58,16 @@ export function ScopeTree({
   scopes,
   value,
   onChange,
-  label = "Scope",
+  label,
 }: {
   scopes: AdminScope[];
   value: ScopeRef | null;
   onChange: (scope: ScopeRef) => void;
   label?: string;
 }) {
+  const t = useT(adminCopy);
+  // Defaulted here rather than in the signature: the fallback is translated.
+  const heading = label ?? t.scope.label;
   const groups = groupScopes(scopes);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const selectedKey = value ? scopeKey(value) : "";
@@ -79,9 +84,9 @@ export function ScopeTree({
   return (
     <div className="flex flex-col gap-2">
       <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        {label}
+        {heading}
       </span>
-      <div role="tree" aria-label={label} className="flex min-w-0 flex-col gap-0.5">
+      <div role="tree" aria-label={heading} className="flex min-w-0 flex-col gap-0.5">
         {groups.map((g) => {
           const open = !collapsed.has(g.tenantId);
           const tenantKey = g.tenantScope ? scopeKey(g.tenantScope) : "";
@@ -91,7 +96,7 @@ export function ScopeTree({
                 <button
                   type="button"
                   onClick={() => toggle(g.tenantId)}
-                  aria-label={open ? "Collapse tenant" : "Expand tenant"}
+                  aria-label={open ? t.scope.collapseTenant : t.scope.expandTenant}
                   aria-expanded={open}
                   className="shrink-0 rounded p-1 text-fg-muted transition-colors hover:bg-elevated/60"
                 >
@@ -104,7 +109,7 @@ export function ScopeTree({
                     aria-selected={selectedKey === tenantKey}
                     onClick={() => onChange({ kind: "tenant", tenantId: g.tenantId })}
                     className={nodeButton({ active: selectedKey === tenantKey })}
-                    title={`Tenant · ${g.tenantName}`}
+                    title={`${t.scope.tenantPrefix} · ${g.tenantName}`}
                   >
                     <Building2 size={15} className="shrink-0 text-fg-muted" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{g.tenantName}</span>
@@ -112,7 +117,7 @@ export function ScopeTree({
                 ) : (
                   <span
                     className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-1.5 pr-2 text-sm text-fg-muted"
-                    title={`Tenant · ${g.tenantName}`}
+                    title={`${t.scope.tenantPrefix} · ${g.tenantName}`}
                   >
                     <Building2 size={15} className="shrink-0" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{g.tenantName}</span>
@@ -137,7 +142,7 @@ export function ScopeTree({
                             onChange({ kind: "subscription", tenantId: sub.tenantId, subsAccId: sub.subsAccId })
                           }
                           className={nodeButton({ active: selectedKey === key })}
-                          title={`Subscription · ${sub.accName ?? sub.subsAccId ?? ""}`}
+                          title={`${t.scope.subscriptionPrefix} · ${sub.accName ?? sub.subsAccId ?? ""}`}
                         >
                           <FolderClosed size={15} className="shrink-0 text-fg-muted" aria-hidden />
                           <span className="min-w-0 flex-1 truncate">{sub.accName ?? sub.subsAccId}</span>

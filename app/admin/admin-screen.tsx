@@ -28,6 +28,8 @@ import SharedSkillsPanel from "./shared-skills-panel";
 import ModelRegistryPanel from "./model-registry-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 
 // Level 2: the sections OF a scope. Subordinate to the mode switch above, and
@@ -63,12 +65,12 @@ const modeButton = cva("rounded-md px-3 py-1.5 text-[13px] font-medium transitio
 // Labels drop the "Shared" prefix: everything in this row is shared across the
 // selected scope by definition, so the word was on every item and distinguished
 // none of them.
-const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: "files", label: "Files", icon: <FileBox size={15} aria-hidden /> },
-  { key: "secrets", label: "Secrets", icon: <KeyRound size={15} aria-hidden /> },
-  { key: "skills", label: "Skills", icon: <Wrench size={15} aria-hidden /> },
-  { key: "model", label: "Models", icon: <Cpu size={15} aria-hidden /> },
-  { key: "members", label: "Members", icon: <Users size={15} aria-hidden /> },
+const TABS: { key: Exclude<Tab, "branding">; icon: React.ReactNode }[] = [
+  { key: "files", icon: <FileBox size={15} aria-hidden /> },
+  { key: "secrets", icon: <KeyRound size={15} aria-hidden /> },
+  { key: "skills", icon: <Wrench size={15} aria-hidden /> },
+  { key: "model", icon: <Cpu size={15} aria-hidden /> },
+  { key: "members", icon: <Users size={15} aria-hidden /> },
 ];
 
 // The administrative screen (FR-9). Server-side authz in the proxy is the real
@@ -77,6 +79,7 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 // never broken pickers). The nav entry link is likewise hidden when scopes are
 // empty, so most users never see this route.
 export default function AdminScreen() {
+  const t = useT(adminCopy);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [scopes, setScopes] = useState<AdminScope[] | null>(null);
@@ -278,7 +281,7 @@ export default function AdminScreen() {
 
       <div className="mb-5 flex items-center gap-2">
         <ShieldCheck size={22} className="text-accent" aria-hidden />
-        <h1 className="font-display text-xl font-semibold text-fg">Administration</h1>
+        <h1 className="font-display text-xl font-semibold text-fg">{t.shell.heading}</h1>
       </div>
 
       {error ? (
@@ -288,10 +291,7 @@ export default function AdminScreen() {
           <Spinner size={28} />
         </div>
       ) : scopes.length === 0 && !canEditBranding ? (
-        <Alert severity="info">
-          You don&apos;t have administrative authority over any scope. Ask a tenant or subscription
-          manager if you think this is a mistake.
-        </Alert>
+        <Alert severity="info">{t.shell.noAuthority}</Alert>
       ) : (
         <>
           {/* Level 1 — which world. Only rendered when both exist; with one of
@@ -300,7 +300,7 @@ export default function AdminScreen() {
             <div
               className="mb-5 inline-flex gap-1 rounded-lg border border-brand/25 bg-elevated p-1"
               role="tablist"
-              aria-label="Admin area"
+              aria-label={t.shell.areaAria}
             >
               <button
                 type="button"
@@ -309,7 +309,7 @@ export default function AdminScreen() {
                 className={modeButton({ active: mode === "scoped" })}
                 onClick={() => setTab(lastScopedTab.current)}
               >
-                Scoped actions
+                {t.shell.scopedActions}
               </button>
               <button
                 type="button"
@@ -320,7 +320,7 @@ export default function AdminScreen() {
               >
                 <span className="flex items-center gap-1.5">
                   <Palette size={14} aria-hidden />
-                  Branding
+                  {t.shell.branding}
                 </span>
               </button>
             </div>
@@ -328,10 +328,7 @@ export default function AdminScreen() {
 
           {mode === "branding" ? (
             <>
-              <p className="mb-4 max-w-[62ch] text-xs text-fg-muted">
-                Instance-wide. Branding applies to everyone on this deployment, so it has no
-                scope to select.
-              </p>
+              <p className="mb-4 max-w-[62ch] text-xs text-fg-muted">{t.shell.brandingNote}</p>
               <BrandingPanel />
             </>
           ) : (
@@ -348,12 +345,12 @@ export default function AdminScreen() {
                   scopes={tab === "members" ? subscriptionScopes : scopes}
                   value={selected}
                   onChange={setSelected}
-                  label={tab === "members" ? "Subscriptions" : "Scopes"}
+                  label={tab === "members" ? t.shell.subscriptions : t.shell.scopes}
                 />
                 <div
                   role="separator"
                   aria-orientation="vertical"
-                  aria-label="Resize scopes"
+                  aria-label={t.shell.resizeScopes}
                   onMouseDown={startResize}
                   className="absolute inset-y-0 right-0 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
                 />
@@ -363,17 +360,17 @@ export default function AdminScreen() {
                 {/* Level 2 — sections of the selected scope. */}
                 <nav
                   className="flex gap-1 overflow-x-auto border-b border-brand/30"
-                  aria-label="Sections of this scope"
+                  aria-label={t.shell.sectionsAria}
                 >
-                  {scopedTabs.map((t) => (
+                  {scopedTabs.map((entry) => (
                     <button
-                      key={t.key}
+                      key={entry.key}
                       type="button"
-                      className={tabButton({ active: tab === t.key }) + " shrink-0"}
-                      onClick={() => setTab(t.key)}
+                      className={tabButton({ active: tab === entry.key }) + " shrink-0"}
+                      onClick={() => setTab(entry.key)}
                     >
-                      {t.icon}
-                      {t.label}
+                      {entry.icon}
+                      {t.shell.tabs[entry.key]}
                     </button>
                   ))}
                 </nav>
@@ -399,12 +396,20 @@ export default function AdminScreen() {
                           />
                         </div>
                         <p className="min-w-[16rem] flex-1 border-l border-brand/30 pl-3.5 text-xs text-fg-muted">
-                          Reaches <b className="font-semibold text-fg">{scopeLabel}</b>
-                          {selected.kind === "tenant" ? " and every subscription under it" : ""}
+                          {t.shell.reaches} <b className="font-semibold text-fg">{scopeLabel}</b>
+                          {selected.kind === "tenant" ? t.shell.andEverySubscription : ""}
                           {tabTarget === ALL_AGENTS ? (
-                            <>, through <b className="font-semibold text-fg">every agent</b>.</>
+                            <>
+                              {t.shell.throughBefore}
+                              <b className="font-semibold text-fg">{t.shell.everyAgent}</b>
+                              {t.shell.period}
+                            </>
                           ) : (
-                            <>, through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only.</>
+                            <>
+                              {t.shell.throughBefore}
+                              <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span>
+                              {t.shell.throughAfter}
+                            </>
                           )}
                         </p>
                       </div>
