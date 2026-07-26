@@ -33,6 +33,10 @@ import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const conversationRow = cva(
   // Column on mobile (name on top, actions below); row on desktop with the
@@ -71,6 +75,9 @@ export default function HistorySidebar({
   onSelect?: () => void;
   onCollapse?: () => void;
 }) {
+  const t = useT(chatCopy);
+  const c = useT(commonCopy);
+  const e = useT(errorCopy);
   const fragment = useFragment();
   const activeSessionId = fragment?.sid;
 
@@ -177,7 +184,7 @@ export default function HistorySidebar({
   async function submitRename(id: string) {
     const title = draft.trim();
     if (!title) {
-      setRenameError("Title can't be empty.");
+      setRenameError(t.history.titleEmpty);
       return;
     }
     try {
@@ -189,7 +196,7 @@ export default function HistorySidebar({
       setEditingId(null);
       setRenameError(null);
     } catch (err) {
-      setRenameError(err instanceof Error ? err.message : "Couldn't rename this chat.");
+      setRenameError(errorText(e, err instanceof Error ? err.message : null));
     }
   }
 
@@ -202,7 +209,7 @@ export default function HistorySidebar({
       setSearchResults((prev) => (prev ? drop(prev) : prev));
       setDeletingId(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete this chat.");
+      setDeleteError(errorText(e, err instanceof Error ? err.message : null));
     }
   }
 
@@ -218,7 +225,7 @@ export default function HistorySidebar({
         <Bot size={18} className="shrink-0 text-fg-muted" aria-hidden />
         <span
           className="min-w-0 flex-1 truncate font-display text-base font-semibold capitalize text-fg"
-          title={`agent ${workspace.r}`}
+          title={`${t.view.agentPrefix} ${workspace.r}`}
         >
           {workspace.r}
         </span>
@@ -226,8 +233,8 @@ export default function HistorySidebar({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Collapse Conversations"
-            title="Collapse"
+            aria-label={t.history.collapseConversations}
+            title={t.nav.collapse}
             onClick={onCollapse}
             className="hidden md:inline-flex"
           >
@@ -267,9 +274,9 @@ export default function HistorySidebar({
             type="button"
             onClick={() => setHistoryView("list")}
             className={viewToggle({ active: view === "list" })}
-            aria-label="List view"
+            aria-label={t.history.listView}
             aria-pressed={view === "list"}
-            title="List"
+            title={t.history.list}
           >
             <List size={14} aria-hidden />
           </button>
@@ -277,9 +284,9 @@ export default function HistorySidebar({
             type="button"
             onClick={() => setHistoryView("tree")}
             className={viewToggle({ active: view === "tree" })}
-            aria-label="Tree view"
+            aria-label={t.history.treeView}
             aria-pressed={view === "tree"}
-            title="Tree"
+            title={t.history.tree}
           >
             <GitBranch size={14} aria-hidden />
           </button>
@@ -305,7 +312,7 @@ export default function HistorySidebar({
         )}
         {!searching && visible.length === 0 && (
           <p className="py-4 text-center text-sm text-fg-muted">
-            {query.trim() ? "No matches." : "No conversations yet."}
+            {query.trim() ? t.history.noMatches : t.history.noneYet}
           </p>
         )}
         {!searching &&
@@ -330,17 +337,17 @@ export default function HistorySidebar({
                       onKeyDown={(e) => {
                         if (e.key === "Escape") cancelRename();
                       }}
-                      aria-label="Rename conversation"
+                      aria-label={t.history.renameAria}
                     />
-                    <IconButton type="submit" variant="ghost" size="sm" aria-label="Save" title="Save">
+                    <IconButton type="submit" variant="ghost" size="sm" aria-label={c.actions.save} title={c.actions.save}>
                       <Check size={16} aria-hidden />
                     </IconButton>
                     <IconButton
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label="Cancel"
-                      title="Cancel"
+                      aria-label={c.actions.cancel}
+                      title={c.actions.cancel}
                       onClick={cancelRename}
                     >
                       <X size={16} aria-hidden />
@@ -394,8 +401,8 @@ export default function HistorySidebar({
                     <IconButton
                       variant="ghost"
                       size="sm"
-                      aria-label="Alias and tags"
-                      title="Alias and tags"
+                      aria-label={t.history.aliasAndTags}
+                      title={t.history.aliasAndTags}
                       onClick={() => setEnrichingId(enriching ? null : conversation.id)}
                       aria-expanded={enriching}
                     >
@@ -404,8 +411,8 @@ export default function HistorySidebar({
                     <IconButton
                       variant="ghost"
                       size="sm"
-                      aria-label="Rename conversation"
-                      title="Rename"
+                      aria-label={t.history.renameAria}
+                      title={t.history.rename}
                       onClick={() => startRename(conversation)}
                     >
                       <Pencil size={14} aria-hidden />
@@ -413,8 +420,8 @@ export default function HistorySidebar({
                     <IconButton
                       variant="ghost"
                       size="sm"
-                      aria-label="Delete conversation"
-                      title="Delete"
+                      aria-label={t.history.deleteAria}
+                      title={c.actions.delete}
                       onClick={() => {
                         setDeleteError(null);
                         setDeletingId(conversation.id);
@@ -440,12 +447,12 @@ export default function HistorySidebar({
 
       <ConfirmDialog
         open={deletingId !== null}
-        title="Delete chat?"
+        title={t.history.deleteTitle}
         message={
           deleteError ??
-          `"${pendingDelete?.title ?? "This chat"}" is removed from your list. This can't be undone.`
+          t.history.deleteMessage.replace("{title}", pendingDelete?.title ?? t.history.deleteFallbackTitle)
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => deletingId && onDelete(deletingId)}
         onCancel={() => {
           setDeletingId(null);

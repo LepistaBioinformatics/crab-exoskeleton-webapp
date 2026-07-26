@@ -6,17 +6,21 @@ import { cva } from "class-variance-authority";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import type { ConversationSummary } from "@/lib/chatSession";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 type Prefix = "tag" | "alias" | "text" | "date";
 
-const PILLS: { prefix: Prefix; label: string; Icon: typeof Tags }[] = [
-  { prefix: "tag", label: "Tag", Icon: Tags },
-  { prefix: "alias", label: "Alias", Icon: AtSign },
-  { prefix: "text", label: "Text", Icon: Type },
-  { prefix: "date", label: "Date", Icon: CalendarDays },
+const PILLS: { prefix: Prefix; Icon: typeof Tags }[] = [
+  { prefix: "tag", Icon: Tags },
+  { prefix: "alias", Icon: AtSign },
+  { prefix: "text", Icon: Type },
+  { prefix: "date", Icon: CalendarDays },
 ];
 
-const DATE_PRESETS = ["hoje", "7d", "30d", String(new Date().getFullYear())];
+// parseFilterQuery accepts "hoje" and "today" alike, so suggest whichever
+// word the reader actually uses.
+const datePresets = (today: string) => [today, "7d", "30d", String(new Date().getFullYear())];
 
 const pill = cva(
   "inline-flex items-center gap-1 rounded-full border border-brand/40 px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-brand hover:text-fg",
@@ -54,6 +58,7 @@ export default function ConversationSearchBar({
   conversations: ConversationSummary[];
   searching?: boolean;
 }) {
+  const t = useT(chatCopy);
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -74,10 +79,11 @@ export default function ConversationSearchBar({
 
   const suggestions = useMemo(() => {
     if (!prefix) return [];
-    const pool = prefix === "tag" ? tagNames : prefix === "alias" ? aliases : DATE_PRESETS;
+    const pool =
+      prefix === "tag" ? tagNames : prefix === "alias" ? aliases : datePresets(t.canvas.today);
     const needle = partial.toLowerCase();
     return pool.filter((s) => s.toLowerCase().includes(needle)).slice(0, 8);
-  }, [prefix, partial, tagNames, aliases]);
+  }, [prefix, partial, tagNames, aliases, t.canvas.today]);
 
   function applySuggestion(suggestion: string) {
     if (!prefix || !suggestion) return;
@@ -120,7 +126,7 @@ export default function ConversationSearchBar({
           variant="subtle"
           inputSize="sm"
           className={cn("pl-8", searching && "pr-8")}
-          placeholder="Filter: tag:  alias:  text:  date:"
+          placeholder={t.search.placeholder}
           value={value}
           onChange={(e) => {
             onChange(e.target.value);
@@ -137,10 +143,10 @@ export default function ConversationSearchBar({
       </div>
 
       <div className="flex flex-wrap gap-1">
-        {PILLS.map(({ prefix: p, label, Icon }) => (
+        {PILLS.map(({ prefix: p, Icon }) => (
           <button key={p} type="button" className={pill()} onClick={() => seedPrefix(p)}>
             <Icon className="h-3 w-3" />
-            {label}
+            {t.search[p]}
           </button>
         ))}
       </div>
