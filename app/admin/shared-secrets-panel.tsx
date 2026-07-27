@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 import { FormEvent, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import {
@@ -48,7 +49,15 @@ const SCOPE_FORMATS = SECRET_FORMATS.filter((f) => f !== "file");
 // Shared secrets at a scope: write / list-names / delete. Injected as env into
 // every container below the scope (FR-5). WRITE-ONLY over the API -- values are
 // never listed or retrieved (FR-5.1), only names.
-export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
+export default function SharedSecretsPanel({
+  scope,
+  restartPolicy = DEFAULT_POLICY,
+}: {
+  scope: ScopeRef;
+  // How the resulting container bounce is delivered; chosen once in the admin
+  // screen and applied to every write here (restart-control FR-8.1).
+  restartPolicy?: RestartPolicy;
+}) {
   const t = useT(adminCopy);
   const c = useT(commonCopy);
   const errs = useT(errorCopy);
@@ -137,7 +146,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
 
     setSubmitting(true);
     try {
-      await setSharedSecret(scope, { format, name: finalName, value });
+      await setSharedSecret(scope, { format, name: finalName, value }, restartPolicy);
       setValue("");
       await refresh();
     } catch (err) {
@@ -152,7 +161,7 @@ export default function SharedSecretsPanel({ scope }: { scope: ScopeRef }) {
     setBusy(secretName);
     setLoadError(null);
     try {
-      await deleteSharedSecret(scope, { format: fmt, name: secretName });
+      await deleteSharedSecret(scope, { format: fmt, name: secretName }, restartPolicy);
       await refresh();
     } catch (err) {
       setLoadError(errorText(errs, err instanceof Error ? err.message : null));

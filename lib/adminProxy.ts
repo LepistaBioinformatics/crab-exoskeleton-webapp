@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { fetchMycelium, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 import type { SessionCookie } from "@/lib/session";
@@ -119,4 +119,29 @@ export async function proxyAdminJsonAgent(
   }
   const data = await res.json().catch(() => ({}));
   return NextResponse.json(data);
+}
+
+// The restart policy travels as query parameters (restart-control FR-4): the
+// proxy reads them off the URL so the multipart upload routes (shared files,
+// skills) need no body change and a DELETE can carry them too.
+//
+// This forwards them verbatim rather than validating: the proxy owns the rules
+// (known mode, `at` in the future and within 7 days) and duplicating them here
+// would let the two drift apart. Absent parameters mean "restart now", which is
+// the behaviour every one of these endpoints had before the policy existed.
+export function restartParams(req: NextRequest): URLSearchParams {
+  const out = new URLSearchParams();
+  for (const key of ["restart", "restart_at", "restart_note"]) {
+    const v = req.nextUrl.searchParams.get(key);
+    if (v) out.set(key, v);
+  }
+  return out;
+}
+
+// withRestart appends the policy to an admin suffix that may already have a
+// query string.
+export function withRestart(suffix: string, policy: URLSearchParams): string {
+  const s = policy.toString();
+  if (!s) return suffix;
+  return suffix + (suffix.includes("?") ? "&" : "?") + s;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Trash2, User } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Trash2, User, UserMinus } from "lucide-react";
 import {
   listSubscriptionUsers,
   listUserFiles,
@@ -10,6 +10,18 @@ import {
   type UserRef,
   type FileMeta,
 } from "@/lib/admin";
+import {
+  listGuestRoles,
+  listGuests,
+  mergeRoster,
+  revokeMember,
+  resolveRoleId,
+  permissionLevel,
+  type GuestRole,
+  type GuestUser,
+  type AccessLevel,
+} from "@/lib/invitations";
+import InviteMember from "./invite-member";
 import { formatBytes, formatModified } from "./format";
 import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
@@ -33,15 +45,28 @@ import { useT } from "@/lib/i18n/context";
 export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   const t = useT(adminCopy);
   const [users, setUsers] = useState<UserRef[] | null>(null);
+  const [guests, setGuests] = useState<GuestUser[]>([]);
+  const [roles, setRoles] = useState<GuestRole[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const [pendingRevoke, setPendingRevoke] = useState<
+    { email: string; agentKey: string; level: AccessLevel } | null
+  >(null);
 
   useEffect(() => {
     if (!scope.subsAccId) return;
     let cancelled = false;
-    setUsers(null);
+    // Only blank the list when there is nothing to show yet. Nulling it on every
+    // `reload` bump made a successful invite or revoke flash the whole roster
+    // away behind a spinner instead of refreshing in place.
+    setUsers((prev) => (reload === 0 ? null : prev));
     setError(null);
     setExpanded(null);
+    // Two feeds, two questions: who was INVITED (mycelium guests) and who has
+    // actually USED the agent (a workspace on disk). Only the workspace feed is
+    // load-bearing for the file rows below, so a guest-list failure degrades to
+    // "no invitations shown" instead of blanking the panel.
     listSubscriptionUsers(scope.tenantId, scope.subsAccId)
       .then((u) => {
         if (!cancelled) setUsers(u);
@@ -49,10 +74,44 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
       });
+    Promise.all([
+      listGuests(scope.tenantId, scope.subsAccId),
+      listGuestRoles(scope.tenantId),
+    ])
+      .then(([g, r]) => {
+        if (cancelled) return;
+        setGuests(g);
+        setRoles(r);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGuests([]);
+          setRoles([]);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [scope.tenantId, scope.subsAccId]);
+  }, [scope.tenantId, scope.subsAccId, reload]);
+
+  const roster = mergeRoster(guests, users ?? [], roles);
+
+  async function revoke(email: string, agentKey: string, level: AccessLevel) {
+    if (!scope.subsAccId) return;
+    const roleId = resolveRoleId(roles, agentKey, level);
+    if (!roleId) return;
+    try {
+      await revokeMember({
+        tenantId: scope.tenantId,
+        subsAccId: scope.subsAccId,
+        roleId,
+        email,
+      });
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.roster.revokeFailed);
+    }
+  }
 
   if (scope.kind !== "subscription" || !scope.subsAccId) {
     return (
@@ -68,47 +127,102 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
 
       {error && <Alert severity="error">{error}</Alert>}
 
+      {scope.subsAccId && (
+        <InviteMember scope={scope} onInvited={() => setReload((n) => n + 1)} />
+      )}
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        title={t.roster.revokeTitle}
+        // Say what revoking does NOT do. The same panel can delete a member's
+        // files, so an admin could reasonably assume this does both.
+        message={
+          pendingRevoke
+            ? t.roster.revokeMessage
+                .replace("{email}", pendingRevoke.email)
+                .replace("{level}", t.invite[pendingRevoke.level])
+                .replace("{agent}", pendingRevoke.agentKey)
+            : undefined
+        }
+        confirmLabel={t.roster.revoke}
+        onCancel={() => setPendingRevoke(null)}
+        onConfirm={() => {
+          if (pendingRevoke) {
+            void revoke(pendingRevoke.email, pendingRevoke.agentKey, pendingRevoke.level);
+          }
+          setPendingRevoke(null);
+        }}
+      />
+
+      {/* ONE roster, not two lists (FR-2.2). Invited-but-never-used and
+          active-with-a-workspace are two states of the same person; two tables
+          would make the normal first state look like an inconsistency. Only a
+          person with a workspace expands — there are no files before one. */}
       {users === null && !error ? (
         <div className="flex justify-center py-6">
           <Spinner size={22} />
         </div>
-      ) : users && users.length === 0 ? (
-        <p className="py-3 text-sm text-fg-muted">{t.members.none}</p>
+      ) : roster.length === 0 ? (
+        <p className="py-3 text-sm text-fg-muted">{t.roster.noneYet}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {users?.map((u) => {
-            // A user present under more than one agent is returned once per
-            // agent (same accId), so identity is (role, accId) — key + expand on
-            // that, and label the agent, otherwise the rows look like duplicates.
-            const rowKey = `${u.role ?? ""}:${u.accId}`;
-            const open = expanded === rowKey;
+          {roster.map((entry) => {
+            const open = expanded === entry.email;
             return (
-              <li key={rowKey} className="rounded-lg border border-brand/30 bg-elevated">
-                <button
-                  type="button"
-                  onClick={() => setExpanded(open ? null : rowKey)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left"
-                >
-                  {open ? (
-                    <ChevronDown size={15} className="shrink-0 text-fg-muted" aria-hidden />
+              <li key={entry.email} className="rounded-lg border border-brand/30 bg-elevated">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  {entry.accId ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(open ? null : entry.email)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      aria-expanded={open}
+                    >
+                      {open ? (
+                        <ChevronDown size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                      ) : (
+                        <ChevronRight size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                      )}
+                      <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
+                    </button>
                   ) : (
-                    <ChevronRight size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                    <div className="flex min-w-0 flex-1 items-center gap-2 pl-[21px]">
+                      <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
+                      <span className="shrink-0 text-[11px] text-fg-muted">
+                        {t.roster.notYetActive}
+                      </span>
+                    </div>
                   )}
-                  <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg">
-                    {u.name || u.email || u.accId}
-                  </span>
-                  {u.role && (
-                    <span className="shrink-0 rounded border border-brand/40 px-1.5 py-0.5 font-mono text-[10px] uppercase text-fg-muted">
-                      {u.role}
-                    </span>
-                  )}
-                </button>
-                {open && scope.subsAccId && (
+
+                  {entry.roles.map((r) => {
+                    const parsed = parseRoleLabel(r);
+                    return (
+                      <span key={r} className="flex shrink-0 items-center gap-0.5">
+                        <Badge>{r}</Badge>
+                        {parsed && (
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            aria-label={t.roster.revokeAria
+                        .replace("{role}", r)
+                        .replace("{email}", entry.email)}
+                            onClick={() => setPendingRevoke({ email: entry.email, ...parsed })}
+                          >
+                            <UserMinus size={14} aria-hidden />
+                          </IconButton>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {open && entry.accId && scope.subsAccId && (
                   <UserFiles
                     tenantId={scope.tenantId}
                     subsAccId={scope.subsAccId}
-                    userAccId={u.accId}
+                    userAccId={entry.accId}
                   />
                 )}
               </li>
@@ -220,4 +334,14 @@ function UserFiles({
       />
     </div>
   );
+}
+
+// Roster labels are rendered as "alpha (write)"; parse one back into the pair a
+// revoke needs. A label with no level came from the workspace feed alone (the
+// person has a workspace but no matching guest row), and there is no guest
+// record to revoke, so it offers no button.
+function parseRoleLabel(label: string): { agentKey: string; level: AccessLevel } | null {
+  const m = /^(.+) \((read|write)\)$/.exec(label);
+  if (!m) return null;
+  return { agentKey: m[1], level: m[2] as AccessLevel };
 }

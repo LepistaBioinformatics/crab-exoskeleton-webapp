@@ -189,6 +189,29 @@ const en = {
     timeFlowsRight: "· time flows right →",
     showAllLanes: "show all",
   },
+  restart: {
+    // The proxy ships a reason ENUM, not a sentence, so the phrasing lives here.
+    // Each is a consequence, not a mechanism: the reason exists to help someone
+    // decide whether to restart now or finish what they were saying.
+    reasons: {
+      "shared-secret": "An administrator changed a shared credential.",
+      "shared-skills": "An administrator changed the shared skills.",
+      "shared-files": "An administrator changed the shared files.",
+      model: "The model behind your assistant changed.",
+      "own-secret": "You saved a secret. It applies after a restart.",
+      "admin-request": "An administrator asked for a restart.",
+    },
+    // A newer proxy may send a reason this build has not learned yet; say the
+    // true, useful part rather than nothing.
+    reasonUnknown: "Your assistant needs a restart to pick up a recent change.",
+    // "{when}" is the scheduled time, formatted in the viewer's locale.
+    scheduled: "Your assistant will restart on {when}.",
+    now: "Restart now",
+    restarting: "Restarting…",
+    failed: "Restart failed.",
+    sessionExpired: "Your session expired. Sign in again.",
+    unreachable: "Could not reach the agent service.",
+  },
   secrets: {
     title: "Agent secrets",
     // "Saved for <you> on <agent x> — kept across…"
@@ -196,11 +219,15 @@ const en = {
     savedForYou: "you",
     savedForOn: " on ",
     savedForAfter:
-      " — kept across this agent's subscriptions and future sessions, not per conversation. Values are write-only: they are never shown or retrieved. Saving or deleting ",
-    restartsAgent: "restarts the agent",
-    restartsAfter: " (a live turn is briefly interrupted).",
+      " — kept across this agent's subscriptions and future sessions, not per conversation. Values are write-only: they are never shown or retrieved. A saved or deleted secret ",
+    restartsAgent: "applies when you restart the agent",
+    restartsAfter: " — you choose the moment, so a live turn is never cut off.",
+    savedNeedsRestart:
+      "Saved. It takes effect after a restart — use the banner at the top of the chat when you are ready.",
+    // "Delete \"X\"? It applies once you restart the agent."
+    deleteConfirm: 'Delete "{name}"? It applies once you restart the agent.',
     setSecrets: "Set secrets",
-    applying: "Applying — the agent is restarting…",
+    applying: "Saving…",
     formatLabel: "Format",
     nameLabel: "Name",
     namePlaceholder: "e.g. OPENAI_API_KEY",
@@ -418,17 +445,37 @@ const pt: ChatDict = {
     timeFlowsRight: "· o tempo corre para a direita →",
     showAllLanes: "mostrar todas",
   },
+  restart: {
+    reasons: {
+      "shared-secret": "Um administrador alterou uma credencial compartilhada.",
+      "shared-skills": "Um administrador alterou as skills compartilhadas.",
+      "shared-files": "Um administrador alterou os arquivos compartilhados.",
+      model: "O modelo por trás do seu assistente mudou.",
+      "own-secret": "Você salvou um segredo. Ele passa a valer após um reinício.",
+      "admin-request": "Um administrador pediu um reinício.",
+    },
+    reasonUnknown: "Seu assistente precisa reiniciar para aplicar uma alteração recente.",
+    scheduled: "Seu assistente vai reiniciar em {when}.",
+    now: "Reiniciar agora",
+    restarting: "Reiniciando…",
+    failed: "Falha ao reiniciar.",
+    sessionExpired: "Sua sessão expirou. Entre novamente.",
+    unreachable: "Não foi possível alcançar o serviço do agente.",
+  },
   secrets: {
     title: "Segredos do agente",
     savedForBefore: "Salvo para ",
     savedForYou: "você",
     savedForOn: " no ",
     savedForAfter:
-      " — mantido entre as assinaturas deste agente e sessões futuras, não por conversa. Os valores são somente escrita: nunca são exibidos nem recuperados. Salvar ou excluir ",
-    restartsAgent: "reinicia o agente",
-    restartsAfter: " (um turno em andamento é interrompido por um instante).",
+      " — mantido entre as assinaturas deste agente e sessões futuras, não por conversa. Os valores são somente escrita: nunca são exibidos nem recuperados. Um segredo salvo ou excluído ",
+    restartsAgent: "passa a valer quando você reiniciar o agente",
+    restartsAfter: " — você escolhe a hora, então um turno em andamento nunca é cortado.",
+    savedNeedsRestart:
+      "Salvo. Passa a valer após um reinício — use o aviso no topo do chat quando quiser.",
+    deleteConfirm: 'Excluir "{name}"? Passa a valer quando você reiniciar o agente.',
     setSecrets: "Segredos definidos",
-    applying: "Aplicando — o agente está reiniciando…",
+    applying: "Salvando…",
     formatLabel: "Formato",
     nameLabel: "Nome",
     namePlaceholder: "ex.: OPENAI_API_KEY",

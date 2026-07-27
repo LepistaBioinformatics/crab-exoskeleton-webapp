@@ -35,6 +35,13 @@ const en = {
       model: "Models",
       members: "Members",
     },
+    // "The inventory is proxy-wide. Only the defaults and pins below it belong
+    // to <scope> and <agent>." Shown on the model tab, where the scope line
+    // would otherwise overstate what a scope owns.
+    inventoryProxyWideBefore: "The inventory is ",
+    inventoryProxyWide: "proxy-wide",
+    inventoryProxyWideAfter: ". Only the defaults and pins below it belong to ",
+    inventoryAnd: " and ",
     // "Reaches <scope> and every subscription under it, through <agent> only."
     reaches: "Reaches",
     andEverySubscription: " and every subscription under it",
@@ -53,7 +60,12 @@ const en = {
   },
   agentTarget: {
     appliesTo: "Applies to",
+    // Shown instead of appliesTo where "all agents" cannot be honoured, so the
+    // label does not promise a breadth the panel cannot deliver.
+    routedThrough: "Routed through",
     allAgents: "All agents",
+    noAgentsAvailable: "no agents available",
+    noAgentToTarget: "No agent to target.",
     // "Only alpha" -- the agent id follows the word.
     onlyPrefix: "Only",
     contentAll: "Every agent under this scope reads this content.",
@@ -63,7 +75,7 @@ const en = {
     registryAll:
       "The model inventory is shared by every picoclaw agent. This picker only chooses the route the request takes; a per-user pin addresses the agent that user's workspace runs under.",
     registryOne:
-      "Requests go through {agent}. The inventory itself is the same one every picoclaw agent shares.",
+      "The inventory is shared by every picoclaw agent, but the agent level of the cascade and each per-user pin belong to {agent} alone.",
   },
   models: {
     noAgents: "No agents reported by the gateway, so the inventory cannot be reached.",
@@ -165,6 +177,50 @@ const en = {
     clearWarnBefore: "Nothing is set below this. Clearing it would leave new workspaces with ",
     clearWarnBold: "no resolvable model",
     clearWarnAfter: ", which refuses to provision.",
+  },
+  invite: {
+    title: "Invite someone",
+    emailPlaceholder: "person@example.com",
+    agentAria: "Agent",
+    accessAria: "Access",
+    read: "read",
+    write: "write",
+    waitingEmail: "Waiting for a valid email address…",
+    // "{agent}" is the agent identifier, which is never translated.
+    noRole:
+      "This deployment declares no guest role for {agent}, so it cannot be granted here.",
+    submit: "Send invitation",
+    submitting: "Inviting…",
+    invited: "Invited {email} to {agent} ({level}).",
+    alreadyInvited: "{email} already had this access.",
+    failed: "Could not send the invitation.",
+  },
+  roster: {
+    notYetActive: "not yet active",
+    noneYet: "Nobody has access to this subscription yet. Invite someone above.",
+    revokeAria: "Revoke {role} from {email}",
+    revokeTitle: "Revoke access?",
+    // Says what revoking does NOT do: the same panel deletes files, so an admin
+    // could reasonably assume this does both.
+    revokeMessage:
+      "{email} will lose {level} access to {agent}. Their workspace and files are kept — deleting those is a separate action.",
+    revoke: "Revoke",
+    revokeFailed: "Could not revoke access.",
+  },
+  restartPolicy: {
+    heading: "When changes take effect",
+    now: "Restart now",
+    notice: "Notify members",
+    schedule: "Schedule for…",
+    nowHint: "Applies immediately. Anyone mid-conversation is briefly interrupted.",
+    noticeHint: "Applies on disk now; each member restarts when it suits them.",
+    scheduleHint:
+      "Applies on disk now; every running instance restarts at the time you pick.",
+    atLabel: "Restart at (your local time)",
+    atInvalid: "Pick a time in the future (within 7 days).",
+    noteLabel: "Note to members (optional)",
+    notePlaceholder: "e.g. rotating the search provider key",
+    blocked: "Finish the schedule above before making changes here.",
   },
   members: {
     selectSubscription: "Select a subscription to see its members.",
@@ -294,9 +350,14 @@ const en = {
     tenant: "Tenant",
     tenantNamed: "Tenant — {name}",
     agentNamed: "Agent — {name}",
+    agentDetail: "every tenant, {name} only",
     thisAgent: "this agent",
     everythingElse: "Everything else",
     instanceWide: "instance-wide",
+    selectSubscriptionForPins: "Select a subscription to see who is pinned",
+    selectSubscription: "Select a subscription in the tree to see or set this",
+    selectTenant: "Select a tenant in the tree to see or set this",
+    selectAgent: "Select an agent above to see or set this",
   },
   ladder: {
     editing: "editing",
@@ -306,6 +367,7 @@ const en = {
     overridden: "overridden",
     notSet: "not set",
     locked: "not yours to see",
+    outOfScope: "out of scope",
   },
 };
 
@@ -337,6 +399,10 @@ const pt: AdminDict = {
       model: "Modelos",
       members: "Membros",
     },
+    inventoryProxyWideBefore: "O inventário é ",
+    inventoryProxyWide: "global do proxy",
+    inventoryProxyWideAfter: ". Apenas os padrões e pins abaixo dele pertencem a ",
+    inventoryAnd: " e ",
     reaches: "Alcança",
     andEverySubscription: " e todas as assinaturas sob ele",
     throughBefore: ", através de ",
@@ -354,7 +420,10 @@ const pt: AdminDict = {
   },
   agentTarget: {
     appliesTo: "Aplica-se a",
+    routedThrough: "Roteado por",
     allAgents: "Todos os agentes",
+    noAgentsAvailable: "nenhum agente disponível",
+    noAgentToTarget: "Nenhum agente a endereçar.",
     onlyPrefix: "Apenas",
     contentAll: "Todos os agentes deste escopo leem este conteúdo.",
     contentOne:
@@ -362,7 +431,7 @@ const pt: AdminDict = {
     registryAll:
       "O inventário de modelos é compartilhado por todos os agentes picoclaw. Este seletor escolhe apenas a rota da requisição; um pin por usuário endereça o agente sob o qual o workspace daquele usuário roda.",
     registryOne:
-      "As requisições passam por {agent}. O inventário em si é o mesmo que todos os agentes picoclaw compartilham.",
+      "O inventário é compartilhado por todos os agentes picoclaw, mas o nível de agente da cascata e cada pin por usuário pertencem apenas a {agent}.",
   },
   models: {
     noAgents: "O gateway não reportou nenhum agente, então o inventário não pode ser acessado.",
@@ -463,6 +532,47 @@ const pt: AdminDict = {
     clearWarnBefore: "Nada está definido abaixo disto. Limpar deixaria novos workspaces ",
     clearWarnBold: "sem modelo resolvível",
     clearWarnAfter: ", o que impede o provisionamento.",
+  },
+  invite: {
+    title: "Convidar alguém",
+    emailPlaceholder: "pessoa@exemplo.com",
+    agentAria: "Agente",
+    accessAria: "Acesso",
+    read: "leitura",
+    write: "escrita",
+    waitingEmail: "Aguardando um endereço de e-mail válido…",
+    noRole:
+      "Esta instalação não declara nenhum guest role para {agent}, então ele não pode ser concedido aqui.",
+    submit: "Enviar convite",
+    submitting: "Convidando…",
+    invited: "{email} convidado para {agent} ({level}).",
+    alreadyInvited: "{email} já tinha este acesso.",
+    failed: "Não foi possível enviar o convite.",
+  },
+  roster: {
+    notYetActive: "ainda não ativo",
+    noneYet: "Ninguém tem acesso a esta assinatura ainda. Convide alguém acima.",
+    revokeAria: "Revogar {role} de {email}",
+    revokeTitle: "Revogar acesso?",
+    revokeMessage:
+      "{email} perderá o acesso de {level} a {agent}. O workspace e os arquivos são mantidos — excluí-los é uma ação separada.",
+    revoke: "Revogar",
+    revokeFailed: "Não foi possível revogar o acesso.",
+  },
+  restartPolicy: {
+    heading: "Quando as alterações passam a valer",
+    now: "Reiniciar agora",
+    notice: "Avisar os membros",
+    schedule: "Agendar para…",
+    nowHint: "Aplica imediatamente. Quem estiver em conversa é interrompido por um instante.",
+    noticeHint: "Aplica em disco agora; cada membro reinicia quando lhe convier.",
+    scheduleHint:
+      "Aplica em disco agora; toda instância em execução reinicia na hora escolhida.",
+    atLabel: "Reiniciar em (seu horário local)",
+    atInvalid: "Escolha um horário no futuro (dentro de 7 dias).",
+    noteLabel: "Recado aos membros (opcional)",
+    notePlaceholder: "ex.: rotação da chave do provedor de busca",
+    blocked: "Conclua o agendamento acima antes de fazer alterações aqui.",
   },
   members: {
     selectSubscription: "Selecione uma assinatura para ver seus membros.",
@@ -591,9 +701,14 @@ const pt: AdminDict = {
     tenant: "Tenant",
     tenantNamed: "Tenant — {name}",
     agentNamed: "Agente — {name}",
+    agentDetail: "todos os tenants, apenas {name}",
     thisAgent: "este agente",
     everythingElse: "Todo o resto",
     instanceWide: "toda a instância",
+    selectSubscriptionForPins: "Selecione uma assinatura para ver quem tem pin",
+    selectSubscription: "Selecione uma assinatura na árvore para ver ou definir isto",
+    selectTenant: "Selecione um tenant na árvore para ver ou definir isto",
+    selectAgent: "Selecione um agente acima para ver ou definir isto",
   },
   ladder: {
     editing: "editando",
@@ -603,6 +718,7 @@ const pt: AdminDict = {
     overridden: "sobreposto",
     notSet: "não definido",
     locked: "fora do seu alcance",
+    outOfScope: "fora de escopo",
   },
 };
 

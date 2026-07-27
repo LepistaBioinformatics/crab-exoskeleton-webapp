@@ -3,6 +3,8 @@ import {
   adminScopeQuery,
   isAdminScope,
   proxyAdminJson,
+  restartParams,
+  withRestart,
   requireSession,
 } from "@/lib/adminProxy";
 
@@ -79,7 +81,8 @@ export async function POST(req: NextRequest) {
 
   // No explicit Content-Type: fetch sets the multipart boundary for a FormData
   // body (same as /api/admin/shared).
-  return proxyAdminJson(session, "/skills", { method: "POST", body: upstream });
+  const suffix = withRestart("/skills", restartParams(req));
+  return proxyAdminJson(session, suffix, { method: "POST", body: upstream });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -99,5 +102,6 @@ export async function DELETE(req: NextRequest) {
   if (!query) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   query.set("name", name);
 
-  return proxyAdminJson(session, `/skills?${query.toString()}`, { method: "DELETE" });
+  const suffix = withRestart(`/skills?${query.toString()}`, restartParams(req));
+  return proxyAdminJson(session, suffix, { method: "DELETE" });
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_POLICY, withPolicy, type RestartPolicy } from "@/lib/restartPolicy";
 import type { Instance } from "@/lib/mycelium";
 
 export type ModelStatus = "active" | "disabled" | "deprecated";
@@ -208,8 +209,16 @@ export async function createModel(agent: Instance, draft: ModelDraft): Promise<v
   await request("/api/admin/models", json({ agent, ...serializeDraft(draft) }));
 }
 
-export async function updateModel(agent: Instance, name: string, version: number, draft: ModelDraft): Promise<void> {
-  await request(`/api/admin/models?${q(agent, { name })}`, {
+export async function updateModel(
+  agent: Instance,
+  name: string,
+  version: number,
+  draft: ModelDraft,
+  // How the resulting bounce of every workspace holding this model is delivered
+  // (restart-control FR-4). Omitted means "now" -- this call's prior behaviour.
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
+  await request(withPolicy(`/api/admin/models?${q(agent, { name })}`, policy), {
     ...json({ agent, name, version, ...serializeDraft(draft) }),
     method: "PUT",
   });
@@ -295,15 +304,26 @@ export async function getModelDefault(agent: Instance, scope: DefaultScope): Pro
   return data.default ?? null;
 }
 
-export async function setModelDefault(agent: Instance, scope: DefaultScope, modelName: string): Promise<void> {
-  await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, {
+export async function setModelDefault(
+  agent: Instance,
+  scope: DefaultScope,
+  modelName: string,
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
+  await request(withPolicy(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, policy), {
     ...json({ agent, model_name: modelName }),
     method: "PUT",
   });
 }
 
-export async function clearModelDefault(agent: Instance, scope: DefaultScope): Promise<void> {
-  await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, { method: "DELETE" });
+export async function clearModelDefault(
+  agent: Instance,
+  scope: DefaultScope,
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
+  await request(withPolicy(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, policy), {
+    method: "DELETE",
+  });
 }
 
 export interface AssignmentTarget {
@@ -316,9 +336,10 @@ export async function setModelAssignment(
   agent: Instance,
   target: AssignmentTarget,
   modelName: string,
+  policy: RestartPolicy = DEFAULT_POLICY,
 ): Promise<void> {
   await request(
-    "/api/admin/model-assignments",
+    withPolicy("/api/admin/model-assignments", policy),
     json({
       agent,
       tenant_id: target.tenantId,
@@ -392,8 +413,12 @@ export function defaultOptions(
   return options;
 }
 
-export async function clearModelAssignment(agent: Instance, target: AssignmentTarget): Promise<void> {
-  await request("/api/admin/model-assignments", {
+export async function clearModelAssignment(
+  agent: Instance,
+  target: AssignmentTarget,
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
+  await request(withPolicy("/api/admin/model-assignments", policy), {
     ...json({
       agent,
       tenant_id: target.tenantId,
@@ -433,6 +458,12 @@ export interface LadderRung {
   overridden: boolean;
   /** True when the caller's privileges do not let them read this level. */
   unreadable: boolean;
+  /**
+   * True when the level exists in the cascade but is not addressable from the
+   * scope the admin has selected — a subscription default cannot be read or
+   * written while the rail sits on the tenant.
+   */
+  outOfScope: boolean;
 }
 
 export interface LadderInput {
@@ -445,6 +476,15 @@ export interface LadderInput {
   global: ScopeDefault | null | undefined;
   /** Names the levels: "Pesquisa", "Biotrop", "alpha". */
   names: { subscription?: string; tenant?: string; agent?: string };
+  /**
+   * Levels the selected scope cannot address. Kept apart from the null/undefined
+   * pair on purpose: there are three different facts, and collapsing any two of
+   * them makes the ladder say something false. `null` means the level is unset
+   * and setting it is one click away; `undefined` means the caller was refused;
+   * this means the level is real but belongs to a scope the admin has not
+   * selected, so there is nothing to set until they select one.
+   */
+  outOfScope?: LadderLevel[];
   /** Rung wording, injected so this module emits no UI text of its own. */
   copy: LadderCopy;
 }
@@ -458,13 +498,41 @@ export interface LadderCopy {
   tenant: string;
   tenantNamed: string;
   agentNamed: string;
+  /**
+   * The agent level's detail. NOT instanceWide: this level is stored per agent
+   * (`agent/<agent>`), so it reaches every tenant but only this agent's
+   * workspaces — and an admin reading "instance-wide" next to one agent's name
+   * cannot tell which of the two it means.
+   */
+  agentDetail: string;
   thisAgent: string;
   everythingElse: string;
   instanceWide: string;
+  // Prompts for a level the selected scope cannot address.
+  selectSubscriptionForPins: string;
+  selectSubscription: string;
+  selectTenant: string;
+  selectAgent: string;
+}
+
+// What to do about a level the current scope cannot address. The rung says the
+// next action rather than the state, because "not set" was the whole confusion:
+// an admin on a tenant read it as "this subscription has no default" when the
+// truth is "no subscription is selected". The wording is injected like the rest
+// of the rung copy, so this module still emits no UI text of its own.
+function scopePrompt(c: LadderCopy): Record<LadderLevel, string> {
+  return {
+    user: c.selectSubscriptionForPins,
+    subscription: c.selectSubscription,
+    tenant: c.selectTenant,
+    agent: c.selectAgent,
+    global: "",
+  };
 }
 
 export function buildLadder(input: LadderInput): LadderRung[] {
   const c = input.copy;
+  const prompts = scopePrompt(c);
   const agentName = input.names.agent ?? c.thisAgent;
   const raw: {
     level: LadderLevel;
@@ -500,7 +568,8 @@ export function buildLadder(input: LadderInput): LadderRung[] {
       level: "agent",
       label: c.agentNamed.replace("{name}", agentName),
       d: input.agent,
-      detail: c.instanceWide,
+      // agentDetail, not instanceWide — see the LadderCopy field's note.
+      detail: c.agentDetail.replace("{name}", agentName),
     },
     { level: "global", label: c.everythingElse, d: input.global, detail: c.instanceWide },
   ];
@@ -510,18 +579,23 @@ export function buildLadder(input: LadderInput): LadderRung[] {
   // were refused would be a lie, and would make the fallback prediction wrong.
   let decided = false;
   return raw.map((r) => {
-    const unreadable = r.d === undefined;
-    const modelName = r.d?.model_name ?? null;
-    const inEffect = !decided && !unreadable && modelName !== null;
+    const outOfScope = input.outOfScope?.includes(r.level) ?? false;
+    const unreadable = !outOfScope && r.d === undefined;
+    // The flag is authoritative: a level the scope cannot address shows no value
+    // even if the caller happened to pass one, because a value shown on that rung
+    // would be some OTHER subscription's.
+    const modelName = outOfScope ? null : (r.d?.model_name ?? null);
+    const inEffect = !decided && !unreadable && !outOfScope && modelName !== null;
     if (inEffect) decided = true;
     return {
       level: r.level,
       label: r.label,
       modelName,
-      detail: r.detail,
+      detail: outOfScope ? prompts[r.level] : r.detail,
       inEffect,
-      overridden: !inEffect && !unreadable && modelName !== null,
+      overridden: !inEffect && !unreadable && !outOfScope && modelName !== null,
       unreadable,
+      outOfScope,
     };
   });
 }

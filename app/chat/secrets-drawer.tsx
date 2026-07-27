@@ -48,10 +48,16 @@ export default function SecretsDrawer({
   workspace,
   open,
   onClose,
+  onRestartNeeded,
 }: {
   workspace: Workspace;
   open: boolean;
   onClose: () => void;
+  // Called after a write or delete. The proxy no longer force-restarts on a
+  // member's own secret change (restart-control DEC-3) -- it leaves a notice --
+  // so the screen has to be told to re-check, or the member would not see the
+  // banner until the next poll.
+  onRestartNeeded?: () => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -66,6 +72,11 @@ export default function SecretsDrawer({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Set after a successful write/delete so the drawer says, in place, that the
+  // change is stored but not yet live. The restart banner behind the drawer says
+  // the same thing and carries the button; this is the confirmation at the point
+  // of action, so the member is not left wondering whether the save worked.
+  const [savedNeedsRestart, setSavedNeedsRestart] = useState(false);
 
   const refresh = () => listSecrets(workspace).then(setSecrets);
 
@@ -74,6 +85,7 @@ export default function SecretsDrawer({
     let cancelled = false;
     setSecrets(null);
     setLoadError(null);
+    setSavedNeedsRestart(false);
     listSecrets(workspace)
       .then((s) => {
         if (!cancelled) setSecrets(s);
@@ -111,6 +123,10 @@ export default function SecretsDrawer({
     try {
       await setSecret(workspace, { format, name: finalName, value });
       setValue(""); // never keep the value around after submit
+      // Publish BEFORE refreshing: the secret is already stored, so a failed
+      // list refresh must not swallow the fact that a restart is now needed.
+      setSavedNeedsRestart(true);
+      onRestartNeeded?.();
       await refresh();
     } catch (err) {
       setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
@@ -120,11 +136,13 @@ export default function SecretsDrawer({
   }
 
   async function onDelete(fmt: SecretFormat, secretName: string) {
-    if (!window.confirm(`Delete "${secretName}"? The agent will restart.`)) return;
+    if (!window.confirm(t.secrets.deleteConfirm.replace("{name}", secretName))) return;
     setBusy(secretName);
     setLoadError(null);
     try {
       await deleteSecret(workspace, { format: fmt, name: secretName });
+      setSavedNeedsRestart(true);
+      onRestartNeeded?.();
       await refresh();
     } catch (err) {
       setLoadError(errorText(errs, err instanceof Error ? err.message : null));
@@ -168,6 +186,12 @@ export default function SecretsDrawer({
           {applying && (
             <div className="mb-3">
               <Alert severity="info">{t.secrets.applying}</Alert>
+            </div>
+          )}
+
+          {savedNeedsRestart && !applying && (
+            <div className="mb-3">
+              <Alert severity="info">{t.secrets.savedNeedsRestart}</Alert>
             </div>
           )}
 

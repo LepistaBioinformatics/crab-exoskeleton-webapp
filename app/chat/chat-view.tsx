@@ -114,9 +114,13 @@ const pendingOutbox = new Map<string, string[]>();
 export default function ChatView({
   workspace,
   sessionId,
+  onRestartNeeded,
 }: {
   workspace: Workspace;
   sessionId: string | undefined;
+  // Forwarded to the secrets drawer: a saved secret now needs an explicit
+  // restart (restart-control DEC-3), and the banner above lives in the shell.
+  onRestartNeeded?: () => void;
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -919,6 +923,7 @@ export default function ChatView({
         workspace={workspace}
         open={secretsOpen}
         onClose={() => setSecretsOpen(false)}
+        onRestartNeeded={onRestartNeeded}
       />
     </div>
   );

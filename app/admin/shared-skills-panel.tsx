@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 import { useEffect, useRef, useState } from "react";
 import { BookText, Download, Eye, Plus, Trash2, Upload, X } from "lucide-react";
 import {
@@ -35,7 +36,15 @@ type Editor =
 // (inline SKILL.md editor) / upload (.zip) / preview / download / delete.
 // Clone of shared-files-panel.tsx with a skill-shaped payload (a directory of
 // SKILL.md + optional supporting files) instead of a single file.
-export default function SharedSkillsPanel({ scope }: { scope: ScopeRef }) {
+export default function SharedSkillsPanel({
+  scope,
+  restartPolicy = DEFAULT_POLICY,
+}: {
+  scope: ScopeRef;
+  // How the resulting container bounce is delivered; chosen once in the admin
+  // screen and applied to every write here (restart-control FR-8.1).
+  restartPolicy?: RestartPolicy;
+}) {
   const t = useT(adminCopy);
   const c = useT(commonCopy);
   const err = useT(errorCopy);
@@ -73,7 +82,7 @@ export default function SharedSkillsPanel({ scope }: { scope: ScopeRef }) {
     setError(null);
     try {
       const name = file.name.replace(/\.zip$/i, "");
-      await uploadSharedSkillZip(scope, name, file);
+      await uploadSharedSkillZip(scope, name, file, restartPolicy);
       await refresh();
     } catch (e) {
       setError(errorText(err, e instanceof Error ? e.message : null));
@@ -103,7 +112,7 @@ export default function SharedSkillsPanel({ scope }: { scope: ScopeRef }) {
     setSaving(true);
     setError(null);
     try {
-      await saveSharedSkillDoc(scope, name, editor.body);
+      await saveSharedSkillDoc(scope, name, editor.body, restartPolicy);
       setEditor(null);
       await refresh();
     } catch (e) {
@@ -118,7 +127,7 @@ export default function SharedSkillsPanel({ scope }: { scope: ScopeRef }) {
     setBusy(name);
     setError(null);
     try {
-      await deleteSharedSkill(scope, name);
+      await deleteSharedSkill(scope, name, restartPolicy);
       if (editor?.name === name) setEditor(null);
       await refresh();
     } catch (e) {
