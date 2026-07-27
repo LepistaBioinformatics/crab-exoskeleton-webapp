@@ -574,11 +574,14 @@ export function buildLadder(input: LadderInput): LadderRung[] {
     { level: "global", label: c.everythingElse, d: input.global, detail: c.instanceWide },
   ];
 
-  // The first level with a readable value wins. A level the caller cannot read
-  // is skipped rather than treated as empty: claiming "not set" for something we
-  // were refused would be a lie, and would make the fallback prediction wrong.
+  // Decided in specificity order — most specific first — because that is the
+  // order the proxy's resolver walks (candidateTx in internal/registry/resolve.go)
+  // and the first readable value it finds is the one a workspace gets. A level the
+  // caller cannot read is skipped rather than treated as empty: claiming "not set"
+  // for something we were refused would be a lie, and would make the fallback
+  // prediction wrong.
   let decided = false;
-  return raw.map((r) => {
+  const bySpecificity = raw.map((r) => {
     const outOfScope = input.outOfScope?.includes(r.level) ?? false;
     const unreadable = !outOfScope && r.d === undefined;
     // The flag is authoritative: a level the scope cannot address shows no value
@@ -598,17 +601,32 @@ export function buildLadder(input: LadderInput): LadderRung[] {
       outOfScope,
     };
   });
+
+  // Returned broadest-first, which is the order the ladder is READ in: start at
+  // the widest net, walk down as each level narrows the audience and overrides the
+  // one above, and the last level with a model is what a person ends up with. The
+  // decision above is unchanged — only the presentation is reversed — so callers
+  // that scan the array relative to the winner must walk toward index 0 to find
+  // what takes over next (see fallbackIfCleared).
+  return bySpecificity.reverse();
 }
 
 // fallbackIfCleared answers the question the ladder exists to answer: if the
 // level currently in effect were cleared, what would these workspaces move to?
-// null means nothing below is set, so clearing would leave them with no
+// null means nothing wider is set, so clearing would leave them with no
 // resolvable model — which refuses to provision rather than defaulting.
+//
+// Walks toward index 0 because buildLadder returns the rungs broadest-first: the
+// level that takes over is the next WIDER one, which sits above the winner on
+// screen. Scanning forward instead finds only the narrower levels, which by
+// definition have no value (the winner is the narrowest that does) — so it would
+// report "nothing to fall back to" for every ladder.
 export function fallbackIfCleared(rungs: LadderRung[]): string | null {
   const winner = rungs.findIndex((r) => r.inEffect);
   if (winner === -1) return null;
-  for (const r of rungs.slice(winner + 1)) {
-    if (r.modelName) return r.modelName;
+  for (let i = winner - 1; i >= 0; i--) {
+    const name = rungs[i].modelName;
+    if (name) return name;
   }
   return null;
 }

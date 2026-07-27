@@ -343,7 +343,7 @@ describe("buildLadder", () => {
       copy: adminCopy.en.ladderRungs,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
-    expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["tenant", "agent"]);
+    expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["agent", "tenant"]);
   });
 
   // The three-way distinction is the whole point of the type: unset, refused, and
@@ -392,6 +392,45 @@ describe("buildLadder", () => {
     expect(subs.detail).toBeUndefined();
   });
 
+  // The ladder reads top-down from the widest net to the narrowest override, so
+  // the array is in DISPLAY order and the winner is the LAST rung with a value —
+  // not the first. Both directions are asserted here because every consumer
+  // (the component's render order, and fallbackIfCleared's scan) depends on it.
+  it("is ordered broadest first, and the narrowest level with a value wins", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: def("claude-sonnet-4.6"),
+      tenant: def("gpt-5.4"),
+      agent: def("glm-4.7"),
+      global: null,
+      names,
+      copy: adminCopy.en.ladderRungs,
+    });
+    expect(rungs.map((r) => r.level)).toEqual(["global", "agent", "tenant", "subscription", "user"]);
+    expect(rungs.at(-2)?.inEffect).toBe(true);
+    expect(rungs.at(-2)?.level).toBe("subscription");
+  });
+
+  // The discriminating case for the scan direction: with the array reversed, the
+  // level that takes over sits at a LOWER index than the winner. A scan that
+  // still walks forward finds only the pin rung, which never has a value, and
+  // reports "nothing below" — telling the admin that clearing is safe to do and
+  // then leaving the workspaces somewhere else entirely.
+  it("predicts the next-widest level that takes over when the winner is cleared", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      subscription: def("claude-sonnet-4.6"),
+      tenant: null,
+      agent: def("glm-4.7"),
+      global: def("gpt-5.4"),
+      names,
+      copy: adminCopy.en.ladderRungs,
+    });
+    expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
+    // The agent, skipping the unset tenant — and NOT the global below it.
+    expect(fallbackIfCleared(rungs)).toBe("glm-4.7");
+  });
+
   it("falls through an unset level to the next one that has a value", () => {
     const rungs = buildLadder({
       pinnedCount: 0,
@@ -432,7 +471,9 @@ describe("buildLadder", () => {
       names,
       copy: adminCopy.en.ladderRungs,
     });
-    const pin = rungs[0];
+    // Last, not first: the pin is the narrowest level, so it sits at the bottom of
+    // the ladder — right where the per-person list that edits it is rendered.
+    const pin = rungs.at(-1)!;
     expect(pin.level).toBe("user");
     expect(pin.inEffect).toBe(false);
     expect(pin.detail).toContain("3 pinned");

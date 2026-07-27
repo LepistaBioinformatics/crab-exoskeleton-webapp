@@ -78,6 +78,16 @@ const en = {
       "The inventory is shared by every picoclaw agent, but the agent level of the cascade and each per-user pin belong to {agent} alone.",
   },
   models: {
+    // The accordion shell around the inventory. Separate from active/inactive:
+    // those label a model's state, these label the sections that hold them.
+    readingInventory: "Reading the inventory…",
+    inventoryEmpty: "Empty — nothing can be served until a model is registered",
+    inventorySummary: "{active} in service · {inactive} retired or held back",
+    inventoryHint:
+      "One inventory for the whole proxy. A model is registered here once, and every scope below points at this record instead of holding its own copy of the credentials.",
+    inService: "In service",
+    deprecate: "Deprecate",
+    retiredOrHeld: "Retired or held back",
     noAgents: "No agents reported by the gateway, so the inventory cannot be reached.",
     startFrom: "Start from a known model",
     startFromJob: "Fills the provider fields below. Choose the last option to type them yourself.",
@@ -154,9 +164,46 @@ const en = {
     cannotDelete: "Cannot delete while {reason}",
   },
   defaults: {
+    // The accordion form of the section. `title` above is the older flat
+    // heading; this one names the scope, because the rail on the left is easy
+    // to lose track of once the page scrolls.
+    titleScoped: "Which model people get in {scope}",
+    thisScope: "this scope",
+    readingLevels: "Reading every level…",
+    summaryFrom: " — from ",
+    nothingReadable: "Nothing you can read resolves — an instance-wide level may still cover it",
+    nothingResolves: "Nothing resolves yet, so new workspaces here are refused",
+    hintLoading:
+      "Read the ladder downwards: each level covers fewer people than the one above and overrides it.",
+    // "Most specific wins: <model> decides because <level> is the first level…"
+    hintInEffectBefore: "Read downwards — the narrowest level with a model wins, so ",
+    hintInEffectMiddle: " decides, from ",
+    hintInEffectAfter:
+      ". Select any rung to edit that level: the one whose reach matches who you want to move, or the pin rung at the bottom for a single person.",
+    hintHidden:
+      "None of the levels you can read names a model. An instance-wide level may still cover this scope — reading those needs instance-admin. Set the level for this scope if you need to be certain what new workspaces land on.",
+    hintNoneBold: "Nothing resolves here yet, so a new workspace under this scope is refused.",
+    hintNoneAfter:
+      " Select a rung and choose a model: the instance-wide rungs at the top to cover whatever nothing else claims, the tenant rung for everyone in the tenant, the subscription rung for one team.",
+    selectOnLeft: "Select a {level} on the left to set its default.",
+    modelFor: "Model for {target}",
+    pinsTitle: "People with a model of their own",
+    pin: "Pin",
+    unpin: "Unpin",
+    pinsSome: "{pinned} of {total} pinned, so the levels above do not reach them",
+    pinsHint:
+      "A pin outranks every level above. Use it for one person who needs something different, not to move a whole group — that is what a scope default is for.",
     title: "Which model this scope resolves to",
     selectSubscription: "Select a subscription to pin models to its users.",
     clearingMovesBefore: "Clearing the level in effect would move its workspaces to ",
+    // Split around the bold: "…would leave new workspaces with NO RESOLVABLE
+    // MODEL, which refuses to provision."
+    clearLeavesHiddenBefore:
+      "Nothing you can read is set above this, and the instance-wide levels are hidden from you — clearing it may leave new workspaces with ",
+    clearLeavesBefore:
+      "Nothing is set above this. Clearing it would leave new workspaces with ",
+    noResolvableModel: "no resolvable model",
+    clearLeavesAfter: ", which refuses to provision.",
     onNextStart: " on their next start.",
     nothingSetHere: "nothing set at this level",
     retiredCurrent: "{name} (retired — current default)",
@@ -165,6 +212,7 @@ const en = {
     noUsersYet:
       "No users have a workspace under this subscription yet (they must start a chat first).",
     pinnedTo: "pinned · {model}",
+    inheritedTo: "inherited · {model}",
     notMaterialized: "not materialized yet",
     inheritedFromScope: "inherited from scope",
     intro:
@@ -209,13 +257,67 @@ const en = {
   },
   restartPolicy: {
     heading: "When changes take effect",
-    now: "Restart now",
-    notice: "Notify members",
-    schedule: "Schedule for…",
+    // Answers to the heading, not commands. They used to read "Restart now" /
+    // "Notify members" / "Schedule for…", which look like buttons that do
+    // something the moment they are clicked — and an admin reported clicking
+    // "Restart now" and watching nothing restart. Nothing was broken: the choice
+    // only rides along with the NEXT save. The labels now complete the sentence
+    // the heading starts.
+    now: "Immediately",
+    notice: "When each member chooses",
+    schedule: "At a time I pick",
     nowHint: "Applies immediately. Anyone mid-conversation is briefly interrupted.",
     noticeHint: "Applies on disk now; each member restarts when it suits them.",
     scheduleHint:
       "Applies on disk now; every running instance restarts at the time you pick.",
+    // The collapsed section: title plus the policy in force, so a non-default
+    // choice is never hidden behind a closed header.
+    advancedTitle: "Advanced — when changes take effect",
+    summaryNow: "Immediately, interrupting anyone mid-conversation",
+    summaryNotice: "Written now; each member restarts when it suits them",
+    summarySchedule: "Written now; every instance restarts at {at}",
+    summaryScheduleUnset: "Written now; pick the time before making changes",
+    groupAria: "When changes take effect",
+
+    // --- the pending notice, and acting on the scope without saving a change
+    //     (FR-8.3). The verb follows the mode chosen above, so the section never
+    //     carries two competing notions of delivery.
+    // The negative claim is where the scoping caveat belongs: the proxy reads ONE
+    // slot (this scope + this agent), never the cascade, so "nothing pending" is
+    // only ever true about the slot named right here.
+    pendingNone: "Nothing armed for {scope} · {agent}. Another scope or agent may still have one.",
+    everyAgentSlot: "every agent",
+    pendingReading: "Checking this scope…",
+    pendingSince: "Raised {at}",
+    pendingScheduled: "Restarting at {at}",
+    pendingBy: "by {who}",
+    // The reason enum, phrased as what happened rather than as a mechanism.
+    reasons: {
+      "shared-secret": "a shared credential changed",
+      "shared-skills": "shared skills changed",
+      "shared-files": "shared files changed",
+      model: "the model changed",
+      "own-secret": "a member changed their own credential",
+      "admin-request": "an administrator asked for it",
+    },
+    // A build older than the proxy may meet a reason it has not learned.
+    reasonUnknown: "a recent change",
+    actNow: "Restart now",
+    actNotice: "Notify members now",
+    actSchedule: "Schedule the restart",
+    withdraw: "Withdraw",
+    // Replaces "nothing restarts until you save" once a verb sits right there.
+    ridesAlong: "This choice rides along with the changes you save below. To act on the scope right now, use the button.",
+    confirmTitle: "Restart every instance under this scope?",
+    confirmMessage:
+      "{scope} restarts now. Anyone mid-conversation is interrupted, and this cannot be undone.",
+    confirmMessageAgent:
+      "{scope} restarts now, through {agent} only. Anyone mid-conversation is interrupted, and this cannot be undone.",
+    confirmLabel: "Restart now",
+    doneRestarted: "Restarted.",
+    doneArmed: "Members have been notified.",
+    doneScheduled: "Scheduled.",
+    doneWithdrawn: "Withdrawn.",
     atLabel: "Restart at (your local time)",
     atInvalid: "Pick a time in the future (within 7 days).",
     noteLabel: "Note to members (optional)",
@@ -343,7 +445,7 @@ const en = {
   // Passed into buildLadder so that pure helper stops emitting English UI text.
   ladderRungs: {
     pinned: "Pinned to one person",
-    pinnedDetail: "{n} pinned — a pin outranks every level below",
+    pinnedDetail: "{n} pinned — a pin outranks every level above",
     nobodyPinned: "Nobody here is pinned",
     subscription: "This subscription",
     subscriptionNamed: "This subscription — {name}",
@@ -368,6 +470,11 @@ const en = {
     notSet: "not set",
     locked: "not yours to see",
     outOfScope: "out of scope",
+    // The two end caps. Read as one sentence, top to bottom, they teach the
+    // direction the ladder is meant to be read in — the one thing the rungs
+    // themselves cannot say.
+    readDown: "Read down. Each level narrows who it covers and overrides the ones above it.",
+    winnerNote: "The last level with a model is the one a person ends up with.",
   },
 };
 
@@ -434,6 +541,14 @@ const pt: AdminDict = {
       "O inventário é compartilhado por todos os agentes picoclaw, mas o nível de agente da cascata e cada pin por usuário pertencem apenas a {agent}.",
   },
   models: {
+    readingInventory: "Lendo o inventário…",
+    inventoryEmpty: "Vazio — nada pode ser servido até que um modelo seja registrado",
+    inventorySummary: "{active} em serviço · {inactive} aposentados ou retidos",
+    inventoryHint:
+      "Um inventário para todo o proxy. Um modelo é registrado aqui uma vez, e cada escopo abaixo aponta para este registro em vez de guardar a própria cópia das credenciais.",
+    inService: "Em serviço",
+    deprecate: "Descontinuar",
+    retiredOrHeld: "Aposentados ou retidos",
     noAgents: "O gateway não reportou nenhum agente, então o inventário não pode ser acessado.",
     startFrom: "Começar de um modelo conhecido",
     startFromJob: "Preenche os campos do provedor abaixo. Escolha a última opção para digitá-los você mesmo.",
@@ -509,9 +624,40 @@ const pt: AdminDict = {
     cannotDelete: "Não dá para excluir enquanto {reason}",
   },
   defaults: {
+    titleScoped: "Qual modelo as pessoas recebem em {scope}",
+    thisScope: "este escopo",
+    readingLevels: "Lendo todos os níveis…",
+    summaryFrom: " — de ",
+    nothingReadable: "Nada que você pode ler resolve — um nível de instância ainda pode cobrir",
+    nothingResolves: "Nada resolve ainda, então novos workspaces aqui são recusados",
+    hintLoading:
+      "Leia a escada de cima para baixo: cada nível cobre menos gente que o de cima e o sobrepõe.",
+    hintInEffectBefore: "Leia de cima para baixo — vence o nível mais específico com um modelo, então ",
+    hintInEffectMiddle: " decide, vindo de ",
+    hintInEffectAfter:
+      ". Selecione qualquer degrau para editar aquele nível: o que corresponde a quem você quer mover, ou o degrau de pin no fim para uma única pessoa.",
+    hintHidden:
+      "Nenhum dos níveis que você pode ler nomeia um modelo. Um nível de instância ainda pode cobrir este escopo — lê-los exige admin da instância. Defina o nível deste escopo se precisar ter certeza de onde novos workspaces caem.",
+    hintNoneBold: "Nada resolve aqui ainda, então um novo workspace neste escopo é recusado.",
+    hintNoneAfter:
+      " Selecione um degrau e escolha um modelo: os degraus de instância no topo para cobrir o que mais nada reivindicar, o de tenant para todo o tenant, o de assinatura para um time.",
+    selectOnLeft: "Selecione um {level} à esquerda para definir o padrão dele.",
+    modelFor: "Modelo para {target}",
+    pinsTitle: "Pessoas com um modelo próprio",
+    pin: "Fixar",
+    unpin: "Desafixar",
+    pinsSome: "{pinned} de {total} com pin, então os níveis acima não os alcançam",
+    pinsHint:
+      "Um pin supera todos os níveis acima. Use para uma pessoa que precisa de algo diferente, não para mover um grupo inteiro — para isso existe o padrão de escopo.",
     title: "Para qual modelo este escopo resolve",
     selectSubscription: "Selecione uma assinatura para fixar modelos aos seus usuários.",
     clearingMovesBefore: "Limpar o nível em vigor moveria os workspaces dele para ",
+    clearLeavesHiddenBefore:
+      "Nada que você possa ler está definido acima deste, e os níveis de instância estão ocultos para você — limpar pode deixar novos workspaces sem ",
+    clearLeavesBefore:
+      "Nada está definido acima deste. Limpar deixaria novos workspaces sem ",
+    noResolvableModel: "nenhum modelo resolvível",
+    clearLeavesAfter: ", o que recusa o provisionamento.",
     onNextStart: " na próxima inicialização.",
     nothingSetHere: "nada definido neste nível",
     retiredCurrent: "{name} (aposentado — padrão atual)",
@@ -520,6 +666,7 @@ const pt: AdminDict = {
     noUsersYet:
       "Nenhum usuário tem workspace nesta assinatura ainda (é preciso iniciar uma conversa primeiro).",
     pinnedTo: "fixado · {model}",
+    inheritedTo: "herdado · {model}",
     notMaterialized: "ainda não materializado",
     inheritedFromScope: "herdado do escopo",
     intro:
@@ -561,13 +708,50 @@ const pt: AdminDict = {
   },
   restartPolicy: {
     heading: "Quando as alterações passam a valer",
-    now: "Reiniciar agora",
-    notice: "Avisar os membros",
-    schedule: "Agendar para…",
+    now: "Imediatamente",
+    notice: "Quando cada membro quiser",
+    schedule: "Em um horário que eu escolher",
     nowHint: "Aplica imediatamente. Quem estiver em conversa é interrompido por um instante.",
     noticeHint: "Aplica em disco agora; cada membro reinicia quando lhe convier.",
     scheduleHint:
       "Aplica em disco agora; toda instância em execução reinicia na hora escolhida.",
+    advancedTitle: "Avançado — quando as alterações passam a valer",
+    summaryNow: "Imediatamente, interrompendo quem estiver em conversa",
+    summaryNotice: "Gravado agora; cada membro reinicia quando lhe convier",
+    summarySchedule: "Gravado agora; toda instância reinicia em {at}",
+    summaryScheduleUnset: "Gravado agora; escolha o horário antes de fazer alterações",
+    groupAria: "Quando as alterações passam a valer",
+
+    pendingNone: "Nada armado para {scope} · {agent}. Outro escopo ou agente ainda pode ter.",
+    everyAgentSlot: "todos os agentes",
+    pendingReading: "Consultando este escopo…",
+    pendingSince: "Levantado em {at}",
+    pendingScheduled: "Reinicia em {at}",
+    pendingBy: "por {who}",
+    reasons: {
+      "shared-secret": "uma credencial compartilhada mudou",
+      "shared-skills": "as skills compartilhadas mudaram",
+      "shared-files": "os arquivos compartilhados mudaram",
+      model: "o modelo mudou",
+      "own-secret": "um membro alterou a própria credencial",
+      "admin-request": "um administrador pediu",
+    },
+    reasonUnknown: "uma alteração recente",
+    actNow: "Reiniciar agora",
+    actNotice: "Avisar os membros agora",
+    actSchedule: "Agendar o reinício",
+    withdraw: "Retirar",
+    ridesAlong: "Esta escolha acompanha as alterações que você salvar abaixo. Para agir sobre o escopo agora, use o botão.",
+    confirmTitle: "Reiniciar todas as instâncias deste escopo?",
+    confirmMessage:
+      "{scope} reinicia agora. Quem estiver em conversa é interrompido, e isso não pode ser desfeito.",
+    confirmMessageAgent:
+      "{scope} reinicia agora, apenas por {agent}. Quem estiver em conversa é interrompido, e isso não pode ser desfeito.",
+    confirmLabel: "Reiniciar agora",
+    doneRestarted: "Reiniciado.",
+    doneArmed: "Os membros foram avisados.",
+    doneScheduled: "Agendado.",
+    doneWithdrawn: "Retirado.",
     atLabel: "Reiniciar em (seu horário local)",
     atInvalid: "Escolha um horário no futuro (dentro de 7 dias).",
     noteLabel: "Recado aos membros (opcional)",
@@ -694,7 +878,7 @@ const pt: AdminDict = {
   },
   ladderRungs: {
     pinned: "Fixado em uma pessoa",
-    pinnedDetail: "{n} fixados — um pin supera todos os níveis abaixo",
+    pinnedDetail: "{n} fixados — um pin supera todos os níveis acima",
     nobodyPinned: "Ninguém aqui está fixado",
     subscription: "Esta assinatura",
     subscriptionNamed: "Esta assinatura — {name}",
@@ -719,6 +903,8 @@ const pt: AdminDict = {
     notSet: "não definido",
     locked: "fora do seu alcance",
     outOfScope: "fora de escopo",
+    readDown: "Leia de cima para baixo. Cada nível restringe quem ele cobre e sobrepõe os de cima.",
+    winnerNote: "O último nível com um modelo é o que a pessoa recebe.",
   },
 };
 

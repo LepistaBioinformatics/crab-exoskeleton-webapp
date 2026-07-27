@@ -33,6 +33,7 @@ import ModelDefaultsPanel from "./model-defaults-panel";
 import { Accordion } from "./accordion";
 import { FallbackEditor } from "./fallback-editor";
 import { adminCopy } from "@/lib/i18n/admin";
+import { commonCopy } from "@/lib/i18n/common";
 import { useT } from "@/lib/i18n/context";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 
@@ -68,6 +69,7 @@ export default function ModelRegistryPanel({
   restartPolicy?: RestartPolicy;
 }) {
   const t = useT(adminCopy);
+  const c = useT(commonCopy);
   const err = useT(errorCopy);
   const routed = target;
 
@@ -226,33 +228,39 @@ export default function ModelRegistryPanel({
       )}
 
       {!routed && (
-        <Alert severity="info">No agents reported by the gateway, so the inventory cannot be reached.</Alert>
+        <Alert severity="info">{t.models.noAgents}</Alert>
       )}
 
+      {/* Every section of this tab starts closed. Each header states its own
+          state — how many models are in service, which one the scope resolves to,
+          how many people are pinned — so opening one is a choice about what to
+          EDIT, not the only way to find out where you are. Three sections all
+          open at once was the flat page the accordions replaced. */}
       <Accordion
-        title="Model inventory"
-        defaultOpen
+        title={t.models.inventory}
         summary={
           models === null
-            ? "Reading the inventory…"
+            ? t.models.readingInventory
             : models.length === 0
-              ? "Empty — nothing can be served until a model is registered"
-              : `${active.length} in service · ${inactive.length} retired or held back`
+              ? t.models.inventoryEmpty
+              : t.models.inventorySummary
+                  .replace("{active}", String(active.length))
+                  .replace("{inactive}", String(inactive.length))
         }
-        hint="One inventory for the whole proxy. A model is registered here once, and every scope below points at this record instead of holding its own copy of the credentials."
+        hint={t.models.inventoryHint}
       >
         <div className="flex justify-end">
           <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
             <Plus size={16} />
-            Register model
+            {t.models.register}
           </Button>
         </div>
 
         {showForm && (
           <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4">
             <Field
-              label="Start from a known model"
-              job="Fills the provider fields below. Choose the last option to type them yourself."
+              label={t.models.startFrom}
+              job={t.models.startFromJob}
               htmlFor="m-catalog"
             >
               <select
@@ -262,14 +270,14 @@ export default function ModelRegistryPanel({
                 onChange={(e) => onCatalogPick(e.target.value)}
               >
                 <option value="" disabled>
-                  pick one to prefill…
+                  {t.models.catalogPlaceholder}
                 </option>
                 {catalog.map((c, i) => (
                   <option key={`${c.provider}|${c.model}`} value={String(i)}>
                     {c.provider} · {c.model}
                   </option>
                 ))}
-                <option value={CUSTOM}>Something else — fill it in by hand</option>
+                <option value={CUSTOM}>{t.models.custom}</option>
               </select>
             </Field>
 
@@ -281,8 +289,8 @@ export default function ModelRegistryPanel({
                 than left to be inferred. */}
             <div className="grid gap-3 rounded-lg border border-brand/25 bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
               <Field
-                label="What you call it here"
-                job="Your name for it, used everywhere in this screen. Must be unique."
+                label={t.models.yourName}
+                job={t.models.yourNameJob}
                 htmlFor="m-alias"
               >
                 <input
@@ -298,8 +306,8 @@ export default function ModelRegistryPanel({
                 →
               </span>
               <Field
-                label="What the provider calls it"
-                job="The exact id the provider expects. It often differs from your name."
+                label={t.models.providerName}
+                job={t.models.providerNameJob}
                 htmlFor="m-id"
               >
                 <input
@@ -314,7 +322,7 @@ export default function ModelRegistryPanel({
               <div className="sm:col-span-3">
                 <div className="mb-1.5 flex items-baseline gap-2">
                   <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
-                    Written to each workspace as
+                    {t.models.writtenAs}
                   </span>
                   <span className="text-[11px] text-fg-muted">config.json</span>
                 </div>
@@ -325,15 +333,18 @@ export default function ModelRegistryPanel({
                 </pre>
                 <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
                   <KeyRound size={12} aria-hidden />
-                  The key goes to <Ident>.security.yml</Ident> instead — never to{" "}
-                  <Ident>config.json</Ident>.
+                  {t.models.keyGoesToBefore}
+                  <Ident>.security.yml</Ident>
+                  {t.models.keyGoesToMiddle}
+                  <Ident>config.json</Ident>
+                  {t.models.keyGoesToAfter}
                 </p>
               </div>
             </div>
 
             <Field
-              label="Provider"
-              job="Who serves the model. Picoclaw uses it to choose how to talk to them."
+              label={t.models.provider}
+              job={t.models.providerJob}
               htmlFor="m-provider"
             >
               <input
@@ -346,8 +357,8 @@ export default function ModelRegistryPanel({
             </Field>
 
             <Field
-              label="Where to send requests"
-              job="The provider's API address. Leave empty to use their default."
+              label={t.models.apiBase}
+              job={t.models.apiBaseJob}
               htmlFor="m-base"
             >
               <input
@@ -360,8 +371,8 @@ export default function ModelRegistryPanel({
             </Field>
 
             <Field
-              label="Sign-in method"
-              job="Only for providers that use OAuth instead of a key. Leave empty otherwise."
+              label={t.models.authMethod}
+              job={t.models.authMethodJob}
               htmlFor="m-auth"
             >
               <input
@@ -375,13 +386,14 @@ export default function ModelRegistryPanel({
 
             <Field
               label="API key"
-              job="Write-only. Stored once here and reused by every scope that points at this model."
+              job={t.models.apiKeyJob}
               htmlFor="m-key"
               consequence={
                 editing ? (
                   <>
-                    Leave it blank to <b>keep the key already stored</b>. This screen never shows a
-                    key back, so it cannot be re-typed from what you see.
+                    {t.models.leaveBlankBefore}
+                    <b>{t.models.leaveBlankBold}</b>
+                    {t.models.leaveBlankAfter}
                   </>
                 ) : undefined
               }
@@ -400,10 +412,10 @@ export default function ModelRegistryPanel({
             <div className="flex justify-end gap-2">
               <Button type="button" variant="text" size="sm"
                 onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
-                Cancel
+                {c.actions.cancel}
               </Button>
               <Button type="submit" variant="filled" size="sm" disabled={busy}>
-                {busy ? "Saving…" : editing ? "Save changes" : "Add model"}
+                {busy ? t.models.saving : editing ? t.models.saveChanges : t.models.addModel}
               </Button>
             </div>
           </form>
@@ -415,9 +427,9 @@ export default function ModelRegistryPanel({
           </div>
         ) : (
           <>
-            <Section title="In service">
+            <Section title={t.models.inService}>
               {active.length === 0 ? (
-                <p className="py-2 text-sm text-fg-muted">No active models. Register one to get started.</p>
+                <p className="py-2 text-sm text-fg-muted">{t.models.noneActive}</p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {active.map((m, i) => (
@@ -439,22 +451,23 @@ export default function ModelRegistryPanel({
                 </ul>
               )}
               <p className="text-[11px] text-fg-muted">
-                This order is for reading only. A model&apos;s fallback chain is the{" "}
-                <span className="font-mono">fallbacks</span> list on the model itself.
+                {t.models.readingOrderBefore}
+                <span className="font-mono">fallbacks</span>
+                {t.models.readingOrderAfter}
               </p>
 
               {deprecating && (
                 <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
                   <span className="text-xs font-medium text-fg-muted">
-                    Retire <span className="font-mono">{deprecating.model_name}</span>
+                    {t.models.retirePrefix} <span className="font-mono">{deprecating.model_name}</span>
                   </span>
                   <p className="text-[11px] text-fg-muted">
-                    Everyone already using it keeps it. New users get the replacement instead.
+                    {t.models.retireExplain}
                   </p>
                   <select className={selectClass} value={replacement}
                     onChange={(e) => setReplacement(e.target.value)}>
                     <option value="" disabled>
-                      replacement for new users…
+                      {t.models.replacementPlaceholder}
                     </option>
                     {active
                       .filter((m) => m.model_name !== deprecating.model_name)
@@ -467,7 +480,7 @@ export default function ModelRegistryPanel({
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="text" size="sm"
                       onClick={() => { setDeprecating(null); setReplacement(""); }}>
-                      Cancel
+                      {c.actions.cancel}
                     </Button>
                     <Button variant="filled" size="sm" disabled={busy || !replacement}
                       onClick={() =>
@@ -478,16 +491,16 @@ export default function ModelRegistryPanel({
                           await refresh();
                         })
                       }>
-                      Deprecate
+                      {t.models.deprecate}
                     </Button>
                   </div>
                 </div>
               )}
             </Section>
 
-            <Section title="Retired or held back">
+            <Section title={t.models.retiredOrHeld}>
               {inactive.length === 0 ? (
-                <p className="py-2 text-sm text-fg-muted">Nothing disabled or deprecated.</p>
+                <p className="py-2 text-sm text-fg-muted">{t.models.noneInactive}</p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {inactive.map((m) => (

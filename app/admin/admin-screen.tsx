@@ -32,6 +32,8 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import RestartPolicySelect from "./restart-policy-select";
+import RestartNoticeBlock from "./restart-notice";
+import { Accordion } from "./accordion";
 import { DEFAULT_POLICY, policyIsValid, type RestartPolicy } from "@/lib/restartPolicy";
 
 
@@ -58,7 +60,14 @@ const tabButton = cva(
 const modeButton = cva("rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors", {
   variants: {
     active: {
-      true: "bg-surface text-fg shadow-elevated",
+      // A filled accent, not a raised card. `shadow-elevated` was a soft
+      // elevation shadow, and nothing else on this screen uses one — the only
+      // other shadow in the system is the hard offset `signature` on Button and
+      // Surface, which is a different idiom — so it read as a stray rather than
+      // as "selected". The fill also differs in KIND from the level-2 tabs'
+      // underline, which is what keeps the two rows of navigation from looking
+      // like one.
+      true: "bg-accent text-accent-fg",
       false: "text-fg-muted hover:text-fg",
     },
   },
@@ -246,6 +255,7 @@ export default function AdminScreen() {
   // Held here rather than in each panel so switching tabs does not silently
   // reset it back to "restart now" mid-task.
   const [restartPolicy, setRestartPolicy] = useState<RestartPolicy>(DEFAULT_POLICY);
+  const [restartOpen, setRestartOpen] = useState(false);
   const tabAgents = modelTab ? modelAgentKeys : agentKeys;
   const tabTarget = modelTab
     ? (tabAgents.includes(agentTarget) ? agentTarget : (tabAgents[0] ?? ""))
@@ -278,6 +288,19 @@ export default function AdminScreen() {
       selected?.kind === "subscription" ? (selectedScope?.accName ?? selected.subsAccId) : undefined,
   };
 
+  // The policy in force, for the collapsed section's header. The scheduled time
+  // is shown as the admin typed it ("2026-07-27 18:00") rather than through
+  // toLocaleString, which renders differently on the server and the client and
+  // would trip hydration.
+  const restartSummary =
+    restartPolicy.mode === "now"
+      ? t.restartPolicy.summaryNow
+      : restartPolicy.mode === "notice"
+        ? t.restartPolicy.summaryNotice
+        : restartPolicy.at
+          ? t.restartPolicy.summarySchedule.replace("{at}", restartPolicy.at.replace("T", " "))
+          : t.restartPolicy.summaryScheduleUnset;
+
   const hasScopes = !!scopes && scopes.length > 0;
   const scopedTabs = hasScopes ? TABS : [];
   // The mode is derived from the tab rather than kept beside it: two sources for
@@ -290,7 +313,7 @@ export default function AdminScreen() {
   const mode: "scoped" | "branding" = tab === "branding" && canEditBranding ? "branding" : "scoped";
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6">
+    <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-24 pt-6">
       <header className="mb-6 flex items-center gap-3">
         <Link
           href="/chat"
@@ -463,10 +486,54 @@ export default function AdminScreen() {
                       </div>
                       {/* Shared files reach containers through a live read-only
                           mount, so they need no bounce; secrets, skills and
-                          model changes do. */}
+                          model changes do.
+
+                          Collapsed, because delivery is not what an admin came to
+                          this tab to do — it modifies the saves they are about to
+                          make, and its default reproduces the behaviour these
+                          endpoints had before the policy existed. What it must
+                          never do is hide a NON-default choice, so the closed
+                          header states the policy in force, and a policy other
+                          than "immediately" draws the section as primary. */}
                       {(tab === "secrets" || tab === "skills" || tab === "model") && (
-                        <div className="mb-4 flex flex-col gap-2">
-                          <RestartPolicySelect policy={restartPolicy} onChange={setRestartPolicy} />
+                        <div className="mb-3 flex flex-col gap-2">
+                          <Accordion
+                            // Open when the admin opened it, and forced open while
+                            // the policy cannot be honoured — you cannot fix a
+                            // blocking error inside a section you cannot see.
+                            //
+                            // Recomputed on every render rather than latched, so a
+                            // schedule that goes stale on its own (the chosen time
+                            // simply passes) also forces it open. This replaced a
+                            // `key` that remounted the section on the same
+                            // condition: remounting re-applied the initial state in
+                            // BOTH directions, so stepping from "at a time I pick"
+                            // back to "immediately" slammed the section shut.
+                            open={restartOpen || !policyIsValid(restartPolicy)}
+                            onOpenChange={setRestartOpen}
+                            title={t.restartPolicy.advancedTitle}
+                            summary={restartSummary}
+                            tone={restartPolicy.mode === "now" ? "quiet" : "primary"}
+                          >
+                            <RestartPolicySelect policy={restartPolicy} onChange={setRestartPolicy} />
+                            {/* The scope is the one in the rail plus the agent in
+                                the picker — the same target every other action on
+                                this tab addresses. The all-agents sentinel is
+                                resolved to "no agent" HERE, where the picker's
+                                vocabulary is owned: lib/adminRestart strips it
+                                from the wire too, but the confirmation copy reads
+                                the field directly and would otherwise offer to
+                                restart "through all only". */}
+                            <RestartNoticeBlock
+                              target={{
+                                tenantId: selected.tenantId,
+                                subsAccId: selected.subsAccId,
+                                agent: tabTarget === ALL_AGENTS ? undefined : tabTarget,
+                              }}
+                              policy={restartPolicy}
+                              scopeLabel={scopeLabel}
+                            />
+                          </Accordion>
                           {/* An incomplete schedule cannot be honoured: the
                               proxy rejects it before writing, so the admin would
                               get a 400 on a change they thought they made. Block
