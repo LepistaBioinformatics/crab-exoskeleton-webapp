@@ -123,9 +123,11 @@ export default function SecretsDrawer({
     try {
       await setSecret(workspace, { format, name: finalName, value });
       setValue(""); // never keep the value around after submit
-      await refresh();
+      // Publish BEFORE refreshing: the secret is already stored, so a failed
+      // list refresh must not swallow the fact that a restart is now needed.
       setSavedNeedsRestart(true);
       onRestartNeeded?.();
+      await refresh();
     } catch (err) {
       setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
@@ -139,9 +141,9 @@ export default function SecretsDrawer({
     setLoadError(null);
     try {
       await deleteSecret(workspace, { format: fmt, name: secretName });
-      await refresh();
       setSavedNeedsRestart(true);
       onRestartNeeded?.();
+      await refresh();
     } catch (err) {
       setLoadError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {

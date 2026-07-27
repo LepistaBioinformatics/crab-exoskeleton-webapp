@@ -57,7 +57,10 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   useEffect(() => {
     if (!scope.subsAccId) return;
     let cancelled = false;
-    setUsers(null);
+    // Only blank the list when there is nothing to show yet. Nulling it on every
+    // `reload` bump made a successful invite or revoke flash the whole roster
+    // away behind a spinner instead of refreshing in place.
+    setUsers((prev) => (reload === 0 ? null : prev));
     setError(null);
     setExpanded(null);
     // Two feeds, two questions: who was INVITED (mycelium guests) and who has

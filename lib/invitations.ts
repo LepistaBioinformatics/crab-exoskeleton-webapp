@@ -33,19 +33,22 @@ export interface GuestUser {
   wasVerified?: boolean;
 }
 
-// Mycelium reports a permission as either a number (0 = read, 1 = write in the
-// gateway's Permission enum) or its string form, depending on the endpoint's
-// serializer. Normalize both rather than betting on one.
+// Mycelium reports a permission as either a number (Read = 0, Write = 1 in the
+// gateway's Permission enum, guest_role.rs) or its string form, depending on the
+// endpoint's serializer. Normalize both rather than betting on one.
+//
+// Matched exactly, never by substring: "overwrite" contains "write" and "thread"
+// contains "read", and silently reading either as a grant would hand out the
+// wrong access level. An unrecognized value is null, which the callers treat as
+// "this level cannot be granted" — the safe direction.
 export function permissionLevel(permission: number | string): AccessLevel | null {
   if (typeof permission === "number") {
     if (permission === 0) return "read";
     if (permission === 1) return "write";
     return null;
   }
-  const v = permission.toLowerCase();
-  if (v.includes("write")) return "write";
-  if (v.includes("read")) return "read";
-  return null;
+  const v = permission.trim().toLowerCase();
+  return v === "read" || v === "write" ? v : null;
 }
 
 // Picks the role id for (agent, access level). Returns null when the tenant has
@@ -75,6 +78,10 @@ export function availableLevels(roles: GuestRole[], agentKey: string): AccessLev
 
 export interface RosterEntry {
   email: string;
+  // Whether mycelium has verified the invitation. An unverified guest has been
+  // invited but has not accepted, which is a different state from "invited and
+  // never used the agent" (see `active`).
+  verified?: boolean;
   // The agent roles this person is guested with, e.g. ["alpha (write)"].
   roles: string[];
   // True once they have a workspace on disk — i.e. they have actually used the
@@ -86,9 +93,12 @@ export interface RosterEntry {
 
 function roleLabel(guest: GuestUser, roles: GuestRole[]): string {
   const gr = guest.guestRole;
-  const id = typeof gr === "string" ? gr : gr?.id;
+  const rawId = typeof gr === "string" ? gr : gr?.id;
+  const id = typeof rawId === "string" && rawId ? rawId : null;
   const named = typeof gr === "object" && gr?.name ? gr.name : undefined;
-  const found = roles.find((r) => r.id === id);
+  // Only look up a real id. Matching on a missing one would pair this guest with
+  // the first role that also has no id — an unrelated agent and permission.
+  const found = id ? roles.find((r) => r.id === id) : undefined;
   const name = found?.name ?? named ?? "unknown";
   const level = found ? permissionLevel(found.permission) : null;
   return level ? `${name} (${level})` : name;
@@ -110,6 +120,10 @@ export function mergeRoster(guests: GuestUser[], users: UserRef[], roles: GuestR
     const label = roleLabel(g, roles);
     if (!entry.roles.includes(label)) entry.roles.push(label);
     if (g.created && !entry.invitedAt) entry.invitedAt = g.created;
+    // Any verified grant makes the person verified; several rows for one email
+    // are separate role grants, not separate people.
+    if (g.wasVerified) entry.verified = true;
+    else if (entry.verified === undefined) entry.verified = false;
     byEmail.set(key, entry);
   }
 

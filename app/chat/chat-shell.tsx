@@ -148,7 +148,14 @@ export default function ChatShell({ email }: { email: string }) {
           {/* Above both the chat and the canvas: a pending restart is a property
               of the workspace, not of the view you happen to be in. */}
           {workspace && (
-            <RestartBanner workspace={workspace} refreshKey={restartRefresh} />
+            // Keyed by the workspace so switching agents remounts it: without
+            // this the previous workspace's pending status renders for a beat
+            // against the newly selected one.
+            <RestartBanner
+              key={`${workspace.t}|${workspace.s}|${workspace.r}`}
+              workspace={workspace}
+              refreshKey={restartRefresh}
+            />
           )}
           <div className="min-h-0 flex-1">
             {!resolved ? (

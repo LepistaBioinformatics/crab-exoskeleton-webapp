@@ -220,6 +220,7 @@ const en = {
     atInvalid: "Pick a time in the future (within 7 days).",
     noteLabel: "Note to members (optional)",
     notePlaceholder: "e.g. rotating the search provider key",
+    blocked: "Finish the schedule above before making changes here.",
   },
   members: {
     selectSubscription: "Select a subscription to see its members.",
@@ -571,6 +572,7 @@ const pt: AdminDict = {
     atInvalid: "Escolha um horário no futuro (dentro de 7 dias).",
     noteLabel: "Recado aos membros (opcional)",
     notePlaceholder: "ex.: rotação da chave do provedor de busca",
+    blocked: "Conclua o agendamento acima antes de fazer alterações aqui.",
   },
   members: {
     selectSubscription: "Selecione uma assinatura para ver seus membros.",

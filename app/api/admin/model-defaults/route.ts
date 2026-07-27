@@ -38,8 +38,12 @@ async function forward(req: NextRequest, method: "GET" | "PUT" | "DELETE") {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   if (method !== "PUT") {
-    const clearSuffix = withRestart(`/model-defaults?${query}`, restartParams(req));
-    return proxyAdminJsonAgent(session, agent, clearSuffix, { method });
+    // GET reads; only DELETE mutates and can therefore carry a restart policy.
+    const suffix =
+      method === "DELETE"
+        ? withRestart(`/model-defaults?${query}`, restartParams(req))
+        : `/model-defaults?${query}`;
+    return proxyAdminJsonAgent(session, agent, suffix, { method });
   }
   const body = await req.json().catch(() => null);
   if (typeof body?.model_name !== "string" || !body.model_name) {

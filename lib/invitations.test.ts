@@ -33,6 +33,14 @@ describe("permissionLevel", () => {
     expect(permissionLevel(42)).toBeNull();
     expect(permissionLevel("owner")).toBeNull();
   });
+
+  it("never infers a level from a substring", () => {
+    // "overwrite" contains "write" and "thread" contains "read". Reading either
+    // as a grant would hand out an access level nobody declared.
+    expect(permissionLevel("overwrite")).toBeNull();
+    expect(permissionLevel("thread")).toBeNull();
+    expect(permissionLevel("readonly")).toBeNull();
+  });
 });
 
 describe("resolveRoleId", () => {
@@ -110,6 +118,45 @@ describe("mergeRoster", () => {
     const roster = mergeRoster([], [user("legacy@x.com", "acc-3", "alpha")], ROLES);
     expect(roster).toHaveLength(1);
     expect(roster[0].active).toBe(true);
+  });
+
+  it("does not pair a guest with an unrelated role when the id is missing", () => {
+    // Both the guest row and some role can lack an id; matching undefined to
+    // undefined would label this guest with whatever role happened to be first.
+    const roles: GuestRole[] = [
+      { id: null, name: "beta", slug: "beta", permission: 1 },
+      { id: "r-alpha-write", name: "alpha", slug: "alpha", permission: 1 },
+    ];
+    const roster = mergeRoster([{ email: "x@x.com", guestRole: { id: null } }], [], roles);
+    expect(roster[0].roles).toEqual(["unknown"]);
+  });
+
+  it("carries the verification state through", () => {
+    const roster = mergeRoster(
+      [
+        { email: "pending@x.com", guestRole: { id: "r-alpha-write" } },
+        { email: "ok@x.com", guestRole: { id: "r-alpha-write" }, wasVerified: true },
+      ],
+      [],
+      ROLES,
+    );
+    const byEmail = Object.fromEntries(roster.map((r) => [r.email, r]));
+    expect(byEmail["ok@x.com"].verified).toBe(true);
+    expect(byEmail["pending@x.com"].verified).toBe(false);
+  });
+
+  it("treats one verified grant as verifying the person", () => {
+    // Several rows for one email are separate role grants, not separate people.
+    const roster = mergeRoster(
+      [
+        { email: "multi@x.com", guestRole: { id: "r-alpha-read" } },
+        { email: "multi@x.com", guestRole: { id: "r-alpha-write" }, wasVerified: true },
+      ],
+      [],
+      ROLES,
+    );
+    expect(roster).toHaveLength(1);
+    expect(roster[0].verified).toBe(true);
   });
 
   it("collects several roles onto one person", () => {

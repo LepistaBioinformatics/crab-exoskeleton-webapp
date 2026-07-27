@@ -23,6 +23,13 @@ export interface RestartStatus {
   scheduledAt?: string;
   lastRestartAt?: string;
   running: boolean;
+  // Whether THIS caller may act on the notice. A read-only member sees the
+  // banner with canRestart=false; the client cannot infer that, because holding
+  // read on an agent says nothing about holding write (FR-7.6).
+  //
+  // Optional so a webapp deployed ahead of the proxy that added it keeps
+  // working: absent is treated as "allowed", which is the pre-field behaviour.
+  canRestart?: boolean;
 }
 
 // The phrasing lives in the copy catalogue; this only picks the right key. An

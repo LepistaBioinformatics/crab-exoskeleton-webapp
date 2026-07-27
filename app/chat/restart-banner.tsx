@@ -28,8 +28,9 @@ const POLL_MS = 60_000;
 //   - an admin scheduled one   -> informational, no button (the proxy will do it)
 //   - pending, unscheduled     -> actionable: "Restart now"
 //
-// A read-only member gets the same banner and a 403 if they somehow press the
-// button, so the affordance stays honest either way -- the proxy is the gate.
+// A read-only member gets the informational form of the third state: the proxy
+// reports canRestart=false and the button is left out, rather than offered and
+// answered with a 403 (FR-7.6).
 export default function RestartBanner({
   workspace,
   refreshKey = 0,
@@ -93,6 +94,9 @@ export default function RestartBanner({
   if (!status?.pending) return null;
 
   const scheduled = status.scheduledAt;
+  // An absent canRestart means the proxy predates the field; treat that as
+  // allowed so an older backend behaves exactly as it did before.
+  const mayRestart = status.canRestart !== false;
 
   return (
     <div className="flex items-start gap-3 border-b border-brand/40 bg-accent/10 px-4 py-2.5 text-sm">
@@ -115,7 +119,7 @@ export default function RestartBanner({
         {error && <p className="mt-1 text-red-500">{error}</p>}
       </div>
 
-      {!scheduled && (
+      {!scheduled && mayRestart && (
         <Button
           size="sm"
           variant="tonal"

@@ -42,6 +42,13 @@ async function callRestart(
   return NextResponse.json(data);
 }
 
+// `role` is interpolated into the internal gateway URL as a path segment, and it
+// is client-controlled. isInstance() only checks non-emptiness, so a value
+// carrying "/", ".." or "?" could redirect the request — with the session bearer
+// token attached — at a different gateway path. Constrain it to the shape a real
+// agent key has (the gateway declares them as plain identifiers) and encode it.
+const AGENT_KEY = /^[a-z0-9][a-z0-9._-]*$/i;
+
 // workspaceQuery reads the three params both verbs need, or null when the
 // combination is unusable (mapped to a 400 by the callers).
 function workspaceQuery(req: NextRequest): { role: string; query: string } | null {
@@ -49,9 +56,9 @@ function workspaceQuery(req: NextRequest): { role: string; query: string } | nul
   const tenantId = p.get("tenant_id");
   const subsAccId = p.get("subs_acc_id");
   const role = p.get("role");
-  if (!tenantId || !subsAccId || !role || !isInstance(role)) return null;
+  if (!tenantId || !subsAccId || !role || !isInstance(role) || !AGENT_KEY.test(role)) return null;
   return {
-    role,
+    role: encodeURIComponent(role),
     query: `?${new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId }).toString()}`,
   };
 }

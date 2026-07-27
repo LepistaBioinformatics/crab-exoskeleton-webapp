@@ -32,7 +32,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import RestartPolicySelect from "./restart-policy-select";
-import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
+import { DEFAULT_POLICY, policyIsValid, type RestartPolicy } from "@/lib/restartPolicy";
 
 
 // Level 2: the sections OF a scope. Subordinate to the mode switch above, and
@@ -465,11 +465,19 @@ export default function AdminScreen() {
                           mount, so they need no bounce; secrets, skills and
                           model changes do. */}
                       {(tab === "secrets" || tab === "skills" || tab === "model") && (
-                        <div className="mb-4">
+                        <div className="mb-4 flex flex-col gap-2">
                           <RestartPolicySelect policy={restartPolicy} onChange={setRestartPolicy} />
+                          {/* An incomplete schedule cannot be honoured: the
+                              proxy rejects it before writing, so the admin would
+                              get a 400 on a change they thought they made. Block
+                              here, the one place that owns the policy, rather
+                              than repeating the check in every panel. */}
+                          {!policyIsValid(restartPolicy) && (
+                            <Alert severity="error">{t.restartPolicy.blocked}</Alert>
+                          )}
                         </div>
                       )}
-                      {tab === "files" ? (
+                      {!policyIsValid(restartPolicy) ? null : tab === "files" ? (
                         <SharedFilesPanel scope={{ ...selected, agent: tabTarget }} />
                       ) : tab === "secrets" ? (
                         <SharedSecretsPanel
