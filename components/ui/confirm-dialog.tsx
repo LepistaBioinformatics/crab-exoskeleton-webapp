@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { useT } from "@/lib/i18n/context";
@@ -13,16 +14,27 @@ export function ConfirmDialog({
   open,
   title,
   message,
+  detail,
   confirmLabel,
   cancelLabel,
+  tone = "neutral",
   onConfirm,
   onCancel,
 }: {
   open: boolean;
   title: string;
   message?: string;
+  /** A second line for what the action does to people other than the caller. */
+  detail?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * `danger` for an action that reaches other people and cannot be undone. The
+   * dialog then reads as a warning rather than as a neutral "are you sure":
+   * a marker, and a confirm button that is not the same accent as every other
+   * primary action on the screen.
+   */
+  tone?: "neutral" | "danger";
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -52,13 +64,28 @@ export function ConfirmDialog({
         aria-label={title}
         className="relative z-10 w-full max-w-sm p-5"
       >
-        <h2 className="font-display text-lg font-semibold text-fg">{title}</h2>
+        <h2 className="flex items-start gap-2 font-display text-lg font-semibold text-fg">
+          {tone === "danger" && (
+            <TriangleAlert size={18} aria-hidden className="mt-0.5 shrink-0 text-blocked" />
+          )}
+          {title}
+        </h2>
         {message && <p className="mt-2 text-sm text-fg-muted">{message}</p>}
+        {detail && (
+          <p className="mt-2 rounded-lg bg-blocked-weak px-3 py-2 text-sm text-blocked">{detail}</p>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="text" onClick={onCancel}>
             {cancelLabel ?? t.actions.cancel}
           </Button>
-          <Button variant="filled" onClick={onConfirm} autoFocus>
+          {/* Cancel keeps the focus on a danger dialog: autoFocus on Confirm turns
+              a stray Enter into the very action the dialog exists to slow down. */}
+          <Button
+            variant={tone === "danger" ? "outlined" : "filled"}
+            className={tone === "danger" ? "border-blocked text-blocked" : undefined}
+            onClick={onConfirm}
+            autoFocus={tone !== "danger"}
+          >
             {confirmLabel ?? t.actions.confirm}
           </Button>
         </div>

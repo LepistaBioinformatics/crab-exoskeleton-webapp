@@ -59,9 +59,19 @@ already owns.
   Reusing the mode is what keeps the section from carrying two competing notions
   of delivery. `reason` is omitted, so the proxy records `admin-request`.
 - **Withdraw** (FR-5.3): offered only when a notice exists.
-- An immediate bounce interrupts everyone in the scope mid-conversation and
-  cannot be undone, so it is confirmed first. Notify and schedule are not: both
-  are reversible by the withdraw action beside them.
+- An immediate bounce interrupts people other than the caller and cannot be
+  undone, so it is confirmed first, and the dialog is marked `danger`: a warning
+  glyph, a confirm button that is not the screen's ordinary primary accent, and
+  focus left on Cancel so a stray Enter cannot fire it. Notify and schedule are
+  not confirmed: both are reversible by the withdraw action beside them.
+- The warning states the reach the proxy actually has. `BounceScope` stops and
+  starts every **running** container under the scope, so it says that members
+  with no session open notice nothing, that a reply in progress is lost, and it
+  names the reversible alternative. A dialog that only asks "are you sure" gets
+  clicked through.
+- It does not state HOW MANY are affected: nothing reports the running container
+  count for a scope, and a member count would be a different number wearing the
+  same clothes.
 - The scope is never widened silently: the confirmation names the tenant or
   subscription, and the agent when one is selected.
 

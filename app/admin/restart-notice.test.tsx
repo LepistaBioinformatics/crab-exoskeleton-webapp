@@ -60,6 +60,22 @@ describe("RestartNoticeBlock", () => {
     expect(html).toMatch(/<button[^>]*disabled/);
   });
 
+  // A warning that only says "are you sure" gets clicked through. This one has
+  // to name who is affected, what they lose, and the way to avoid it — and the
+  // reach has to match what BounceScope does, which is stop+start every RUNNING
+  // container under the scope and nothing else.
+  it("warns about the people the bounce reaches, not just about the caller", () => {
+    for (const locale of ["en", "pt"] as const) {
+      const c = adminCopy[locale].restartPolicy;
+      expect(c.confirmMessage).toContain("{scope}");
+      expect(c.confirmMessageAgent).toContain("{agent}");
+      // Says the bounce is limited to live sessions rather than implying everyone.
+      expect(c.confirmMessage.length).toBeGreaterThan(c.confirmTitle.length);
+      // Offers the reversible alternative instead of leaving it as a dead end.
+      expect(c.confirmDetail).toContain(c.notice);
+    }
+  });
+
   it("keeps the confirmation closed until the admin asks for an immediate bounce", () => {
     // ConfirmDialog portals to <body>, which server rendering cannot do — it
     // returning null while closed is what makes this component renderable at all.

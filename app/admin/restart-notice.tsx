@@ -178,13 +178,16 @@ export default function RestartNoticeBlock({
 
       {/* Only the immediate bounce is confirmed. Notify and schedule are both
           reversible by the Withdraw button sitting next to them; a restart that
-          already happened is not. */}
+          already happened is not — and unlike most confirmations on this screen
+          the cost falls on OTHER people, which is what the danger tone marks. */}
       <ConfirmDialog
         open={confirming}
+        tone="danger"
         title={t.confirmTitle}
         message={(target.agent ? t.confirmMessageAgent : t.confirmMessage)
           .replace("{scope}", scopeLabel)
           .replace("{agent}", target.agent ?? "")}
+        detail={t.confirmDetail}
         confirmLabel={t.confirmLabel}
         onConfirm={() => {
           setConfirming(false);

@@ -308,11 +308,17 @@ const en = {
     withdraw: "Withdraw",
     // Replaces "nothing restarts until you save" once a verb sits right there.
     ridesAlong: "This choice rides along with the changes you save below. To act on the scope right now, use the button.",
-    confirmTitle: "Restart every instance under this scope?",
+    confirmTitle: "This interrupts people who are working right now",
+    // What the proxy actually does: BounceScope stops and starts every RUNNING
+    // container under the scope. So the reach is "whoever has a live session",
+    // not "everyone", and the loss is the reply in flight — worth stating
+    // precisely, because a vague warning gets clicked through.
     confirmMessage:
-      "{scope} restarts now. Anyone mid-conversation is interrupted, and this cannot be undone.",
+      "Every instance running under {scope} stops and starts again. Members with no session open notice nothing.",
     confirmMessageAgent:
-      "{scope} restarts now, through {agent} only. Anyone mid-conversation is interrupted, and this cannot be undone.",
+      "Every instance running under {scope}, through {agent} only, stops and starts again. Members with no session open notice nothing.",
+    confirmDetail:
+      "Anyone with a reply in progress loses it and has to ask again. There is no undo — to give members warning instead, close this and choose “When each member chooses”.",
     confirmLabel: "Restart now",
     doneRestarted: "Restarted.",
     doneArmed: "Members have been notified.",
@@ -742,11 +748,13 @@ const pt: AdminDict = {
     actSchedule: "Agendar o reinício",
     withdraw: "Retirar",
     ridesAlong: "Esta escolha acompanha as alterações que você salvar abaixo. Para agir sobre o escopo agora, use o botão.",
-    confirmTitle: "Reiniciar todas as instâncias deste escopo?",
+    confirmTitle: "Isto interrompe quem está trabalhando agora",
     confirmMessage:
-      "{scope} reinicia agora. Quem estiver em conversa é interrompido, e isso não pode ser desfeito.",
+      "Toda instância em execução sob {scope} para e sobe de novo. Quem não estiver com uma sessão aberta não percebe nada.",
     confirmMessageAgent:
-      "{scope} reinicia agora, apenas por {agent}. Quem estiver em conversa é interrompido, e isso não pode ser desfeito.",
+      "Toda instância em execução sob {scope}, apenas por {agent}, para e sobe de novo. Quem não estiver com uma sessão aberta não percebe nada.",
+    confirmDetail:
+      "Quem estiver com uma resposta em andamento a perde e precisa perguntar de novo. Não há como desfazer — para avisar os membros em vez disso, feche e escolha “Quando cada membro quiser”.",
     confirmLabel: "Reiniciar agora",
     doneRestarted: "Reiniciado.",
     doneArmed: "Os membros foram avisados.",
