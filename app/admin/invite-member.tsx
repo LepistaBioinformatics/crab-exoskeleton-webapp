@@ -16,6 +16,8 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-9 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -35,6 +37,8 @@ export default function InviteMember({
   scope: ScopeRef;
   onInvited: () => void;
 }) {
+  const t = useT(adminCopy).invite;
+  const levelLabel: Record<AccessLevel, string> = { read: t.read, write: t.write };
   const [roles, setRoles] = useState<GuestRole[] | null>(null);
   const [agents, setAgents] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -99,13 +103,16 @@ export default function InviteMember({
       });
       setNotice(
         alreadyInvited
-          ? `${email.trim()} already had this access.`
-          : `Invited ${email.trim()} to ${agent} (${level}).`,
+          ? t.alreadyInvited.replace("{email}", email.trim())
+          : t.invited
+              .replace("{email}", email.trim())
+              .replace("{agent}", agent)
+              .replace("{level}", levelLabel[level]),
       );
       setEmail("");
       onInvited();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not send the invitation.");
+      setError(e instanceof Error ? e.message : t.failed);
     } finally {
       setSubmitting(false);
     }
@@ -124,14 +131,14 @@ export default function InviteMember({
     <div className="flex flex-col gap-3 rounded-lg border border-brand/40 bg-elevated px-3 py-3">
       <div className="flex items-center gap-2">
         <UserPlus size={16} className="shrink-0 text-fg-muted" aria-hidden />
-        <span className="text-sm font-semibold text-fg">Invite someone</span>
+        <span className="text-sm font-semibold text-fg">{t.title}</span>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
         <Input
           inputSize="sm"
           type="email"
-          placeholder="person@example.com"
+          placeholder={t.emailPlaceholder}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -139,7 +146,7 @@ export default function InviteMember({
           className={selectClass}
           value={agent}
           onChange={(e) => setAgent(e.target.value)}
-          aria-label="Agent"
+          aria-label={t.agentAria}
         >
           {agents.map((a) => (
             <option key={a} value={a}>
@@ -151,32 +158,29 @@ export default function InviteMember({
           className={selectClass}
           value={level}
           onChange={(e) => setLevel(e.target.value as AccessLevel)}
-          aria-label="Access"
+          aria-label={t.accessAria}
           disabled={levels.length === 0}
         >
           {levels.map((l) => (
             <option key={l} value={l}>
-              {l}
+              {levelLabel[l]}
             </option>
           ))}
         </select>
       </div>
 
       {email && !emailOk && (
-        <p className="text-xs text-fg-muted">Waiting for a valid email address…</p>
+        <p className="text-xs text-fg-muted">{t.waitingEmail}</p>
       )}
       {agent && levels.length === 0 && (
-        <p className="text-xs text-fg-muted">
-          This deployment declares no guest role for <span className="font-mono">{agent}</span>, so
-          it cannot be granted here.
-        </p>
+        <p className="text-xs text-fg-muted">{t.noRole.replace("{agent}", agent)}</p>
       )}
 
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="info">{notice}</Alert>}
 
       <Button size="sm" variant="filled" onClick={submit} disabled={!canSubmit}>
-        {submitting ? "Inviting…" : "Send invitation"}
+        {submitting ? t.submitting : t.submit}
       </Button>
     </div>
   );

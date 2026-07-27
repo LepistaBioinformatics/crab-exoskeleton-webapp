@@ -2,13 +2,13 @@
 
 import { Input } from "@/components/ui/input";
 import {
-  MODE_HINT,
-  MODE_LABEL,
   RESTART_MODES,
   policyIsValid,
   type RestartPolicy,
   type RestartMode,
 } from "@/lib/restartPolicy";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // How the next change that needs a container bounce is delivered
 // (restart-control FR-8.1). Owned by the admin screen rather than by each panel,
@@ -24,11 +24,22 @@ export default function RestartPolicySelect({
   policy: RestartPolicy;
   onChange: (next: RestartPolicy) => void;
 }) {
+  const t = useT(adminCopy).restartPolicy;
+  const label: Record<RestartMode, string> = {
+    now: t.now,
+    notice: t.notice,
+    schedule: t.schedule,
+  };
+  const hint: Record<RestartMode, string> = {
+    now: t.nowHint,
+    notice: t.noticeHint,
+    schedule: t.scheduleHint,
+  };
   const invalidSchedule = policy.mode === "schedule" && !policyIsValid(policy);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-brand/40 bg-elevated px-3 py-2.5">
-      <span className="text-xs font-medium text-fg-muted">When changes take effect</span>
+      <span className="text-xs font-medium text-fg-muted">{t.heading}</span>
 
       <div className="flex flex-wrap gap-1">
         {RESTART_MODES.map((mode) => (
@@ -44,16 +55,16 @@ export default function RestartPolicySelect({
                 : "border-brand/40 bg-transparent text-fg hover:bg-accent/10")
             }
           >
-            {MODE_LABEL[mode]}
+            {label[mode]}
           </button>
         ))}
       </div>
 
-      <p className="text-xs text-fg-muted">{MODE_HINT[policy.mode]}</p>
+      <p className="text-xs text-fg-muted">{hint[policy.mode]}</p>
 
       {policy.mode === "schedule" && (
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Restart at (your local time)</span>
+          <span className="text-xs font-medium text-fg-muted">{t.atLabel}</span>
           <Input
             inputSize="sm"
             type="datetime-local"
@@ -61,17 +72,17 @@ export default function RestartPolicySelect({
             onChange={(e) => onChange({ ...policy, at: e.target.value })}
           />
           {invalidSchedule && (
-            <span className="text-xs text-red-500">Pick a time in the future (within 7 days).</span>
+            <span className="text-xs text-red-500">{t.atInvalid}</span>
           )}
         </label>
       )}
 
       {policy.mode !== "now" && (
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">Note to members (optional)</span>
+          <span className="text-xs font-medium text-fg-muted">{t.noteLabel}</span>
           <Input
             inputSize="sm"
-            placeholder="e.g. rotating the search provider key"
+            placeholder={t.notePlaceholder}
             value={policy.note ?? ""}
             onChange={(e) => onChange({ ...policy, note: e.target.value })}
           />

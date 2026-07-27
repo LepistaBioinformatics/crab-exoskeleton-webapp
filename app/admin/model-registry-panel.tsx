@@ -32,6 +32,9 @@ import { ModelRow } from "./model-row";
 import ModelDefaultsPanel from "./model-defaults-panel";
 import { Accordion } from "./accordion";
 import { FallbackEditor } from "./fallback-editor";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -64,6 +67,8 @@ export default function ModelRegistryPanel({
    */
   restartPolicy?: RestartPolicy;
 }) {
+  const t = useT(adminCopy);
+  const err = useT(errorCopy);
   const routed = target;
 
   const [models, setModels] = useState<InventoryModel[] | null>(null);
@@ -164,7 +169,7 @@ export default function ModelRegistryPanel({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
-      setError({ message: "Fill model name, provider and model.", referrers: [] });
+      setError({ code: "models_incomplete", referrers: [] });
       return;
     }
     await run(async () => {
@@ -207,7 +212,7 @@ export default function ModelRegistryPanel({
     <div className="flex flex-col gap-3">
       {error && (
         <Alert severity="error">
-          {error.message}
+          {errorText(err, error.code)}
           {error.referrers.length > 0 && (
             <ul className="mt-1 list-disc pl-4 text-[11px]">
               {error.referrers.map((r) => (

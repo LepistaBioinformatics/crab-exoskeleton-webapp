@@ -17,6 +17,7 @@ import {
 } from "./models";
 import type { ScopeDefault } from "./models";
 import type { InventoryModel, ModelAssignment } from "./models";
+import { adminCopy } from "@/lib/i18n/admin";
 
 function model(over: Partial<InventoryModel> = {}): InventoryModel {
   return {
@@ -173,16 +174,16 @@ describe("modelsApiError", () => {
 
   it("maps the stack-wide error shapes", async () => {
     const conn = await modelsApiError(new Response(JSON.stringify({ error: "connectivity" }), { status: 502 }));
-    expect(conn.message).toBe("Can't reach the gateway right now.");
+    expect(conn.code).toBe("connectivity");
     const expired = await modelsApiError(
       new Response(JSON.stringify({ error: "session_expired" }), { status: 401 }),
     );
-    expect(expired.message).toBe("Your session expired — sign in again.");
+    expect(expired.code).toBe("session_expired");
   });
 
   it("falls back to a generic message on an unparseable body", async () => {
     const err = await modelsApiError(new Response("<html>500</html>", { status: 500 }));
-    expect(err.message).toBe("Something went wrong.");
+    expect(err.code).toBe("unknown");
     expect(err.referrers).toEqual([]);
   });
 });
@@ -190,28 +191,30 @@ describe("modelsApiError", () => {
 describe("describeError", () => {
   it("carries the message and referrers off a thrown ModelsError", () => {
     // Mirrors what request() actually throws: Object.assign(new Error(...), modelsApiError(res)).
-    const err = Object.assign(new Error("in use"), {
+    const err = Object.assign(new Error("request failed"), {
+      code: "in_use",
       versionConflict: false,
       referrers: [{ kind: "fallback", id: "main" }],
     });
     const d = describeError(err);
-    expect(d.message).toBe("in use");
+    expect(d.code).toBe("in_use");
     expect(d.referrers).toEqual([{ kind: "fallback", id: "main" }]);
   });
 
-  it("carries the reload wording for a version conflict, with no referrers", () => {
-    const err = Object.assign(new Error("Another admin changed this model — reload before saving."), {
+  it("carries the version-conflict code, with no referrers", () => {
+    const err = Object.assign(new Error("request failed"), {
+      code: "version_conflict",
       versionConflict: true,
       referrers: [],
     });
     const d = describeError(err);
-    expect(d.message).toBe("Another admin changed this model — reload before saving.");
+    expect(d.code).toBe("version_conflict");
     expect(d.referrers).toEqual([]);
   });
 
   it("falls back to a generic message and no referrers for a non-Error throw", () => {
     const d = describeError("boom");
-    expect(d.message).toBe("Something went wrong.");
+    expect(d.code).toBe("unknown");
     expect(d.referrers).toEqual([]);
   });
 });
@@ -337,6 +340,7 @@ describe("buildLadder", () => {
       agent: def("glm-4.7"),
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
     expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["tenant", "agent"]);
@@ -355,6 +359,7 @@ describe("buildLadder", () => {
       agent: null,
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
       outOfScope: ["subscription", "user"],
     });
     const subs = rungs.find((r) => r.level === "subscription")!;
@@ -365,7 +370,7 @@ describe("buildLadder", () => {
     // It is not a refusal either — the admin is allowed to read it, there is just
     // nothing selected to read.
     expect(subs.unreadable).toBe(false);
-    expect(subs.detail).toContain("Select a subscription");
+    expect(subs.detail).toBe(adminCopy.en.ladderRungs.selectSubscription);
     // The tenant decides instead, and clearing it must not promise the value the
     // out-of-scope rung was carrying.
     expect(rungs.find((r) => r.inEffect)?.level).toBe("tenant");
@@ -380,6 +385,7 @@ describe("buildLadder", () => {
       agent: null,
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     const subs = inScope.find((r) => r.level === "subscription")!;
     expect(subs.outOfScope).toBe(false);
@@ -394,6 +400,7 @@ describe("buildLadder", () => {
       agent: def("glm-4.7"),
       global: def("gpt-5.4"),
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("agent");
   });
@@ -408,6 +415,7 @@ describe("buildLadder", () => {
       agent: undefined,
       global: undefined,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     expect(rungs.find((r) => r.level === "agent")?.unreadable).toBe(true);
     expect(rungs.find((r) => r.level === "agent")?.overridden).toBe(false);
@@ -422,6 +430,7 @@ describe("buildLadder", () => {
       agent: null,
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     const pin = rungs[0];
     expect(pin.level).toBe("user");
@@ -443,6 +452,7 @@ describe("fallbackIfCleared", () => {
       agent: null,
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     expect(fallbackIfCleared(rungs)).toBe("gpt-5.4");
   });
@@ -455,6 +465,7 @@ describe("fallbackIfCleared", () => {
       agent: null,
       global: null,
       names,
+      copy: adminCopy.en.ladderRungs,
     });
     expect(fallbackIfCleared(rungs)).toBeNull();
   });

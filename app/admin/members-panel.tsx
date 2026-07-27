@@ -28,6 +28,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { BCP47 } from "@/lib/i18n/format";
+import { useLocale } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // Members of the subscription selected in the rail (the scope is owned by the
 // admin screen, same as the shared-files / shared-secrets panels). Per user we
@@ -37,6 +43,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 // so this panel exposes no content affordance. Do not add a link, download icon,
 // or row click handler to the file rows.
 export default function MembersPanel({ scope }: { scope: ScopeRef }) {
+  const t = useT(adminCopy);
   const [users, setUsers] = useState<UserRef[] | null>(null);
   const [guests, setGuests] = useState<GuestUser[]>([]);
   const [roles, setRoles] = useState<GuestRole[]>([]);
@@ -99,21 +106,20 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
       });
       setReload((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not revoke access.");
+      setError(e instanceof Error ? e.message : t.roster.revokeFailed);
     }
   }
 
   if (scope.kind !== "subscription" || !scope.subsAccId) {
     return (
-      <p className="py-3 text-sm text-fg-muted">Select a subscription to see its members.</p>
+      <p className="py-3 text-sm text-fg-muted">{t.members.selectSubscription}</p>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        You can list and delete a member&apos;s private files, but never open or edit their contents
-        — a member&apos;s private content never leaves their workspace (FR-7).
+        {t.members.privacyNote}
       </p>
 
       {error && <Alert severity="error">{error}</Alert>}
@@ -124,15 +130,18 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
 
       <ConfirmDialog
         open={pendingRevoke !== null}
-        title="Revoke access?"
+        title={t.roster.revokeTitle}
         // Say what revoking does NOT do. The same panel can delete a member's
         // files, so an admin could reasonably assume this does both.
         message={
           pendingRevoke
-            ? `${pendingRevoke.email} will lose ${pendingRevoke.level} access to ${pendingRevoke.agentKey}. Their workspace and files are kept — deleting those is a separate action.`
+            ? t.roster.revokeMessage
+                .replace("{email}", pendingRevoke.email)
+                .replace("{level}", t.invite[pendingRevoke.level])
+                .replace("{agent}", pendingRevoke.agentKey)
             : undefined
         }
-        confirmLabel="Revoke"
+        confirmLabel={t.roster.revoke}
         onCancel={() => setPendingRevoke(null)}
         onConfirm={() => {
           if (pendingRevoke) {
@@ -151,9 +160,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
           <Spinner size={22} />
         </div>
       ) : roster.length === 0 ? (
-        <p className="py-3 text-sm text-fg-muted">
-          Nobody has access to this subscription yet. Invite someone above.
-        </p>
+        <p className="py-3 text-sm text-fg-muted">{t.roster.noneYet}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {roster.map((entry) => {
@@ -180,7 +187,9 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                     <div className="flex min-w-0 flex-1 items-center gap-2 pl-[21px]">
                       <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
                       <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
-                      <span className="shrink-0 text-[11px] text-fg-muted">not yet active</span>
+                      <span className="shrink-0 text-[11px] text-fg-muted">
+                        {t.roster.notYetActive}
+                      </span>
                     </div>
                   )}
 
@@ -193,7 +202,9 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                           <IconButton
                             variant="ghost"
                             size="sm"
-                            aria-label={`Revoke ${r} from ${entry.email}`}
+                            aria-label={t.roster.revokeAria
+                        .replace("{role}", r)
+                        .replace("{email}", entry.email)}
                             onClick={() => setPendingRevoke({ email: entry.email, ...parsed })}
                           >
                             <UserMinus size={14} aria-hidden />
@@ -232,6 +243,10 @@ function UserFiles({
   const [files, setFiles] = useState<FileMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
+  const tag = BCP47[useLocale().locale];
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const refresh = () => listUserFiles(tenantId, subsAccId, userAccId).then(setFiles);
@@ -260,7 +275,7 @@ function UserFiles({
       await deleteUserFile(tenantId, subsAccId, userAccId, name);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
     }
@@ -274,11 +289,11 @@ function UserFiles({
           <Spinner size={18} />
         </div>
       ) : files && files.length === 0 ? (
-        <p className="py-1 text-xs text-fg-muted">No private files.</p>
+        <p className="py-1 text-xs text-fg-muted">{t.members.noPrivateFiles}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {files?.map((f) => {
-            const modified = formatModified(f.modifiedAt);
+            const modified = formatModified(f.modifiedAt, tag);
             return (
               <li key={f.name} className="flex items-center gap-2 py-1">
                 <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
@@ -290,7 +305,7 @@ function UserFiles({
                 <IconButton
                   variant="ghost"
                   size="sm"
-                  aria-label={`Delete ${f.name}`}
+                  aria-label={`${t.members.deletePrefix} ${f.name}`}
                   disabled={busy === f.name}
                   onClick={() => setPendingDelete(f.name)}
                 >
@@ -304,13 +319,13 @@ function UserFiles({
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete member's file?"
+        title={t.members.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete}" will be permanently removed from this member's private workspace.`
+            ? t.members.deleteMessage.replace("{name}", pendingDelete)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
       />

@@ -4,6 +4,8 @@ import { cva } from "class-variance-authority";
 import { Lock } from "lucide-react";
 import { type LadderLevel, type LadderRung } from "@/lib/models";
 import { Ident } from "./field";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // The resolution ladder.
 //
@@ -88,17 +90,6 @@ function toneOf(r: LadderRung): Tone {
   return "empty";
 }
 
-const TAG_TEXT: Record<Tone, string> = {
-  effect: "in effect",
-  overridden: "overridden",
-  empty: "not set",
-  locked: "not yours to see",
-  // Deliberately vague where the detail line beside it is specific: the same tag
-  // sits on the subscription rung and on the pin rung, and both are out of scope
-  // for one reason — no subscription is selected — which the detail line states.
-  outOfScope: "out of scope",
-};
-
 export function ResolutionLadder({
   rungs,
   selected,
@@ -110,6 +101,18 @@ export function ResolutionLadder({
   /** Absent for the per-user rung, which is set from the pin list instead. */
   onSelect: (level: LadderLevel) => void;
 }) {
+  const t = useT(adminCopy);
+  const tagText: Record<Tone, string> = {
+    effect: t.ladder.inEffect,
+    overridden: t.ladder.overridden,
+    empty: t.ladder.notSet,
+    locked: t.ladder.locked,
+    // Deliberately vague where the detail line beside it is specific: the same
+    // tag sits on the subscription rung and on the pin rung, and both are out of
+    // scope for one reason — no subscription is selected — which the detail line
+    // states.
+    outOfScope: t.ladder.outOfScope,
+  };
   return (
     <ul className="flex flex-col">
       {rungs.map((r, i) => {
@@ -132,26 +135,26 @@ export function ResolutionLadder({
               <span className={levelText({ tone })}>
                 {r.label}
                 {isSelected && (
-                  <span className="ml-2 text-[11px] font-normal text-accent">editing</span>
+                  <span className="ml-2 text-[11px] font-normal text-accent">{t.ladder.editing}</span>
                 )}
               </span>
               <span className="truncate text-xs text-fg-muted">
                 {r.unreadable ? (
-                  "Instance-wide levels need instance-admin privileges"
+                  t.ladder.unreadable
                 ) : r.modelName ? (
                   <>
                     <Ident>{r.modelName}</Ident>
                     {r.detail ? ` · ${r.detail}` : ""}
                   </>
                 ) : (
-                  (r.detail ?? "Nothing set at this level")
+                  (r.detail ?? t.ladder.nothingSet)
                 )}
               </span>
             </span>
             <span className="row-span-2 justify-self-end">
               <span className={tag({ tone })}>
                 {tone === "locked" && <Lock size={10} aria-hidden />}
-                {TAG_TEXT[tone]}
+                {tagText[tone]}
               </span>
             </span>
           </>

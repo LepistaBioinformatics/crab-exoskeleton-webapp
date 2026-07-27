@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Script from "next/script";
 import BrandName from "@/app/brand-name";
-import { LOCALES, LOCALE_COOKIE, LOCALE_NAMES, type Locale } from "@/lib/i18n/config";
+import { LOCALES, LOCALE_NAMES } from "@/lib/i18n/config";
+import { useLocale } from "@/lib/i18n/context";
 import { landingCopy } from "@/lib/i18n/landing";
 import styles from "./landing.module.css";
 import {
@@ -47,8 +48,11 @@ function NextNudge({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function Landing({ initialLocale }: { initialLocale: Locale }) {
-  const [locale, setLocale] = useState<Locale>(initialLocale);
+export default function Landing() {
+  // The locale now lives in the app-wide provider (mounted in the root layout)
+  // rather than in local state, so switching here and switching on an authed
+  // screen are the same action against the same cookie.
+  const { locale, setLocale } = useLocale();
   const rootRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const t = landingCopy[locale];
@@ -61,11 +65,6 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
     barRef.current?.setAttribute("locale", locale === "pt" ? "pt-BR" : "en");
   }, [locale]);
 
-  function chooseLocale(next: Locale) {
-    setLocale(next);
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
-  }
-
   // The Lepista bar's own PT/EN toggle drives the app's language too: it emits
   // `lbl-locale-change` (en / pt-BR); map it onto our locale, switch the copy
   // live and persist the cookie. No loop — the bar's `locale` attribute is
@@ -74,13 +73,11 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
   useEffect(() => {
     function onBarLocale(e: Event) {
       const raw = (e as CustomEvent<{ locale?: string }>).detail?.locale ?? "";
-      const next: Locale = raw.toLowerCase().startsWith("pt") ? "pt" : "en";
-      setLocale(next);
-      document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+      setLocale(raw.toLowerCase().startsWith("pt") ? "pt" : "en");
     }
     document.addEventListener("lbl-locale-change", onBarLocale);
     return () => document.removeEventListener("lbl-locale-change", onBarLocale);
-  }, []);
+  }, [setLocale]);
 
   // Scroll reveal, armed only with JS. To avoid a flash, elements already in
   // view are marked revealed synchronously before the hiding `js` class lands;
@@ -127,7 +124,7 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
                 type="button"
                 className={`${styles.langBtn} ${l === locale ? styles.langActive : ""}`}
                 aria-pressed={l === locale}
-                onClick={() => chooseLocale(l)}
+                onClick={() => setLocale(l)}
               >
                 {l === "en" ? "EN" : l.toUpperCase()}
                 <span className="sr-only"> — {LOCALE_NAMES[l]}</span>
@@ -165,7 +162,7 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
             </div>
           </div>
           <div className={styles.artCol}>
-            <HeroArt />
+            <HeroArt label={t.diagrams.hero} />
           </div>
         </section>
 
@@ -182,12 +179,12 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <CanvasMini />
+                <CanvasMini label={t.diagrams.canvas} />
                 <div className={styles.panelCaption}>{t.thought.canvasCaption}</div>
               </div>
               <div style={{ height: "1rem" }} />
               <div className={styles.panel}>
-                <TreeMini />
+                <TreeMini label={t.diagrams.tree} />
                 <div className={styles.panelCaption}>{t.thought.treeCaption}</div>
               </div>
             </div>
@@ -207,7 +204,7 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <MemoryMock dict={t.memory} />
+                <MemoryMock dict={t.memory} samples={t.diagrams.sampleConversations} />
               </div>
             </div>
           </div>
@@ -250,7 +247,7 @@ export default function Landing({ initialLocale }: { initialLocale: Locale }) {
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <ComponentMap doorLabel={t.defense.doorLabel} />
+                <ComponentMap doorLabel={t.defense.doorLabel} label={t.diagrams.map} />
                 <ComponentLegend groups={t.defense.groups} />
                 <div className={styles.panelCaption}>{t.defense.caption}</div>
               </div>

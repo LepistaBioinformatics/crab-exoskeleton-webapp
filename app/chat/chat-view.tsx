@@ -27,6 +27,9 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 // Bands stretch the full width of the message area; the message content itself
 // stays centered at the composer width (an inner max-w wrapper in the render).
@@ -76,8 +79,8 @@ const QUOTE_MAX = 280;
 // Turns the referenced message into a one-line attributed blockquote. Anexo
 // refs are stripped (only the prose is quoted) and newlines collapsed so the
 // quote stays a single tidy `>` line regardless of the original's length.
-function buildQuote(reply: ReplyTo): string {
-  const who = reply.role === "user" ? "Você" : "Agente";
+function buildQuote(reply: ReplyTo, t: ChatDict): string {
+  const who = reply.role === "user" ? t.view.quoteUser : t.view.quoteAgent;
   const { text } = parseAnexos(reply.content);
   const oneLine = text.replace(/\s+/g, " ").trim();
   const snippet = oneLine.length > QUOTE_MAX ? `${oneLine.slice(0, QUOTE_MAX - 1)}…` : oneLine;
@@ -119,6 +122,8 @@ export default function ChatView({
   // restart (restart-control DEC-3), and the banner above lives in the shell.
   onRestartNeeded?: () => void;
 }) {
+  const t = useT(chatCopy);
+  const err = useT(errorCopy);
   const router = useRouter();
   const fragment = useFragment();
 
@@ -173,6 +178,7 @@ export default function ChatView({
         if (!alive) return;
         const candidate = list
           .filter((c) => c.id !== sessionId)
+          // "New chat" is the API's default title, matched as data -- never translated.
           .filter((c) => !(c.title === "New chat" && !c.alias && c.tags.length === 0))
           .reduce<ConversationSummary | null>(
             (best, c) => (!best || c.updatedAt > best.updatedAt ? c : best),
@@ -355,7 +361,7 @@ export default function ChatView({
         lastUploadAtRef.current = Date.now();
       }
     } catch (err) {
-      setAttachError(err instanceof Error ? err.message : "Upload failed.");
+      setAttachError(err instanceof Error ? err.message : "unknown");
     } finally {
       setUploading(false);
     }
@@ -377,7 +383,7 @@ export default function ChatView({
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return null;
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
-    const quote = replyTo ? buildQuote(replyTo) : "";
+    const quote = replyTo ? buildQuote(replyTo, t) : "";
     return [quote, trimmed, refs].filter(Boolean).join("\n\n");
   }
 
@@ -494,7 +500,7 @@ export default function ChatView({
             // 4xx: the proxy's real reason (403 not licensed, 409 not
             // scaffolded, 400 bad request). Retrying won't help.
             const data = await r.json().catch(() => null);
-            if (activeSidRef.current === sid) setError(errorMessage(data?.error));
+            if (activeSidRef.current === sid) setError(typeof data?.error === "string" ? data.error : "unknown");
             terminal = true;
             break;
           }
@@ -513,7 +519,7 @@ export default function ChatView({
         // A terminal 4xx already set its error; otherwise every attempt failed.
         if (activeSidRef.current === sid) {
           if (!terminal) {
-            setError("Still can't reach the gateway after several attempts. Try again shortly.");
+            setError("gateway_retries_exhausted");
           }
           setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
         }
@@ -562,7 +568,7 @@ export default function ChatView({
     } catch {
       // Keep whatever partial content already streamed in -- only surface the
       // error banner if the user is still viewing this conversation.
-      if (activeSidRef.current === sid) setError("Can't reach the gateway right now.");
+      if (activeSidRef.current === sid) setError("connectivity");
     } finally {
       if (activeSidRef.current === sid) {
         setSending(false);
@@ -584,21 +590,21 @@ export default function ChatView({
 
     if (cmd === "/rename") {
       if (!arg) {
-        flash("error", "Uso: /rename <novo título>");
+        flash("error", t.commands.renameUsage);
         return true;
       }
       renameConversation(sessionId, arg)
         .then((saved) => {
           notifyConversationsUpdated();
-          flash("ok", `Chat renomeado para “${saved}”.`);
+          flash("ok", t.commands.renamed.replace("{title}", saved));
         })
-        .catch((e) => flash("error", e instanceof Error ? e.message : "Não consegui renomear."));
+        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.renameFailed));
       return true;
     }
 
     if (cmd === "/tag") {
       if (!arg) {
-        flash("error", "Uso: /tag <nome> [valor] [#cor]");
+        flash("error", t.commands.tagUsage);
         return true;
       }
       // Peel an optional trailing "#…" color, then split name[=value] (or
@@ -624,19 +630,19 @@ export default function ChatView({
         val = parts.slice(1).join(" ");
       }
       if (!name) {
-        flash("error", "Uso: /tag <nome> [valor] [#cor]");
+        flash("error", t.commands.tagUsage);
         return true;
       }
       upsertTag(sessionId, { name, value: val || name, metadata: color ? { color } : {} })
         .then(() => {
           notifyConversationsUpdated();
-          flash("ok", `Tag “${name}” aplicada.`);
+          flash("ok", t.commands.tagApplied.replace("{name}", name));
         })
-        .catch((e) => flash("error", e instanceof Error ? e.message : "Não consegui aplicar a tag."));
+        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.tagFailed));
       return true;
     }
 
-    flash("error", `Comando desconhecido: ${cmd}. Tente /rename ou /tag.`);
+    flash("error", t.commands.unknown.replace("{cmd}", cmd));
     return true;
   }
 
@@ -654,8 +660,8 @@ export default function ChatView({
       <IconButton
         variant="ghost"
         size="sm"
-        aria-label="Responder a esta mensagem"
-        title="Responder"
+        aria-label={t.view.replyAria}
+        title={t.view.reply}
         onClick={() => setReplyTo({ role: m.role, content: m.content })}
       >
         <Reply size={15} aria-hidden />
@@ -674,7 +680,7 @@ export default function ChatView({
       sessionId={sessionId ?? ""}
       attachments={attachments}
       uploading={uploading}
-      attachError={attachError}
+      attachError={attachError ? errorText(err, attachError) : null}
       onPickFiles={uploadFiles}
       onRemoveAttachment={removeAttachment}
       replyTo={replyTo}
@@ -687,15 +693,15 @@ export default function ChatView({
       <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2">
         <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
-          agent {workspace.r}
+          {t.view.agentPrefix} {workspace.r}
         </span>
         <ViewModeToggle view="chat" />
         <div className="flex flex-1 items-center justify-end gap-1">
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Agent secrets"
-            title="Agent secrets"
+            aria-label={t.view.secrets}
+            title={t.view.secrets}
             onClick={() => setSecretsOpen(true)}
           >
             <KeyRound size={18} aria-hidden />
@@ -703,8 +709,8 @@ export default function ChatView({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label="Workspace files"
-            title="Workspace files"
+            aria-label={t.view.files}
+            title={t.view.files}
             onClick={() => setFilesOpen((o) => !o)}
           >
             <PanelRight size={18} aria-hidden />
@@ -715,13 +721,17 @@ export default function ChatView({
       {retrying !== null && (
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs text-fg-muted">
           <Spinner size={12} />
-          <span>Couldn&apos;t reach the gateway — retrying… (attempt {retrying} of {MAX_SEND_ATTEMPTS})</span>
+          <span>
+            {t.view.retrying
+              .replace("{n}", String(retrying))
+              .replace("{total}", String(MAX_SEND_ATTEMPTS))}
+          </span>
         </div>
       )}
 
       {error && (
         <div className="px-4 pt-4">
-          <Alert severity="error">{error}</Alert>
+          <Alert severity="error">{errorText(err, error)}</Alert>
         </div>
       )}
 
@@ -733,7 +743,7 @@ export default function ChatView({
 
       {settling && (
         <div className="px-4 pt-4">
-          <Alert severity="info">Estamos guardando o arquivo para você…</Alert>
+          <Alert severity="info">{t.view.settling}</Alert>
         </div>
       )}
 
@@ -749,7 +759,7 @@ export default function ChatView({
             <div className="flex w-full flex-col items-center gap-4">
               <div className="text-center">
                 <h2 className="font-display text-2xl font-bold text-fg">
-                  Continue where you left off
+                  {t.view.resumeHeading}
                 </h2>
                 <p className="mt-2 text-sm text-fg-muted">
                   Jump back into your most recent conversation with agent {workspace.r}.
@@ -779,9 +789,9 @@ export default function ChatView({
             </div>
           )}
           <div className="text-center">
-            <h2 className="font-display text-2xl font-bold text-fg">Start a new chat</h2>
+            <h2 className="font-display text-2xl font-bold text-fg">{t.view.startHeading}</h2>
             <p className="mt-2 text-sm text-fg-muted">
-              Ask agent {workspace.r} anything to get going.
+              {t.view.startBody.replace("{agent}", workspace.r)}
             </p>
           </div>
           {composer}
@@ -917,12 +927,6 @@ export default function ChatView({
       />
     </div>
   );
-}
-
-function errorMessage(raw: unknown): string {
-  if (raw === "connectivity") return "Can't reach the gateway right now.";
-  if (typeof raw === "string" && raw.trim()) return raw;
-  return "Something went wrong sending your message.";
 }
 
 // Parses the proxy's OpenAI-style SSE stream (`data: {...}\n\n`, terminated by

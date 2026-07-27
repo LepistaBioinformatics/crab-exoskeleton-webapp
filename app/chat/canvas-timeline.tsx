@@ -22,6 +22,9 @@ import {
 } from "./conversation-bursts";
 import { setFragmentSid, setView, type Workspace } from "./fragment";
 import ViewModeToggle from "./view-mode-toggle";
+import { BCP47 } from "@/lib/i18n/format";
+import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { useT, useLocale } from "@/lib/i18n/context";
 
 // The Canvas timeline: an alternative, graphics-forward view of a workspace's
 // conversations (see .specs/features/canvas-timeline-view/). Time flows left ->
@@ -76,19 +79,21 @@ const CANVAS_CSS = `
 .ct-dim { opacity: .2; transition: opacity .2s ease; }
 `;
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function fmtDate(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+// The month names used to be a hardcoded English array; Intl gives us both
+// locales (and the right day/month order) for free.
+function fmtDate(ms: number, tag: string): string {
+  return new Date(ms).toLocaleDateString(tag, { day: "numeric", month: "short" });
 }
-function ago(ms: number): string {
+function ago(ms: number, t: ChatDict): string {
   const days = Math.round((Date.now() - ms) / 86400000);
-  if (days <= 0) return "today";
-  if (days === 1) return "1d ago";
-  return `${days}d ago`;
+  if (days <= 0) return t.canvas.today;
+  if (days === 1) return t.canvas.dayAgo;
+  return t.canvas.daysAgo.replace("{n}", String(days));
 }
 
 export default function CanvasTimeline({ workspace }: { workspace: Workspace }) {
+  const t = useT(chatCopy);
+  const tag = BCP47[useLocale().locale];
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
   const [bursts, setBursts] = useState<Burst[] | null>(null);
@@ -222,20 +227,20 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 
       {/* Time band + pager */}
       <div className="flex shrink-0 items-center gap-2 border-b border-brand/20 px-4 py-1.5 text-xs text-fg-muted">
-        <span className="font-semibold text-fg">{fmtDate(tMin)} → {fmtDate(model.tMax)}</span>
-        <span>· time flows right →</span>
+        <span className="font-semibold text-fg">{fmtDate(tMin, tag)} → {fmtDate(model.tMax, tag)}</span>
+        <span>{t.canvas.timeFlowsRight}</span>
         {soloId && (
           <Button variant="text" size="sm" className="h-6 gap-1 px-1 text-accent" onClick={() => setSoloId(null)}>
-            <X size={13} /> show all
+            <X size={13} /> {t.canvas.showAllLanes}
           </Button>
         )}
         {overflow > 0 && <span className="text-fg-muted">· {overflow} quieter conversation(s) hidden</span>}
         {overflowX && (
           <div className="ml-auto flex items-center gap-1">
-            <IconButton variant="ghost" size="sm" aria-label="Page left" onClick={() => stageRef.current?.scrollBy({ left: -600, behavior: "smooth" })}>
+            <IconButton variant="ghost" size="sm" aria-label={t.canvas.pageLeft} onClick={() => stageRef.current?.scrollBy({ left: -600, behavior: "smooth" })}>
               <ChevronLeft size={16} aria-hidden />
             </IconButton>
-            <IconButton variant="ghost" size="sm" aria-label="Page right" onClick={() => stageRef.current?.scrollBy({ left: 600, behavior: "smooth" })}>
+            <IconButton variant="ghost" size="sm" aria-label={t.canvas.pageRight} onClick={() => stageRef.current?.scrollBy({ left: 600, behavior: "smooth" })}>
               <ChevronRight size={16} aria-hidden />
             </IconButton>
           </div>
@@ -244,7 +249,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 
       {lanes.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-fg-muted">No conversations yet.</p>
+          <p className="text-sm text-fg-muted">{t.history.noneYet}</p>
         </div>
       ) : (
         <div ref={attachStage} className="ct-stage relative flex-1 overflow-x-auto overflow-y-hidden">
@@ -276,7 +281,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                   className={`ct-lane${dimmed ? " ct-dim" : ""}`}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Preview ${title}`}
+                  aria-label={`${t.canvas.previewPrefix} ${title}`}
                   onMouseEnter={() => setHoveredId(lane.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   onClick={() => setPreviewId(lane.id)}
@@ -302,7 +307,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                         fill={color} stroke="var(--bg)" strokeWidth={1.5}
                         opacity={0.7 + recency * 0.3}
                       >
-                        <title>{`${fmtDate(b.ts)} · ${b.count} msg${b.count > 1 ? "s" : ""}`}</title>
+                        <title>{`${fmtDate(b.ts, tag)} · ${b.count} ${b.count > 1 ? t.canvas.msgOther : t.canvas.msgOne}`}</title>
                       </circle>
                     );
                   })}
@@ -319,7 +324,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                 {ticks.map((tt, d) => (
                   <g key={d}>
                     <line x1={xOf(tt)} y1={0} x2={xOf(tt)} y2={5} stroke={LINE} strokeWidth={1} />
-                    <text x={xOf(tt)} y={19} textAnchor="middle" fontSize={10} fill={MUTED} className="font-mono">{fmtDate(tt)}</text>
+                    <text x={xOf(tt)} y={19} textAnchor="middle" fontSize={10} fill={MUTED} className="font-mono">{fmtDate(tt, tag)}</text>
                   </g>
                 ))}
               </svg>
@@ -346,6 +351,7 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 
 // Aggregate message volume bucketed over the time range -- the agent's "pulse".
 function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number; width: number }) {
+  const t = useT(chatCopy);
   const { area, line, total } = useMemo(() => {
     if (bursts.length === 0) return { area: "", line: "", total: 0 };
     const times = bursts.map((b) => b.ts);
@@ -373,8 +379,10 @@ function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number
   return (
     <div className="pt-2">
       <div className="mb-1 flex items-baseline gap-2 px-4">
-        <span className="font-display text-[11px] font-semibold text-fg">Agent pulse</span>
-        <span className="text-[10px] uppercase tracking-wider text-fg-muted">message volume over time · {total} total</span>
+        <span className="font-display text-[11px] font-semibold text-fg">{t.view.agentPulse}</span>
+        <span className="text-[10px] uppercase tracking-wider text-fg-muted">
+          {t.canvas.volumeOverTime.replace("{n}", String(total))}
+        </span>
       </div>
       <svg viewBox={`0 0 ${width} ${PULSE_H}`} width={width} height={PULSE_H} style={{ display: "block" }}>
         <defs>
@@ -405,6 +413,8 @@ function Preview({
   onSolo: () => void;
   onOpen: () => void;
 }) {
+  const t = useT(chatCopy);
+  const tag = BCP47[useLocale().locale];
   const title = conv?.alias || conv?.title || lane.id;
   const recent = lane.bursts.slice(0, 3); // bursts are most-recent first
 
@@ -451,7 +461,7 @@ function Preview({
       className={`absolute z-10 overflow-hidden border border-brand/40 bg-surface shadow-lg transition-[width] duration-200 ${expanded !== null ? "w-[min(680px,92vw)]" : "w-[min(360px,84vw)]"}${pos ? "" : " left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
       style={pos ? { left: pos.left, top: pos.top } : undefined}
       role="dialog"
-      aria-label={`Preview ${title}`}
+      aria-label={`${t.canvas.previewPrefix} ${title}`}
     >
       <div
         className="flex cursor-move touch-none select-none items-center gap-2 border-b border-brand/20 px-4 py-3"
@@ -464,7 +474,7 @@ function Preview({
         <IconButton
           variant="ghost"
           size="sm"
-          aria-label="Close preview"
+          aria-label={t.canvas.closePreview}
           onClick={onClose}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -473,7 +483,10 @@ function Preview({
       </div>
       <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto px-4 py-3">
         <p className="text-[11px] text-fg-muted">
-          {lane.totalMsgs} messages · {lane.bursts.length} bursts · last {ago(lane.lastT)}
+          {t.canvas.laneSummary
+            .replace("{msgs}", String(lane.totalMsgs))
+            .replace("{bursts}", String(lane.bursts.length))
+            .replace("{ago}", ago(lane.lastT, t))}
         </p>
         {recent.map((b, i) => {
           const isExp = expanded === i;
@@ -490,7 +503,7 @@ function Preview({
                 className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-elevated"
               >
                 <span className="font-mono text-[9px] uppercase tracking-wide text-fg-muted">
-                  {fmtDate(b.ts)} · {b.count} msg{b.count > 1 ? "s" : ""}
+                  {fmtDate(b.ts, tag)} · {b.count} {b.count > 1 ? t.canvas.msgOther : t.canvas.msgOne}
                 </span>
                 <ChevronDown
                   size={13}
@@ -518,10 +531,10 @@ function Preview({
       </div>
       <div className="flex gap-2 border-t border-brand/20 px-4 py-3">
         <Button variant="outlined" size="sm" className="flex-1" onClick={onSolo}>
-          {isSolo ? "Show all" : "Solo this lane"}
+          {isSolo ? t.canvas.showAll : t.canvas.soloLane}
         </Button>
         <Button variant="filled" size="sm" className="flex-1" onClick={onOpen}>
-          Full transcript
+          {t.canvas.fullTranscript}
         </Button>
       </div>
     </div>

@@ -4,6 +4,8 @@ import { MouseEvent, ReactNode } from "react";
 import { cva } from "class-variance-authority";
 import { ChevronRight } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
+import { useT } from "@/lib/i18n/context";
+import { chatCopy } from "@/lib/i18n/chat";
 
 // A sidebar column that, on DESKTOP (md+), can be resized by dragging its right
 // edge (clamped between `minWidth` and a max) and collapsed to a thin rail (the
@@ -53,6 +55,8 @@ export default function ResizablePane({
   onResize: (width: number) => void;
   children: ReactNode;
 }) {
+  const t = useT(chatCopy);
+
   function startResize(e: MouseEvent) {
     e.preventDefault();
     const startX = e.clientX;
@@ -86,7 +90,7 @@ export default function ResizablePane({
       <div className={content({ collapsed })}>{children}</div>
 
       <div className={rail({ collapsed })}>
-        <IconButton variant="ghost" size="sm" aria-label={`Expand ${ariaLabel}`} onClick={onExpand}>
+        <IconButton variant="ghost" size="sm" aria-label={`${t.pane.expand} ${ariaLabel}`} onClick={onExpand}>
           <ChevronRight size={18} aria-hidden />
         </IconButton>
       </div>
@@ -95,7 +99,7 @@ export default function ResizablePane({
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label={`Resize ${ariaLabel}`}
+          aria-label={`${t.pane.resize} ${ariaLabel}`}
           onMouseDown={startResize}
           className="absolute inset-y-0 right-0 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
         />

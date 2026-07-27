@@ -1,6 +1,8 @@
 "use client";
 
 import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 import { useCallback, useEffect, useState } from "react";
 import {
   getModelDefault,
@@ -74,6 +76,7 @@ export default function ModelDefaultsPanel({
    */
   restartPolicy?: RestartPolicy;
 }) {
+  const t = useT(adminCopy);
   const [current, setCurrent] = useState<ScopeDefault | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [users, setUsers] = useState<UserRef[] | null>(null);
@@ -236,6 +239,7 @@ export default function ModelDefaultsPanel({
     agent: levels?.agent,
     global: levels?.global,
     names: { agent: routed, tenant: scopeNames.tenant, subscription: scopeNames.subscription },
+    copy: t.ladderRungs,
     // On a tenant there is no subscription to read or write, and the pin list
     // addresses one subscription's members. Reporting either as "not set" told
     // the admin a subscription had no default when the truth was that they had

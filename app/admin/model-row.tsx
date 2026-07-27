@@ -6,6 +6,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
 import { type InventoryModel } from "@/lib/models";
 import { Ident } from "./field";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 // Variants rather than interpolated className strings, per the codebase's
 // convention. An inactive row is drawn rather than dimmed: a dashed border says
@@ -53,15 +55,18 @@ export function ModelRow({
   // anywhere, so editing its chain has no effect worth offering.
   onEditChain?: (m: InventoryModel) => void;
 }) {
+  const t = useT(adminCopy);
   const inUse = model.in_use_count > 0;
   // Delete and disable share one precondition — nothing may reference the model.
   // Deprecation is the tool for retiring something in use, so it stays available.
   // The phrasing names what holds it rather than a bare count, because "3
   // workspaces" tells an admin where to look and "in use by 3" does not.
   const lockReason = inUse
-    ? `in use by ${model.in_use_count} ${model.in_use_count === 1 ? "reference" : "references"}`
+    ? model.in_use_count === 1
+      ? t.modelRow.inUseOne
+      : t.modelRow.inUseOther.replace("{n}", String(model.in_use_count))
     : "";
-  const toggleLabel = model.status === "active" ? "Disable" : "Enable";
+  const toggleLabel = model.status === "active" ? t.modelRow.disable : t.modelRow.enable;
 
   return (
     <li className={row({ state: model.status === "active" ? "active" : "inactive" })}>
@@ -69,7 +74,7 @@ export function ModelRow({
         <div className="flex shrink-0 flex-col pt-0.5 leading-none">
           <button
             type="button"
-            aria-label={`Move ${model.model_name} up`}
+            aria-label={`${t.modelRow.movePrefix} ${model.model_name} ${t.modelRow.moveUpSuffix}`}
             className="px-0.5 text-xs text-fg-muted hover:text-fg disabled:text-fg-muted/40"
             disabled={busy || !onMoveUp}
             onClick={onMoveUp}
@@ -78,7 +83,7 @@ export function ModelRow({
           </button>
           <button
             type="button"
-            aria-label={`Move ${model.model_name} down`}
+            aria-label={`${t.modelRow.movePrefix} ${model.model_name} ${t.modelRow.moveDownSuffix}`}
             className="px-0.5 text-xs text-fg-muted hover:text-fg disabled:text-fg-muted/40"
             disabled={busy || !onMoveDown}
             onClick={onMoveDown}
@@ -91,14 +96,14 @@ export function ModelRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="truncate font-mono text-[13px] font-bold text-fg">{model.model_name}</span>
-          {model.has_key && <Badge tone="neutral">key stored</Badge>}
-          {model.status === "disabled" && <Badge tone="neutral">held back</Badge>}
+          {model.has_key && <Badge tone="neutral">{t.modelRow.keyStored}</Badge>}
+          {model.status === "disabled" && <Badge tone="neutral">{t.modelRow.heldBack}</Badge>}
           {model.status === "deprecated" && (
             <span className="rounded bg-retiring-weak px-1.5 py-0.5 text-[11px] font-medium text-retiring">
-              retiring → <Ident>{model.replaced_by ?? "?"}</Ident>
+              {t.modelRow.retiringTo} <Ident>{model.replaced_by ?? "?"}</Ident>
             </span>
           )}
-          {model.imported_orphan && <Badge tone="neutral">imported</Badge>}
+          {model.imported_orphan && <Badge tone="neutral">{t.modelRow.imported}</Badge>}
           {inUse && (
             <span className="rounded bg-blocked-weak px-1.5 py-0.5 text-[11px] font-medium text-blocked">
               {lockReason}
@@ -114,7 +119,7 @@ export function ModelRow({
           </span>
           {model.fallbacks.length > 0 ? (
             <span className="truncate">
-              falls back to{" "}
+              {t.modelRow.fallsBackTo}{" "}
               {model.fallbacks.map((f, i) => (
                 <span key={f}>
                   {i > 0 && <span aria-hidden className="text-fg-muted/60"> → </span>}
@@ -124,7 +129,7 @@ export function ModelRow({
             </span>
           ) : (
             model.status === "active" && (
-              <span className="text-fg-muted/70">No fallbacks — a failed request has nowhere to go</span>
+              <span className="text-fg-muted/70">{t.modelRow.noFallbacks}</span>
             )
           )}
         </div>
@@ -134,8 +139,8 @@ export function ModelRow({
         <IconButton
           variant="ghost"
           size="sm"
-          aria-label={`Edit ${model.model_name}`}
-          title="Edit"
+          aria-label={`${t.modelRow.editPrefix} ${model.model_name}`}
+          title={t.modelRow.edit}
           disabled={busy}
           onClick={() => onEdit(model)}
         >
@@ -144,8 +149,8 @@ export function ModelRow({
         <IconButton
           variant="ghost"
           size="sm"
-          aria-label={`Duplicate ${model.model_name}`}
-          title="Duplicate"
+          aria-label={`${t.modelRow.duplicatePrefix} ${model.model_name}`}
+          title={t.modelRow.duplicate}
           disabled={busy}
           onClick={() => onDuplicate(model)}
         >
@@ -155,8 +160,8 @@ export function ModelRow({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label={`Edit fallback chain for ${model.model_name}`}
-            title="Fallback chain"
+            aria-label={`${t.modelRow.fallbackChainPrefix} ${model.model_name}`}
+            title={t.modelRow.fallbackChain}
             disabled={busy}
             onClick={() => onEditChain(model)}
           >
@@ -169,7 +174,7 @@ export function ModelRow({
           aria-label={`${toggleLabel} ${model.model_name}`}
           title={
             inUse && model.status === "active"
-              ? `Cannot disable while ${lockReason} — retire it instead`
+              ? t.modelRow.cannotDisable.replace("{reason}", lockReason)
               : toggleLabel
           }
           disabled={busy || (inUse && model.status === "active")}
@@ -181,8 +186,8 @@ export function ModelRow({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label={`Retire ${model.model_name}`}
-            title="Retire — people already on it keep it, new ones get the replacement"
+            aria-label={`${t.modelRow.retirePrefix} ${model.model_name}`}
+            title={t.modelRow.retireTitle}
             disabled={busy}
             onClick={() => onDeprecate(model)}
           >
@@ -192,8 +197,8 @@ export function ModelRow({
         <IconButton
           variant="ghost"
           size="sm"
-          aria-label={`Delete ${model.model_name}`}
-          title={inUse ? `Cannot delete while ${lockReason}` : "Delete"}
+          aria-label={`${t.modelRow.deletePrefix} ${model.model_name}`}
+          title={inUse ? t.modelRow.cannotDelete.replace("{reason}", lockReason) : t.modelRow.deletePrefix}
           disabled={busy || inUse}
           onClick={() => onDelete(model)}
         >

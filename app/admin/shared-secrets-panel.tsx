@@ -25,6 +25,10 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, fieldControlClass } from "./field";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -33,7 +37,7 @@ const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
   json: "json",
   file: "file",
-  native: "native (picoclaw search-provider / model key)",
+  native: "native",
 };
 
 // `file` is not env-shaped, so the proxy rejects it at scope level. The other
@@ -54,6 +58,9 @@ export default function SharedSecretsPanel({
   // screen and applied to every write here (restart-control FR-8.1).
   restartPolicy?: RestartPolicy;
 }) {
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const errs = useT(errorCopy);
   const [secrets, setSecrets] = useState<SecretNames | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -103,7 +110,7 @@ export default function SharedSecretsPanel({
     let cancelled = false;
     listModels(routedAgent)
       .then((m) => !cancelled && setModels(m))
-      .catch((e) => !cancelled && setModelsError(describeError(e).message));
+      .catch((e) => !cancelled && setModelsError(describeError(e).code));
     return () => {
       cancelled = true;
     };
@@ -125,15 +132,15 @@ export default function SharedSecretsPanel({
     const finalName = targetName();
 
     if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
-      setSubmitError("Name may only contain letters, numbers, and . _ -");
+      setSubmitError(t.sharedSecrets.invalidName);
       return;
     }
     if (format === "native" && nativeKind === "model" && !modelName) {
-      setSubmitError("Select a model.");
+      setSubmitError(t.sharedSecrets.selectModel);
       return;
     }
     if (!value) {
-      setSubmitError("Enter a value.");
+      setSubmitError(t.sharedSecrets.valueRequired);
       return;
     }
 
@@ -143,7 +150,7 @@ export default function SharedSecretsPanel({
       setValue("");
       await refresh();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
+      setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +164,7 @@ export default function SharedSecretsPanel({
       await deleteSharedSecret(scope, { format: fmt, name: secretName }, restartPolicy);
       await refresh();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Something went wrong.");
+      setLoadError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setBusy(null);
     }
@@ -171,15 +178,14 @@ export default function SharedSecretsPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        Injected as environment into every container below this scope, merged under each user&apos;s
-        own secrets. Values are write-only: never shown or retrieved. Writing or deleting restarts
+        {t.sharedSecrets.injectedAs} Values are write-only: never shown or retrieved. Writing or deleting restarts
         running containers under the scope.
       </p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <Field
-          label="How the agent receives it"
-          job="Environment variable, a JSON entry, a file on disk, or a slot in picoclaw's own config."
+          label={t.sharedSecrets.howReceived}
+          job={t.sharedSecrets.howReceivedJob}
           htmlFor="s-format"
         >
           <select
@@ -190,7 +196,7 @@ export default function SharedSecretsPanel({
           >
             {SCOPE_FORMATS.map((f) => (
               <option key={f} value={f}>
-                {FORMAT_LABEL[f]}
+                {f === "native" ? t.sharedSecrets.formatNative : FORMAT_LABEL[f]}
               </option>
             ))}
           </select>
@@ -199,8 +205,8 @@ export default function SharedSecretsPanel({
         {format === "native" ? (
           <>
             <Field
-              label="Which picoclaw setting"
-              job="The two config slots a scope admin may write. Everything else in picoclaw's config is off limits."
+              label={t.sharedSecrets.whichSetting}
+              job={t.sharedSecrets.whichSettingJob}
               htmlFor="s-slot"
             >
               <select
@@ -209,16 +215,16 @@ export default function SharedSecretsPanel({
                 value={nativeKind}
                 onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
               >
-                <option value="web">A web search provider&apos;s key</option>
-                <option value="model">A model&apos;s API key</option>
+                <option value="web">{t.sharedSecrets.slotWeb}</option>
+                <option value="model">{t.sharedSecrets.slotModel}</option>
               </select>
             </Field>
             {nativeKind === "web" ? (
               <Field
-                label="Which search provider"
-                job="Picoclaw's web tool uses whichever provider has a key."
+                label={t.sharedSecrets.whichSearch}
+                job={t.sharedSecrets.whichSearchJob}
                 htmlFor="s-provider"
-                consequence={<>Written into every workspace below this scope, on their next start.</>}
+                consequence={t.sharedSecrets.whichSearchConsequence}
               >
                 <select
                   id="s-provider"
@@ -234,26 +240,27 @@ export default function SharedSecretsPanel({
                 </select>
               </Field>
             ) : !routedAgent ? (
-              <Alert severity="info">Pick a single agent above to set a model API key.</Alert>
+              <Alert severity="info">{t.sharedSecrets.pickAgentFirst}</Alert>
             ) : modelsError ? (
-              <Alert severity="error">{modelsError}</Alert>
+              <Alert severity="error">{errorText(errs, modelsError)}</Alert>
             ) : models === null ? (
               <div className="flex justify-center py-2">
                 <Spinner size={16} />
               </div>
             ) : availableModels.length === 0 ? (
               <Alert severity="info">
-                {routedAgent} has no registered models yet — register one in the Model tab first.
+                {t.sharedSecrets.noRegisteredModels.replace("{agent}", routedAgent)}
               </Alert>
             ) : (
               <Field
-                label="Which model"
-                job={`Only models registered for ${routedAgent}. A name typed by hand would be rejected.`}
+                label={t.sharedSecrets.whichModel}
+                job={t.sharedSecrets.whichModelJob.replace("{agent}", routedAgent)}
                 htmlFor="s-model"
                 consequence={
                   <>
-                    A key here <b>overrides the one stored on the model itself</b>, for this scope
-                    only. Workspaces below this scope that resolve to a different model are skipped.
+                    {t.sharedSecrets.modelConsequenceBefore}
+                    <b>{t.sharedSecrets.modelConsequenceBold}</b>
+                    {t.sharedSecrets.modelConsequenceAfter}
                   </>
                 }
               >
@@ -263,7 +270,7 @@ export default function SharedSecretsPanel({
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
                 >
-                  <option value="">Select a model…</option>
+                  <option value="">{t.sharedSecrets.selectModelOption}</option>
                   {availableModels.map((m) => (
                     <option key={m.model_name} value={m.model_name}>
                       {m.model_name}
@@ -275,8 +282,8 @@ export default function SharedSecretsPanel({
           </>
         ) : (
           <Field
-            label="Name the agent will read it by"
-            job="Exactly as the agent's code expects it — case and underscores included."
+            label={t.sharedSecrets.nameLabel}
+            job={t.sharedSecrets.nameJob}
             htmlFor="s-name"
           >
             <input
@@ -290,17 +297,17 @@ export default function SharedSecretsPanel({
         )}
 
         <Field
-          label="Value"
-          job="Write-only. It is never shown or retrieved after you save it."
+          label={t.sharedSecrets.valueLabel}
+          job={t.sharedSecrets.valueJob}
           htmlFor="s-value"
-          consequence={<>Saving restarts the running containers under this scope so they pick it up.</>}
+          consequence={t.sharedSecrets.valueConsequence}
         >
           <input
             id="s-value"
             className={fieldControlClass()}
             type="password"
             autoComplete="off"
-            placeholder="paste the value"
+            placeholder={t.sharedSecrets.valuePlaceholder}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
@@ -309,14 +316,14 @@ export default function SharedSecretsPanel({
         {submitError && <Alert severity="error">{submitError}</Alert>}
 
         <Button type="submit" variant="filled" disabled={submitting}>
-          {submitting ? "Saving…" : "Save shared secret"}
+          {submitting ? t.sharedSecrets.saving : t.sharedSecrets.save}
         </Button>
       </form>
 
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Set secrets
+          {t.sharedSecrets.setSecrets}
         </span>
       </div>
 
@@ -328,7 +335,7 @@ export default function SharedSecretsPanel({
         </div>
       )}
 
-      {isEmpty && <p className="py-3 text-sm text-fg-muted">No shared secrets at this scope yet.</p>}
+      {isEmpty && <p className="py-3 text-sm text-fg-muted">{t.sharedSecrets.none}</p>}
 
       {groups.map((group) => (
         <div key={group.fmt}>
@@ -347,7 +354,7 @@ export default function SharedSecretsPanel({
                 <IconButton
                   variant="ghost"
                   size="sm"
-                  aria-label={`Delete ${secretName}`}
+                  aria-label={`${t.sharedSecrets.deletePrefix} ${secretName}`}
                   disabled={busy === secretName}
                   onClick={() => setPendingDelete({ fmt: group.fmt, name: secretName })}
                 >
@@ -361,13 +368,13 @@ export default function SharedSecretsPanel({
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete shared secret?"
+        title={t.sharedSecrets.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete.name}" will be removed. Containers below this scope restart to drop it.`
+            ? t.sharedSecrets.deleteMessage.replace("{name}", pendingDelete.name)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete.fmt, pendingDelete.name)}
         onCancel={() => setPendingDelete(null)}
       />

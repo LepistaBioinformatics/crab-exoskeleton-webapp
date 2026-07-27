@@ -1,20 +1,27 @@
 import { describe, it, expect } from "vitest";
 import { RESTART_REASONS, reasonText } from "./restart";
+import { chatCopy } from "./i18n/chat";
 import { DEFAULT_POLICY, policyIsValid, policyParams, withPolicy } from "./restartPolicy";
 
 describe("reasonText", () => {
-  it("has a distinct phrase for every reason the proxy can send", () => {
-    const texts = RESTART_REASONS.map(reasonText);
-    expect(new Set(texts).size).toBe(RESTART_REASONS.length);
-    for (const t of texts) expect(t.length).toBeGreaterThan(0);
-  });
+  // Both locales, because a missing key shows up as undefined rather than as a
+  // type error once the dictionary is indexed by a runtime string.
+  for (const locale of ["en", "pt"] as const) {
+    const copy = chatCopy[locale].restart;
 
-  it("falls back to something true when the proxy grows a new reason", () => {
-    // A newer proxy shipping an enum value this build has not learned about must
-    // not render an empty banner.
-    expect(reasonText("something-new")).toMatch(/restart/i);
-    expect(reasonText(undefined)).toMatch(/restart/i);
-  });
+    it(`has a distinct phrase for every reason the proxy can send (${locale})`, () => {
+      const texts = RESTART_REASONS.map((r) => reasonText(copy, r));
+      expect(new Set(texts).size).toBe(RESTART_REASONS.length);
+      for (const t of texts) expect(t.length).toBeGreaterThan(0);
+    });
+
+    it(`falls back to something true when the proxy grows a new reason (${locale})`, () => {
+      // A newer proxy shipping an enum value this build has not learned about
+      // must not render an empty banner.
+      expect(reasonText(copy, "something-new")).toBe(copy.reasonUnknown);
+      expect(reasonText(copy, undefined)).toBe(copy.reasonUnknown);
+    });
+  }
 });
 
 describe("policyParams", () => {

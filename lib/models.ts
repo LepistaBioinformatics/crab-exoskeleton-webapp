@@ -130,49 +130,50 @@ export function draftFromDuplicate(m: InventoryModel): ModelDraft {
 }
 
 export interface ModelsError {
-  message: string;
+  /** An error CODE, resolved to text by lib/i18n/errors at the point of
+   *  display. This module stays locale-free. */
+  code: string;
   versionConflict: boolean;
   referrers: Referrer[];
 }
 
 // modelsApiError turns a failed response into something the panel can render
 // specifically: a stale version says "reload", an in-use rejection names what to
-// detach. A generic conflict message would leave the admin with no next action.
+// detach. A generic conflict code would leave the admin with no next action.
 export async function modelsApiError(res: Response): Promise<ModelsError> {
   const data = await res.json().catch(() => null);
   const referrers: Referrer[] = Array.isArray(data?.referrers) ? data.referrers : [];
   const versionConflict = data?.version_conflict === true;
   const e = data?.error;
-  let message = "Something went wrong.";
-  if (e === "connectivity") {
-    message = "Can't reach the gateway right now.";
-  } else if (e === "session_expired") {
-    message = "Your session expired — sign in again.";
-  } else if (versionConflict) {
-    message = "Another admin changed this model — reload before saving.";
+  let code = "unknown";
+  if (versionConflict) {
+    code = "version_conflict";
   } else if (typeof e === "string" && e.trim()) {
-    message = e;
+    code = e.trim();
   }
-  return { message, versionConflict, referrers };
+  return { code, versionConflict, referrers };
 }
 
 // DisplayError is what a panel actually renders: a message plus whatever
 // referrers a 409 in-use rejection carried, if any.
 export interface DisplayError {
-  message: string;
+  code: string;
   referrers: Referrer[];
 }
 
 // describeError turns a caught error into a DisplayError. request() throws an
-// Error carrying modelsApiError's fields (see below), so e.message already has
-// the right wording for a version conflict — this only needs to pull the
-// referrers back off safely, and to give a non-Error throw a generic message.
+// Error carrying modelsApiError's fields (see below), so the code rides on the
+// error itself — this only needs to pull it and the referrers back off safely,
+// and to give a non-Error throw a generic code.
 export function describeError(e: unknown): DisplayError {
   if (e instanceof Error) {
-    const referrers = (e as Partial<ModelsError>).referrers;
-    return { message: e.message, referrers: Array.isArray(referrers) ? referrers : [] };
+    const { code, referrers } = e as Partial<ModelsError>;
+    return {
+      code: typeof code === "string" && code ? code : "unknown",
+      referrers: Array.isArray(referrers) ? referrers : [],
+    };
   }
-  return { message: "Something went wrong.", referrers: [] };
+  return { code: "unknown", referrers: [] };
 }
 
 // request throws an Error carrying the ModelsError fields, so a caller can render
@@ -484,22 +485,55 @@ export interface LadderInput {
    * selected, so there is nothing to set until they select one.
    */
   outOfScope?: LadderLevel[];
+  /** Rung wording, injected so this module emits no UI text of its own. */
+  copy: LadderCopy;
+}
+
+export interface LadderCopy {
+  pinned: string;
+  pinnedDetail: string;
+  nobodyPinned: string;
+  subscription: string;
+  subscriptionNamed: string;
+  tenant: string;
+  tenantNamed: string;
+  agentNamed: string;
+  /**
+   * The agent level's detail. NOT instanceWide: this level is stored per agent
+   * (`agent/<agent>`), so it reaches every tenant but only this agent's
+   * workspaces — and an admin reading "instance-wide" next to one agent's name
+   * cannot tell which of the two it means.
+   */
+  agentDetail: string;
+  thisAgent: string;
+  everythingElse: string;
+  instanceWide: string;
+  // Prompts for a level the selected scope cannot address.
+  selectSubscriptionForPins: string;
+  selectSubscription: string;
+  selectTenant: string;
+  selectAgent: string;
 }
 
 // What to do about a level the current scope cannot address. The rung says the
 // next action rather than the state, because "not set" was the whole confusion:
 // an admin on a tenant read it as "this subscription has no default" when the
-// truth is "no subscription is selected".
-const SCOPE_PROMPT: Record<LadderLevel, string> = {
-  user: "Select a subscription to see who is pinned",
-  subscription: "Select a subscription in the tree to see or set this",
-  tenant: "Select a tenant in the tree to see or set this",
-  agent: "Select an agent above to see or set this",
-  global: "",
-};
+// truth is "no subscription is selected". The wording is injected like the rest
+// of the rung copy, so this module still emits no UI text of its own.
+function scopePrompt(c: LadderCopy): Record<LadderLevel, string> {
+  return {
+    user: c.selectSubscriptionForPins,
+    subscription: c.selectSubscription,
+    tenant: c.selectTenant,
+    agent: c.selectAgent,
+    global: "",
+  };
+}
 
 export function buildLadder(input: LadderInput): LadderRung[] {
-  const agentName = input.names.agent ?? "this agent";
+  const c = input.copy;
+  const prompts = scopePrompt(c);
+  const agentName = input.names.agent ?? c.thisAgent;
   const raw: {
     level: LadderLevel;
     label: string;
@@ -508,37 +542,36 @@ export function buildLadder(input: LadderInput): LadderRung[] {
   }[] = [
     {
       level: "user",
-      label: "Pinned to one person",
+      label: c.pinned,
       // A pin is per person, so it never resolves for the scope as a whole — it
       // is shown because it OUTRANKS everything below, which is the fact an
       // admin needs when a scope change appears not to reach someone.
       d: null,
       detail:
         input.pinnedCount > 0
-          ? `${input.pinnedCount} pinned — a pin outranks every level below`
-          : "Nobody here is pinned",
+          ? c.pinnedDetail.replace("{n}", String(input.pinnedCount))
+          : c.nobodyPinned,
     },
     {
       level: "subscription",
-      label: input.names.subscription ? `This subscription — ${input.names.subscription}` : "This subscription",
+      label: input.names.subscription
+        ? c.subscriptionNamed.replace("{name}", input.names.subscription)
+        : c.subscription,
       d: input.subscription,
     },
     {
       level: "tenant",
-      label: input.names.tenant ? `Tenant — ${input.names.tenant}` : "Tenant",
+      label: input.names.tenant ? c.tenantNamed.replace("{name}", input.names.tenant) : c.tenant,
       d: input.tenant,
     },
-    // "every tenant" rather than "instance-wide": this level is stored per agent
-    // (`agent/<agent>`), so it reaches every tenant but only this agent's
-    // workspaces — and an admin reading "instance-wide" next to one agent's name
-    // cannot tell which of the two it means.
     {
       level: "agent",
-      label: `Agent — ${agentName}`,
+      label: c.agentNamed.replace("{name}", agentName),
       d: input.agent,
-      detail: `every tenant, ${agentName} only`,
+      // agentDetail, not instanceWide — see the LadderCopy field's note.
+      detail: c.agentDetail.replace("{name}", agentName),
     },
-    { level: "global", label: "Everything else", d: input.global, detail: "instance-wide" },
+    { level: "global", label: c.everythingElse, d: input.global, detail: c.instanceWide },
   ];
 
   // The first level with a readable value wins. A level the caller cannot read
@@ -558,7 +591,7 @@ export function buildLadder(input: LadderInput): LadderRung[] {
       level: r.level,
       label: r.label,
       modelName,
-      detail: outOfScope ? SCOPE_PROMPT[r.level] : r.detail,
+      detail: outOfScope ? prompts[r.level] : r.detail,
       inEffect,
       overridden: !inEffect && !unreadable && !outOfScope && modelName !== null,
       unreadable,

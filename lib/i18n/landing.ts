@@ -106,6 +106,16 @@ const en = {
     sample: ["assay-results.csv", "protocol.pdf", "notes.md", "figure-2.png"],
     next: "Ready to see your first thought take shape?",
   },
+  // Accessible names for the SVG figures, and the mock conversation titles
+  // inside them. The node labels in ComponentMap are product names and stay
+  // untranslated.
+  diagrams: {
+    hero: "Branching lines of thought growing like mycelium",
+    canvas: "Canvas timeline: conversations as lanes with message nodes",
+    tree: "Conversation tree: an idea branching into paths",
+    map: "The zombie-crab stack: components behind a single authenticated gateway",
+    sampleConversations: ["Assay pipeline v3 — normalization", "Grant draft — methods section"],
+  },
   cta: {
     eyebrow: "Your agent is waiting",
     title: "Step through the door.",
@@ -215,6 +225,13 @@ const pt: LandingDict = {
     filterPlaceholder: "Filtrar arquivos",
     sample: ["resultados-ensaio.csv", "protocolo.pdf", "notas.md", "figura-2.png"],
     next: "Pronto para ver seu primeiro pensamento tomar forma?",
+  },
+  diagrams: {
+    hero: "Linhas de pensamento se ramificando como micélio",
+    canvas: "Linha do tempo do Canvas: conversas como faixas com nós de mensagens",
+    tree: "Árvore de conversas: uma ideia se ramificando em caminhos",
+    map: "A stack zombie-crab: componentes atrás de um único gateway autenticado",
+    sampleConversations: ["Pipeline de ensaio v3 — normalização", "Rascunho de projeto — seção de métodos"],
   },
   cta: {
     eyebrow: "Seu agente está esperando",

@@ -18,18 +18,6 @@ export interface RestartPolicy {
 // behaviour.
 export const DEFAULT_POLICY: RestartPolicy = { mode: "now" };
 
-export const MODE_LABEL: Record<RestartMode, string> = {
-  now: "Restart now",
-  notice: "Notify members",
-  schedule: "Schedule for…",
-};
-
-export const MODE_HINT: Record<RestartMode, string> = {
-  now: "Applies immediately. Anyone mid-conversation is briefly interrupted.",
-  notice: "Applies on disk now; each member restarts when it suits them.",
-  schedule: "Applies on disk now; every running instance restarts at the time you pick.",
-};
-
 // Turns the policy into the query parameters the BFF forwards to the proxy.
 // `at` is converted from the browser's local datetime-local value to RFC3339
 // UTC here, so the admin picks a time in their own zone and the proxy always

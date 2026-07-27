@@ -8,6 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useT } from "@/lib/i18n/context";
 
 const OPEN_KEY = "chat-memory-open";
 
@@ -17,6 +20,8 @@ const OPEN_KEY = "chat-memory-open";
 // ONLY (never a file-refresh signal), so uploading a file can't clobber an
 // in-progress edit.
 export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
+  const t = useT(chatCopy);
+  const err = useT(errorCopy);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -81,7 +86,7 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save the memory.");
+      setError(e instanceof Error ? e.message : "unknown");
     } finally {
       setSaving(false);
     }
@@ -101,14 +106,12 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
           <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
         )}
         <Brain size={16} className="shrink-0 text-accent" aria-hidden />
-        <span className="flex-1 font-display text-sm font-semibold text-fg">Workspace memory</span>
+        <span className="flex-1 font-display text-sm font-semibold text-fg">{t.memory.title}</span>
       </button>
 
       {open && (
         <div className="px-3 pb-3">
-          <p className="mb-2 text-[11px] leading-snug text-fg-muted">
-            Saved to MEMORY_CUSTOM.md — the agent reads it on every message.
-          </p>
+          <p className="mb-2 text-[11px] leading-snug text-fg-muted">{t.memory.hint}</p>
 
           {loading ? (
             <div className="flex justify-center py-4">
@@ -120,14 +123,14 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
                 <Textarea
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
-                  placeholder="e.g. Always answer in Portuguese. Our stack is Next.js + Go…"
+                  placeholder={t.memory.placeholder}
                   className="h-40 overflow-auto font-mono text-xs leading-relaxed"
                 />
               </div>
 
               {error && (
                 <div className="mt-2">
-                  <Alert severity="error">{error}</Alert>
+                  <Alert severity="error">{errorText(err, error)}</Alert>
                 </div>
               )}
 

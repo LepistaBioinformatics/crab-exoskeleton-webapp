@@ -2,6 +2,8 @@
 
 import { Building2, FolderClosed } from "lucide-react";
 import { scopeKey, type AdminScope, type ScopeRef } from "@/lib/admin";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const selectClass =
   "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -20,19 +22,20 @@ export function ScopeSelect({
   scopes,
   value,
   onChange,
-  label = "Scope",
+  label,
 }: {
   scopes: AdminScope[];
   value: ScopeRef | null;
   onChange: (scope: ScopeRef) => void;
   label?: string;
 }) {
+  const t = useT(adminCopy);
   const selectedKey = value ? scopeKey(value) : "";
   const Icon = value?.kind === "tenant" ? Building2 : FolderClosed;
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-fg-muted">{label}</span>
+      <span className="text-xs font-medium text-fg-muted">{label ?? t.scope.label}</span>
       <div className="relative">
         <Icon
           size={16}

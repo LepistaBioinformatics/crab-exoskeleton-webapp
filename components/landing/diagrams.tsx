@@ -18,9 +18,9 @@ function d(sec: number) {
   return { animationDelay: `${sec}s` } as React.CSSProperties;
 }
 
-export function HeroArt() {
+export function HeroArt({ label }: { label: string }) {
   return (
-    <svg className={styles.svg} viewBox="0 0 460 360" role="img" aria-label="Branching lines of thought growing like mycelium">
+    <svg className={styles.svg} viewBox="0 0 460 360" role="img" aria-label={label}>
       <g strokeWidth={2.2}>
         <path className={`${styles.line} ${styles.lineCyan} ${styles.grow}`} pathLength={1} style={d(0.1)} d="M20 190 C110 190 130 120 210 120" />
         <path className={`${styles.line} ${styles.lineCyan} ${styles.grow}`} pathLength={1} style={d(0.5)} d="M210 120 C280 120 300 70 380 66" />
@@ -54,14 +54,14 @@ export function HeroArt() {
   );
 }
 
-export function CanvasMini() {
+export function CanvasMini({ label }: { label: string }) {
   const lanes = [
     { y: 40, x2: 250, color: CY, nodes: [40, 110, 180, 250] },
     { y: 90, x2: 210, color: VI, nodes: [40, 130, 210] },
     { y: 140, x2: 290, color: CY, nodes: [40, 100, 170, 230, 290] },
   ];
   return (
-    <svg className={styles.svg} viewBox="0 0 320 180" role="img" aria-label="Canvas timeline: conversations as lanes with message nodes">
+    <svg className={styles.svg} viewBox="0 0 320 180" role="img" aria-label={label}>
       <g stroke="rgba(169,136,201,0.18)" strokeWidth={1} strokeDasharray="2 4">
         {[70, 130, 190, 250].map((x) => (
           <line key={x} x1={x} y1={16} x2={x} y2={164} />
@@ -86,9 +86,9 @@ export function CanvasMini() {
   );
 }
 
-export function TreeMini() {
+export function TreeMini({ label }: { label: string }) {
   return (
-    <svg className={styles.svg} viewBox="0 0 320 180" role="img" aria-label="Conversation tree: an idea branching into paths">
+    <svg className={styles.svg} viewBox="0 0 320 180" role="img" aria-label={label}>
       <g strokeWidth={2.2} fill="none">
         <path className={`${styles.line} ${styles.lineCyan} ${styles.grow}`} pathLength={1} style={d(0.1)} d="M40 90 H110" />
         <path className={`${styles.line} ${styles.lineCyan} ${styles.grow}`} pathLength={1} style={d(0.4)} d="M110 90 C150 90 150 45 200 45" />
@@ -153,9 +153,9 @@ function MapNode({ x, y, l1, l2, tone }: { x: number; y: number; l1: string; l2?
   );
 }
 
-export function ComponentMap({ doorLabel }: { doorLabel: string }) {
+export function ComponentMap({ doorLabel, label }: { doorLabel: string; label: string }) {
   return (
-    <svg className={styles.svg} viewBox="0 0 560 360" role="img" aria-label="The zombie-crab stack: components behind a single authenticated gateway">
+    <svg className={styles.svg} viewBox="0 0 560 360" role="img" aria-label={label}>
       {/* connectors */}
       <g stroke="rgba(169,136,201,0.5)" strokeWidth={1.5} fill="none">
         <path d="M174 83 C205 83 205 168 235 178" />
@@ -241,7 +241,7 @@ export function HierarchyTree({ dict }: { dict: LandingDict["hierarchy"] }) {
   );
 }
 
-export function MemoryMock({ dict }: { dict: LandingDict["memory"] }) {
+export function MemoryMock({ dict, samples }: { dict: LandingDict["memory"]; samples: readonly string[] }) {
   const colors = [CY, VI, "#e0a94a"];
   return (
     <div className={styles.memWrap}>
@@ -251,7 +251,7 @@ export function MemoryMock({ dict }: { dict: LandingDict["memory"] }) {
       </div>
       {[0, 1].map((row) => (
         <div key={row} className={styles.convRow}>
-          <span className={styles.convTitle}>{row === 0 ? "Assay pipeline v3 — normalization" : "Grant draft — methods section"}</span>
+          <span className={styles.convTitle}>{samples[row] ?? samples[0]}</span>
           <span className={styles.convAlias}>{row === 0 ? "@pipeline" : "@grant"}</span>
           <span className={styles.miniTag} tabIndex={0}>
             <Tag size={11} style={{ color: colors[row] }} aria-hidden />

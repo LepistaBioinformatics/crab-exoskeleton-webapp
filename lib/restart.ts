@@ -25,37 +25,26 @@ export interface RestartStatus {
   running: boolean;
 }
 
-// What the member is told. Deliberately phrased as a consequence ("to pick up
-// ...") rather than a mechanism, because the reason exists to help them decide
-// whether to restart now or finish what they were saying.
-const REASON_TEXT: Record<RestartReason, string> = {
-  "shared-secret": "An administrator changed a shared credential.",
-  "shared-skills": "An administrator changed the shared skills.",
-  "shared-files": "An administrator changed the shared files.",
-  model: "The model behind your assistant changed.",
-  "own-secret": "You saved a secret. It applies after a restart.",
-  "admin-request": "An administrator asked for a restart.",
-};
-
-export function reasonText(reason: string | undefined): string {
+// The phrasing lives in the copy catalogue; this only picks the right key. An
+// unknown reason means the proxy grew a new enum value this build has not
+// learned yet — say the true, useful part rather than nothing.
+export function reasonText(
+  copy: { reasons: Record<RestartReason, string>; reasonUnknown: string },
+  reason: string | undefined,
+): string {
   if (reason && (RESTART_REASONS as readonly string[]).includes(reason)) {
-    return REASON_TEXT[reason as RestartReason];
+    return copy.reasons[reason as RestartReason];
   }
-  // An unknown reason means the proxy grew a new enum value this build has not
-  // learned yet. Say the true, useful part rather than nothing.
-  return "Your assistant needs a restart to pick up a recent change.";
+  return copy.reasonUnknown;
 }
 
 // Formats an RFC3339 instant in the viewer's own locale and zone. The proxy
 // always sends UTC and the browser owns the conversion, so there is no relative
 // arithmetic against a server clock anywhere.
-export function formatScheduled(iso: string): string {
+export function formatScheduled(iso: string, locale?: string): string {
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return iso;
-  return when.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return when.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export interface WorkspaceRef {
@@ -80,13 +69,12 @@ export async function restartInstance(ws: WorkspaceRef): Promise<{ status: strin
   return (await res.json()) as { status: string };
 }
 
-// The BFF normalizes failures to {error}. Surface the real reason -- "could not
-// restart" with no cause is the least useful thing to show someone whose
-// assistant is stuck.
+// The BFF normalizes failures to {error}. The raw code is thrown as-is so the
+// component can look it up in the copy catalogue; anything else is already a
+// message from the proxy and is surfaced verbatim -- "could not restart" with no
+// cause is the least useful thing to show someone whose assistant is stuck.
 async function errorText(res: Response): Promise<string> {
   const body = await res.json().catch(() => null);
   const raw = typeof body?.error === "string" ? body.error : null;
-  if (raw === "session_expired") return "Your session expired. Sign in again.";
-  if (raw === "connectivity") return "Could not reach the agent service.";
-  return raw ?? `Restart failed (${res.status}).`;
+  return raw ?? `restart_failed_${res.status}`;
 }

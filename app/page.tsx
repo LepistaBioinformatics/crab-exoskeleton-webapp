@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { getLocale } from "@/lib/i18n/server";
 import { startAtSignin } from "@/lib/appConfig";
 import Landing from "@/components/landing/Landing";
 
@@ -16,6 +15,5 @@ export default async function RootPage() {
   const session = await getSession();
   if (session) redirect("/chat");
   if (startAtSignin()) redirect("/signin");
-  const locale = await getLocale();
-  return <Landing initialLocale={locale} />;
+  return <Landing />;
 }

@@ -12,6 +12,9 @@ import {
   type RestartStatus,
   type WorkspaceRef,
 } from "@/lib/restart";
+import { chatCopy } from "@/lib/i18n/chat";
+import { useLocale, useT } from "@/lib/i18n/context";
+import { BCP47 } from "@/lib/i18n/format";
 import type { Workspace } from "./fragment";
 
 // How often the banner re-checks. A restart notice is a human-frequency event
@@ -36,6 +39,8 @@ export default function RestartBanner({
   // write), so the banner appears immediately instead of at the next poll.
   refreshKey?: number;
 }) {
+  const t = useT(chatCopy).restart;
+  const { locale } = useLocale();
   const ws: WorkspaceRef = workspace;
   const [status, setStatus] = useState<RestartStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +75,16 @@ export default function RestartBanner({
       await restartInstance(ws);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Restart failed.");
+      // The BFF's normalized codes get catalogue copy; anything else is already
+      // a message from the proxy and is shown as-is.
+      const raw = e instanceof Error ? e.message : "";
+      setError(
+        raw === "session_expired"
+          ? t.sessionExpired
+          : raw === "connectivity"
+            ? t.unreachable
+            : raw || t.failed,
+      );
     } finally {
       setBusy(false);
     }
@@ -91,12 +105,12 @@ export default function RestartBanner({
       <div className="min-w-0 flex-1">
         <p className="text-fg">
           {scheduled
-            ? `Your assistant will restart on ${formatScheduled(scheduled)}.`
-            : reasonText(status.reason)}
+            ? t.scheduled.replace("{when}", formatScheduled(scheduled, BCP47[locale]))
+            : reasonText(t, status.reason)}
         </p>
         {/* When a time is showing, the headline is the time — so the reason
             follows it, ahead of the admin's optional note. */}
-        {scheduled && <p className="mt-0.5 text-fg-muted">{reasonText(status.reason)}</p>}
+        {scheduled && <p className="mt-0.5 text-fg-muted">{reasonText(t, status.reason)}</p>}
         {status.note && <p className="mt-0.5 text-fg-muted">{status.note}</p>}
         {error && <p className="mt-1 text-red-500">{error}</p>}
       </div>
@@ -113,7 +127,7 @@ export default function RestartBanner({
           className="shrink-0"
         >
           {busy ? <Spinner size={14} /> : null}
-          {busy ? "Restarting…" : "Restart now"}
+          {busy ? t.restarting : t.now}
         </Button>
       )}
     </div>

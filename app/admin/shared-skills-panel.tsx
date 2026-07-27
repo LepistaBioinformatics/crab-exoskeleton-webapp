@@ -21,6 +21,10 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
+import { commonCopy } from "@/lib/i18n/common";
+import { adminCopy } from "@/lib/i18n/admin";
+import { useT } from "@/lib/i18n/context";
 
 const SKILL_TEMPLATE = "---\nname: \ndescription: \n---\n\n";
 
@@ -41,6 +45,9 @@ export default function SharedSkillsPanel({
   // screen and applied to every write here (restart-control FR-8.1).
   restartPolicy?: RestartPolicy;
 }) {
+  const t = useT(adminCopy);
+  const c = useT(commonCopy);
+  const err = useT(errorCopy);
   const [skills, setSkills] = useState<SkillMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -78,7 +85,7 @@ export default function SharedSkillsPanel({
       await uploadSharedSkillZip(scope, name, file, restartPolicy);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setUploading(false);
       if (zipInput.current) zipInput.current.value = "";
@@ -92,7 +99,7 @@ export default function SharedSkillsPanel({
       const doc = await sharedSkillDoc(scope, name);
       setEditor({ mode: "preview", name: doc.name, body: doc.content });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Preview failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setPreviewLoading(null);
     }
@@ -109,7 +116,7 @@ export default function SharedSkillsPanel({
       setEditor(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setSaving(false);
     }
@@ -124,7 +131,7 @@ export default function SharedSkillsPanel({
       if (editor?.name === name) setEditor(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(errorText(err, e instanceof Error ? e.message : null));
     } finally {
       setBusy(null);
     }
@@ -150,7 +157,7 @@ export default function SharedSkillsPanel({
           onClick={() => setEditor({ mode: "create", name: "", body: SKILL_TEMPLATE })}
         >
           <Plus size={16} aria-hidden />
-          New skill
+          {t.sharedSkills.newSkill}
         </Button>
         <Button
           variant="tonal"
@@ -159,12 +166,9 @@ export default function SharedSkillsPanel({
           onClick={() => zipInput.current?.click()}
         >
           <Upload size={16} aria-hidden />
-          {uploading ? "Uploading…" : "Upload .zip"}
+          {uploading ? t.sharedSkills.uploading : t.sharedSkills.uploadZip}
         </Button>
-        <span className="text-xs text-fg-muted">
-          Cascades read-only to every container below this scope. Adding, replacing, or removing a
-          skill restarts affected containers.
-        </span>
+        <span className="text-xs text-fg-muted">{t.sharedSkills.cascades}</span>
       </div>
 
       {error && <Alert severity="error">{error}</Alert>}
@@ -176,14 +180,14 @@ export default function SharedSkillsPanel({
               type="text"
               value={editor.name}
               readOnly={editor.mode === "preview"}
-              placeholder="skill-name"
+              placeholder={t.sharedSkills.namePlaceholder}
               onChange={(e) => setEditor({ ...editor, name: e.target.value })}
               className="min-w-0 flex-1 rounded-lg border border-brand/30 bg-transparent px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
             />
             <IconButton
               variant="ghost"
               size="sm"
-              aria-label="Close editor"
+              aria-label={t.sharedSkills.closeEditor}
               onClick={() => setEditor(null)}
             >
               <X size={15} aria-hidden />
@@ -195,7 +199,7 @@ export default function SharedSkillsPanel({
               readOnly={editor.mode === "preview"}
               onChange={(e) => setEditor({ ...editor, body: e.target.value })}
               rows={14}
-              placeholder="SKILL.md contents"
+              placeholder={t.sharedSkills.bodyPlaceholder}
               className="font-mono"
             />
           </div>
@@ -210,7 +214,7 @@ export default function SharedSkillsPanel({
                 disabled={saving || !editor.name.trim() || !editor.body.trim()}
                 onClick={onSave}
               >
-                {saving ? "Saving…" : "Save"}
+                {saving ? t.sharedSkills.saving : c.actions.save}
               </Button>
             </div>
           )}
@@ -222,7 +226,7 @@ export default function SharedSkillsPanel({
           <Spinner size={22} />
         </div>
       ) : skills && skills.length === 0 ? (
-        <p className="py-3 text-sm text-fg-muted">No shared skills at this scope yet.</p>
+        <p className="py-3 text-sm text-fg-muted">{t.sharedSkills.none}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {skills?.map((s) => (
@@ -241,12 +245,12 @@ export default function SharedSkillsPanel({
                   </div>
                 )}
               </div>
-              {s.hasFiles && <Badge tone="accent">files</Badge>}
+              {s.hasFiles && <Badge tone="accent">{t.sharedSkills.files}</Badge>}
               <Badge tone="neutral">{formatBytes(s.size)}</Badge>
               <IconButton
                 variant="ghost"
                 size="sm"
-                aria-label={`Preview ${s.name}`}
+                aria-label={`${t.sharedSkills.previewPrefix} ${s.name}`}
                 disabled={previewLoading === s.name}
                 onClick={() => onPreview(s.name)}
               >
@@ -255,7 +259,7 @@ export default function SharedSkillsPanel({
               <a
                 href={sharedSkillArchiveUrl(scope, s.name)}
                 download={`${s.name}.zip`}
-                aria-label={`Download ${s.name}`}
+                aria-label={`${t.sharedSkills.downloadPrefix} ${s.name}`}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
                 <Download size={15} aria-hidden />
@@ -263,7 +267,7 @@ export default function SharedSkillsPanel({
               <IconButton
                 variant="ghost"
                 size="sm"
-                aria-label={`Delete ${s.name}`}
+                aria-label={`${t.sharedSkills.deletePrefix} ${s.name}`}
                 disabled={busy === s.name}
                 onClick={() => setPendingDelete(s.name)}
               >
@@ -276,13 +280,13 @@ export default function SharedSkillsPanel({
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete shared skill?"
+        title={t.sharedSkills.deleteTitle}
         message={
           pendingDelete
-            ? `"${pendingDelete}" will be removed for everyone below this scope. Containers restart to pick up the change.`
+            ? t.sharedSkills.deleteMessage.replace("{name}", pendingDelete)
             : undefined
         }
-        confirmLabel="Delete"
+        confirmLabel={c.actions.delete}
         onConfirm={() => pendingDelete && onDelete(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
       />

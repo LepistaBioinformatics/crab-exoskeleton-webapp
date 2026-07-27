@@ -1,3 +1,4 @@
+import { errorCode } from "@/lib/i18n/errors";
 import type { Workspace } from "@/app/chat/fragment";
 
 // Names only -- values are write-only and never returned by the proxy.
@@ -43,7 +44,7 @@ function workspaceQuery(workspace: Workspace): URLSearchParams {
 
 export async function listSecrets(workspace: Workspace): Promise<SecretNames> {
   const res = await fetch(`/api/secrets?${workspaceQuery(workspace).toString()}`);
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
   const s = data.secrets ?? {};
   return {
@@ -70,7 +71,7 @@ export async function setSecret(
       value: input.value,
     }),
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 export async function deleteSecret(
@@ -81,16 +82,8 @@ export async function deleteSecret(
   query.set("format", input.format);
   query.set("name", input.name);
   const res = await fetch(`/api/secrets?${query.toString()}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorCode(res));
 }
 
 // Surfaces the proxy's real reason (400 bad name/slot, 403 unlicensed) rather
 // than a masked "connectivity".
-async function errorMessage(res: Response): Promise<string> {
-  const data = await res.json().catch(() => null);
-  const e = data?.error;
-  if (e === "connectivity") return "Can't reach the gateway right now.";
-  if (e === "session_expired") return "Your session expired — sign in again.";
-  if (typeof e === "string" && e.trim()) return e;
-  return "Something went wrong.";
-}
