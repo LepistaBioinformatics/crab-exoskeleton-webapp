@@ -37,6 +37,8 @@ export function Accordion({
   hint,
   tone,
   defaultOpen = false,
+  open,
+  onOpenChange,
   children,
 }: {
   title: string;
@@ -46,10 +48,29 @@ export function Accordion({
   hint?: React.ReactNode;
   tone?: "primary" | "quiet";
   defaultOpen?: boolean;
+  /**
+   * Drive the section from the caller instead of letting <details> own it. Use
+   * this only where something outside the section has to force it open — a
+   * caller that merely wants a starting state wants `defaultOpen`.
+   *
+   * The alternative, remounting on a `key` to re-apply `defaultOpen`, looks
+   * equivalent and is not: it also SHUT the section every time the key changed
+   * back, so a user stepping through the options inside watched it close under
+   * them and lose its place.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
 }) {
+  const controlled = open !== undefined;
   return (
-    <details className={shell({ tone })} open={defaultOpen}>
+    <details
+      className={shell({ tone })}
+      open={controlled ? open : defaultOpen}
+      onToggle={
+        controlled ? (e) => onOpenChange?.((e.currentTarget as HTMLDetailsElement).open) : undefined
+      }
+    >
       <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 hover:bg-elevated/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
         <ChevronRight
           size={15}

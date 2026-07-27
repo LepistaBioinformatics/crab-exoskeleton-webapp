@@ -1,7 +1,7 @@
 "use client";
 
 import { cva } from "class-variance-authority";
-import { Lock } from "lucide-react";
+import { ArrowDown, Lock } from "lucide-react";
 import { type LadderLevel, type LadderRung } from "@/lib/models";
 import { Ident } from "./field";
 import { adminCopy } from "@/lib/i18n/admin";
@@ -20,6 +20,18 @@ import { useT } from "@/lib/i18n/context";
 // Vertical position encodes authority because in this product it literally does.
 // No numbering: the order is not a sequence to follow, it is a ranking, and a rank
 // is read from position.
+//
+// Drawn widest-first, narrowing downward, even though the resolver decides in the
+// opposite order. A ranking has no inherent reading direction, and an admin asked
+// which end to start from — so the ladder now flows the way the word cascade
+// implies: the global net at the top, each level below it covering fewer people
+// and overriding the one above, the individual at the bottom. That also puts the
+// pin rung next to the per-person list that edits it, which is the same fact in
+// two places rather than two boxes.
+//
+// The cost is that the answer is no longer the first line. The caps below carry
+// the direction, and the section's own summary keeps stating the winner in plain
+// text for anyone who only wants that.
 
 const rung = cva(
   "grid grid-cols-[16px_1fr_auto] items-center gap-x-3 gap-y-0.5 border-b border-dashed border-brand/20 py-2 pr-2 text-left last:border-b-0",
@@ -98,7 +110,6 @@ export function ResolutionLadder({
   rungs: LadderRung[];
   /** The level whose value the controls below act on. */
   selected: LadderLevel | null;
-  /** Absent for the per-user rung, which is set from the pin list instead. */
   onSelect: (level: LadderLevel) => void;
 }) {
   const t = useT(adminCopy);
@@ -114,13 +125,20 @@ export function ResolutionLadder({
     outOfScope: t.ladder.outOfScope,
   };
   return (
-    <ul className="flex flex-col">
+    <div className="flex flex-col">
+      {/* The direction, stated before the first rung rather than inferred from
+          it. The arrow repeats it in form for anyone scanning past the text. */}
+      <p className="flex items-start gap-1.5 pb-1.5 text-[11px] text-fg-muted">
+        <ArrowDown size={12} aria-hidden className="mt-px shrink-0" />
+        <span className="max-w-[56ch]">{t.ladder.readDown}</span>
+      </p>
+      <ul className="flex flex-col">
       {rungs.map((r, i) => {
         const tone = toneOf(r);
-        // The per-user rung is informational: a pin is set from the pin list
-        // below, one person at a time, so selecting it here would offer a control
-        // that cannot exist.
-        const selectable = r.level !== "user" && !r.unreadable && !r.outOfScope;
+        // Every readable rung is selectable, the pin rung included: selecting it
+        // swaps the editor below for the per-person list, so one ladder addresses
+        // every level of the cascade instead of four of the five.
+        const selectable = !r.unreadable && !r.outOfScope;
         const isSelected = selected === r.level;
         const body = (
           <>
@@ -177,6 +195,13 @@ export function ResolutionLadder({
           </li>
         );
       })}
-    </ul>
+      </ul>
+      {/* The conclusion of the sentence the top cap starts, sitting under the rail
+          it describes. Aligned to the rail's own x so it reads as its terminus. */}
+      <p className="relative pl-[26px] pt-1.5 text-[11px] text-fg-muted">
+        <ArrowDown size={12} aria-hidden className="absolute left-[1.5px] top-1 text-brand/60" />
+        {t.ladder.winnerNote}
+      </p>
+    </div>
   );
 }

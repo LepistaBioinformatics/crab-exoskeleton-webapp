@@ -10,6 +10,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],
-    exclude: ["node_modules", ".next"],
+    // Globs, not bare names: "node_modules" only matched the one at the root, so
+    // a git worktree checked out under .claude/worktrees/ brought its own
+    // node_modules into the run and third-party .test.ts files inside it failed
+    // to collect. The suite's own files are excluded there too — a worktree is
+    // another branch's checkout, and running its tests from this one reports on
+    // code that is not in this tree.
+    exclude: ["**/node_modules/**", ".next", ".claude/**"],
   },
 });

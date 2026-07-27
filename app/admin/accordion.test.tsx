@@ -32,6 +32,27 @@ describe("Accordion", () => {
     expect(open).toMatch(/<details[^>]*\sopen/);
   });
 
+  // The bug this guards: the restart section was forced open by remounting it on
+  // a `key` that flipped with the policy's validity. Remounting re-applies the
+  // initial state in BOTH directions, so stepping from "at a time I pick" back to
+  // "immediately" flipped the key back and slammed the section shut under the
+  // admin. A controlled `open` cannot do that — it is whatever the caller says.
+  it("obeys the caller when driven, ignoring defaultOpen", () => {
+    const forcedOpen = renderToStaticMarkup(
+      <Accordion title="t" summary="s" open onOpenChange={() => {}}>
+        <p>body</p>
+      </Accordion>,
+    );
+    expect(forcedOpen).toMatch(/<details[^>]*\sopen/);
+
+    const forcedShut = renderToStaticMarkup(
+      <Accordion title="t" summary="s" defaultOpen open={false} onOpenChange={() => {}}>
+        <p>body</p>
+      </Accordion>,
+    );
+    expect(forcedShut).not.toMatch(/<details[^>]*\sopen/);
+  });
+
   // The body renders either way — <details> hides it in the browser, so a closed
   // section is still searchable and still reachable by assistive tech.
   it("renders its children and the hint", () => {

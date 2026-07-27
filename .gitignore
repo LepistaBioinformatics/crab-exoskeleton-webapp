@@ -4,3 +4,6 @@ next-env.d.ts
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# Git worktrees created by tooling under .claude/ — never part of the tree
+.claude/worktrees/

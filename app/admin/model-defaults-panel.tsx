@@ -3,6 +3,7 @@
 import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
+import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useCallback, useEffect, useState } from "react";
 import {
   getModelDefault,
@@ -77,6 +78,7 @@ export default function ModelDefaultsPanel({
   restartPolicy?: RestartPolicy;
 }) {
   const t = useT(adminCopy);
+  const errs = useT(errorCopy);
   const [current, setCurrent] = useState<ScopeDefault | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [users, setUsers] = useState<UserRef[] | null>(null);
@@ -102,7 +104,11 @@ export default function ModelDefaultsPanel({
   // follow the scope tree on the left. Without this selector there is no way to set
   // an instance-wide default at all, and a fresh install with no scope default
   // refuses to provision every new workspace.
-  const [level, setLevel] = useState<DefaultScope["kind"]>(
+  // The whole cascade, not just the four writable scopes: the pin rung is part of
+  // the same ladder, and selecting it swaps the editor below for the per-person
+  // list. `resolveDefaultScope` keeps its narrower, tested signature — the "user"
+  // case is guarded at the call site rather than widened into it.
+  const [level, setLevel] = useState<LadderLevel>(
     scope.kind === "subscription" ? "subscription" : "tenant",
   );
 
@@ -120,7 +126,7 @@ export default function ModelDefaultsPanel({
     setLevel(scope.kind === "subscription" ? "subscription" : "tenant");
   }, [scope.kind, scope.tenantId, scope.subsAccId]);
 
-  const defaultScope = resolveDefaultScope(level, scope);
+  const defaultScope = level === "user" ? null : resolveDefaultScope(level, scope);
 
   // One serialized dependency instead of picking fields off a union: the scope's
   // identity IS its serialization, and casting to read optional fields would be a
@@ -225,7 +231,7 @@ export default function ModelDefaultsPanel({
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(errorText(errs, e instanceof Error ? e.message : null));
     } finally {
       setBusy(false);
     }
@@ -254,6 +260,15 @@ export default function ModelDefaultsPanel({
   // false claim the ladder was built to remove — every message below that talks
   // about absence has to carry this qualifier.
   const hasHidden = rungs.some((r) => r.unreadable);
+  // The pin count rides on the section summary because the pins moved INTO this
+  // section: the ladder's bottom rung IS the pin, so the closed header has to
+  // report both halves or the merge would have hidden one of them.
+  const pinSummary =
+    scope.kind !== "subscription" || users === null || pinnedCount === 0
+      ? ""
+      : ` · ${t.defaults.pinsSome
+          .replace("{pinned}", String(pinnedCount))
+          .replace("{total}", String(users.length))}`;
   // What the control below is about to write to, in the admin's words. "the
   // tenant level" names a rank; this names the tenant.
   const targetLabel =
@@ -275,44 +290,46 @@ export default function ModelDefaultsPanel({
         // The title names the scope rather than saying "here": the section is the
         // one place an admin decides what a whole tenant or subscription lands on,
         // and the rail on the left is easy to lose track of once you scroll.
-        title={`Which model people get in ${scopeNames.subscription ?? scopeNames.tenant ?? "this scope"}`}
+        title={t.defaults.titleScoped.replace(
+          "{scope}",
+          scopeNames.subscription ?? scopeNames.tenant ?? t.defaults.thisScope,
+        )}
         tone="primary"
-        defaultOpen
         summary={
           levels === null ? (
-            "Reading every level…"
+            t.defaults.readingLevels
           ) : inEffect ? (
             <>
-              <Ident>{inEffect.modelName}</Ident> — from {inEffect.label}
+              <Ident>{inEffect.modelName}</Ident>
+              {t.defaults.summaryFrom}
+              {inEffect.label}
+              {pinSummary}
             </>
           ) : hasHidden ? (
-            "Nothing you can read resolves — an instance-wide level may still cover it"
+            t.defaults.nothingReadable
           ) : (
-            "Nothing resolves yet, so new workspaces here are refused"
+            t.defaults.nothingResolves
           )
         }
         hint={
           levels === null ? (
-            "Most specific wins: the first level with a model decides, and the levels below it stay set."
+            t.defaults.hintLoading
           ) : inEffect ? (
             <>
-              Most specific wins: <Ident>{inEffect.modelName}</Ident> decides because{" "}
-              {inEffect.label} is the first level with a model. Pick a level below to change what new
-              workspaces land on — set the one that matches how far the choice should reach, and use a
-              pin (next section) for a single person.
+              {t.defaults.hintInEffectBefore}
+              <Ident>{inEffect.modelName}</Ident>
+              {t.defaults.hintInEffectMiddle}
+              {inEffect.label}
+              {t.defaults.hintInEffectAfter}
             </>
           ) : hasHidden ? (
             <>
-              None of the levels you can read names a model. An instance-wide level may still cover
-              this scope — reading those needs instance-admin. Set the level for this scope if you
-              need to be certain what new workspaces land on.
+              {t.defaults.hintHidden}
             </>
           ) : (
             <>
-              <b>Nothing resolves here yet, so a new workspace under this scope is refused.</b> Pick a
-              level below and choose a model: the tenant level to cover everyone in the tenant, the
-              subscription level to cover one team, the instance-wide levels to cover whatever nothing
-              else claims.
+              <b>{t.defaults.hintNoneBold}</b>
+              {t.defaults.hintNoneAfter}
             </>
           )
         }
@@ -323,37 +340,135 @@ export default function ModelDefaultsPanel({
           </div>
         ) : (
           <>
-            <ResolutionLadder rungs={rungs} selected={level} onSelect={(l) => setLevel(l as DefaultScope["kind"])} />
+            <ResolutionLadder rungs={rungs} selected={level} onSelect={setLevel} />
 
-            {!defaultScope ? (
+            {level === "user" ? (
+              // The scope check inside is load-bearing, not defensive: the resync
+              // effect runs AFTER the render in which the scope changed, so there
+              // is one frame where a subscription's "user" level is still selected
+              // against a tenant scope. Branching on scope.kind first keeps that
+              // frame off the subsAccId! assertions further down.
+              <Field label={t.defaults.pinsTitle} job={t.defaults.pinsHint}>
+                <div className="flex flex-col gap-2">
+                  {scope.kind !== "subscription" ? (
+                    <p className="py-2 text-sm text-fg-muted">{t.defaults.selectSubscription}</p>
+                  ) : users === null ? (
+                    <div className="flex justify-center py-3">
+                      <Spinner size={18} />
+                    </div>
+                  ) : users.length === 0 ? (
+                    <p className="py-2 text-sm text-fg-muted">
+                      {t.defaults.noUsersYet}
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {users.map((u) => {
+                        // Keyed by agent AND user everywhere, including the local pick
+                        // state: the same person can have a workspace under two agents, and
+                        // a user-only key would let a selection on one row bleed into the
+                        // other.
+                        const rowKey = assignmentKey(u.role ?? routed, u.accId);
+                        const stored = assignments[rowKey];
+                        const pinned = pinnedModel(stored);
+                        return (
+                          <li key={`${u.role}|${u.accId}`}
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
+                            <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
+                              {u.name || u.email || u.accId}
+                            </span>
+                            {u.role && <Badge tone="accent">{u.role}</Badge>}
+                            {/* What this user actually resolves to today, and whether it is a
+                                pin or the cascade. Both halves matter: "pinned" says a scope
+                                change will NOT move them, which is the whole reason a pin
+                                exists. */}
+                            {pinned ? (
+                              <Badge tone="accent">{t.defaults.pinnedTo.replace("{model}", pinned)}</Badge>
+                            ) : stored ? (
+                              <Badge tone="neutral">{t.defaults.inheritedTo.replace("{model}", stored.model_name)}</Badge>
+                            ) : (
+                              <Badge tone="neutral">{t.defaults.notMaterialized}</Badge>
+                            )}
+                            <select className={selectClass} value={pick[rowKey] ?? pinned ?? ""} disabled={busy}
+                              onChange={(e) => setPick((prev) => ({ ...prev, [rowKey]: e.target.value }))}>
+                              <option value="" disabled>
+                                {t.defaults.inheritedFromScope}
+                              </option>
+                              {assignable.map((m) => (
+                                <option key={m.model_name} value={m.model_name}>
+                                  {m.model_name}
+                                </option>
+                              ))}
+                            </select>
+                            <Button variant="tonal" size="sm" disabled={busy || !(pick[rowKey] ?? pinned)}
+                              onClick={() =>
+                                run(async () => {
+                                  await setModelAssignment(
+                                    u.role ?? routed,
+                                    { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
+                                    pick[rowKey] ?? pinned!,
+                                    restartPolicy,
+                                  );
+                                  await loadAssignments();
+                                })
+                              }>
+                              {t.defaults.pin}
+                            </Button>
+                            <Button variant="text" size="sm" disabled={busy || !stored}
+                              onClick={() =>
+                                run(async () => {
+                                  await clearModelAssignment(
+                                    u.role ?? routed,
+                                    {
+                                      tenantId: scope.tenantId,
+                                      subsAccId: scope.subsAccId!,
+                                      userAccId: u.accId,
+                                    },
+                                    restartPolicy,
+                                  );
+                                  setPick((prev) => ({ ...prev, [rowKey]: "" }));
+                                  await loadAssignments();
+                                })
+                              }>
+                              {t.defaults.unpin}
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </Field>
+            ) : !defaultScope ? (
               <p className="text-sm text-fg-muted">
-                Select a {level} on the left to set its default.
+                {t.defaults.selectOnLeft.replace("{level}", level)}
               </p>
             ) : (
               <Field
-                label={`Model for ${targetLabel}`}
+                label={t.defaults.modelFor.replace("{target}", targetLabel)}
                 job={
                   level === "global" || level === "agent"
-                    ? "Instance-wide. Needs instance-admin, and reaches each workspace on its next start rather than restarting the fleet."
-                    : "New workspaces at this level land on this model unless a more specific level or a per-user pin overrides it."
+                    ? t.defaults.instanceJob
+                    : t.defaults.scopeJob
                 }
                 htmlFor="default-model"
                 consequence={
                   clearedFallback !== null ? (
                     <>
-                      Clearing the level in effect would move its workspaces to{" "}
-                      <Ident>{clearedFallback}</Ident> on their next start.
+                      {t.defaults.clearingMovesBefore}
+                      <Ident>{clearedFallback}</Ident>
+                      {t.defaults.onNextStart}
                     </>
                   ) : !inEffect ? undefined : hasHidden ? (
                     <>
-                      Nothing you can read is set below this, and the instance-wide levels are hidden
-                      from you — clearing it may leave new workspaces with <b>no resolvable model</b>,
-                      which refuses to provision.
+                      {t.defaults.clearLeavesHiddenBefore}
+                      <b>{t.defaults.noResolvableModel}</b>
+                      {t.defaults.clearLeavesAfter}
                     </>
                   ) : (
                     <>
-                      Nothing is set below this. Clearing it would leave new workspaces with{" "}
-                      <b>no resolvable model</b>, which refuses to provision.
+                      {t.defaults.clearLeavesBefore}
+                      <b>{t.defaults.noResolvableModel}</b>
+                      {t.defaults.clearLeavesAfter}
                     </>
                   )
                 }
@@ -373,14 +488,14 @@ export default function ModelDefaultsPanel({
                     }
                   >
                     <option value="" disabled>
-                      nothing set at this level
+                      {t.defaults.nothingSetHere}
                     </option>
                     {/* The current default is offered even when it is no longer active:
                         filtering to active models made a deprecated default match no
                         option, so the control read "no default set" while one WAS set. */}
                     {defaultOptions(models, current?.model_name ?? null).map((o) => (
                       <option key={o.name} value={o.name}>
-                        {o.inactive ? `${o.name} (retired — current default)` : o.name}
+                        {o.inactive ? t.defaults.retiredCurrent.replace("{name}", o.name) : o.name}
                       </option>
                     ))}
                   </select>
@@ -397,114 +512,13 @@ export default function ModelDefaultsPanel({
                         })
                       }
                     >
-                      Clear
+                      {t.defaults.clear}
                     </Button>
                   )}
                 </div>
               </Field>
             )}
           </>
-        )}
-      </Accordion>
-
-      <Accordion
-        title="People with a model of their own"
-        summary={
-          scope.kind !== "subscription"
-            ? "Select a subscription to see and set pins"
-            : users === null
-              ? "Reading the member list…"
-              : pinnedCount === 0
-                ? `Nobody among ${users.length} — everyone follows the levels above`
-                : `${pinnedCount} of ${users.length} pinned, so the levels above do not reach them`
-        }
-        hint="A pin outranks every level above. Use it for one person who needs something different, not to move a whole group — that is what a scope default is for."
-      >
-        {scope.kind !== "subscription" ? (
-          <p className="py-2 text-sm text-fg-muted">Select a subscription to pin models to its users.</p>
-        ) : users === null ? (
-          <div className="flex justify-center py-3">
-            <Spinner size={18} />
-          </div>
-        ) : users.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">
-            No users have a workspace under this subscription yet (they must start a chat first).
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {users.map((u) => {
-              // Keyed by agent AND user everywhere, including the local pick
-              // state: the same person can have a workspace under two agents, and
-              // a user-only key would let a selection on one row bleed into the
-              // other.
-              const rowKey = assignmentKey(u.role ?? routed, u.accId);
-              const stored = assignments[rowKey];
-              const pinned = pinnedModel(stored);
-              return (
-                <li key={`${u.role}|${u.accId}`}
-                  className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
-                    {u.name || u.email || u.accId}
-                  </span>
-                  {u.role && <Badge tone="accent">{u.role}</Badge>}
-                  {/* What this user actually resolves to today, and whether it is a
-                      pin or the cascade. Both halves matter: "pinned" says a scope
-                      change will NOT move them, which is the whole reason a pin
-                      exists. */}
-                  {pinned ? (
-                    <Badge tone="accent">pinned · {pinned}</Badge>
-                  ) : stored ? (
-                    <Badge tone="neutral">inherited · {stored.model_name}</Badge>
-                  ) : (
-                    <Badge tone="neutral">not materialized yet</Badge>
-                  )}
-                  <select className={selectClass} value={pick[rowKey] ?? pinned ?? ""} disabled={busy}
-                    onChange={(e) => setPick((prev) => ({ ...prev, [rowKey]: e.target.value }))}>
-                    <option value="" disabled>
-                      inherited from scope
-                    </option>
-                    {assignable.map((m) => (
-                      <option key={m.model_name} value={m.model_name}>
-                        {m.model_name}
-                      </option>
-                    ))}
-                  </select>
-                  <Button variant="tonal" size="sm" disabled={busy || !(pick[rowKey] ?? pinned)}
-                    onClick={() =>
-                      run(async () => {
-                        await setModelAssignment(
-                          u.role ?? routed,
-                          { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
-                          pick[rowKey] ?? pinned!,
-                          restartPolicy,
-                        );
-                        await loadAssignments();
-                      })
-                    }>
-                    Pin
-                  </Button>
-                  <Button variant="text" size="sm" disabled={busy || !stored}
-                    onClick={() =>
-                      run(async () => {
-                        await clearModelAssignment(
-                          u.role ?? routed,
-                          {
-                            tenantId: scope.tenantId,
-                            subsAccId: scope.subsAccId!,
-                            userAccId: u.accId,
-                          },
-                          restartPolicy,
-                        );
-                        setPick((prev) => ({ ...prev, [rowKey]: "" }));
-                        await loadAssignments();
-                      })
-                    }>
-                    Unpin
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
         )}
       </Accordion>
     </div>
