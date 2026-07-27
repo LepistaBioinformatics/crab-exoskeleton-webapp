@@ -25,12 +25,31 @@ export interface GuestRole {
   system?: boolean;
 }
 
+// Mycelium serializes an Email as a STRUCTURED OBJECT ({username, domain}), not
+// a plain string — the same trap app/api/auth/verify/route.ts already documents
+// for the magic-link response: "the reference mycelium-webapp's own TS types
+// call it a string, which doesn't match what the server actually sends".
+// Accept both, and never touch the raw value directly.
+export type MyceliumEmail = string | { username?: string; domain?: string };
+
 export interface GuestUser {
   id?: string | null;
-  email: string;
+  email: MyceliumEmail;
   guestRole?: { id?: string | null; name?: string } | string | null;
   created?: string;
   wasVerified?: boolean;
+}
+
+// emailText renders either shape as the address a human reads. An unusable
+// value becomes "" rather than throwing: one malformed guest row must not take
+// down the whole Members screen.
+export function emailText(email: MyceliumEmail | undefined | null): string {
+  if (typeof email === "string") return email;
+  if (email && typeof email === "object") {
+    const { username, domain } = email;
+    if (username && domain) return `${username}@${domain}`;
+  }
+  return "";
 }
 
 // Mycelium reports a permission as either a number (Read = 0, Write = 1 in the
@@ -115,8 +134,12 @@ export function mergeRoster(guests: GuestUser[], users: UserRef[], roles: GuestR
   const byEmail = new Map<string, RosterEntry>();
 
   for (const g of guests) {
-    const key = g.email.toLowerCase();
-    const entry = byEmail.get(key) ?? { email: g.email, roles: [], active: false };
+    const address = emailText(g.email);
+    // A row we cannot name cannot be matched, shown or revoked; skipping it
+    // keeps the rest of the roster usable.
+    if (!address) continue;
+    const key = address.toLowerCase();
+    const entry = byEmail.get(key) ?? { email: address, roles: [], active: false };
     const label = roleLabel(g, roles);
     if (!entry.roles.includes(label)) entry.roles.push(label);
     if (g.created && !entry.invitedAt) entry.invitedAt = g.created;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   availableLevels,
+  emailText,
   isValidEmail,
   mergeRoster,
   permissionLevel,
@@ -40,6 +41,26 @@ describe("permissionLevel", () => {
     expect(permissionLevel("overwrite")).toBeNull();
     expect(permissionLevel("thread")).toBeNull();
     expect(permissionLevel("readonly")).toBeNull();
+  });
+});
+
+describe("emailText", () => {
+  // Mycelium sends an Email as {username, domain}, not a string. Assuming the
+  // string form crashed the whole Members screen with
+  // "a.email.toLowerCase is not a function".
+  it("renders the structured form mycelium actually sends", () => {
+    expect(emailText({ username: "ana", domain: "x.com" })).toBe("ana@x.com");
+  });
+
+  it("still accepts a plain string", () => {
+    expect(emailText("ana@x.com")).toBe("ana@x.com");
+  });
+
+  it("returns empty for anything unusable instead of throwing", () => {
+    expect(emailText(undefined)).toBe("");
+    expect(emailText(null)).toBe("");
+    expect(emailText({})).toBe("");
+    expect(emailText({ username: "ana" })).toBe("");
   });
 });
 
@@ -157,6 +178,31 @@ describe("mergeRoster", () => {
     );
     expect(roster).toHaveLength(1);
     expect(roster[0].verified).toBe(true);
+  });
+
+  it("handles the structured email mycelium sends", () => {
+    const roster = mergeRoster(
+      [{ email: { username: "ana", domain: "x.com" }, guestRole: { id: "r-alpha-write" } }],
+      [user("ana@x.com", "acc-9", "alpha")],
+      ROLES,
+    );
+    expect(roster).toHaveLength(1);
+    expect(roster[0].email).toBe("ana@x.com");
+    // And it still matches the workspace feed, which sends a plain string.
+    expect(roster[0].active).toBe(true);
+  });
+
+  it("skips a guest row whose email cannot be read", () => {
+    // One malformed row must not take the whole roster down with it.
+    const roster = mergeRoster(
+      [
+        { email: {} as never, guestRole: { id: "r-alpha-write" } },
+        guest("ok@x.com", "r-alpha-write"),
+      ],
+      [],
+      ROLES,
+    );
+    expect(roster.map((r) => r.email)).toEqual(["ok@x.com"]);
   });
 
   it("collects several roles onto one person", () => {
