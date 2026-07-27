@@ -21,7 +21,8 @@ const HINTS: Record<"content" | "registry", { all: string; one: (a: string) => s
   },
   registry: {
     all: "The model inventory is shared by every picoclaw agent. This picker only chooses the route the request takes; a per-user pin addresses the agent that user's workspace runs under.",
-    one: (a) => `Requests go through ${a}. The inventory itself is the same one every picoclaw agent shares.`,
+    one: (a) =>
+      `The inventory is shared by every picoclaw agent, but the agent level of the cascade and each per-user pin belong to ${a} alone.`,
   },
 };
 
@@ -29,21 +30,29 @@ const HINTS: Record<"content" | "registry", { all: string; one: (a: string) => s
 // agent under the scope reads (the pre-per-agent behaviour); picking one agent
 // narrows both the store and the containers that get restarted, so a skill or
 // credential meant for alpha never reaches beta.
+//
+// `allowAll` is off where "all" cannot be honoured. Some records are stored per
+// agent, so an all-agents selection would have to be collapsed to one agent to
+// make the request at all — and then the panel reads and writes that one agent
+// while the label promises every one of them. Where that is the case the caller
+// turns the option off and the admin picks the agent themselves.
 export function AgentTargetSelect({
   agents,
   value,
   onChange,
   purpose = "content",
+  allowAll = true,
 }: {
   agents: string[];
   value: string;
   onChange: (agent: string) => void;
   purpose?: "content" | "registry";
+  allowAll?: boolean;
 }) {
   const hint = HINTS[purpose];
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-fg-muted">Applies to</span>
+      <span className="text-xs font-medium text-fg-muted">{allowAll ? "Applies to" : "Routed through"}</span>
       <div className="relative">
         <Bot
           size={16}
@@ -55,16 +64,21 @@ export function AgentTargetSelect({
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
-          <option value={ALL_AGENTS}>All agents</option>
+          {allowAll && <option value={ALL_AGENTS}>All agents</option>}
+          {agents.length === 0 && (
+            <option value="" disabled>
+              no agents available
+            </option>
+          )}
           {agents.map((a) => (
             <option key={a} value={a}>
-              Only {a}
+              {allowAll ? `Only ${a}` : a}
             </option>
           ))}
         </select>
       </div>
       <span className="text-[11px] text-fg-muted">
-        {value === ALL_AGENTS ? hint.all : hint.one(value)}
+        {value === ALL_AGENTS ? hint.all : value ? hint.one(value) : "No agent to target."}
       </span>
     </label>
   );

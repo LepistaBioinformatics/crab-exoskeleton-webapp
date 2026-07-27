@@ -342,6 +342,50 @@ describe("buildLadder", () => {
     expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["tenant", "agent"]);
   });
 
+  // The three-way distinction is the whole point of the type: unset, refused, and
+  // "belongs to a scope you have not selected" are different facts, and reporting
+  // the third as the first told an admin standing on a tenant that a subscription
+  // had no default when in truth no subscription was selected.
+  it("marks a level the selected scope cannot address, and never lets it decide", () => {
+    const rungs = buildLadder({
+      pinnedCount: 0,
+      // A value CAN arrive on this key from a previous scope's read; the flag wins.
+      subscription: def("claude-sonnet-4.6"),
+      tenant: def("gpt-5.4"),
+      agent: null,
+      global: null,
+      names,
+      outOfScope: ["subscription", "user"],
+    });
+    const subs = rungs.find((r) => r.level === "subscription")!;
+    expect(subs.outOfScope).toBe(true);
+    expect(subs.modelName).toBeNull();
+    expect(subs.inEffect).toBe(false);
+    expect(subs.overridden).toBe(false);
+    // It is not a refusal either — the admin is allowed to read it, there is just
+    // nothing selected to read.
+    expect(subs.unreadable).toBe(false);
+    expect(subs.detail).toContain("Select a subscription");
+    // The tenant decides instead, and clearing it must not promise the value the
+    // out-of-scope rung was carrying.
+    expect(rungs.find((r) => r.inEffect)?.level).toBe("tenant");
+    expect(fallbackIfCleared(rungs)).toBeNull();
+  });
+
+  it("separates unset from out-of-scope on the same level", () => {
+    const inScope = buildLadder({
+      pinnedCount: 0,
+      subscription: null,
+      tenant: def("gpt-5.4"),
+      agent: null,
+      global: null,
+      names,
+    });
+    const subs = inScope.find((r) => r.level === "subscription")!;
+    expect(subs.outOfScope).toBe(false);
+    expect(subs.detail).toBeUndefined();
+  });
+
   it("falls through an unset level to the next one that has a value", () => {
     const rungs = buildLadder({
       pinnedCount: 0,

@@ -28,6 +28,7 @@ const rung = cva(
         overridden: "",
         empty: "",
         locked: "",
+        outOfScope: "",
       },
       selectable: { true: "hover:bg-elevated/70", false: "" },
     },
@@ -42,6 +43,8 @@ const dot = cva("absolute left-[3px] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounde
       overridden: "border-brand/50 bg-bg",
       empty: "border-brand/30 bg-bg",
       locked: "border-brand/30 bg-bg",
+      // Hollow and dashed: the level exists, but nothing about it is decided here.
+      outOfScope: "border-dashed border-brand/30 bg-bg",
     },
   },
   defaultVariants: { tone: "empty" },
@@ -54,6 +57,7 @@ const levelText = cva("text-[13px]", {
       overridden: "font-medium text-fg-muted",
       empty: "font-medium text-fg-muted/80",
       locked: "font-medium text-fg-muted/80",
+      outOfScope: "font-medium text-fg-muted/70",
     },
   },
   defaultVariants: { tone: "empty" },
@@ -66,14 +70,18 @@ const tag = cva("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px
       overridden: "border border-brand/30 text-fg-muted",
       empty: "bg-elevated text-fg-muted",
       locked: "bg-elevated text-fg-muted",
+      outOfScope: "border border-dashed border-brand/40 text-fg-muted",
     },
   },
   defaultVariants: { tone: "empty" },
 });
 
-type Tone = "effect" | "overridden" | "empty" | "locked";
+type Tone = "effect" | "overridden" | "empty" | "locked" | "outOfScope";
 
 function toneOf(r: LadderRung): Tone {
+  // Both checks come before inEffect for the same reason: a rung nobody can act
+  // on here must not be dressed as the one that decides.
+  if (r.outOfScope) return "outOfScope";
   if (r.unreadable) return "locked";
   if (r.inEffect) return "effect";
   if (r.overridden) return "overridden";
@@ -85,6 +93,10 @@ const TAG_TEXT: Record<Tone, string> = {
   overridden: "overridden",
   empty: "not set",
   locked: "not yours to see",
+  // Deliberately vague where the detail line beside it is specific: the same tag
+  // sits on the subscription rung and on the pin rung, and both are out of scope
+  // for one reason — no subscription is selected — which the detail line states.
+  outOfScope: "out of scope",
 };
 
 export function ResolutionLadder({
@@ -105,7 +117,7 @@ export function ResolutionLadder({
         // The per-user rung is informational: a pin is set from the pin list
         // below, one person at a time, so selecting it here would offer a control
         // that cannot exist.
-        const selectable = r.level !== "user" && !r.unreadable;
+        const selectable = r.level !== "user" && !r.unreadable && !r.outOfScope;
         const isSelected = selected === r.level;
         const body = (
           <>
