@@ -4,6 +4,8 @@ import {
   isAdminScope,
   proxyAdminJson,
   requireSession,
+  restartParams,
+  withRestart,
 } from "@/lib/adminProxy";
 
 // Shared secrets at a scope: write / list-names / delete. Like the per-user
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
   if (scope === "subscription" && subsAccId) payload.subs_acc_id = subsAccId;
   if (agent) payload.agent = agent;
 
-  return proxyAdminJson(session, "/shared-secrets", {
+  return proxyAdminJson(session, withRestart("/shared-secrets", restartParams(req)), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -78,5 +80,6 @@ export async function DELETE(req: NextRequest) {
   query.set("format", format);
   query.set("name", name);
 
-  return proxyAdminJson(session, `/shared-secrets?${query.toString()}`, { method: "DELETE" });
+  const suffix = withRestart(`/shared-secrets?${query.toString()}`, restartParams(req));
+  return proxyAdminJson(session, suffix, { method: "DELETE" });
 }

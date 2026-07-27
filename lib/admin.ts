@@ -1,3 +1,4 @@
+import { DEFAULT_POLICY, withPolicy, type RestartPolicy } from "@/lib/restartPolicy";
 import type { SecretNames, SecretFormat } from "@/lib/secrets";
 
 // A scope the caller may administer (GET /api/admin/scopes). Modeled on the
@@ -155,8 +156,11 @@ export async function listSharedSecrets(scope: ScopeRef): Promise<SecretNames> {
 export async function setSharedSecret(
   scope: ScopeRef,
   input: { format: SecretFormat; name: string; value: string },
+  // How the resulting container bounce is delivered (restart-control FR-4).
+  // Omitted means "now" -- the behaviour this call always had.
+  policy: RestartPolicy = DEFAULT_POLICY,
 ): Promise<void> {
-  const res = await fetch("/api/admin/shared-secrets", {
+  const res = await fetch(withPolicy("/api/admin/shared-secrets", policy), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -175,11 +179,14 @@ export async function setSharedSecret(
 export async function deleteSharedSecret(
   scope: ScopeRef,
   input: { format: SecretFormat; name: string },
+  policy: RestartPolicy = DEFAULT_POLICY,
 ): Promise<void> {
   const q = scopeParams(scope);
   q.set("format", input.format);
   q.set("name", input.name);
-  const res = await fetch(`/api/admin/shared-secrets?${q.toString()}`, { method: "DELETE" });
+  const res = await fetch(withPolicy(`/api/admin/shared-secrets?${q.toString()}`, policy), {
+    method: "DELETE",
+  });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 

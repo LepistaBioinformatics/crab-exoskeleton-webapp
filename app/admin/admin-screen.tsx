@@ -28,6 +28,8 @@ import SharedSkillsPanel from "./shared-skills-panel";
 import ModelRegistryPanel from "./model-registry-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
+import RestartPolicySelect from "./restart-policy-select";
+import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 
 
 // Level 2: the sections OF a scope. Subordinate to the mode switch above, and
@@ -224,14 +226,28 @@ export default function AdminScreen() {
   // The Model tab offers only the agents the inventory governs. Hermes agents read
   // their model from the proxy's config.yaml, so pinning one writes a record nothing
   // reads — the proxy rejects it, and the picker should not offer it in the first
-  // place. If the shared choice is a hermes agent, this tab falls back to "all",
-  // which resolves to the first picoclaw agent.
+  // place.
+  //
+  // That tab also refuses "All agents". The agent level of the model cascade is
+  // stored per agent (`agent/<agent>` in the registry), so an "all agents"
+  // selection had to be collapsed to one agent before the request could be made —
+  // and the panel then showed and wrote THAT agent's default while the header
+  // claimed the write reached every agent. Naming the agent is the honest version,
+  // and it costs nothing: the inventory is shared, so which agent routes the
+  // request only matters for the levels that really are per agent.
   const agentKeys = agents.map((a) => a.key);
   const modelAgentKeys = picoclawAgentKeys(agents);
   const modelTab = tab === "model";
+  // One choice covers a run of edits in this sitting (restart-control FR-8.2).
+  // Held here rather than in each panel so switching tabs does not silently
+  // reset it back to "restart now" mid-task.
+  const [restartPolicy, setRestartPolicy] = useState<RestartPolicy>(DEFAULT_POLICY);
   const tabAgents = modelTab ? modelAgentKeys : agentKeys;
-  const tabTarget =
-    agentTarget !== ALL_AGENTS && !tabAgents.includes(agentTarget) ? ALL_AGENTS : agentTarget;
+  const tabTarget = modelTab
+    ? (tabAgents.includes(agentTarget) ? agentTarget : (tabAgents[0] ?? ""))
+    : agentTarget !== ALL_AGENTS && !tabAgents.includes(agentTarget)
+      ? ALL_AGENTS
+      : agentTarget;
 
   // The selected scope in the admin's own words. Falls back to the id when names
   // have not resolved — an id is worse to read than a name, but far better than a
@@ -248,6 +264,15 @@ export default function AdminScreen() {
       : selected.kind === "subscription"
         ? (selectedScope?.accName ?? selected.subsAccId ?? "this subscription")
         : (selectedScope?.tenantName ?? selected.tenantId);
+
+  // The names the model panel puts on the cascade levels it writes. Falls back to
+  // the id for the same reason scopeLabel does: an id reads worse than a name and
+  // far better than a rung that says "Tenant — undefined".
+  const scopeNames = {
+    tenant: selectedScope?.tenantName ?? selected?.tenantId,
+    subscription:
+      selected?.kind === "subscription" ? (selectedScope?.accName ?? selected.subsAccId) : undefined,
+  };
 
   const hasScopes = !!scopes && scopes.length > 0;
   const scopedTabs = hasScopes ? TABS : [];
@@ -396,26 +421,62 @@ export default function AdminScreen() {
                             value={tabTarget}
                             onChange={setAgentTarget}
                             purpose={modelTab ? "registry" : "content"}
+                            allowAll={!modelTab}
                           />
                         </div>
+                        {/* What the combination actually reaches. The Models tab
+                            gets its own sentence: its inventory is proxy-wide, so
+                            saying a write there "reaches this tenant" would promise
+                            a containment the inventory does not have — the scope
+                            governs only the defaults and pins under it. */}
                         <p className="min-w-[16rem] flex-1 border-l border-brand/30 pl-3.5 text-xs text-fg-muted">
-                          Reaches <b className="font-semibold text-fg">{scopeLabel}</b>
-                          {selected.kind === "tenant" ? " and every subscription under it" : ""}
-                          {tabTarget === ALL_AGENTS ? (
-                            <>, through <b className="font-semibold text-fg">every agent</b>.</>
+                          {modelTab ? (
+                            <>
+                              The inventory is <b className="font-semibold text-fg">proxy-wide</b>. Only the
+                              defaults and pins below it belong to{" "}
+                              <b className="font-semibold text-fg">{scopeLabel}</b> and{" "}
+                              <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span>.
+                            </>
                           ) : (
-                            <>, through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only.</>
+                            <>
+                              Reaches <b className="font-semibold text-fg">{scopeLabel}</b>
+                              {selected.kind === "tenant" ? " and every subscription under it" : ""}
+                              {tabTarget === ALL_AGENTS ? (
+                                <>, through <b className="font-semibold text-fg">every agent</b>.</>
+                              ) : (
+                                <>, through <span className="font-mono text-[0.92em] text-fg">{tabTarget}</span> only.</>
+                              )}
+                            </>
                           )}
                         </p>
                       </div>
+                      {/* Shared files reach containers through a live read-only
+                          mount, so they need no bounce; secrets, skills and
+                          model changes do. */}
+                      {(tab === "secrets" || tab === "skills" || tab === "model") && (
+                        <div className="mb-4">
+                          <RestartPolicySelect policy={restartPolicy} onChange={setRestartPolicy} />
+                        </div>
+                      )}
                       {tab === "files" ? (
                         <SharedFilesPanel scope={{ ...selected, agent: tabTarget }} />
                       ) : tab === "secrets" ? (
-                        <SharedSecretsPanel scope={{ ...selected, agent: tabTarget }} />
+                        <SharedSecretsPanel
+                          scope={{ ...selected, agent: tabTarget }}
+                          restartPolicy={restartPolicy}
+                        />
                       ) : tab === "skills" ? (
-                        <SharedSkillsPanel scope={{ ...selected, agent: tabTarget }} />
+                        <SharedSkillsPanel
+                          scope={{ ...selected, agent: tabTarget }}
+                          restartPolicy={restartPolicy}
+                        />
                       ) : (
-                        <ModelRegistryPanel scope={selected} agents={modelAgentKeys} target={tabTarget} />
+                        <ModelRegistryPanel
+                          scope={selected}
+                          scopeNames={scopeNames}
+                          target={tabTarget}
+                          restartPolicy={restartPolicy}
+                        />
                       )}
                     </div>
                   ) : (

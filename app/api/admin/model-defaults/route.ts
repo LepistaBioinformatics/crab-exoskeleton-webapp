@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import {
+  proxyAdminJsonAgent,
+  requireSession,
+  restartParams,
+  withRestart,
+} from "@/lib/adminProxy";
 import { isInstance } from "@/lib/mycelium";
 
 const SCOPES = ["global", "agent", "tenant", "subscription"];
@@ -33,13 +38,15 @@ async function forward(req: NextRequest, method: "GET" | "PUT" | "DELETE") {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   if (method !== "PUT") {
-    return proxyAdminJsonAgent(session, agent, `/model-defaults?${query}`, { method });
+    const clearSuffix = withRestart(`/model-defaults?${query}`, restartParams(req));
+    return proxyAdminJsonAgent(session, agent, clearSuffix, { method });
   }
   const body = await req.json().catch(() => null);
   if (typeof body?.model_name !== "string" || !body.model_name) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  return proxyAdminJsonAgent(session, agent, `/model-defaults?${query}`, {
+  const suffix = withRestart(`/model-defaults?${query}`, restartParams(req));
+  return proxyAdminJsonAgent(session, agent, suffix, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model_name: body.model_name }),

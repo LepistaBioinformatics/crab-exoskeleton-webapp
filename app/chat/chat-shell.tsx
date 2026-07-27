@@ -8,6 +8,7 @@ import HistorySidebar from "./history-sidebar";
 import ChatView from "./chat-view";
 import CanvasTimeline from "./canvas-timeline";
 import EmptyState from "./empty-state";
+import RestartBanner from "./restart-banner";
 import ResizablePane from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
@@ -39,6 +40,10 @@ export default function ChatShell({ email }: { email: string }) {
     return () => mq.removeEventListener("change", sync);
   }, []);
   const canvas = fragment?.view === "canvas" && !!workspace && desktop;
+
+  // Bumped whenever something the member did needs a restart (a secret write),
+  // so the banner appears at once instead of at its next poll.
+  const [restartRefresh, setRestartRefresh] = useState(0);
 
   const [navOpen, setNavOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -135,18 +140,29 @@ export default function ChatShell({ email }: { email: string }) {
           </ResizablePane>
         )}
 
-        <main className="min-w-0 flex-1">
-          {!resolved ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner size={28} />
-            </div>
-          ) : canvas && workspace ? (
-            <CanvasTimeline workspace={workspace} />
-          ) : workspace ? (
-            <ChatView workspace={workspace} sessionId={sessionId} />
-          ) : (
-            <EmptyState />
+        <main className="flex min-w-0 flex-1 flex-col">
+          {/* Above both the chat and the canvas: a pending restart is a property
+              of the workspace, not of the view you happen to be in. */}
+          {workspace && (
+            <RestartBanner workspace={workspace} refreshKey={restartRefresh} />
           )}
+          <div className="min-h-0 flex-1">
+            {!resolved ? (
+              <div className="flex h-full items-center justify-center">
+                <Spinner size={28} />
+              </div>
+            ) : canvas && workspace ? (
+              <CanvasTimeline workspace={workspace} />
+            ) : workspace ? (
+              <ChatView
+                workspace={workspace}
+                sessionId={sessionId}
+                onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
+              />
+            ) : (
+              <EmptyState />
+            )}
+          </div>
         </main>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { DEFAULT_POLICY, withPolicy, type RestartPolicy } from "@/lib/restartPolicy";
 import type { ScopeRef } from "@/lib/admin";
 
 // SkillMeta from the proxy -- metadata only; content is fetched separately via
@@ -38,7 +39,14 @@ export async function sharedSkillDoc(
   return res.json();
 }
 
-export async function saveSharedSkillDoc(scope: ScopeRef, name: string, body: string): Promise<void> {
+export async function saveSharedSkillDoc(
+  scope: ScopeRef,
+  name: string,
+  body: string,
+  // How the resulting container bounce is delivered (restart-control FR-4).
+  // Omitted means "now" -- the behaviour this call always had.
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
   const form = new FormData();
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
@@ -46,11 +54,16 @@ export async function saveSharedSkillDoc(scope: ScopeRef, name: string, body: st
   if (scope.agent) form.set("agent", scope.agent);
   form.set("name", name);
   form.set("body", body);
-  const res = await fetch("/api/admin/skills", { method: "POST", body: form });
+  const res = await fetch(withPolicy("/api/admin/skills", policy), { method: "POST", body: form });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
-export async function uploadSharedSkillZip(scope: ScopeRef, name: string, file: File): Promise<void> {
+export async function uploadSharedSkillZip(
+  scope: ScopeRef,
+  name: string,
+  file: File,
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
   const form = new FormData();
   form.set("scope", scope.kind);
   form.set("tenant_id", scope.tenantId);
@@ -58,7 +71,7 @@ export async function uploadSharedSkillZip(scope: ScopeRef, name: string, file: 
   if (scope.agent) form.set("agent", scope.agent);
   form.set("name", name);
   form.set("file", file, file.name);
-  const res = await fetch("/api/admin/skills", { method: "POST", body: form });
+  const res = await fetch(withPolicy("/api/admin/skills", policy), { method: "POST", body: form });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
@@ -70,10 +83,16 @@ export function sharedSkillArchiveUrl(scope: ScopeRef, name: string): string {
   return `/api/admin/skills/archive?${q.toString()}`;
 }
 
-export async function deleteSharedSkill(scope: ScopeRef, name: string): Promise<void> {
+export async function deleteSharedSkill(
+  scope: ScopeRef,
+  name: string,
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<void> {
   const q = scopeParams(scope);
   q.set("name", name);
-  const res = await fetch(`/api/admin/skills?${q.toString()}`, { method: "DELETE" });
+  const res = await fetch(withPolicy(`/api/admin/skills?${q.toString()}`, policy), {
+    method: "DELETE",
+  });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 

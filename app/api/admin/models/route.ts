@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import {
+  proxyAdminJsonAgent,
+  requireSession,
+  restartParams,
+  withRestart,
+} from "@/lib/adminProxy";
 import { isInstance } from "@/lib/mycelium";
 
 // Model inventory (admin). The inventory itself is proxy-wide, but requests are
@@ -41,7 +46,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   const { agent: _agent, name: _name, ...payload } = body;
-  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}`, {
+  // A definition or key edit re-materializes every workspace holding this model;
+  // the policy decides whether they bounce now or are told to (FR-4).
+  const suffix = withRestart(`/models/${encodeURIComponent(name)}`, restartParams(req));
+  return proxyAdminJsonAgent(session, agent, suffix, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

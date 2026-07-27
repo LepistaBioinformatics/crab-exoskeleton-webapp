@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 import { useCallback, useEffect, useState } from "react";
 import {
   getModelDefault,
@@ -25,7 +26,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { Field, FieldGroup, Ident } from "./field";
+import { Field, Ident } from "./field";
+import { Accordion } from "./accordion";
 import { ResolutionLadder } from "./resolution-ladder";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
@@ -51,12 +53,26 @@ export function resolveDefaultScope(level: DefaultScope["kind"], scope: ScopeRef
 // the difference between a pin and a cascade visible.
 export default function ModelDefaultsPanel({
   scope,
+  scopeNames,
   routed,
   models,
+  restartPolicy = DEFAULT_POLICY,
 }: {
   scope: ScopeRef;
+  /**
+   * What the admin calls the selected tenant and subscription. The ladder names
+   * the level it is about to write — "Tenant — Biotrop" rather than "Tenant" —
+   * because a level name alone does not tell you WHICH tenant you are editing.
+   */
+  scopeNames: { tenant?: string; subscription?: string };
   routed: string;
   models: InventoryModel[];
+  /**
+   * How the container bounce these changes cause is delivered; chosen once in
+   * the admin screen and applied to every mutation here (restart-control
+   * FR-8.1).
+   */
+  restartPolicy?: RestartPolicy;
 }) {
   const [current, setCurrent] = useState<ScopeDefault | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -215,25 +231,87 @@ export default function ModelDefaultsPanel({
   const pinnedCount = Object.values(assignments).filter((a) => a.source === "explicit").length;
   const rungs: LadderRung[] = buildLadder({
     pinnedCount,
-    subscription: scope.kind === "subscription" ? levels?.subscription : null,
+    subscription: levels?.subscription,
     tenant: levels?.tenant,
     agent: levels?.agent,
     global: levels?.global,
-    // Only the agent is named. Which tenant and subscription are selected is
-    // already the left rail's job, and repeating it on the rung would be
-    // decoration — the rung's work is to say what that level RESOLVES to.
-    names: { agent: routed },
+    names: { agent: routed, tenant: scopeNames.tenant, subscription: scopeNames.subscription },
+    // On a tenant there is no subscription to read or write, and the pin list
+    // addresses one subscription's members. Reporting either as "not set" told
+    // the admin a subscription had no default when the truth was that they had
+    // not selected one.
+    outOfScope: scope.kind === "subscription" ? [] : ["subscription", "user"],
   });
   const clearedFallback = fallbackIfCleared(rungs);
+  const inEffect = rungs.find((r) => r.inEffect);
+  // A tenant admin is refused the instance-wide levels, so "nothing resolves" is
+  // only ever true about the levels this caller can READ. Saying a new workspace
+  // is refused when an unreadable global level may well cover it would be the same
+  // false claim the ladder was built to remove — every message below that talks
+  // about absence has to carry this qualifier.
+  const hasHidden = rungs.some((r) => r.unreadable);
+  // What the control below is about to write to, in the admin's words. "the
+  // tenant level" names a rank; this names the tenant.
+  const targetLabel =
+    level === "subscription"
+      ? (scopeNames.subscription ?? "this subscription")
+      : level === "tenant"
+        ? (scopeNames.tenant ?? "this tenant")
+        : level === "agent"
+          ? routed
+          : "every workspace no other level claims";
 
+  // gap-3 matches the inventory section above: the Models tab is one evenly
+  // spaced stack of sections, not two panels bolted together.
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
       {error && <Alert severity="error">{error}</Alert>}
 
-      <FieldGroup
-        title="Which model this scope resolves to"
-        intro="Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it."
-        count={<><span className="tabular-nums">{rungs.length}</span> levels</>}
+      <Accordion
+        // The title names the scope rather than saying "here": the section is the
+        // one place an admin decides what a whole tenant or subscription lands on,
+        // and the rail on the left is easy to lose track of once you scroll.
+        title={`Which model people get in ${scopeNames.subscription ?? scopeNames.tenant ?? "this scope"}`}
+        tone="primary"
+        defaultOpen
+        summary={
+          levels === null ? (
+            "Reading every level…"
+          ) : inEffect ? (
+            <>
+              <Ident>{inEffect.modelName}</Ident> — from {inEffect.label}
+            </>
+          ) : hasHidden ? (
+            "Nothing you can read resolves — an instance-wide level may still cover it"
+          ) : (
+            "Nothing resolves yet, so new workspaces here are refused"
+          )
+        }
+        hint={
+          levels === null ? (
+            "Most specific wins: the first level with a model decides, and the levels below it stay set."
+          ) : inEffect ? (
+            <>
+              Most specific wins: <Ident>{inEffect.modelName}</Ident> decides because{" "}
+              {inEffect.label} is the first level with a model. Pick a level below to change what new
+              workspaces land on — set the one that matches how far the choice should reach, and use a
+              pin (next section) for a single person.
+            </>
+          ) : hasHidden ? (
+            <>
+              None of the levels you can read names a model. An instance-wide level may still cover
+              this scope — reading those needs instance-admin. Set the level for this scope if you
+              need to be certain what new workspaces land on.
+            </>
+          ) : (
+            <>
+              <b>Nothing resolves here yet, so a new workspace under this scope is refused.</b> Pick a
+              level below and choose a model: the tenant level to cover everyone in the tenant, the
+              subscription level to cover one team, the instance-wide levels to cover whatever nothing
+              else claims.
+            </>
+          )
+        }
       >
         {levels === null ? (
           <div className="flex justify-center py-4">
@@ -249,7 +327,7 @@ export default function ModelDefaultsPanel({
               </p>
             ) : (
               <Field
-                label={`Set the ${level} level`}
+                label={`Model for ${targetLabel}`}
                 job={
                   level === "global" || level === "agent"
                     ? "Instance-wide. Needs instance-admin, and reaches each workspace on its next start rather than restarting the fleet."
@@ -262,9 +340,18 @@ export default function ModelDefaultsPanel({
                       Clearing the level in effect would move its workspaces to{" "}
                       <Ident>{clearedFallback}</Ident> on their next start.
                     </>
-                  ) : rungs.some((r) => r.inEffect) ? (
-                    <>Nothing is set below this. Clearing it would leave new workspaces with <b>no resolvable model</b>, which refuses to provision.</>
-                  ) : undefined
+                  ) : !inEffect ? undefined : hasHidden ? (
+                    <>
+                      Nothing you can read is set below this, and the instance-wide levels are hidden
+                      from you — clearing it may leave new workspaces with <b>no resolvable model</b>,
+                      which refuses to provision.
+                    </>
+                  ) : (
+                    <>
+                      Nothing is set below this. Clearing it would leave new workspaces with{" "}
+                      <b>no resolvable model</b>, which refuses to provision.
+                    </>
+                  )
                 }
               >
                 <div className="flex items-center gap-2">
@@ -275,7 +362,7 @@ export default function ModelDefaultsPanel({
                     disabled={busy || !loaded}
                     onChange={(e) =>
                       run(async () => {
-                        await setModelDefault(routed, defaultScope, e.target.value);
+                        await setModelDefault(routed, defaultScope, e.target.value, restartPolicy);
                         await load();
                         await loadLadder();
                       })
@@ -300,7 +387,7 @@ export default function ModelDefaultsPanel({
                       disabled={busy}
                       onClick={() =>
                         run(async () => {
-                          await clearModelDefault(routed, defaultScope);
+                          await clearModelDefault(routed, defaultScope, restartPolicy);
                           await load();
                           await loadLadder();
                         })
@@ -314,12 +401,21 @@ export default function ModelDefaultsPanel({
             )}
           </>
         )}
-      </FieldGroup>
+      </Accordion>
 
-      <div className="flex flex-col gap-2">
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Per-user pins
-        </span>
+      <Accordion
+        title="People with a model of their own"
+        summary={
+          scope.kind !== "subscription"
+            ? "Select a subscription to see and set pins"
+            : users === null
+              ? "Reading the member list…"
+              : pinnedCount === 0
+                ? `Nobody among ${users.length} — everyone follows the levels above`
+                : `${pinnedCount} of ${users.length} pinned, so the levels above do not reach them`
+        }
+        hint="A pin outranks every level above. Use it for one person who needs something different, not to move a whole group — that is what a scope default is for."
+      >
         {scope.kind !== "subscription" ? (
           <p className="py-2 text-sm text-fg-muted">Select a subscription to pin models to its users.</p>
         ) : users === null ? (
@@ -376,6 +472,7 @@ export default function ModelDefaultsPanel({
                           u.role ?? routed,
                           { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
                           pick[rowKey] ?? pinned!,
+                          restartPolicy,
                         );
                         await loadAssignments();
                       })
@@ -385,11 +482,15 @@ export default function ModelDefaultsPanel({
                   <Button variant="text" size="sm" disabled={busy || !stored}
                     onClick={() =>
                       run(async () => {
-                        await clearModelAssignment(u.role ?? routed, {
-                          tenantId: scope.tenantId,
-                          subsAccId: scope.subsAccId!,
-                          userAccId: u.accId,
-                        });
+                        await clearModelAssignment(
+                          u.role ?? routed,
+                          {
+                            tenantId: scope.tenantId,
+                            subsAccId: scope.subsAccId!,
+                            userAccId: u.accId,
+                          },
+                          restartPolicy,
+                        );
                         setPick((prev) => ({ ...prev, [rowKey]: "" }));
                         await loadAssignments();
                       })
@@ -401,7 +502,7 @@ export default function ModelDefaultsPanel({
             })}
           </ul>
         )}
-      </div>
+      </Accordion>
     </div>
   );
 }

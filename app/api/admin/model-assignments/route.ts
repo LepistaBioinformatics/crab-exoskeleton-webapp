@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import {
+  proxyAdminJsonAgent,
+  requireSession,
+  restartParams,
+  withRestart,
+} from "@/lib/adminProxy";
 import { isInstance } from "@/lib/mycelium";
 
 async function forward(req: NextRequest, method: "POST" | "DELETE") {
@@ -24,7 +29,8 @@ async function forward(req: NextRequest, method: "POST" | "DELETE") {
     }
     payload.model_name = body.model_name;
   }
-  return proxyAdminJsonAgent(session, agent, "/model-assignments", {
+  const suffix = withRestart("/model-assignments", restartParams(req));
+  return proxyAdminJsonAgent(session, agent, suffix, {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
