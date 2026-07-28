@@ -200,16 +200,18 @@ export default function WorkspaceNav({
   const fullCount = planWorkspaceTree(groups ?? [], tenantNames).agentCount;
   const filterAvailable = needsFilter(fullCount);
 
+  // Both hoisted labels ride here when there is a single tenant: its name AND its
+  // sole subscription's. Suppressing a row saves vertical space; it is not licence to
+  // drop what the row said, and which subscription a workspace belongs to is
+  // load-bearing (billing, membership, who administers it).
   const identity = plan.soleTenant ? (
-    <span className="flex shrink-0 items-center gap-1.5">
+    <span className="flex min-w-0 shrink items-center gap-1.5">
       <TenantAvatar
         name={plan.soleTenant.label}
         logo={tenantBrands[plan.soleTenant.id]?.logo}
         color={tenantBrands[plan.soleTenant.id]?.color}
       />
-      <span className="max-w-24 truncate font-mono text-[11px] text-fg-muted">
-        {plan.soleTenant.label}
-      </span>
+      <ScopeLabel tenant={plan.soleTenant.label} account={plan.soleTenant.hoistedAccount} />
     </span>
   ) : undefined;
 
@@ -349,6 +351,10 @@ function PlanNodes({
                 )
               }
               label={node.label}
+              // A hoisted subscription's name shows on the tenant row that survived
+              // it, for the same reason it shows on the group header when the tenant
+              // was hoisted too.
+              subLabel={node.kind === "tenant" ? node.hoistedAccount : undefined}
               open={open}
               level={node.kind === "tenant" ? "tenant" : "account"}
               onClick={() => toggle(node.id)}
@@ -378,12 +384,15 @@ function PlanNodes({
 function GroupHeader({
   icon,
   label,
+  subLabel,
   open,
   level,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  /** A hoisted child level's label, shown after this one. */
+  subLabel?: string;
   open: boolean;
   level: GroupLevel;
   onClick: () => void;
@@ -396,10 +405,49 @@ function GroupHeader({
         <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
       )}
       <span className="shrink-0 text-fg-muted">{icon}</span>
-      <span className={groupHeaderLabel({ level })} title={label}>
-        {label}
-      </span>
+      {subLabel ? (
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className={groupHeaderLabel({ level })} title={label}>
+            {label}
+          </span>
+          <span className="shrink-0 text-fg-muted/60" aria-hidden>
+            /
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={subLabel}>
+            {subLabel}
+          </span>
+        </span>
+      ) : (
+        <span className={groupHeaderLabel({ level })} title={label}>
+          {label}
+        </span>
+      )}
     </button>
+  );
+}
+
+// The tenant plus, when its row was hoisted away too, its sole subscription. Rendered
+// in the Workspaces group header, where the space is tightest — so the tenant stays
+// small and monospaced (it is an id or an org name, context) and the subscription
+// carries the weight, since that is the thing a member recognizes.
+function ScopeLabel({ tenant, account }: { tenant: string; account?: string }) {
+  if (!account) {
+    return (
+      <span className="max-w-32 truncate font-mono text-[11px] text-fg-muted" title={tenant}>
+        {tenant}
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-baseline gap-1" title={`${tenant} / ${account}`}>
+      <span className="max-w-20 shrink-0 truncate font-mono text-[11px] text-fg-muted">
+        {tenant}
+      </span>
+      <span className="shrink-0 text-[11px] text-fg-muted/60" aria-hidden>
+        /
+      </span>
+      <span className="min-w-0 truncate text-[11px] font-medium text-fg">{account}</span>
+    </span>
   );
 }
 

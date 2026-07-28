@@ -99,12 +99,13 @@ describe("planWorkspaceTree — a level with one node is hoisted away", () => {
 describe("planWorkspaceTree — identity and invariants", () => {
   it("reports the sole tenant so the group header can carry its identity", () => {
     const plan = planWorkspaceTree([tenant("acme", [["growth", ["alpha"]]])], { acme: "Acme Corp" });
-    expect(plan.soleTenant).toEqual({ id: "acme", label: "Acme Corp" });
+    // The sole subscription's name rides along, because its row was hoisted too.
+    expect(plan.soleTenant).toEqual({ id: "acme", label: "Acme Corp", hoistedAccount: "growth" });
   });
 
   it("falls back to the tenant id when there is no display name", () => {
     const plan = planWorkspaceTree([tenant("acme", [["growth", ["alpha"]]])], {});
-    expect(plan.soleTenant).toEqual({ id: "acme", label: "acme" });
+    expect(plan.soleTenant).toEqual({ id: "acme", label: "acme", hoistedAccount: "growth" });
   });
 
   it("reports no sole tenant when there are several", () => {
@@ -177,5 +178,54 @@ describe("agentCount and the filter threshold", () => {
     expect(needsFilter(0)).toBe(false);
     expect(needsFilter(5)).toBe(false);
     expect(needsFilter(6)).toBe(true);
+  });
+});
+
+// A suppressed row is a decision about vertical space, not licence to discard what the
+// row said. The first version dropped a hoisted subscription's name entirely, so a
+// member with one subscription saw agent names with nothing saying which subscription
+// they belonged to — and which subscription a workspace is under is load-bearing
+// (billing, membership, who administers it).
+describe("a hoisted level's label is carried, not discarded", () => {
+  it("carries the sole subscription's name onto the sole tenant", () => {
+    const plan = planWorkspaceTree(
+      [tenant("acme", [["Growth", ["alpha", "beta"]]])],
+      { acme: "Acme Corp" },
+    );
+    expect(plan.soleTenant).toEqual({
+      id: "acme",
+      label: "Acme Corp",
+      hoistedAccount: "Growth",
+    });
+  });
+
+  it("carries it onto a tenant row that survived, when there are several tenants", () => {
+    const plan = planWorkspaceTree(
+      [tenant("acme", [["Growth", ["alpha"]]]), tenant("other", [["Sales", ["beta"]]])],
+      {},
+    );
+    const tenants = plan.nodes.filter((n) => n.kind === "tenant");
+    expect(tenants.map((n) => (n.kind === "tenant" ? n.hoistedAccount : null))).toEqual([
+      "Growth",
+      "Sales",
+    ]);
+  });
+
+  it("carries nothing when the subscription rows survived on their own", () => {
+    const plan = planWorkspaceTree(
+      [tenant("acme", [["Growth", ["alpha"]], ["Sales", ["beta"]]])],
+      {},
+    );
+    // Both rows render, so there is nothing to hoist onto the header.
+    expect(plan.soleTenant?.hoistedAccount).toBeUndefined();
+    expect(plan.nodes.every((n) => n.kind === "account")).toBe(true);
+  });
+
+  it("falls back to the subscription id when it has no name", () => {
+    const plan = planWorkspaceTree(
+      [{ tenantId: "acme", accounts: [{ subsAccId: "s-123", accName: "", agents: [agent("acme", "s-123", "alpha")] }] }],
+      {},
+    );
+    expect(plan.soleTenant?.hoistedAccount).toBe("s-123");
   });
 });

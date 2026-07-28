@@ -89,9 +89,9 @@ export default function HistorySidebar({
   const fragment = useFragment();
   const activeSessionId = fragment?.sid;
 
-  // List (default) vs. Tree view, persisted in the URL (fragment `hv`) so a
+  // Tree (default) vs. List view, persisted in the URL (fragment `hv`) so a
   // reload or shared link keeps the chosen mode.
-  const view: "list" | "tree" = fragment?.hv === "tree" ? "tree" : "list";
+  const view: "list" | "tree" = fragment?.hv === "list" ? "list" : "tree";
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");

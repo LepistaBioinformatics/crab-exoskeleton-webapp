@@ -83,6 +83,14 @@ describe("UnifiedSidebar", () => {
     expect(html).toContain("flex-1");
   });
 
+  // A group header's toggle sits in a row beside that group's actions. With `w-full`
+  // it took the whole row and pushed the actions past the pane's right edge, where
+  // they rendered outside the sidebar altogether — which is how the conversations
+  // list/tree switch ended up on the outside.
+  it("never gives a group header's toggle w-full, which pushes its actions out", () => {
+    expect(render()).not.toContain("flex w-full shrink-0 items-center gap-2 px-3");
+  });
+
   it("offers the desktop collapse control only when the shell passes one", () => {
     expect(render()).not.toContain(t.nav.collapseWorkspaces);
     expect(render({ onCollapse: () => {} })).toContain(t.nav.collapseWorkspaces);

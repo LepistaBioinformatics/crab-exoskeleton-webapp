@@ -15,8 +15,13 @@ import { cva } from "class-variance-authority";
 // capped at 40%, Conversations takes the remainder, and both need the wrapper to own
 // the flex rules. This renders header + body and nothing about size.
 
+// `min-w-0 flex-1`, never `w-full`. The toggle sits in a ROW beside the group's
+// actions, and w-full means width:100% — the toggle took the whole row and pushed the
+// actions past the pane's right edge, where they rendered outside the sidebar
+// altogether. flex-1 lets it take the space that is left; min-w-0 lets its label
+// truncate instead of refusing to shrink.
 const header = cva(
-  "flex w-full shrink-0 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-elevated/60",
+  "flex min-w-0 flex-1 shrink items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-elevated/60",
 );
 
 const label = cva(
