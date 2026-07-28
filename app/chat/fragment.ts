@@ -25,8 +25,9 @@ export interface FragmentState {
   // when opening a conversation (e.g. clicking a past point in the tree view).
   // Transient -- consumed and stripped once the target is scrolled into view.
   msg?: string;
-  // History sidebar view mode ("tree" | "list"); persisted in the URL so a
-  // reload or shared link keeps it. Absent means the default (list).
+  // History sidebar view mode ("tree" | "list"); persisted in the URL so a reload or
+  // shared link keeps it. Absent means the default, which is TREE: the tree shows how
+  // conversations branch from one another, and a flat list is the reduction of it.
   hv?: string;
   // Top-level workspace view ("canvas"); when set, the Canvas timeline replaces
   // the history sidebar + chat view. Persisted in the URL so a reload or shared
@@ -68,11 +69,12 @@ export function setFragmentSid(sid: string, msg?: string): void {
 
 // Persists the history sidebar view mode in the URL. Assigns `location.hash`
 // (same mechanism as setFragmentSid) so a native `hashchange` fires reliably and
-// the address bar updates -- other params are preserved. "list" is the default,
-// so it's dropped from the hash to keep it clean.
+// the address bar updates -- other params are preserved. TREE is the default, so it
+// is dropped from the hash to keep it clean and "list" is what gets written.
 export function setHistoryView(view: "list" | "tree"): void {
   const params = new URLSearchParams(window.location.hash.slice(1));
-  if (view === "tree") params.set("hv", "tree");
+  // Tree is the default, so it is "list" that has to be written into the URL.
+  if (view === "list") params.set("hv", "list");
   else params.delete("hv");
   window.location.hash = params.toString();
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Trash2, User, UserMinus } from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, FileText, Trash2, User, UserMinus } from "lucide-react";
 import {
   listSubscriptionUsers,
   listUserFiles,
@@ -9,6 +9,7 @@ import {
   type ScopeRef,
   type UserRef,
   type FileMeta,
+  type InstanceRef,
 } from "@/lib/admin";
 import {
   listGuestRoles,
@@ -22,7 +23,9 @@ import {
   type AccessLevel,
 } from "@/lib/invitations";
 import InviteMember from "./invite-member";
+import InstanceConfigEditor from "./instance-config-editor";
 import { formatBytes, formatModified } from "./format";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
@@ -42,6 +45,13 @@ import { useT } from "@/lib/i18n/context";
 // a user's private file here: the privacy invariant (FR-7) holds for every tier,
 // so this panel exposes no content affordance. Do not add a link, download icon,
 // or row click handler to the file rows.
+//
+// The Instances section is a DIFFERENT surface and is not an exception to that.
+// config.json is proxy-materialized provisioning state at the workspace root --
+// the proxy seeds it and rewrites six of its paths -- not member-authored
+// content, and it never appears in the file list below (which is the uploads
+// dir). It is reached from an instance row, never from a file row. See
+// admin-instance-config-editor's spec.
 export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   const t = useT(adminCopy);
   const [users, setUsers] = useState<UserRef[] | null>(null);
@@ -53,6 +63,9 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   const [pendingRevoke, setPendingRevoke] = useState<
     { email: string; agentKey: string; level: AccessLevel } | null
   >(null);
+  // The config editor is mounted once at panel level rather than per row, so two
+  // instances can never be open at the same time.
+  const [editing, setEditing] = useState<(InstanceRef & { label: string }) | null>(null);
 
   useEffect(() => {
     if (!scope.subsAccId) return;
@@ -219,15 +232,88 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                 </div>
 
                 {open && entry.accId && scope.subsAccId && (
-                  <UserFiles
-                    tenantId={scope.tenantId}
-                    subsAccId={scope.subsAccId}
-                    userAccId={entry.accId}
-                  />
+                  <>
+                    {/* Instances come from the WORKSPACE feed, not from the
+                        merged roster's role labels: those include invitations
+                        with no workspace yet, and collapsing to one accId per
+                        email loses the (accId, role) pairing an instance is. */}
+                    <UserInstances
+                      instances={(users ?? []).filter((u) => u.accId === entry.accId)}
+                      onEdit={(agent) =>
+                        setEditing({
+                          tenantId: scope.tenantId,
+                          subsAccId: scope.subsAccId as string,
+                          userAccId: entry.accId as string,
+                          agent,
+                          label: entry.email,
+                        })
+                      }
+                    />
+                    <UserFiles
+                      tenantId={scope.tenantId}
+                      subsAccId={scope.subsAccId}
+                      userAccId={entry.accId}
+                    />
+                  </>
                 )}
               </li>
             );
           })}
+        </ul>
+      )}
+
+      {editing && (
+        <InstanceConfigEditor
+          instance={{
+            tenantId: editing.tenantId,
+            subsAccId: editing.subsAccId,
+            userAccId: editing.userAccId,
+            agent: editing.agent,
+          }}
+          memberLabel={editing.label}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// One row per agent this member has a workspace under -- one container, one
+// config.json. A member with grants on two agents has two instances, and each
+// can be broken independently.
+function UserInstances({
+  instances,
+  onEdit,
+}: {
+  instances: UserRef[];
+  onEdit: (agent: string) => void;
+}) {
+  const t = useT(adminCopy);
+  const agents = instances.map((i) => i.role).filter((r): r is string => Boolean(r));
+
+  return (
+    <div className="border-t border-brand/20 px-3 py-2">
+      <span className="text-[11px] font-medium text-fg-muted">{t.members.instancesHeading}</span>
+      {/* Says outright that editing an instance's configuration is not opening the
+          member's files. The two live in the same expanded row, and the privacy
+          rule at the top of this panel is worth restating exactly where an admin
+          might otherwise read the new action as an exception to it. */}
+      <p className="mt-0.5 text-[11px] leading-relaxed text-fg-muted">
+        {t.members.instancesNote}
+      </p>
+      {agents.length === 0 ? (
+        <p className="py-1 text-xs text-fg-muted">{t.members.noInstances}</p>
+      ) : (
+        <ul className="mt-1 flex flex-col gap-1">
+          {agents.map((agent) => (
+            <li key={agent} className="flex items-center gap-2 py-0.5">
+              <Boxes size={14} className="shrink-0 text-fg-muted" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-xs text-fg">{agent}</span>
+              <Button variant="text" size="sm" onClick={() => onEdit(agent)}>
+                {t.members.editConfig}
+              </Button>
+            </li>
+          ))}
         </ul>
       )}
     </div>

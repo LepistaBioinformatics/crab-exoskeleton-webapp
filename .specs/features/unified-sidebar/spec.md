@@ -1,0 +1,297 @@
+# unified-sidebar — Specification
+
+**Status:** Draft
+**Size:** Large (navigation restructure: 4 components, a new pure module, persisted-layout migration)
+**Repo:** `crab-exoskeleton-webapp` only.
+
+---
+
+## Problem
+
+`/chat` has two independent sidebars. `NavSidebar` holds branding, the workspace
+tree and the account footer; `HistorySidebar` holds the conversation list with its
+own search, new-chat button and list/tree toggle. Each is a `ResizablePane` with its
+own width and collapsed flag, persisted together under `chat-sidebars`, and on mobile
+each is its own overlay drawer behind its own hamburger.
+
+Two panes cost up to **580px** of horizontal chrome (280 + 300 defaults) before the
+conversation gets any. They also duplicate structure: two headers, two search inputs,
+two collapse buttons, two scroll containers — for what a member reads as one question,
+"which agent, and which conversation".
+
+## Goal
+
+One pane. Two collapsible groups inside it. Usable when either group has many items,
+and free of tree chrome when the member's account has nothing to branch.
+
+---
+
+## Requirements
+
+### FR-1 — One pane, two sibling groups
+
+- **FR-1.1** A single `ResizablePane` holds, top to bottom: the brand header, a
+  **Workspaces** group, a **Conversations** group, and the account footer. — DEC-1
+- **FR-1.2** The groups are siblings, not nested. The workspace tree stays the
+  workspace tree; the conversations listed are always the selected workspace's. A
+  four-level tree (tenant › subscription › agent › conversations) was rejected: it
+  buries hundreds of conversations inside a node and leaves the conversation
+  search, the new-chat action and the existing list/tree toggle with nowhere to live.
+- **FR-1.3** Each group has a header that is always visible and a body that
+  collapses. Open/closed is persisted per group; both start open.
+- **FR-1.4** Freed width goes to the conversation: one pane at 300px against two at
+  280 + 300.
+
+### FR-2 — Height, when both groups are full
+
+- **FR-2.1** **Workspaces takes its content's height, capped at 40vh**, and scrolls
+  inside itself past that. **Conversations takes the remainder** and scrolls inside
+  itself. Both headers stay visible. — DEC-2
+- **FR-2.1.1** The cap is **viewport-relative, not a percentage of the pane**. A
+  percentage `max-height` resolves only against a parent with a definite height, and
+  this parent is a flex item sized by flex resolution — the indefinite case, where the
+  percentage is ignored outright. The tree would then render at full content height
+  and push the Conversations header off screen, which is precisely the failure that
+  ruled out a single pane-wide scroll. The pane is full-height, so `40vh` means the
+  same thing in practice and needs no definite ancestor.
+- **FR-2.2** No accordion (opening one closing the other): switching agent and then
+  picking a conversation is the pane's main job, and both lists are visible for that
+  today. No single pane-wide scroll either: with many workspaces it pushes the
+  conversation search below the fold.
+- **FR-2.3** The split is **not** draggable. With the cap content-driven, a member
+  with one workspace sees one row and Conversations gets nearly everything; a member
+  with thirty sees the cap. There is nothing to adjust in the common case, and a
+  second resize axis in a pane that already resizes horizontally would need a
+  re-fit rule for switching to a smaller tenant. — DEC-3
+
+### FR-3 — A level with one node does not render
+
+- **FR-3.1** **Any tree level holding exactly one node contributes no header, and
+  its children are hoisted.** Applied per level, independently: one tenant hides the
+  tenant row; a tenant with one subscription hides that subscription's row. — DEC-4
+- **FR-3.2** The literal case in the request — one tenant, one subscription, one
+  workspace — is this rule applied three times, not a special case beside it.
+- **FR-3.3** **A hoisted level's label is carried onto the surviving header, never
+  discarded.** Suppressing a row is a decision about vertical space; it is not licence
+  to drop what the row said.
+  - One tenant → its identity (avatar, brand colour, name) moves to the **Workspaces
+    group header**.
+  - One subscription under a tenant → its **name** moves onto whichever header
+    survived: the group header when the tenant was hoisted too, or the tenant's own
+    row when it was not.
+  - Which subscription a workspace belongs to is load-bearing (billing, membership,
+    who administers it), and the first implementation of this rule dropped it: a
+    member with one subscription saw agent names with nothing saying what they hung
+    from.
+- **FR-3.4** The rule is about *rendering*, never about selection: hoisting a level
+  changes no workspace key, no fragment and no request.
+- **FR-3.5** While a workspace filter is active the tree renders every surviving
+  level expanded, as it does today. The hoisting rule still applies to the filtered
+  shape, so filtering to one tenant hides that tenant's row.
+
+### FR-4 — Search, per group
+
+- **FR-4.1** The **workspace filter exists only above 5 agents**, counted as agent
+  leaves — the tenants and subscriptions they hang from are not rows in that count.
+  At five or fewer, scanning the list is faster than typing. — DEC-5
+- **FR-4.2** When it exists it is a **magnifier in the group header** that expands
+  into a field, not a permanently open input. Two open text fields six rows apart in
+  one narrow pane is the thing unification is supposed to remove.
+- **FR-4.3** The **conversation search is always present**, threshold-free. History
+  grows without bound — three conversations today is sixty next month — and its query
+  is the rich one (`tag:`, content search over the network). A control that appears
+  when history crosses a count is a moving target. — DEC-6
+- **FR-4.4** The two searches are **not** merged. `tag:infra` and a content search
+  mean nothing to an agent name, and the content search hits the network, so typing
+  to filter workspaces would fire conversation requests per keystroke.
+
+### FR-5 — Mobile
+
+- **FR-5.1** **One button, and it toggles.** The hamburger opens the drawer and, while
+  open, closes it — showing an X so the control says which it will do. — DEC-7
+- **FR-5.2** The separate conversations button is **gone**. It existed on the reasoning
+  that losing the direct shortcut would turn switching conversation, the most frequent
+  action, into open-scroll-pick. Unifying the panes removed that reasoning: both groups
+  are open by default, so the one drawer already lands with the conversation list on
+  screen. The second button differed only for a member who had collapsed Conversations
+  by hand — not worth a permanent control that reads as another way to open the same
+  panel. With it went the focus request, its counter and the deferred scroll.
+- **FR-5.3** **Selecting a workspace does not close the drawer.** Picking an agent
+  swaps which agent's conversations the group below is listing, and that list is what
+  the member came for; closing there made "choose an agent, then one of its chats" two
+  open-close cycles. The drawer closes on: the toggle, the backdrop, or **selecting a
+  conversation**.
+
+### FR-6 — Canvas
+
+- **FR-6.1** In the canvas view the **Conversations group is not rendered**, and
+  Workspaces gets the full height. The canvas already lanes every conversation, so
+  listing them beside it is the same information twice, competing for height with
+  the tree — and switching agent is the only navigation the canvas still needs.
+  This preserves today's behaviour (`workspace && !canvas`). — DEC-8
+
+### FR-7 — Layout state
+
+- **FR-7.1** One width and one collapsed flag replace two of each. Default **300px**
+  (the larger of the two, since conversation rows carry inline actions and tags),
+  minimum 240.
+- **FR-7.2** The persisted key changes. Two old widths cannot be half-applied to one
+  pane, and silently reading `navWidth` for the merged pane would give members a
+  narrower sidebar than either of the two they had.
+- **FR-7.3** With no workspace selected, the Conversations group is **present with
+  an empty state**, not absent. A group that appears once a workspace is picked
+  makes the pane's shape depend on selection, and the first-run member is exactly
+  who needs to be told what to do next.
+
+### NFR
+
+- **NFR-1** No new dependency.
+- **NFR-2** The hoisting rule and the agent count are **pure functions** in their own
+  module, so both are tested without mounting anything (`environment: "node"`).
+- **NFR-3** No change to `lib/subscriptions.ts`'s model, to the fragment, or to any
+  request. This is a rendering and layout change.
+
+## Decisions
+
+| ID | Decision |
+| --- | --- |
+| DEC-1 | Two stacked collapsible groups in one pane |
+| DEC-2 | Workspaces content-height capped at 40%, Conversations takes the rest, each scrolling internally |
+| DEC-3 | The split is not draggable |
+| DEC-4 | Any single-node level is hoisted away, per level |
+| DEC-5 | Workspace filter only above 5 agent leaves |
+| DEC-6 | Conversation search always present |
+| DEC-7 | One drawer, ONE toggling mobile button. Revised from two-buttons-differing-by-focus once the unified pane made the second redundant |
+| DEC-8 | Conversations group absent in the canvas view |
+
+## Deferred
+
+| ID | Idea | Why not now |
+| --- | --- | --- |
+| DEFER-1 | A draggable divider between the groups | DEC-3; revisit if members with many of both ask |
+| DEFER-2 | Remembering the last conversation per workspace | Independent of the merge |
+| DEFER-3 | Virtualizing either list | Neither is near the size that needs it; the caps bound what is painted |
+
+---
+
+## Traceability
+
+| ID | Verified by |
+| --- | --- |
+| FR-3.1 | Unit: 1 tenant/1 sub/4 agents hoists both levels; 2 tenants with 1 sub each hoists only the subs |
+| FR-3.2 | Unit: 1/1/1 yields a single agent row and no headers |
+| FR-3.3 | Unit: the plan reports the sole tenant, and carries a hoisted subscription's name onto the sole tenant, onto a surviving tenant row, and not at all when the subscription rows survived |
+| FR-3.4 | Unit: every agent leaf survives hoisting, with its key unchanged |
+| FR-3.5 | Unit: hoisting applied to a filtered tree |
+| FR-4.1 | Unit: `agentCount` counts leaves only. **Not** covered at component level — see below |
+| FR-6.1 | Component: `hideConversations` renders no Conversations group |
+| FR-7.3 | Component: no workspace → the group renders its empty state |
+
+---
+
+## Reconciliation (what shipped)
+
+**The height cap was wrong on the first pass, in a way no test here can see.** It was
+`max-h-[40%]`, and a percentage max-height against a flex-sized parent is indefinite
+and ignored — so with many workspaces the tree would have rendered full-height and
+pushed the Conversations header off screen, the exact outcome DEC-2 exists to prevent.
+Now `40vh` (FR-2.1.1). The markup test asserts the class is the `vh` one and says
+plainly that whether it *constrains* anything is layout, which `renderToStaticMarkup`
+cannot observe.
+
+**The mobile focus signal had to become a request, not a state.** The first version
+passed the bare group and opened it from an effect keyed on that group. Three defects
+followed: tapping the same button twice did not change `focus`, so the effect never
+re-ran and a member who had collapsed Conversations by hand got a drawer that ignored
+the button; the effect called a `setGroup` redeclared every render, so it closed over
+a dependency it did not declare; and it called `scrollIntoView` on a ref whose node
+`SidebarGroup` only mounts while open, so it was null on the very render that opened
+it — silently doing nothing on the one path the second button exists for. `focus` now
+carries a counter, persistence moved to a module-level function, and the scroll waits
+for a second effect keyed on the group actually being open.
+
+**Coverage the traceability table does not claim.** Several requirements have no
+automated test and the honest thing is to name them rather than list a row that
+implies otherwise:
+
+| Requirement | Why not, and what covers it |
+| --- | --- |
+| FR-4.1 at component level (no filter at 5, filter at 6) | The tree comes from `fetch("/api/subscriptions")` in an effect, which never resolves in `environment: "node"`, so `groups` stays null and no filter renders either way. The rule itself is `needsFilter`, unit-tested. Manual UAT for the rendering |
+| FR-4.2 (the magnifier expands into a field) | Same reason: the control only exists once the tree has loaded |
+| FR-5.1/5.3 (drawer toggling, and staying open on a workspace pick) | Needs a DOM and click handling; the wiring is visible in `chat-shell.tsx` (one `toggleDrawer`, `onConversationSelect` passed only to the conversations group) but nothing asserts it |
+| FR-1.3 (group state persists) | Needs `localStorage` and effects |
+
+Closing them needs jsdom plus a testing library, which is the same gap the
+admin instance-config spec records — one change, not four.
+
+**New chat moved twice.** It began as a labelled text button (as in the old sidebar),
+briefly became an icon in the group header — which was a discoverability regression the
+refactor had no reason to spend — and now sits **under the search, right-aligned, as a
+plus icon with the label as its title**, on the row the first conversation would
+occupy. That placement is what earns the icon: the plus is directly above the list of
+the things it adds, so it does not need a word. Generous vertical padding separates it
+from the first conversation so it does not read as one.
+
+**Also fixed in passing.** Both section titles were the literals `WORKSPACES` and
+`CONVERSATIONS`, hardcoded in JSX and untranslated. They now come from
+`chat.shell.workspaces` / `chat.shell.conversations`, which already existed as the
+panes' aria labels.
+
+**Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **371 passed / 32
+files**, including 15 for the tree plan; `yarn build` succeeds. `/chat` 86.1 → 88.8 kB.
+`yarn lint` is not a gate in this repo — it is unconfigured and prompts
+interactively.
+
+---
+
+## Reconciliation, second pass
+
+Three defects reported from use, all mine, all from the shipped change.
+
+**A hoisted subscription's name vanished.** FR-3.3 was written for the tenant only and
+never generalized, so the rule as built suppressed a single subscription's row and threw
+its label away with it — leaving agent names with nothing saying which subscription they
+belong to. FR-3.3 is now the general clause and the plan reports `hoistedAccount`, which
+renders on the group header or on the surviving tenant row as appropriate. Four unit
+tests cover it, including the case where nothing should be carried.
+
+**The conversations list/tree switch rendered OUTSIDE the pane.** `SidebarGroup` gave
+its header toggle `w-full` while placing it in a row beside the group's actions;
+`width: 100%` took the whole row and pushed the actions past the pane's right edge. It
+is `min-w-0 flex-1` now, and `unified-sidebar.test.tsx` asserts the `w-full` class
+string is absent — a markup test cannot see the overflow, but it can see the cause.
+
+**Tree is now the default conversation view** (`fragment.ts`). It shows how
+conversations branch from one another and the flat list is the reduction of it, so `hv`
+is written into the URL for `list` and omitted for tree — the inverse of before.
+
+**Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **376 passed / 32
+files**; `yarn build` succeeds. `/chat` 89 kB.
+
+---
+
+## Reconciliation, third pass
+
+Three more from use.
+
+**Mobile had two buttons for one drawer, and the first one could not close it.**
+`openDrawer` always set the state true, so pressing the control that opened the panel
+did nothing — the way anyone closes a panel. It toggles now, and shows an X while open
+so the control states which action it performs. The second button went with it
+(FR-5.2): the unified pane made it redundant, since the drawer already opens with the
+conversation list visible. DEC-7 is revised rather than quietly contradicted — it was
+the right call for two panes and the wrong one for a merged pane, and the reason is the
+merge itself.
+
+**Selecting a workspace closed the drawer** (FR-5.3). One `onSelect` was wired to both
+groups, so picking an agent dismissed the panel that was about to list that agent's
+conversations. The prop is now `onConversationSelect` and reaches only the
+conversations group; the name is the fix, since a bare `onSelect` on a component with
+two selectable things is what invited the bug.
+
+**Spacing.** The conversation search block (field plus filter chips) and the group
+header rows had no vertical breathing room; both now do, the header padding on the ROW
+so the group's actions get it too rather than the title alone.
+
+**Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **376 passed / 32
+files**; `yarn build` succeeds. `/chat` 88.9 kB.

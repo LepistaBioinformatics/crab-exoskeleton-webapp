@@ -14,10 +14,13 @@ import {
 } from "@/lib/subscriptions";
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
+import SidebarGroup from "./sidebar-group";
+import { planWorkspaceTree, needsFilter, type PlanNode } from "./sidebar-tree";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { IconButton } from "@/components/ui/icon-button";
 import { TenantAvatar } from "@/components/ui/avatar";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -72,7 +75,16 @@ type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 // The "Workspaces" section body: fetches the caller's subscriptions, collapses
 // permission-duplicated rows, and renders a tenant -> account -> agent tree.
 // The agent leaf is the selectable workspace.
-export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
+export default function WorkspaceNav({
+  onSelect,
+  open,
+  onToggle,
+}: {
+  onSelect?: () => void;
+  /** Group open/closed, owned by the unified sidebar so it can be persisted. */
+  open: boolean;
+  onToggle: () => void;
+}) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
   const router = useRouter();
@@ -87,6 +99,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [tenantBrands, setTenantBrands] = useState<Record<string, TenantBrand>>({});
   const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -178,33 +191,72 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const q = filter.trim().toLowerCase();
   const visibleGroups = groups && q ? filterGroups(groups, tenantNames, q) : groups;
 
+  // The tree's SHAPE comes from the plan, which hoists away any level holding a
+  // single node (sidebar-tree.ts). The plan is built from the FILTERED groups, so
+  // filtering down to one tenant hides that tenant's row too.
+  const plan = planWorkspaceTree(visibleGroups ?? [], tenantNames);
+  // Counted over the unfiltered tree: whether the filter exists must not depend on
+  // what the filter currently matches, or typing could remove the field mid-word.
+  const fullCount = planWorkspaceTree(groups ?? [], tenantNames).agentCount;
+  const filterAvailable = needsFilter(fullCount);
+
+  // Both hoisted labels ride here when there is a single tenant: its name AND its
+  // sole subscription's. Suppressing a row saves vertical space; it is not licence to
+  // drop what the row said, and which subscription a workspace belongs to is
+  // load-bearing (billing, membership, who administers it).
+  const identity = plan.soleTenant ? (
+    <span className="flex min-w-0 shrink items-center gap-1.5">
+      <TenantAvatar
+        name={plan.soleTenant.label}
+        logo={tenantBrands[plan.soleTenant.id]?.logo}
+        color={tenantBrands[plan.soleTenant.id]?.color}
+      />
+      <ScopeLabel tenant={plan.soleTenant.label} account={plan.soleTenant.hoistedAccount} />
+    </span>
+  ) : undefined;
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 p-2">
-        <div className="relative">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-          />
+    <SidebarGroup
+      title={t.shell.workspaces}
+      open={open}
+      onToggle={onToggle}
+      identity={identity}
+      actions={
+        filterAvailable ? (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label={t.workspaceNav.filterPlaceholder}
+            aria-expanded={filterOpen}
+            onClick={() => {
+              // Closing the field clears it: a hidden filter still narrowing the
+              // tree is the worst of both, since the reason rows are missing is
+              // off screen.
+              if (filterOpen) setFilter("");
+              setFilterOpen((v) => !v);
+            }}
+          >
+            <Search size={16} aria-hidden />
+          </IconButton>
+        ) : undefined
+      }
+    >
+      {/* A field rather than a permanently open input: two open text boxes six rows
+          apart in one narrow pane is what unifying is meant to remove. */}
+      {filterAvailable && filterOpen && (
+        <div className="px-2 pb-1 pt-1">
           <Input
             variant="subtle"
             inputSize="sm"
-            className="pl-9"
+            autoFocus
             placeholder={t.workspaceNav.filterPlaceholder}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-      </div>
+      )}
 
-      <div className="flex items-center gap-2 px-3 pb-1">
-        <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          WORKSPACES
-        </span>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
+      <div className="px-2 pb-2">
         {error ? (
           <Alert severity="error">{errorText(err, error)}</Alert>
         ) : groups === null ? (
@@ -212,83 +264,119 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
             <Spinner size={20} />
           </div>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-fg-muted">
-            {t.workspaceNav.none}
-          </p>
-        ) : visibleGroups!.length === 0 ? (
+          <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.none}</p>
+        ) : plan.nodes.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {visibleGroups!.map((tenant) => {
-              const tKey = tenant.tenantId;
-              const tOpen = q ? true : !collapsed.has(tKey);
-              const tName = tenantNames[tenant.tenantId];
-              const tBrand = tenantBrands[tenant.tenantId];
-              return (
-                <div key={tKey}>
-                  <GroupHeader
-                    icon={
-                      tName ? (
-                        <TenantAvatar name={tName} logo={tBrand?.logo} color={tBrand?.color} />
-                      ) : (
-                        <Building2 size={15} aria-hidden />
-                      )
-                    }
-                    label={tName ?? tenant.tenantId}
-                    open={tOpen}
-                    level="tenant"
-                    onClick={() => toggle(tKey)}
-                  />
-                  {tOpen && (
-                    <div className="ml-[15px] mt-0.5 space-y-2 border-l border-brand/25 pl-2">
-                      {tenant.accounts.map((account) => {
-                        const aKey = `${tenant.tenantId}|${account.subsAccId}`;
-                        const aOpen = q ? true : !collapsed.has(aKey);
-                        return (
-                          <div key={aKey}>
-                            <GroupHeader
-                              icon={<FolderClosed size={15} aria-hidden />}
-                              label={account.accName || account.subsAccId}
-                              open={aOpen}
-                              level="account"
-                              onClick={() => toggle(aKey)}
-                            />
-                            {aOpen && (
-                              <div className="ml-[15px] mt-0.5 space-y-0.5 border-l border-brand/15 pl-2">
-                                {account.agents.map((leaf) => {
-                                  const lKey = `${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`;
-                                  const active = lKey === activeKey;
-                                  const badge = accessLabel(leaf.perms);
-                                  const tool = tools.get(leaf.role);
-                                  const unhealthy = tool ? !isToolHealthy(tool) : false;
-                                  return (
-                                    <button
-                                      key={lKey}
-                                      type="button"
-                                      disabled={entering}
-                                      onClick={() => onPick(leaf)}
-                                      title={tool?.description || undefined}
-                                      className={leafButton({ active, unhealthy })}
-                                    >
-                                      <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                                      <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>
-                                      {badge && <Badge tone="accent">{badge}</Badge>}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <PlanNodes
+            nodes={plan.nodes}
+            q={q}
+            collapsed={collapsed}
+            toggle={toggle}
+            activeKey={activeKey}
+            entering={entering}
+            onPick={onPick}
+            tools={tools}
+            tenantBrands={tenantBrands}
+          />
         )}
       </div>
+    </SidebarGroup>
+  );
+}
+
+// Renders a level of the plan. Recursive rather than three nested loops, because
+// hoisting means a tenant's children can be accounts OR agents, and an agent can sit
+// at any depth.
+function PlanNodes({
+  nodes,
+  q,
+  collapsed,
+  toggle,
+  activeKey,
+  entering,
+  onPick,
+  tools,
+  tenantBrands,
+}: {
+  nodes: PlanNode[];
+  q: string;
+  collapsed: Set<string>;
+  toggle: (key: string) => void;
+  activeKey: string | null;
+  entering: boolean;
+  onPick: (leaf: AgentLeaf) => void;
+  tools: Map<string, Tool>;
+  tenantBrands: Record<string, TenantBrand>;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {nodes.map((node) => {
+        if (node.kind === "agent") {
+          const active = node.key === activeKey;
+          const badge = accessLabel(node.leaf.perms);
+          const tool = tools.get(node.leaf.role);
+          const unhealthy = tool ? !isToolHealthy(tool) : false;
+          return (
+            <button
+              key={node.key}
+              type="button"
+              disabled={entering}
+              onClick={() => onPick(node.leaf)}
+              title={tool?.description || undefined}
+              className={leafButton({ active, unhealthy })}
+            >
+              <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
+              <span className="min-w-0 flex-1 truncate capitalize">{node.leaf.role}</span>
+              {badge && <Badge tone="accent">{badge}</Badge>}
+            </button>
+          );
+        }
+        // A filter forces every surviving level open: the rows are there because
+        // they matched, so hiding them behind a closed header would be perverse.
+        const open = q ? true : !collapsed.has(node.id);
+        const brand = node.kind === "tenant" ? tenantBrands[node.id] : undefined;
+        return (
+          <div key={node.id}>
+            <GroupHeader
+              icon={
+                node.kind === "tenant" ? (
+                  brand || node.label ? (
+                    <TenantAvatar name={node.label} logo={brand?.logo} color={brand?.color} />
+                  ) : (
+                    <Building2 size={15} aria-hidden />
+                  )
+                ) : (
+                  <FolderClosed size={15} aria-hidden />
+                )
+              }
+              label={node.label}
+              // A hoisted subscription's name shows on the tenant row that survived
+              // it, for the same reason it shows on the group header when the tenant
+              // was hoisted too.
+              subLabel={node.kind === "tenant" ? node.hoistedAccount : undefined}
+              open={open}
+              level={node.kind === "tenant" ? "tenant" : "account"}
+              onClick={() => toggle(node.id)}
+            />
+            {open && (
+              <div className="ml-[15px] mt-0.5 border-l border-brand/25 pl-2">
+                <PlanNodes
+                  nodes={node.children}
+                  q={q}
+                  collapsed={collapsed}
+                  toggle={toggle}
+                  activeKey={activeKey}
+                  entering={entering}
+                  onPick={onPick}
+                  tools={tools}
+                  tenantBrands={tenantBrands}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -296,12 +384,15 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
 function GroupHeader({
   icon,
   label,
+  subLabel,
   open,
   level,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  /** A hoisted child level's label, shown after this one. */
+  subLabel?: string;
   open: boolean;
   level: GroupLevel;
   onClick: () => void;
@@ -314,10 +405,49 @@ function GroupHeader({
         <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
       )}
       <span className="shrink-0 text-fg-muted">{icon}</span>
-      <span className={groupHeaderLabel({ level })} title={label}>
-        {label}
-      </span>
+      {subLabel ? (
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className={groupHeaderLabel({ level })} title={label}>
+            {label}
+          </span>
+          <span className="shrink-0 text-fg-muted/60" aria-hidden>
+            /
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={subLabel}>
+            {subLabel}
+          </span>
+        </span>
+      ) : (
+        <span className={groupHeaderLabel({ level })} title={label}>
+          {label}
+        </span>
+      )}
     </button>
+  );
+}
+
+// The tenant plus, when its row was hoisted away too, its sole subscription. Rendered
+// in the Workspaces group header, where the space is tightest — so the tenant stays
+// small and monospaced (it is an id or an org name, context) and the subscription
+// carries the weight, since that is the thing a member recognizes.
+function ScopeLabel({ tenant, account }: { tenant: string; account?: string }) {
+  if (!account) {
+    return (
+      <span className="max-w-32 truncate font-mono text-[11px] text-fg-muted" title={tenant}>
+        {tenant}
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-baseline gap-1" title={`${tenant} / ${account}`}>
+      <span className="max-w-20 shrink-0 truncate font-mono text-[11px] text-fg-muted">
+        {tenant}
+      </span>
+      <span className="shrink-0 text-[11px] text-fg-muted/60" aria-hidden>
+        /
+      </span>
+      <span className="min-w-0 truncate text-[11px] font-medium text-fg">{account}</span>
+    </span>
   );
 }
 

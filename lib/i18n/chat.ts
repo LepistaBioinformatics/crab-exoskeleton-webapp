@@ -9,6 +9,7 @@ import type { Locale } from "./config";
 const en = {
   shell: {
     openWorkspaces: "Open workspaces",
+    closeMenu: "Close menu",
     conversations: "Conversations",
     workspaces: "Workspaces",
     // Rendered as "<agentPrefix> <role>" in the mobile top bar.
@@ -22,6 +23,9 @@ const en = {
   nav: {
     collapseWorkspaces: "Collapse Workspaces",
     collapse: "Collapse",
+    // Shown under the Conversations header before a workspace is chosen. The group
+    // is present rather than absent, so it has to say what to do next.
+    pickWorkspaceForConversations: "Pick a workspace above to see its conversations.",
   },
   emptyState: {
     title: "Pick a workspace to start",
@@ -209,6 +213,7 @@ const en = {
       model: "The model behind your assistant changed.",
       "own-secret": "You saved a secret. It applies after a restart.",
       "admin-request": "An administrator asked for a restart.",
+      config: "An administrator changed your assistant's configuration.",
     },
     // A newer proxy may send a reason this build has not learned yet; say the
     // true, useful part rather than nothing.
@@ -282,6 +287,7 @@ export type ChatDict = typeof en;
 const pt: ChatDict = {
   shell: {
     openWorkspaces: "Abrir workspaces",
+    closeMenu: "Fechar menu",
     conversations: "Conversas",
     workspaces: "Workspaces",
     agentPrefix: "agente",
@@ -293,6 +299,7 @@ const pt: ChatDict = {
   nav: {
     collapseWorkspaces: "Recolher Workspaces",
     collapse: "Recolher",
+    pickWorkspaceForConversations: "Escolha um workspace acima para ver as conversas dele.",
   },
   emptyState: {
     title: "Escolha um workspace para começar",
@@ -466,6 +473,7 @@ const pt: ChatDict = {
       model: "O modelo por trás do seu assistente mudou.",
       "own-secret": "Você salvou um segredo. Ele passa a valer após um reinício.",
       "admin-request": "Um administrador pediu um reinício.",
+      config: "Um administrador alterou a configuração do seu assistente.",
     },
     reasonUnknown: "Seu assistente precisa reiniciar para aplicar uma alteração recente.",
     scheduled: "Seu assistente vai reiniciar em {when}.",
