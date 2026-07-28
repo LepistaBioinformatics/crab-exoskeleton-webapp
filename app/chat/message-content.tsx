@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cva } from "class-variance-authority";
+import CodeBlock from "@/app/chat/code-block";
 
 // Half the gap between the content section edge and the 720px message column, in
 // container-query units against the band (see chat-view's messageBand). 50cqw is
@@ -74,7 +75,18 @@ const codeText = cva("font-mono text-[0.85em]", {
 // Code blocks scroll horizontally inside the message column. Tables narrower than
 // the column stay aligned with the text; wider ones break out across the full
 // content section and scroll there (Notion-style) -- see MarkdownTable.
-export default function MessageContent({ content }: { content: string }) {
+export default function MessageContent({
+  content,
+  streaming = false,
+}: {
+  content: string;
+  /**
+   * True only for the assistant band that is still being revealed. Code blocks are
+   * left un-highlighted while it is set — see code-block.tsx for why that is a
+   * decision about the reveal's re-render budget rather than an optimization.
+   */
+  streaming?: boolean;
+}) {
   return (
     // Slightly larger than the rest of the UI (which is text-sm/xs) so the chat
     // body reads as the primary content.
@@ -129,7 +141,18 @@ export default function MessageContent({ content }: { content: string }) {
             // react-markdown v9 gives block-level code a `language-*` className
             // (from the fenced ```lang block); inline code has none.
             const isBlock = Boolean(className);
-            return <code className={codeText({ block: isBlock })}>{children}</code>;
+            if (!isBlock) {
+              return <code className={codeText({ block: false })}>{children}</code>;
+            }
+            // A fenced block: the className carries the language, and the children
+            // are the code text.
+            return (
+              <CodeBlock
+                code={String(children ?? "")}
+                className={`${codeText({ block: true })} ${className}`}
+                streaming={streaming}
+              />
+            );
           },
           pre: ({ children }) => (
             <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>

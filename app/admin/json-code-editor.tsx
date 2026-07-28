@@ -6,7 +6,7 @@ import { cva } from "class-variance-authority";
 import { useT } from "@/lib/i18n/context";
 import { adminCopy } from "@/lib/i18n/admin";
 import { SYNTAX_ROLE, tokenize } from "./json-tokens";
-import { roleClass } from "./syntax-theme";
+import { roleClass } from "@/lib/syntax-theme";
 import { applyViewEdit, foldedView, foldRanges, lineStarts, sameFolds } from "./json-folds";
 import { insertTab } from "./instance-config-state";
 

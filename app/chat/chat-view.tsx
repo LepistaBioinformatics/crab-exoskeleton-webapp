@@ -756,7 +756,7 @@ export default function ChatView({
                         <TurnProgress progress={progress} lastEventAt={turn.lastEventAt} />
                       ) : (
                         <>
-                          <MessageContent content={parseAnexos(revealed).text} />
+                          <MessageContent content={parseAnexos(revealed).text} streaming />
                           {sending && (
                             <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
                           )}

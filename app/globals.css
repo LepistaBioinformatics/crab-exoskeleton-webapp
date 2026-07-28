@@ -107,6 +107,89 @@
   --font-mono: var(--ff-mono), "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* highlight.js emits `hljs-*` classes; these map that class set onto the app's own
+   `--syntax-*` roles, so there is ONE palette rather than a vendored highlight.js
+   theme quietly drifting from the admin editor's colours.
+   The package's own CSS is deliberately not imported.
+
+   Grouped by role, not by language: `hljs-keyword` and `hljs-literal` are the same
+   colour because `true` and `if` are the same KIND of thing to a reader. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-literal,
+.hljs-selector-tag,
+.hljs-type,
+.hljs-built_in,
+.hljs-meta-keyword,
+.hljs-template-tag,
+.hljs-doctag {
+  color: var(--syntax-keyword);
+}
+
+.hljs-string,
+.hljs-meta-string,
+.hljs-regexp,
+.hljs-char,
+.hljs-addition,
+.hljs-code,
+.hljs-formula {
+  color: var(--syntax-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--syntax-number);
+}
+
+/* Names: a key, a property, a function's title, an attribute, a tag. The thing
+   being NAMED rather than the value it holds — same reasoning as the JSON
+   editor's key colour. */
+.hljs-attr,
+.hljs-attribute,
+.hljs-name,
+.hljs-property,
+.hljs-title,
+.hljs-section,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-pseudo,
+.hljs-template-variable,
+.hljs-variable {
+  color: var(--syntax-name);
+}
+
+.hljs-operator,
+.hljs-punctuation,
+.hljs-params,
+.hljs-subst,
+.hljs-meta,
+.hljs-tag {
+  color: var(--syntax-punct);
+}
+
+/* A deletion in a diff is the one place a colour has to mean "wrong/removed"
+   rather than name a token kind. */
+.hljs-deletion {
+  color: var(--blocked);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
+}
+
+
 /* Streaming caret blink (assistant reply in flight). */
 @keyframes blink {
   50% {

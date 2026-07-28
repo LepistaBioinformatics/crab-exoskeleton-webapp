@@ -7,10 +7,10 @@
 // words elsewhere. The colours themselves live in globals.css as `--syntax-*`, in
 // both light and dark, because that is where this app's theming lives.
 //
-// The intended second caller is the chat's markdown code blocks, which are
-// multi-language and stream token-by-token — that needs a grammar per language and
-// per-block memoization, and is not part of this change. What it will NOT need is
-// to invent its own palette.
+// Two callers: the admin's JSON editor (its own tokenizer, `SYNTAX_ROLE` in
+// json-tokens.ts) and the chat's markdown code blocks (highlight.js, whose `hljs-*`
+// classes globals.css maps onto these same roles). Neither owns the palette, which
+// is why a third surface can adopt it without touching either.
 
 export type SyntaxRole =
   | "name"

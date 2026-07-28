@@ -10,7 +10,7 @@
 //   2. It never throws and never abandons the rest of the document. The files this
 //      exists to repair are malformed by definition.
 
-import type { SyntaxRole } from "./syntax-theme";
+import type { SyntaxRole } from "@/lib/syntax-theme";
 
 export type TokenKind =
   | "key"
