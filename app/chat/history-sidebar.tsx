@@ -48,8 +48,10 @@ const conversationRow = cva(
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
       // When another conversation is hovered, the rest fade back so the row
-      // under the cursor is spotlighted.
-      dimmed: { true: "opacity-40", false: "opacity-100" },
+      // under the cursor is spotlighted. `spotlight-dim` is inert without a
+      // hovering pointer (globals.css), so on touch the list is never faded --
+      // there is no cursor there to lift the dim again.
+      dimmed: { true: "spotlight-dim", false: "opacity-100" },
     },
     defaultVariants: { active: false, dimmed: false },
   },
