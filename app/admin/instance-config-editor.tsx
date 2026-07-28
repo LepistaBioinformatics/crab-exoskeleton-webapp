@@ -17,6 +17,7 @@ import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
 import {
   readInstanceConfig,
+  restartInstance,
   writeInstanceConfig,
   type InstanceConfig,
   type InstanceRef,
@@ -30,6 +31,8 @@ import {
   insertTab,
   outcomeFor,
   outcomeForError,
+  saveLabel,
+  type Delivery,
   type Mode,
   type Outcome,
 } from "./instance-config-state";
@@ -73,6 +76,7 @@ export default function InstanceConfigEditor({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<RestartPolicy>(DEFAULT_POLICY);
   const [saving, setSaving] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [reload, setReload] = useState(0);
@@ -118,6 +122,23 @@ export default function InstanceConfigEditor({
     // discard confirmation once there is an unsaved edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty]);
+
+  // Restarting is its own action, not a side effect of saving. picoclaw reads
+  // config.json only at boot, and a broken instance may not have booted at all —
+  // so its member cannot press their own restart button, and "notify the member"
+  // is useless for exactly the instance an admin just repaired.
+  async function restart() {
+    setRestarting(true);
+    setOutcome(null);
+    try {
+      const status = await restartInstance(instance);
+      setOutcome({ kind: status === "noop" ? "restartNoop" : "restarted" });
+    } catch (e) {
+      setOutcome({ kind: "error", code: e instanceof Error ? e.message : "unknown" });
+    } finally {
+      setRestarting(false);
+    }
+  }
 
   async function save() {
     if (!loaded || !parsed.ok) return;
@@ -240,16 +261,31 @@ export default function InstanceConfigEditor({
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+            {/* Says why a save alone is not enough, and why the member cannot be
+                relied on to restart a broken instance. Without this the policy
+                control reads as the whole story. */}
+            <p className="mt-3 text-xs leading-relaxed text-fg-muted">{t.restartHint}</p>
+
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
               {/* Schedule is absent on purpose: the proxy reduces this endpoint's
                   policy per workspace, where "schedule" behaves as "notice". */}
               <RestartPolicySelect policy={policy} onChange={setPolicy} modes={["now", "notice"]} />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="text" onClick={requestClose}>
                   {t.close}
                 </Button>
-                <Button variant="filled" disabled={!canSave({ parsedOk: parsed.ok, dirty, saving })} onClick={() => void save()}>
-                  {saving ? t.saving : t.save}
+                {/* A real action, always available and independent of a save: the
+                    admin may have finished a run of edits, or the instance may need
+                    a bounce for a change made elsewhere. */}
+                <Button variant="outlined" disabled={restarting || saving} onClick={() => void restart()}>
+                  {restarting ? t.restarting : t.restartNow}
+                </Button>
+                <Button
+                  variant="filled"
+                  disabled={!canSave({ parsedOk: parsed.ok, dirty, saving }) || restarting}
+                  onClick={() => void save()}
+                >
+                  {saving ? t.saving : saveLabel(policy.mode as Delivery, t)}
                 </Button>
               </div>
             </div>
@@ -281,6 +317,12 @@ function OutcomeAlert({ outcome, onReload }: { outcome: Outcome; onReload: () =>
   switch (outcome.kind) {
     case "saved":
       return <Alert severity="info">{t.saved}</Alert>;
+    case "restarted":
+      return <Alert severity="info">{t.restarted}</Alert>;
+    case "restartNoop":
+      // Nothing was running to bounce. Still a success: the next cold start reads
+      // the repaired file.
+      return <Alert severity="info">{t.restartNoop}</Alert>;
     case "managedReverted":
       return (
         <Alert severity="info">

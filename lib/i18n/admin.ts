@@ -515,6 +515,15 @@ const en = {
     redactedNote:
       "A credential was found in this file, left there by an older layout. Its value is masked and is not shown here; the proxy replaces the whole model list when you save.",
     save: "Save",
+    saveAndRestart: "Save and restart now",
+    saveAndNotify: "Save and notify the member",
+    restartNow: "Restart this instance",
+    restarting: "Restarting…",
+    restarted: "Instance restarted. It is running the configuration above.",
+    restartNoop:
+      "Nothing was running to restart — this instance is stopped, and it will read the configuration above the next time the member opens it.",
+    restartHint:
+      "picoclaw reads config.json only when the instance starts, so a save alone changes nothing yet. If the instance is broken it may not be running at all, and its member cannot restart it themselves — use the button.",
     saving: "Saving…",
     saved: "Configuration saved.",
     managedReverted:
@@ -991,6 +1000,15 @@ const pt: AdminDict = {
     redactedNote:
       "Foi encontrada uma credencial neste arquivo, deixada por um formato antigo. O valor está mascarado e não é exibido aqui; o proxy substitui a lista de modelos inteira quando você salvar.",
     save: "Salvar",
+    saveAndRestart: "Salvar e reiniciar agora",
+    saveAndNotify: "Salvar e avisar o membro",
+    restartNow: "Reiniciar esta instância",
+    restarting: "Reiniciando…",
+    restarted: "Instância reiniciada. Ela está rodando a configuração acima.",
+    restartNoop:
+      "Não havia nada rodando para reiniciar — esta instância está parada, e vai ler a configuração acima na próxima vez que o membro abrir.",
+    restartHint:
+      "O picoclaw lê o config.json só quando a instância inicia, então salvar por si só ainda não muda nada. Se a instância está quebrada ela pode não estar rodando, e o membro não consegue reiniciá-la — use o botão.",
     saving: "Salvando…",
     saved: "Configuração salva.",
     managedReverted:

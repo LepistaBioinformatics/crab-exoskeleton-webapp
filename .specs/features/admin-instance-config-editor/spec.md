@@ -174,6 +174,17 @@ its own `config.json`.
   member**. `config.json` is read only at picoclaw boot
   (`gateway.hot_reload: false`), so a save with no bounce changes nothing yet —
   the chooser must be present, not implied.
+- **FR-7.1.1** The chooser is **not** the action. The save button names what it
+  will do (*Save and restart now* / *Save and notify the member*), and there is a
+  separate **Restart this instance** button that works independently of a save. A
+  radio group reads as a command — restart-control already fixed that exact report
+  once, where an admin clicked a mode and observed nothing restart.
+- **FR-7.1.2** The explicit restart is **required**, not a convenience. A workspace
+  whose `config.json` is broken may not boot picoclaw at all, so its member can
+  never reach their own restart button, and "notify the member" is inert for
+  precisely the instance this feature exists to repair. It needs the new proxy
+  route `POST /v1/admin/users/restart` (proxy spec FR-4.5), which restart-control
+  declined to build on grounds that do not survive here.
 - **FR-7.2** **Schedule is not offered** here. The proxy reduces this endpoint's
   policy with `bounceNow`, where `schedule` behaves as `notice`; offering it
   would promise a scheduled window the endpoint does not arm.
@@ -232,6 +243,8 @@ its own `config.json`.
 | FR-6.3 | Component test: response body replaces state; a reverted managed path is announced |
 | FR-6.4 | Component test: `reapplied.ok:false` renders a warning, not a failure |
 | FR-7.1 | Component test: the policy select is present and its value reaches the request |
+| FR-7.1.1 | Unit: `saveLabel` names the delivery; both locales differ from the bare "Save", and a restart action + hint exist |
+| FR-7.1.2 | Proxy unit (`admin_instance_config_test.go`): the route bounces the named agent, reports `noop` when stopped, 403s a non-manager |
 | FR-7.3 | Component test: `reason: "config"` renders non-empty banner copy |
 | FR-8.1 | `parity.test.ts` (existing gate) |
 

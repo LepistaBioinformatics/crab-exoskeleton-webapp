@@ -5,6 +5,7 @@ import {
   insertTab,
   outcomeFor,
   outcomeForError,
+  saveLabel,
 } from "./instance-config-state";
 import { adminCopy } from "@/lib/i18n/admin";
 import type { InstanceConfigWrite } from "@/lib/admin";
@@ -107,6 +108,29 @@ describe("outcomeForError", () => {
 
   it("passes any other code through for the shared error dictionary", () => {
     expect(outcomeForError("forbidden")).toEqual({ kind: "error", code: "forbidden" });
+  });
+});
+
+describe("saveLabel", () => {
+  // The policy control above the button is a preference, and restart-control
+  // already learned that an admin reads a mode as a command. The button has to say
+  // what it will actually do.
+  it("names the delivery in the button", () => {
+    const copy = { saveAndRestart: "Save and restart now", saveAndNotify: "Save and notify" };
+    expect(saveLabel("now", copy)).toBe(copy.saveAndRestart);
+    expect(saveLabel("notice", copy)).toBe(copy.saveAndNotify);
+  });
+
+  it("has copy in both locales that states the action, not the setting", () => {
+    for (const locale of ["en", "pt"] as const) {
+      const c = adminCopy[locale].instanceConfig;
+      expect(c.saveAndRestart).not.toBe(c.save);
+      expect(c.saveAndNotify).not.toBe(c.save);
+      // And an explicit restart action exists, because a broken instance's member
+      // cannot press their own button.
+      expect(c.restartNow).toBeTruthy();
+      expect(c.restartHint).toBeTruthy();
+    }
   });
 });
 

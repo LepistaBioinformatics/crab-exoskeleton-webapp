@@ -11,6 +11,8 @@ export type Mode = "raw" | "tree";
 // outcomes can never be on screen at once.
 export type Outcome =
   | { kind: "saved" }
+  | { kind: "restarted" }
+  | { kind: "restartNoop" }
   | { kind: "managedReverted"; paths: string[] }
   | { kind: "reapplyFailed"; detail?: string }
   | { kind: "stale" }
@@ -42,6 +44,23 @@ export function outcomeFor(res: InstanceConfigWrite, submitted: JsonValue): Outc
   const saved = parseDocument(res.raw).value;
   const reverted = saved ? managedDifferences(submitted, saved, res.managedPaths) : [];
   return reverted.length > 0 ? { kind: "managedReverted", paths: reverted } : { kind: "saved" };
+}
+
+// The delivery modes this editor offers. Not RESTART_MODES: the proxy reduces this
+// endpoint's policy per workspace, where "schedule" behaves as "notice".
+export type Delivery = "now" | "notice";
+
+// saveLabel names what the button will DO, because the control above it is a
+// preference and reads as one.
+//
+// restart-control already fixed this mistake once: an admin clicked a mode, read it
+// as a command, and reported that nothing restarted. Leaving the button as a bare
+// "Save" while the delivery hides in a radio group two rows up recreates it.
+export function saveLabel(
+  delivery: Delivery,
+  copy: { saveAndRestart: string; saveAndNotify: string },
+): string {
+  return delivery === "now" ? copy.saveAndRestart : copy.saveAndNotify;
 }
 
 // A stale revision is its own outcome and is never retried: the proxy's own

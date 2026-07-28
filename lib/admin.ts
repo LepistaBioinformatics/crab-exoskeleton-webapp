@@ -299,6 +299,22 @@ export async function readInstanceConfig(ref: InstanceRef): Promise<InstanceConf
 // `stale_revision`, which the editor surfaces with a Reload rather than retrying:
 // the proxy's own materialization is the other writer, and retrying would
 // overwrite it.
+// Restarts one member's instance. Separate from the member's own restart and from
+// a scope bounce: a workspace whose config.json is broken may not boot picoclaw at
+// all, so its member cannot press their own button and an admin's repair would sit
+// on disk without ever taking effect.
+//
+// `noop` means the container was absent or scaled to zero — a success, because the
+// next cold start begins from the repaired file.
+export async function restartInstance(ref: InstanceRef): Promise<"restarted" | "noop"> {
+  const res = await fetch(`/api/admin/users/restart?${instanceParams(ref).toString()}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await errorCode(res));
+  const data = await res.json();
+  return data.status === "noop" ? "noop" : "restarted";
+}
+
 export async function writeInstanceConfig(
   ref: InstanceRef,
   body: { raw: string; revision: string },
