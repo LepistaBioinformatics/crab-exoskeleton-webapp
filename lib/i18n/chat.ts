@@ -209,6 +209,7 @@ const en = {
       model: "The model behind your assistant changed.",
       "own-secret": "You saved a secret. It applies after a restart.",
       "admin-request": "An administrator asked for a restart.",
+      config: "An administrator changed your assistant's configuration.",
     },
     // A newer proxy may send a reason this build has not learned yet; say the
     // true, useful part rather than nothing.
@@ -466,6 +467,7 @@ const pt: ChatDict = {
       model: "O modelo por trás do seu assistente mudou.",
       "own-secret": "Você salvou um segredo. Ele passa a valer após um reinício.",
       "admin-request": "Um administrador pediu um reinício.",
+      config: "Um administrador alterou a configuração do seu assistente.",
     },
     reasonUnknown: "Seu assistente precisa reiniciar para aplicar uma alteração recente.",
     scheduled: "Seu assistente vai reiniciar em {when}.",

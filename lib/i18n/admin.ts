@@ -299,6 +299,7 @@ const en = {
       model: "the model changed",
       "own-secret": "a member changed their own credential",
       "admin-request": "an administrator asked for it",
+      config: "an administrator repaired this instance's configuration",
     },
     // A build older than the proxy may meet a reason it has not learned.
     reasonUnknown: "a recent change",
@@ -340,6 +341,12 @@ const en = {
     deleteTitle: "Delete member's file?",
     deleteMessage:
       "“{name}” will be permanently removed from this member's private workspace.",
+    // The Instances section: one row per agent this member has a workspace under.
+    instancesHeading: "Instances",
+    instancesNote:
+      "One instance per agent this member has started. Editing its configuration is not the same as opening their files — see below.",
+    editConfig: "Edit configuration",
+    noInstances: "No instances yet.",
   },
   branding: {
     lightLogo: "Light logo",
@@ -481,6 +488,47 @@ const en = {
     // themselves cannot say.
     readDown: "Read down. Each level narrows who it covers and overrides the ones above it.",
     winnerNote: "The last level with a model is the one a person ends up with.",
+  },
+  // The instance-config editor. A repair surface, so the copy leans on saying
+  // what is and is not the admin's to change, and what a save does not do on its
+  // own (config.json is read only when the instance boots).
+  instanceConfig: {
+    heading: "Instance configuration",
+    close: "Close",
+    rawMode: "Raw JSON",
+    treeMode: "Tree",
+    format: "Reformat",
+    validJson: "Valid JSON",
+    invalidJson: "The document has to be a JSON object.",
+    atLine: "(line {line}, column {column})",
+    expand: "Expand",
+    collapse: "Collapse",
+    typeLabel: "Type of",
+    addKey: "Add key",
+    newKeyPlaceholder: "new_key",
+    duplicateKey: "That key already exists here.",
+    removeKey: "Remove",
+    appendItem: "Add item",
+    managedAria: "Managed by the proxy",
+    managedNote:
+      "Locked keys belong to the proxy — it rewrites them whenever it applies a model, so an edit to one of them will not stick. Change the model from the Models tab instead.",
+    redactedNote:
+      "A credential was found in this file, left there by an older layout. Its value is masked and is not shown here; the proxy replaces the whole model list when you save.",
+    save: "Save",
+    saving: "Saving…",
+    saved: "Configuration saved.",
+    managedReverted:
+      "Saved. The proxy re-established the keys it owns, so these went back to its own values: {paths}",
+    reapplyFailed:
+      "Saved, but the proxy could not re-apply this instance's model afterwards. The file is on disk; fix the model assignment and it will settle on the next apply.",
+    staleRevision:
+      "This configuration changed while you were editing, so nothing was written. Reload to see the current file before saving again.",
+    reload: "Reload",
+    notProvisioned:
+      "This member has never started this agent, so there is no configuration to repair yet.",
+    discardTitle: "Discard your changes?",
+    discardMessage: "The edits in this editor have not been saved and cannot be recovered.",
+    discard: "Discard",
   },
 };
 
@@ -741,6 +789,7 @@ const pt: AdminDict = {
       model: "o modelo mudou",
       "own-secret": "um membro alterou a própria credencial",
       "admin-request": "um administrador pediu",
+      config: "um administrador consertou a configuração desta instância",
     },
     reasonUnknown: "uma alteração recente",
     actNow: "Reiniciar agora",
@@ -776,6 +825,11 @@ const pt: AdminDict = {
     deleteTitle: "Excluir o arquivo do membro?",
     deleteMessage:
       "“{name}” será removido permanentemente do workspace privado deste membro.",
+    instancesHeading: "Instâncias",
+    instancesNote:
+      "Uma instância por agente que este membro já iniciou. Editar a configuração dela não é o mesmo que abrir os arquivos dele — veja abaixo.",
+    editConfig: "Editar configuração",
+    noInstances: "Nenhuma instância ainda.",
   },
   branding: {
     lightLogo: "Logo claro",
@@ -913,6 +967,44 @@ const pt: AdminDict = {
     outOfScope: "fora de escopo",
     readDown: "Leia de cima para baixo. Cada nível restringe quem ele cobre e sobrepõe os de cima.",
     winnerNote: "O último nível com um modelo é o que a pessoa recebe.",
+  },
+  instanceConfig: {
+    heading: "Configuração da instância",
+    close: "Fechar",
+    rawMode: "JSON puro",
+    treeMode: "Árvore",
+    format: "Reformatar",
+    validJson: "JSON válido",
+    invalidJson: "O documento precisa ser um objeto JSON.",
+    atLine: "(linha {line}, coluna {column})",
+    expand: "Expandir",
+    collapse: "Recolher",
+    typeLabel: "Tipo de",
+    addKey: "Adicionar chave",
+    newKeyPlaceholder: "nova_chave",
+    duplicateKey: "Essa chave já existe aqui.",
+    removeKey: "Remover",
+    appendItem: "Adicionar item",
+    managedAria: "Gerenciado pelo proxy",
+    managedNote:
+      "As chaves travadas pertencem ao proxy — ele as reescreve sempre que aplica um modelo, então uma edição nelas não vai permanecer. Troque o modelo pela aba Modelos.",
+    redactedNote:
+      "Foi encontrada uma credencial neste arquivo, deixada por um formato antigo. O valor está mascarado e não é exibido aqui; o proxy substitui a lista de modelos inteira quando você salvar.",
+    save: "Salvar",
+    saving: "Salvando…",
+    saved: "Configuração salva.",
+    managedReverted:
+      "Salvo. O proxy restabeleceu as chaves que são dele, então estas voltaram aos valores dele: {paths}",
+    reapplyFailed:
+      "Salvo, mas o proxy não conseguiu reaplicar o modelo desta instância depois. O arquivo está no disco; corrija a atribuição de modelo e ela se ajusta na próxima aplicação.",
+    staleRevision:
+      "Esta configuração mudou enquanto você editava, então nada foi gravado. Recarregue para ver o arquivo atual antes de salvar de novo.",
+    reload: "Recarregar",
+    notProvisioned:
+      "Este membro nunca iniciou este agente, então ainda não há configuração para consertar.",
+    discardTitle: "Descartar suas alterações?",
+    discardMessage: "As edições deste editor não foram salvas e não podem ser recuperadas.",
+    discard: "Descartar",
   },
 };
 

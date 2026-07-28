@@ -39,9 +39,17 @@ const option = cva("rounded-lg border px-2.5 py-1 text-sm transition-colors", {
 export default function RestartPolicySelect({
   policy,
   onChange,
+  modes = RESTART_MODES,
 }: {
   policy: RestartPolicy;
   onChange: (next: RestartPolicy) => void;
+  /**
+   * Narrows the offered set. The instance-config editor passes ["now","notice"]:
+   * the proxy reduces that endpoint's policy per WORKSPACE, where "schedule"
+   * behaves as "notice", so offering a scheduler would promise a window nothing
+   * arms.
+   */
+  modes?: readonly RestartMode[];
 }) {
   const t = useT(adminCopy).restartPolicy;
   const label: Record<RestartMode, string> = {
@@ -61,7 +69,7 @@ export default function RestartPolicySelect({
       <span className="text-xs font-medium text-fg-muted">{t.heading}</span>
 
       <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={t.groupAria}>
-        {RESTART_MODES.map((mode) => (
+        {modes.map((mode) => (
           <button
             key={mode}
             type="button"
