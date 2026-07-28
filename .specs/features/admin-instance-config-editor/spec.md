@@ -101,9 +101,11 @@ its own `config.json`.
 
 - **FR-4.1** A monospace textarea holding the document text. Tab inserts two
   spaces rather than moving focus, since the field is a code editor.
-- **FR-4.2** The text is validated on every change (debounced) with
-  `JSON.parse`. The result is shown as a status line: valid, or the parser
-  message with the line/column derived from the error position.
+- **FR-4.2** The text is validated on every change with `JSON.parse`. The result
+  is shown as a status line: valid, or the parser message with the line/column
+  derived from the error position. **Shipped without a debounce** — the parse is a
+  `useMemo` over the text, and `JSON.parse` on a 12 KiB document is microseconds;
+  a debounce would only delay the error an admin is typing towards.
 - **FR-4.3** **Save is disabled while the text is not valid JSON, or is not a
   JSON object at the top level.** The proxy rejects both (its FR-2.2); blocking
   locally makes the reason immediate instead of a round-trip.
@@ -114,8 +116,16 @@ its own `config.json`.
 
 - **FR-5.1** The tree renders the parsed document: objects and arrays as
   collapsible nodes labelled with their key (or index) and child count, leaves as
-  type-appropriate controls — text input for strings, numeric input for numbers,
-  a toggle for booleans, and an explicit `null` marker.
+  type-appropriate controls — text input for strings, a decimal-mode field for
+  numbers, a toggle for booleans, and an explicit `null` marker.
+- **FR-5.1.1** A number leaf holds the text being typed while it has focus and
+  commits only a **complete** number, because `0.` and `-` are states an admin
+  passes through on the way to `0.7` and `-1`. Coercing them lands on `0`, the
+  re-render erases the keystroke, and a decimal becomes unreachable — the seeded
+  template's `min_success_ratio: 0.7` is exactly that case. Blur commits whatever
+  the draft amounts to. The field is `type="text"` with `inputMode="decimal"`: a
+  native number input reports `""` for a partial value, throwing away the very
+  keystrokes this preserves.
 - **FR-5.2** Objects and arrays are **collapsed by default below the second
   level**. The seeded document has ~470 lines and 15 channel blocks; an
   all-expanded tree is unusable.
@@ -211,6 +221,7 @@ its own `config.json`.
 | FR-4.2 | Unit (pure module): parse errors map to line/column |
 | FR-4.3 | Component test: Save disabled on invalid text and on a top-level array |
 | FR-5.1 | Unit: value → tree node shape for each JSON type |
+| FR-5.1.1 | Unit: `parseNumberDraft` holds back `0.`/`-`/`` and commits `0.7`/`-1`/`1e3`; a full decimal entry walked keystroke by keystroke |
 | FR-5.3 | Unit: type switch string→number converts and re-serializes |
 | FR-5.4 | Unit: add/remove key and append/remove item |
 | FR-5.5 | Unit: duplicate key add is refused |
@@ -276,8 +287,22 @@ both locales and `parity.test.ts` passes unchanged.
 renders as `error`, because nothing was written. No new severity was added for
 this feature.
 
-**Verification.** `yarn tsc --noEmit` clean. `yarn vitest run`: **271 passed / 25
-files**, including 23 `json-tree`, 14 `instance-config-state`, 8
+**A decimal was unenterable in the tree, and is fixed (FR-5.1.1).** The first
+implementation coerced a number leaf on every keystroke, so `0.` became `0` and
+the re-render erased the point — `min_success_ratio: 0.7`, which is in the seeded
+template, could not be typed at all. The fix is `parseNumberDraft` plus a
+focus-scoped draft in the leaf; the pure test walks a full decimal entry
+keystroke by keystroke. Raw mode was always a workaround for this, never a fix.
+
+**FR-5.2 (refused writes are audited) was only half-shipped, and is now whole.**
+The proxy's `adminInstanceKey` answers a 403 or a bad-parameter 400 and returns
+before the audit line could be reached, so exactly the refusal an operator most
+wants to see went unlogged — and FR-4.4 leans on that logging to justify the
+authz tier. The handler now audits from its own refusal branches. See the proxy
+spec's reconciliation.
+
+**Verification.** `yarn tsc --noEmit` clean. `yarn vitest run`: **275 passed / 25
+files**, including 27 `json-tree`, 14 `instance-config-state`, 8
 `json-tree-view`, and `parity.test.ts`. `yarn build` succeeds with
 `/api/admin/users/config` in the route manifest. `app/api/admin/users/files/route.ts`
 has an empty diff, so its "do not add one" instruction is untouched; the only

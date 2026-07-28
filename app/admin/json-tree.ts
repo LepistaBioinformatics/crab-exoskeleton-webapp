@@ -116,6 +116,20 @@ export function coerce(v: JsonValue, to: JsonType): JsonValue {
   }
 }
 
+// parseNumberDraft reports the number a partially-typed field already represents,
+// or null while it represents nothing yet.
+//
+// It exists because a number leaf cannot commit on every keystroke. `0.` and `-`
+// are valid things to have typed on the way to `0.7` and `-1`, but they are not
+// numbers: coercing them lands on 0, the field re-renders as "0", and the decimal
+// point can never be reached. The seeded template has `min_success_ratio: 0.7`,
+// so that is not a corner case — it is a value an admin has to be able to type.
+export function parseNumberDraft(text: string): number | null {
+  if (!/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(text.trim())) return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
 // isWithin reports whether a path is one of `entries` or sits INSIDE one of them.
 // Both callers need the subtree rule: `model_list` is proxy-managed, so
 // `model_list[0].provider` is too (the proxy replaces the whole value), and a

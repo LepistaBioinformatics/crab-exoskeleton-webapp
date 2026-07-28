@@ -294,6 +294,13 @@ function UserInstances({
   return (
     <div className="border-t border-brand/20 px-3 py-2">
       <span className="text-[11px] font-medium text-fg-muted">{t.members.instancesHeading}</span>
+      {/* Says outright that editing an instance's configuration is not opening the
+          member's files. The two live in the same expanded row, and the privacy
+          rule at the top of this panel is worth restating exactly where an admin
+          might otherwise read the new action as an exception to it. */}
+      <p className="mt-0.5 text-[11px] leading-relaxed text-fg-muted">
+        {t.members.instancesNote}
+      </p>
       {agents.length === 0 ? (
         <p className="py-1 text-xs text-fg-muted">{t.members.noInstances}</p>
       ) : (

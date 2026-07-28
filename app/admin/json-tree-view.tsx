@@ -14,6 +14,7 @@ import {
   coerce,
   dotted,
   isWithin,
+  parseNumberDraft,
   removeAtPath,
   setAtPath,
   typeOf,
@@ -214,7 +215,9 @@ function Leaf({
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      {kind === "boolean" ? (
+      {kind === "number" ? (
+        <NumberLeaf value={value as number} label={key} onCommit={(next) => onEdit(path, next)} />
+      ) : kind === "boolean" ? (
         <label className="flex items-center gap-1.5 text-xs text-fg">
           <input
             type="checkbox"
@@ -231,12 +234,10 @@ function Leaf({
           inputSize="sm"
           variant="subtle"
           className="font-mono text-xs"
-          type={kind === "number" ? "number" : "text"}
+          type="text"
           aria-label={key}
           value={String(value)}
-          onChange={(e) =>
-            onEdit(path, kind === "number" ? coerce(e.target.value, "number") : e.target.value)
-          }
+          onChange={(e) => onEdit(path, e.target.value)}
         />
       )}
 
@@ -256,6 +257,56 @@ function Leaf({
         ))}
       </select>
     </div>
+  );
+}
+
+// NumberLeaf keeps the text the admin is typing, not the number the document
+// holds, for as long as the field has focus.
+//
+// Committing every keystroke through Number() cannot work: `0.` and `-` are
+// states you pass through on the way to `0.7` and `-1`, they coerce to 0, and the
+// re-render then erases what was typed. So a complete number commits immediately
+// (the document stays live), an incomplete one is held locally, and blur commits
+// whatever it amounts to.
+//
+// `type="text"` with inputMode="decimal" rather than type="number": a number
+// input reports "" for a partial value, which throws away the very keystrokes
+// this is preserving.
+function NumberLeaf({
+  value,
+  label,
+  onCommit,
+}: {
+  value: number;
+  label: string;
+  onCommit: (next: JsonValue) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <Input
+      inputSize="sm"
+      variant="subtle"
+      className="font-mono text-xs"
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      value={focused ? draft : String(value)}
+      onFocus={() => {
+        setDraft(String(value));
+        setFocused(true);
+      }}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const parsed = parseNumberDraft(e.target.value);
+        if (parsed !== null) onCommit(parsed);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        onCommit(coerce(draft, "number"));
+      }}
+    />
   );
 }
 

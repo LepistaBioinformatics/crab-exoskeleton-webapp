@@ -6,6 +6,7 @@ import {
   typeOf,
   coerce,
   isWithin,
+  parseNumberDraft,
   setAtPath,
   removeAtPath,
   addKey,
@@ -89,6 +90,39 @@ describe("coerce", () => {
     expect(coerce("x", "null")).toBe(null);
     expect(coerce("x", "object")).toEqual({});
     expect(coerce("x", "array")).toEqual([]);
+  });
+});
+
+describe("parseNumberDraft", () => {
+  // The states you type THROUGH on the way to a decimal. Committing these would
+  // coerce to 0 and erase the keystroke, which made 0.7 unreachable in the tree —
+  // and the seeded template has min_success_ratio: 0.7.
+  it("holds back an incomplete number instead of coercing it to 0", () => {
+    expect(parseNumberDraft("0.")).toBeNull();
+    expect(parseNumberDraft("-")).toBeNull();
+    expect(parseNumberDraft("")).toBeNull();
+    expect(parseNumberDraft(".")).toBeNull();
+    expect(parseNumberDraft("1e")).toBeNull();
+  });
+
+  it("commits a complete number, including decimals, negatives and exponents", () => {
+    expect(parseNumberDraft("0")).toBe(0);
+    expect(parseNumberDraft("0.7")).toBe(0.7);
+    expect(parseNumberDraft("-1")).toBe(-1);
+    expect(parseNumberDraft("-0.25")).toBe(-0.25);
+    expect(parseNumberDraft("32768")).toBe(32768);
+    expect(parseNumberDraft("1e3")).toBe(1000);
+  });
+
+  it("rejects text that is not a number at all", () => {
+    expect(parseNumberDraft("abc")).toBeNull();
+    expect(parseNumberDraft("0x10")).toBeNull();
+    expect(parseNumberDraft("Infinity")).toBeNull();
+  });
+
+  it("walks a full decimal entry: only the complete states reach the document", () => {
+    const typed = ["", "0", "0.", "0.7"];
+    expect(typed.map(parseNumberDraft)).toEqual([null, 0, null, 0.7]);
   });
 });
 
