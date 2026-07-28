@@ -1,0 +1,629 @@
+// Per-conversation turn state, held at module scope.
+//
+// Everything here is keyed by session id and deliberately outside React. Three
+// separate symptoms all came from turn state living in ChatView: the "sent"
+// indicator vanished when you switched conversations, the composer locked while
+// a turn ran, and a reply that arrived after you navigated away was lost. The
+// component is the wrong owner -- it resets on every `sid` change and unmounts
+// entirely on a workspace change (chat-shell.tsx keys ChatView on t|s|r).
+//
+// The queue that used to be `pendingOutbox` lives here too, for the same reason
+// it was module-scope before: a stack parked by switching chats must survive.
+//
+// picoclaw does NOT stream: it returns the whole answer in one frame (measured
+// -- see .specs/features/chat-responsiveness/spec.md OQ-1). The reveal driver
+// below is therefore the only thing that makes a reply appear progressively,
+// and it runs here rather than in a component so it keeps going across a
+// remount instead of freezing mid-word.
+
+import { useSyncExternalStore } from "react";
+import { historyQuery, type Workspace } from "@/app/chat/fragment";
+import {
+  notifyConversationsUpdated,
+  syncSessionRefs,
+  touchConversation,
+} from "@/lib/chatSession";
+
+// ---------------------------------------------------------------------------
+// Tunables
+// ---------------------------------------------------------------------------
+
+// A message isn't POSTed the instant you hit send: it joins a burst and, after
+// this long with no further typing/sending, the whole burst flushes as ONE
+// turn. Typing again re-arms the timer.
+export const SEND_DEBOUNCE_MS = 3000;
+
+// Sending retries on transport / gateway failure (fetch throws or a 5xx) with
+// exponential backoff. A 4xx (auth/validation) is terminal and never retried.
+export const MAX_SEND_ATTEMPTS = 10;
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_MS = 30000;
+const retryDelay = (attempt: number) => Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Reveal pacing is planned per turn, not fixed per tick.
+//
+// The first version ticked every 40ms and let the STEP COUNT follow from the
+// length -- ~200 steps for a long reply. Each step re-renders the assistant
+// band, and `MessageContent` re-parses the whole revealed markdown through
+// react-markdown + remark-gfm (plus a ResizeObserver per table). So the render
+// cost per step grows with what has already been revealed, making the total
+// O(n²): a 2,900-word reply asked for ~200 reparses of a document growing to
+// 17KB. The browser could not keep up, and the reveal ran slower than its own
+// nominal rate -- shortening the tick only made it schedule more work it
+// couldn't finish.
+//
+// So the STEP COUNT is what is capped now, and the tick is derived. Duration is
+// the same; the number of expensive re-renders is bounded.
+const REVEAL_MS_PER_WORD = 27; // per-word cadence for short replies
+const REVEAL_TOTAL_MS = 5333; // ceiling: no reply takes longer than this
+const REVEAL_MAX_STEPS = 60; // ceiling on re-renders (was effectively ~200)
+const REVEAL_MIN_TICK_MS = 16; // never schedule faster than a frame
+
+// How long the band may sit with no progress event and no content before it
+// admits it's still waiting. The measured tool-free turn emitted NOTHING for 51
+// seconds; without this the last event freezes and it looks hung again.
+export const SILENCE_GRACE_MS = 6000;
+
+// After an upload, picoclaw reloads to pick up the new workspace file. Give it a
+// moment to settle before firing the turn, so the first message right after an
+// attach doesn't hit the container mid-reload ("Can't reach the gateway").
+const UPLOAD_SETTLE_MS = 1500;
+
+let lastUploadAt = 0;
+
+/** Called by the view after a successful upload, to arm the settle wait. */
+export function noteUpload() {
+  lastUploadAt = Date.now();
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type ProgressKind = "thought" | "tool" | "placeholder" | "typing";
+
+export interface Progress {
+  kind: ProgressKind;
+  /** Human-readable narration. Empty for `typing`. */
+  text: string;
+  /** The tool's function name, when kind is "tool". */
+  tool?: string;
+  /** "start" | "stop", only for kind "typing". */
+  state?: string;
+}
+
+export interface TurnState {
+  /** True while a turn is posted/streaming for this conversation. */
+  running: boolean;
+  /** Composed-but-not-yet-flushed messages (the debounce burst). */
+  pending: string[];
+  /**
+   * The user message of the turn currently in flight, kept so returning to the
+   * conversation re-renders it above the reply instead of showing a bare
+   * assistant band. Survives the history reload; cleared by `clearCompleted`.
+   */
+  activeUserMessage: string | null;
+  /** Flushed bursts waiting their turn. Each entry is one future turn. */
+  queue: string[];
+  /** Current retry attempt, or null when not retrying. */
+  retrying: number | null;
+  /** Latest progress event, or null. */
+  progress: Progress | null;
+  /** Timestamp of the last progress event or content arrival. */
+  lastEventAt: number;
+  /** Words already revealed for the in-flight reply. */
+  revealed: string;
+  /** Arrived but not yet revealed. */
+  buffered: string;
+  /** The upstream finished sending; the reveal may still be draining. */
+  arrivalDone: boolean;
+  /** Terminal error key for this conversation, or null. */
+  error: string | null;
+  /** Waiting for picoclaw to reload after an attachment upload. */
+  settling: boolean;
+}
+
+/** Everything a queued turn needs to actually run, captured at submit time. */
+export interface RunContext {
+  workspace: Workspace;
+  /** Called on a 401 so the caller can route to signin. */
+  onUnauthorized: () => void;
+}
+
+const EMPTY: TurnState = {
+  running: false,
+  pending: [],
+  activeUserMessage: null,
+  queue: [],
+  retrying: null,
+  progress: null,
+  lastEventAt: 0,
+  revealed: "",
+  buffered: "",
+  arrivalDone: true,
+  error: null,
+  settling: false,
+};
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
+const turns = new Map<string, TurnState>();
+const contexts = new Map<string, RunContext>();
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const fn of listeners) fn();
+}
+
+export function getTurn(sid: string | undefined): TurnState {
+  if (!sid) return EMPTY;
+  return turns.get(sid) ?? EMPTY;
+}
+
+// Snapshots are replaced wholesale on every mutation, so reference equality is
+// the correct bail-out for useSyncExternalStore -- no custom comparator.
+function patch(sid: string, next: Partial<TurnState>) {
+  const cur = turns.get(sid) ?? EMPTY;
+  turns.set(sid, { ...cur, ...next });
+  emit();
+}
+
+function subscribe(fn: () => void) {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+export function useTurn(sid: string | undefined): TurnState {
+  return useSyncExternalStore(
+    subscribe,
+    () => getTurn(sid),
+    () => EMPTY, // server snapshot
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Debounce burst (formerly `pendingOutbox`)
+// ---------------------------------------------------------------------------
+
+const flushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearFlushTimer(sid: string) {
+  const timer = flushTimers.get(sid);
+  if (timer) {
+    clearTimeout(timer);
+    flushTimers.delete(sid);
+  }
+}
+
+/**
+ * Stack a composed message as pending (pulsing, not sent) and arm the debounce.
+ * Unlike the previous implementation this never refuses while a turn is running
+ * -- the burst simply queues behind it.
+ */
+export function enqueue(sid: string, composed: string, ctx: RunContext) {
+  contexts.set(sid, ctx);
+  const cur = getTurn(sid);
+  patch(sid, { pending: [...cur.pending, composed], error: null });
+  armFlush(sid);
+}
+
+/** A keystroke while a burst is pending pushes the flush back. */
+export function bumpFlush(sid: string) {
+  if (getTurn(sid).pending.length > 0) armFlush(sid);
+}
+
+function armFlush(sid: string) {
+  clearFlushTimer(sid);
+  flushTimers.set(
+    sid,
+    setTimeout(() => flushPending(sid), SEND_DEBOUNCE_MS),
+  );
+}
+
+/**
+ * Park the burst without sending -- used when the user navigates away. The
+ * stack stays in the store and its countdown resumes only when the user
+ * re-engages (types or sends), never just from looking at the conversation.
+ */
+export function parkFlush(sid: string | undefined) {
+  if (sid) clearFlushTimer(sid);
+}
+
+/**
+ * The debounce fired: the whole burst becomes ONE queued turn. Bursts separated
+ * by more than the debounce window become separate turns (DEC-2).
+ */
+export function flushPending(sid: string) {
+  clearFlushTimer(sid);
+  const cur = getTurn(sid);
+  if (cur.pending.length === 0) return;
+  patch(sid, { pending: [], queue: [...cur.queue, cur.pending.join("\n\n")] });
+  void drain(sid);
+}
+
+// ---------------------------------------------------------------------------
+// Sequential turn queue
+// ---------------------------------------------------------------------------
+
+/**
+ * Run queued turns one at a time. Not gated on the conversation being on
+ * screen: a turn the user committed must finish (and the next must follow) even
+ * if they walked away -- the proxy runs it regardless (sse.go detaches the turn
+ * from the request), so abandoning it here would only lose the UI's copy.
+ */
+// Conversations with a drain loop already running. This must be a SYNCHRONOUS
+// flag, not `state.running`: `drain` is called fire-and-forget, and `running`
+// is only set once `runTurn` is entered — so two bursts flushing back to back
+// would both pass a `running` check and run concurrently, clobbering each
+// other's reveal buffer.
+const draining = new Set<string>();
+
+async function drain(sid: string) {
+  if (draining.has(sid)) return;
+  const ctx = contexts.get(sid);
+  if (!ctx) return;
+
+  draining.add(sid);
+  try {
+    while (getTurn(sid).queue.length > 0) {
+      const [next, ...rest] = getTurn(sid).queue;
+      patch(sid, { queue: rest });
+      await runTurn(sid, next, ctx);
+      // Wait for the reveal to finish before starting the next turn. Without
+      // this the next runTurn resets `revealed`/`buffered` and the previous
+      // reply is wiped off the screen mid-sentence.
+      await awaitDrained(sid);
+    }
+  } finally {
+    draining.delete(sid);
+  }
+}
+
+// Resolvers waiting for a conversation's reveal to finish draining.
+const drainWaiters = new Map<string, Array<() => void>>();
+
+function awaitDrained(sid: string): Promise<void> {
+  if (!getTurn(sid).running) return Promise.resolve();
+  return new Promise((resolve) => {
+    const list = drainWaiters.get(sid) ?? [];
+    list.push(resolve);
+    drainWaiters.set(sid, list);
+  });
+}
+
+function releaseDrainWaiters(sid: string) {
+  const list = drainWaiters.get(sid);
+  if (!list) return;
+  drainWaiters.delete(sid);
+  for (const resolve of list) resolve();
+}
+
+/**
+ * Called when a turn has fully finished (arrival done AND reveal drained), so
+ * the view can pull the now-durable transcript. The in-flight bands stay in the
+ * store until `clearCompleted` is called, so there is no gap between the live
+ * reply disappearing and the reloaded one appearing.
+ */
+type ReplyDone = (sid: string) => void;
+
+let onReplyDone: ReplyDone | null = null;
+
+/**
+ * ChatView registers the completion hook. A single global rather than per-sid:
+ * only one ChatView is ever mounted, and it checks the sid itself. When no view
+ * is mounted (workspace switch mid-turn) this is null and the turn simply
+ * finishes into the store -- the next mount reads it from there.
+ */
+export function setPainter(next: ReplyDone | null) {
+  onReplyDone = next;
+}
+
+/**
+ * Drop the finished turn's in-flight bands. Called by the view once it has
+ * reloaded the transcript, so the reply never blinks out and back in.
+ */
+export function clearCompleted(sid: string) {
+  const cur = getTurn(sid);
+  if (cur.running) return;
+  if (cur.activeUserMessage === null && cur.revealed === "") return;
+  // `error` is deliberately preserved: the banner must outlive the bands, or a
+  // turn that failed while the user was elsewhere would clear itself silently.
+  patch(sid, { activeUserMessage: null, revealed: "", buffered: "", progress: null });
+}
+
+async function runTurn(sid: string, composed: string, ctx: RunContext) {
+  const { workspace } = ctx;
+  patch(sid, {
+    running: true,
+    error: null,
+    activeUserMessage: composed,
+    revealed: "",
+    buffered: "",
+    arrivalDone: false,
+    progress: null,
+    lastEventAt: Date.now(),
+  });
+
+  try {
+    // Attachments were consumed at enqueue time, so a just-uploaded file is
+    // detected from the composed text's "[anexo: …]" refs.
+    const settleWait = composed.includes("[anexo:")
+      ? Math.max(0, UPLOAD_SETTLE_MS - (Date.now() - lastUploadAt))
+      : 0;
+    if (settleWait > 0) {
+      patch(sid, { settling: true });
+      await sleep(settleWait);
+      patch(sid, { settling: false });
+    }
+
+    const body = JSON.stringify({
+      message: composed,
+      session_id: sid,
+      tenant_id: workspace.t,
+      subs_acc_id: workspace.s,
+    });
+
+    let stream: ReadableStream<Uint8Array> | null = null;
+    let terminal = false;
+    for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS && !terminal; attempt++) {
+      try {
+        const r = await fetch(`/api/chat/${workspace.r}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (r.status === 401) {
+          ctx.onUnauthorized();
+          return;
+        }
+        if (r.ok && r.body) {
+          stream = r.body;
+          break;
+        }
+        if (r.status < 500) {
+          const data = await r.json().catch(() => null);
+          patch(sid, { error: typeof data?.error === "string" ? data.error : "unknown" });
+          terminal = true;
+          break;
+        }
+      } catch {
+        // transport error -> backoff and retry
+      }
+      if (attempt < MAX_SEND_ATTEMPTS) {
+        patch(sid, { retrying: attempt });
+        await sleep(retryDelay(attempt));
+      }
+    }
+    patch(sid, { retrying: null });
+
+    if (!stream) {
+      // A terminal 4xx already recorded its reason; otherwise every attempt failed.
+      if (!terminal) patch(sid, { error: "gateway_retries_exhausted" });
+      return;
+    }
+
+    // The turn was accepted -- picoclaw is running it and will persist the
+    // session. Only now create/bump the postgres row, so a rejected send never
+    // leaves a conversation row with no transcript behind it.
+    touchConversation(workspace, sid, composed).catch(() => {});
+
+    await consumeStream(
+      stream,
+      (delta) => {
+        const cur = getTurn(sid);
+        patch(sid, { buffered: cur.buffered + delta, lastEventAt: Date.now() });
+        startReveal(sid);
+      },
+      (progress) => patch(sid, { progress, lastEventAt: Date.now() }),
+    );
+
+    syncSessionRefs(workspace, sid).catch(() => {});
+    notifyConversationsUpdated();
+  } catch {
+    patch(sid, { error: "connectivity" });
+  } finally {
+    patch(sid, { arrivalDone: true, retrying: null, settling: false });
+    // The reveal may still be draining; `running` clears when it empties so the
+    // caret and the "still working" state don't disappear mid-sentence.
+    startReveal(sid);
+    finishIfDrained(sid);
+  }
+}
+
+function finishIfDrained(sid: string) {
+  const cur = getTurn(sid);
+  if (!cur.arrivalDone || cur.buffered !== "") return;
+  if (!cur.running) return;
+  patch(sid, { running: false, progress: null });
+  onReplyDone?.(sid);
+  releaseDrainWaiters(sid);
+}
+
+// ---------------------------------------------------------------------------
+// Reveal driver ("typewriter")
+// ---------------------------------------------------------------------------
+
+const revealTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * How to reveal a reply of `totalWords`: how many words each step uncovers and
+ * how long to wait between steps.
+ *
+ * The step count is capped, NOT the tick. Every step re-parses the revealed
+ * markdown, so steps are the expensive unit — bounding them is what keeps a long
+ * reply from starving the main thread and running slower than its own nominal
+ * pace. The duration is unaffected; only its granularity is.
+ */
+export function revealPlan(totalWords: number): { wordsPerStep: number; tickMs: number } {
+  if (totalWords <= 0) return { wordsPerStep: 1, tickMs: REVEAL_MS_PER_WORD };
+  // A short reply gets a real per-word cadence; a long one is capped at the
+  // total, so nothing ever crawls just because it is big.
+  const durationMs = Math.min(REVEAL_TOTAL_MS, totalWords * REVEAL_MS_PER_WORD);
+  const steps = Math.min(totalWords, REVEAL_MAX_STEPS);
+  return {
+    wordsPerStep: Math.ceil(totalWords / steps),
+    tickMs: Math.max(REVEAL_MIN_TICK_MS, Math.round(durationMs / steps)),
+  };
+}
+
+/**
+ * Word-boundary character offsets for `text`, so a step can cut at the Nth word
+ * with a single slice instead of re-splitting the remaining buffer every time
+ * (which made the old driver quadratic). Whitespace rides with the word before
+ * it, so markdown structure survives a partial reveal.
+ */
+function wordOffsets(text: string): number[] {
+  const offsets: number[] = [];
+  const re = /\S+\s*/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) offsets.push(m.index + m[0].length);
+  return offsets;
+}
+
+// Per-turn reveal plan. Kept OUT of TurnState: it holds a large array, and every
+// patch clones the state object -- there is no reason to churn that per step.
+interface RevealPlan {
+  full: string;
+  offsets: number[];
+  cursor: number; // index into offsets
+  wordsPerStep: number;
+}
+const revealPlans = new Map<string, RevealPlan>();
+
+function startReveal(sid: string) {
+  const cur = getTurn(sid);
+  if (cur.buffered === "") return;
+
+  if (prefersReducedMotion()) {
+    // No incremental reveal: hand over everything at once.
+    patch(sid, { revealed: cur.revealed + cur.buffered, buffered: "" });
+    revealPlans.delete(sid);
+    finishIfDrained(sid);
+    return;
+  }
+
+  // Re-plan whenever new content arrives. picoclaw sends the whole answer in one
+  // frame, so in practice this runs once per turn.
+  const full = cur.revealed + cur.buffered;
+  const offsets = wordOffsets(full);
+  const { wordsPerStep, tickMs } = revealPlan(offsets.length);
+  const existing = revealPlans.get(sid);
+  revealPlans.set(sid, {
+    full,
+    offsets,
+    cursor: existing ? existing.cursor : 0,
+    wordsPerStep,
+  });
+
+  if (revealTimers.has(sid)) return;
+  revealTimers.set(sid, setInterval(() => tickReveal(sid), tickMs));
+}
+
+function stopReveal(sid: string) {
+  const timer = revealTimers.get(sid);
+  if (timer) {
+    clearInterval(timer);
+    revealTimers.delete(sid);
+  }
+  revealPlans.delete(sid);
+}
+
+function tickReveal(sid: string) {
+  const plan = revealPlans.get(sid);
+  if (!plan) {
+    stopReveal(sid);
+    finishIfDrained(sid);
+    return;
+  }
+  plan.cursor = Math.min(plan.cursor + plan.wordsPerStep, plan.offsets.length);
+  const cut = plan.cursor === 0 ? 0 : plan.offsets[plan.cursor - 1];
+  patch(sid, { revealed: plan.full.slice(0, cut), buffered: plan.full.slice(cut) });
+
+  if (plan.cursor >= plan.offsets.length) {
+    stopReveal(sid);
+    finishIfDrained(sid);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SSE
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses the proxy's OpenAI-style SSE stream. Content deltas arrive as
+ * `choices[0].delta.content`; progress events ride as an extra top-level
+ * `x_crab_progress` on an otherwise-empty chunk, which any client that doesn't
+ * know about them simply skips (it yields no content delta).
+ */
+export async function consumeStream(
+  body: ReadableStream<Uint8Array>,
+  onDelta: (delta: string) => void,
+  onProgress?: (progress: Progress) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+
+    for (const frame of frames) {
+      const line = frame.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice("data:".length).trim();
+      if (payload === "[DONE]") return;
+
+      try {
+        const parsed = JSON.parse(payload);
+        const progress = parsed?.x_crab_progress;
+        if (progress && typeof progress.kind === "string" && onProgress) {
+          onProgress({
+            kind: progress.kind,
+            text: typeof progress.text === "string" ? progress.text : "",
+            tool: typeof progress.tool === "string" ? progress.tool : undefined,
+            state: typeof progress.state === "string" ? progress.state : undefined,
+          });
+        }
+        const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
+        if (delta) onDelta(delta);
+      } catch {
+        // skip a malformed frame rather than aborting the whole stream
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Test seam
+// ---------------------------------------------------------------------------
+
+/** Wipes all state. Tests only. */
+export function __reset() {
+  for (const sid of flushTimers.keys()) clearFlushTimer(sid);
+  for (const sid of [...revealTimers.keys()]) stopReveal(sid);
+  revealPlans.clear();
+  turns.clear();
+  contexts.clear();
+  drainWaiters.clear();
+  onReplyDone = null;
+}
+
+/** Directly seed a conversation's state. Tests only. */
+export function __seed(sid: string, state: Partial<TurnState>) {
+  patch(sid, state);
+}
