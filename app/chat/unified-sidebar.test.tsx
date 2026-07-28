@@ -23,7 +23,6 @@ function render(over: Partial<Parameters<typeof UnifiedSidebar>[0]> = {}) {
     <UnifiedSidebar
       email="member@example.com"
       workspace={workspace}
-      focus={{ group: "workspaces", n: 0 }}
       hideConversations={false}
       {...over}
     />,

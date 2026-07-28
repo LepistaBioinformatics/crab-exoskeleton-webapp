@@ -107,13 +107,20 @@ and free of tree chrome when the member's account has nothing to branch.
 
 ### FR-5 — Mobile
 
-- **FR-5.1** One drawer, **two buttons**. The hamburger opens it focused on
-  Workspaces; the message icon opens it focused on Conversations — that group
-  expanded and scrolled to. — DEC-7
-- **FR-5.2** Both buttons open the same pane and the same components. "Focus" is
-  which group is expanded and where the pane is scrolled, nothing more.
-- **FR-5.3** Losing the direct conversation button would turn switching
-  conversation, the most frequent action, from one tap into open-scroll-pick.
+- **FR-5.1** **One button, and it toggles.** The hamburger opens the drawer and, while
+  open, closes it — showing an X so the control says which it will do. — DEC-7
+- **FR-5.2** The separate conversations button is **gone**. It existed on the reasoning
+  that losing the direct shortcut would turn switching conversation, the most frequent
+  action, into open-scroll-pick. Unifying the panes removed that reasoning: both groups
+  are open by default, so the one drawer already lands with the conversation list on
+  screen. The second button differed only for a member who had collapsed Conversations
+  by hand — not worth a permanent control that reads as another way to open the same
+  panel. With it went the focus request, its counter and the deferred scroll.
+- **FR-5.3** **Selecting a workspace does not close the drawer.** Picking an agent
+  swaps which agent's conversations the group below is listing, and that list is what
+  the member came for; closing there made "choose an agent, then one of its chats" two
+  open-close cycles. The drawer closes on: the toggle, the backdrop, or **selecting a
+  conversation**.
 
 ### FR-6 — Canvas
 
@@ -154,7 +161,7 @@ and free of tree chrome when the member's account has nothing to branch.
 | DEC-4 | Any single-node level is hoisted away, per level |
 | DEC-5 | Workspace filter only above 5 agent leaves |
 | DEC-6 | Conversation search always present |
-| DEC-7 | One drawer, two mobile buttons, differing only in focus |
+| DEC-7 | One drawer, ONE toggling mobile button. Revised from two-buttons-differing-by-focus once the unified pane made the second redundant |
 | DEC-8 | Conversations group absent in the canvas view |
 
 ## Deferred
@@ -211,7 +218,7 @@ implies otherwise:
 | --- | --- |
 | FR-4.1 at component level (no filter at 5, filter at 6) | The tree comes from `fetch("/api/subscriptions")` in an effect, which never resolves in `environment: "node"`, so `groups` stays null and no filter renders either way. The rule itself is `needsFilter`, unit-tested. Manual UAT for the rendering |
 | FR-4.2 (the magnifier expands into a field) | Same reason: the control only exists once the tree has loaded |
-| FR-5.1/5.2 (mobile focus) | Needs a DOM, effects and `scrollIntoView`; none run in this suite |
+| FR-5.1/5.3 (drawer toggling, and staying open on a workspace pick) | Needs a DOM and click handling; the wiring is visible in `chat-shell.tsx` (one `toggleDrawer`, `onConversationSelect` passed only to the conversations group) but nothing asserts it |
 | FR-1.3 (group state persists) | Needs `localStorage` and effects |
 
 Closing them needs jsdom plus a testing library, which is the same gap the
@@ -260,3 +267,31 @@ is written into the URL for `list` and omitted for tree — the inverse of befor
 
 **Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **376 passed / 32
 files**; `yarn build` succeeds. `/chat` 89 kB.
+
+---
+
+## Reconciliation, third pass
+
+Three more from use.
+
+**Mobile had two buttons for one drawer, and the first one could not close it.**
+`openDrawer` always set the state true, so pressing the control that opened the panel
+did nothing — the way anyone closes a panel. It toggles now, and shows an X while open
+so the control states which action it performs. The second button went with it
+(FR-5.2): the unified pane made it redundant, since the drawer already opens with the
+conversation list visible. DEC-7 is revised rather than quietly contradicted — it was
+the right call for two panes and the wrong one for a merged pane, and the reason is the
+merge itself.
+
+**Selecting a workspace closed the drawer** (FR-5.3). One `onSelect` was wired to both
+groups, so picking an agent dismissed the panel that was about to list that agent's
+conversations. The prop is now `onConversationSelect` and reaches only the
+conversations group; the name is the fix, since a bare `onSelect` on a component with
+two selectable things is what invited the bug.
+
+**Spacing.** The conversation search block (field plus filter chips) and the group
+header rows had no vertical breathing room; both now do, the header padding on the ROW
+so the group's actions get it too rather than the title alone.
+
+**Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **376 passed / 32
+files**; `yarn build` succeeds. `/chat` 88.9 kB.

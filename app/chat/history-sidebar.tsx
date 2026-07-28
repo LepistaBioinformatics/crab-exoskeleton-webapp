@@ -72,15 +72,12 @@ export default function HistorySidebar({
   onSelect,
   open,
   onToggle,
-  bodyRef,
 }: {
   workspace: Workspace;
   onSelect?: () => void;
   /** Group open/closed, owned by the unified sidebar so it can be persisted. */
   open: boolean;
   onToggle: () => void;
-  /** So the sidebar can scroll this group into view when opened from mobile. */
-  bodyRef?: React.Ref<HTMLDivElement>;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -227,7 +224,6 @@ export default function HistorySidebar({
       title={t.shell.conversations}
       open={open}
       onToggle={onToggle}
-      bodyRef={bodyRef}
       // The agent whose conversations these are. It used to be this sidebar's own
       // 16px header; in one pane that would be a second title bar six rows under
       // the brand.

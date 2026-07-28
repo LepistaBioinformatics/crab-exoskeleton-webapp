@@ -35,7 +35,6 @@ export default function SidebarGroup({
   identity,
   actions,
   children,
-  bodyRef,
 }: {
   title: string;
   open: boolean;
@@ -49,7 +48,6 @@ export default function SidebarGroup({
   /** Group-scoped controls (filter, new chat, list/tree). Not inside the toggle. */
   actions?: ReactNode;
   children: ReactNode;
-  bodyRef?: React.Ref<HTMLDivElement>;
 }) {
   return (
     <>
@@ -73,7 +71,7 @@ export default function SidebarGroup({
         {actions}
       </div>
       {open && (
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           {children}
         </div>
       )}

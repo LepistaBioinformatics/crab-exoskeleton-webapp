@@ -9,6 +9,7 @@ import type { Locale } from "./config";
 const en = {
   shell: {
     openWorkspaces: "Open workspaces",
+    closeMenu: "Close menu",
     conversations: "Conversations",
     workspaces: "Workspaces",
     // Rendered as "<agentPrefix> <role>" in the mobile top bar.
@@ -286,6 +287,7 @@ export type ChatDict = typeof en;
 const pt: ChatDict = {
   shell: {
     openWorkspaces: "Abrir workspaces",
+    closeMenu: "Fechar menu",
     conversations: "Conversas",
     workspaces: "Workspaces",
     agentPrefix: "agente",

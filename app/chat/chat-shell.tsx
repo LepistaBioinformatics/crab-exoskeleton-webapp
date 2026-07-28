@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Menu, MessageSquare } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useFragment, toWorkspace } from "./fragment";
-import UnifiedSidebar, { type FocusRequest, type SidebarFocus } from "./unified-sidebar";
+import UnifiedSidebar from "./unified-sidebar";
 import ChatView from "./chat-view";
 import CanvasTimeline from "./canvas-timeline";
 import EmptyState from "./empty-state";
@@ -57,10 +57,6 @@ export default function ChatShell({ email }: { email: string }) {
   // Which group the button that opened the drawer wants in front. Both buttons open
   // the same pane and the same components; this only decides what is expanded and
   // scrolled to.
-  // A counter, not just the group: tapping the same button twice has to read as two
-  // requests, or a member who collapsed a group by hand gets a drawer that ignores
-  // the button they just pressed.
-  const [focus, setFocus] = useState<FocusRequest>({ group: "workspaces", n: 0 });
 
   // Restore persisted desktop layout once on mount.
   useEffect(() => {
@@ -85,29 +81,36 @@ export default function ChatShell({ email }: { email: string }) {
 
   const closeDrawer = () => setDrawerOpen(false);
 
-  // Both mobile buttons open the SAME drawer; they differ only in which group they
-  // ask for. Dropping the direct conversation button would turn switching
-  // conversation, the most frequent action, from one tap into open-scroll-pick.
-  const openDrawer = (want: SidebarFocus) => {
-    setFocus((prev) => ({ group: want, n: prev.n + 1 }));
-    setDrawerOpen(true);
-  };
+  // ONE mobile button, and it TOGGLES.
+  //
+  // There were two — a hamburger for workspaces and a message icon for conversations —
+  // on the reasoning that losing the direct conversation shortcut would turn the most
+  // frequent action into open-scroll-pick. Unifying the panes removed that reasoning:
+  // both groups are open by default, so the drawer already lands with the conversation
+  // list on screen. The second button differed only for a member who had collapsed
+  // Conversations by hand, which is not worth a permanent second control that looks
+  // like another way to open the same panel.
+  //
+  // And it toggles rather than only opening: pressing the control that opened a panel
+  // is how anyone closes one, and it did nothing.
+  const toggleDrawer = () => setDrawerOpen((v) => !v);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Mobile top bar */}
       <div className="flex items-center gap-2 border-b border-brand/30 bg-surface px-3 py-2 md:hidden">
-        <IconButton variant="ghost" size="sm" aria-label={t.shell.openWorkspaces} onClick={() => openDrawer("workspaces")}>
-          <Menu size={20} aria-hidden />
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={drawerOpen ? t.shell.closeMenu : t.shell.openWorkspaces}
+          aria-expanded={drawerOpen}
+          onClick={toggleDrawer}
+        >
+          {drawerOpen ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
         </IconButton>
         <span className="flex-1 truncate font-display text-sm font-semibold text-fg">
           {workspace ? `${t.shell.agentPrefix} ${workspace.r}` : <BrandName />}
         </span>
-        {workspace && (
-          <IconButton variant="ghost" size="sm" aria-label={t.shell.conversations} onClick={() => openDrawer("conversations")}>
-            <MessageSquare size={20} aria-hidden />
-          </IconButton>
-        )}
       </div>
 
       <div className="relative flex min-h-0 flex-1">
@@ -128,9 +131,8 @@ export default function ChatShell({ email }: { email: string }) {
           <UnifiedSidebar
             email={email}
             workspace={workspace}
-            focus={focus}
             hideConversations={canvas}
-            onSelect={closeDrawer}
+            onConversationSelect={closeDrawer}
             onCollapse={() => setCollapsed(true)}
           />
         </ResizablePane>

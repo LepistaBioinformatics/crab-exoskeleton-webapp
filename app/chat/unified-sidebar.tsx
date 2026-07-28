@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
@@ -35,22 +35,13 @@ import type { Workspace } from "./fragment";
 // many workspaces that pushes the Conversations header, and its search, below the
 // fold).
 
-/** Which group a mobile entry point wants in front. */
-export type SidebarFocus = "workspaces" | "conversations";
-
-/**
- * A request from a mobile button, carrying a counter so that TAPPING THE SAME BUTTON
- * TWICE is two distinct requests.
- *
- * Passing the bare group would not be: `focus` does not change on a second tap of the
- * same button, so an effect watching it would not re-run — and a member who collapsed
- * Conversations by hand would tap the message icon and get a drawer with it still
- * collapsed.
- */
-export interface FocusRequest {
-  group: SidebarFocus;
-  n: number;
-}
+// There is no "focus" prop any more. Mobile had two buttons — a hamburger for
+// workspaces, a message icon for conversations — and this component opened and
+// scrolled to whichever group was asked for. Unifying the panes made the second button
+// redundant: both groups are open by default, so the single drawer already lands with
+// the conversation list on screen, and the request only differed for a member who had
+// collapsed Conversations by hand. One toggling button replaced the pair, so the
+// request, its counter and the deferred scroll all went with it.
 
 const GROUPS_KEY = "chat-sidebar-groups";
 
@@ -75,28 +66,32 @@ function persist(next: GroupState): GroupState {
 export default function UnifiedSidebar({
   email,
   workspace,
-  focus,
   hideConversations,
-  onSelect,
+  onConversationSelect,
   onCollapse,
 }: {
   email: string;
   /** Null until the fragment resolves a workspace. */
   workspace: Workspace | null;
-  /** Set by whichever mobile button opened the drawer. */
-  focus: FocusRequest;
   /**
    * True in the canvas view. The canvas already lanes every conversation, so listing
    * them beside it is the same information twice, competing for height with the tree
    * — and switching agent is the only navigation the canvas still needs.
    */
   hideConversations: boolean;
-  onSelect?: () => void;
+  /**
+   * Closes the mobile drawer. Wired to CONVERSATION selection only.
+   *
+   * Picking a workspace deliberately leaves the drawer open: it swaps which agent's
+   * conversations the group below is listing, and that list is the thing the member
+   * came for. Closing there made choosing an agent and then one of its chats two
+   * open-close cycles.
+   */
+  onConversationSelect?: () => void;
   onCollapse?: () => void;
 }) {
   const t = useT(chatCopy);
   const [groups, setGroups] = useState<GroupState>(BOTH_OPEN);
-  const conversationsRef = useRef<HTMLDivElement>(null);
 
   // Restore the persisted open/closed state once. Both open is the default: the pair
   // is what the two sidebars always showed at the same time.
@@ -117,28 +112,6 @@ export default function UnifiedSidebar({
   function setGroup(key: keyof GroupState, open: boolean) {
     setGroups((prev) => persist({ ...prev, [key]: open }));
   }
-
-  // A mobile entry point asks for a group by opening it, then scrolling to it. That
-  // is all "focus" means — both buttons open the same pane and the same components.
-  //
-  // Two steps, not one: SidebarGroup mounts its body only while open, so the ref is
-  // still null on the render that opens it. Scrolling here would silently do nothing
-  // — on the very mobile path the second button exists for.
-  const [scrollPending, setScrollPending] = useState(false);
-
-  useEffect(() => {
-    if (focus.n === 0) return; // initial state, not a tap
-    if (focus.group !== "conversations" || hideConversations) return;
-    // `persist` is module-level, so this closes over nothing that changes per render.
-    setGroups((prev) => persist({ ...prev, conversations: true }));
-    setScrollPending(true);
-  }, [focus, hideConversations]);
-
-  useEffect(() => {
-    if (!scrollPending || !groups.conversations) return;
-    conversationsRef.current?.scrollIntoView({ block: "nearest" });
-    setScrollPending(false);
-  }, [scrollPending, groups.conversations]);
 
   const showConversations = !hideConversations;
 
@@ -173,8 +146,8 @@ export default function UnifiedSidebar({
             shrink-0 with a cap: the group takes min(content, 40vh) and never grows,
             so a small tree still leaves Conversations nearly everything. */}
         <div className="flex max-h-[40vh] min-h-0 shrink-0 flex-col border-b border-brand/20">
+          {/* No onSelect: picking an agent must not close the drawer. */}
           <WorkspaceNav
-            onSelect={onSelect}
             open={groups.workspaces}
             onToggle={() => setGroup("workspaces", !groups.workspaces)}
           />
@@ -188,10 +161,9 @@ export default function UnifiedSidebar({
                 // of showing the previous agent's conversations for a beat.
                 key={`${workspace.t}|${workspace.s}|${workspace.r}`}
                 workspace={workspace}
-                onSelect={onSelect}
+                onSelect={onConversationSelect}
                 open={groups.conversations}
                 onToggle={() => setGroup("conversations", !groups.conversations)}
-                bodyRef={conversationsRef}
               />
             ) : (
               // Present with an empty state, not absent: a group that appears once a
