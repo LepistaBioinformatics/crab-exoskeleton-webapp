@@ -1,6 +1,7 @@
 # admin-instance-config-editor — Specification (webapp)
 
-**Status:** Draft
+**Status:** Shipped. See "Reconciliation" at the end for what changed during
+implementation.
 **Size:** Large (new BFF route pair, new panel surface, two editor modes)
 **Companion spec:** `crab-shell-proxy/.specs/features/admin-instance-config-editor/spec.md`
 owns the problem statement, the API contract, the FR-7 argument and the
@@ -222,3 +223,63 @@ its own `config.json`.
 | FR-7.1 | Component test: the policy select is present and its value reaches the request |
 | FR-7.3 | Component test: `reason: "config"` renders non-empty banner copy |
 | FR-8.1 | `parity.test.ts` (existing gate) |
+
+---
+
+## Reconciliation (what shipped)
+
+Every FR is implemented. Six deviations, and one of them found a real bug.
+
+**Component tests are not where the spec put them.** This repo's vitest config is
+`environment: "node"` with no DOM and no testing-library, and the editor portals
+to `<body>`, so it cannot be mounted in this suite at all — the same limit
+`restart-notice.test.tsx` already documents about itself. Rather than change the
+shared test environment for one feature, the coverage moved:
+
+| Was going to be | Is |
+| --- | --- |
+| `instance-config-editor.test.tsx` | `instance-config-state.test.ts` — a new **pure** module holding the editor's decisions (`initialMode`, `canSave`, `outcomeFor`, `outcomeForError`, `insertTab`), 14 tests |
+| Tree component tests | `json-tree-view.test.tsx` — `renderToStaticMarkup`, which works because the tree has no effects and no portal. Asserts the **first paint**, which is exactly where the read-only rules live |
+
+FR-3.1, FR-3.4, FR-3.5, FR-4.1 and FR-4.4 (modal shell, dirty-close confirmation,
+Escape/backdrop, the Tab handler's wiring, Format) are therefore verified by
+`tsc` and the production build plus manual UAT, not by an automated test. That is
+a real gap and it is the environment's, not the design's: closing it needs
+jsdom + testing-library, which is its own change.
+
+**The extraction was worth it independently.** `outcomeFor`'s ordering rule — a
+failed re-apply outranks a reverted managed path, and both read as *saved* — is a
+product decision, and it now has a test naming the reason instead of living
+inside a JSX branch.
+
+**`json-tree.tsx` had to be renamed `json-tree-view.tsx`.** `./json-tree`
+resolves to the `.ts` file first, so the two modules the design named could not
+coexist under one basename.
+
+**`isManaged` became `isWithin`, and the rename caught a bug.** The tree's
+redaction check was written as "this path equals a redacted entry, or an entry
+starts with it" — which does not match `model_list[0].api_keys[0]`, the leaf that
+actually holds the credential. The first render of the markup test printed
+`sk-live-secret` into an editable input. Both the managed check and the redaction
+check need the same containment rule (a path, or anything inside it), so they now
+share one function. `json-tree-view.test.tsx`'s masking test is the regression
+gate.
+
+**FR-8.2's `SHARED` extension was unnecessary.** The JSON type names in the
+switcher come from a literal array in the component (`string`/`number`/
+`boolean`/`null` are JSON syntax, not copy), so they never entered the i18n
+dictionaries and the parity test needed no exemption. All other new copy is in
+both locales and `parity.test.ts` passes unchanged.
+
+**`Alert` has only `error` and `info` severities.** The spec's "warning" states
+(reapply-failed, and the saved/reverted notices) render as `info`; stale-revision
+renders as `error`, because nothing was written. No new severity was added for
+this feature.
+
+**Verification.** `yarn tsc --noEmit` clean. `yarn vitest run`: **271 passed / 25
+files**, including 23 `json-tree`, 14 `instance-config-state`, 8
+`json-tree-view`, and `parity.test.ts`. `yarn build` succeeds with
+`/api/admin/users/config` in the route manifest. `app/api/admin/users/files/route.ts`
+has an empty diff, so its "do not add one" instruction is untouched; the only
+deletions in `members-panel.tsx` are the lucide import line and the `<UserFiles>`
+block being wrapped in a fragment.
