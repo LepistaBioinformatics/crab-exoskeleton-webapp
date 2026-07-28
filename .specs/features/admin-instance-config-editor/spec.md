@@ -148,6 +148,51 @@ its own `config.json`.
 - **FR-5.8** A tree row is addressable for tests by its dotted path
   (`data-path="tools.exec.timeout_seconds"`).
 
+### FR-9 — Raw mode is a real code editor (increment)
+
+Raw mode shipped as a bare `Textarea`. Plain monospace text is where an admin
+actually reads a 470-line document, and it gave them nothing: no way to tell a key
+from a value, no way to collapse the 15 channel blocks they are not looking at.
+
+- **FR-9.1 (highlighting)** Keys, strings, numbers, booleans, `null` and
+  punctuation are visually distinct. Rendered as a coloured `<pre>` layer behind a
+  transparent `<textarea>`, so the caret, selection, IME, undo/redo and
+  spellcheck stay **native** — nothing about editing is reimplemented.
+- **FR-9.2** The highlight layer's text is a **contiguous, non-overlapping cover**
+  of the input. A tokenizer that dropped or reordered one character would shift
+  every glyph after it and misalign the caret from what the admin sees, so the
+  tokenizer emits a token for whitespace and for garbage too.
+- **FR-9.3** A key is a string whose next non-whitespace character is `:`. That is
+  the only difference between a key and a string value in JSON, and it is what
+  makes the highlighting worth having at all.
+- **FR-9.4** The tokenizer **never throws** and never gives up on the rest of the
+  document. An unterminated string or a stray character is tokenized and coloured
+  as invalid; the file this feature repairs is by definition malformed.
+- **FR-9.5 (folding)** Every `{`/`[` whose match is on a later line can be
+  collapsed from a gutter arrow, and reopened. Line numbers sit in the same
+  gutter.
+- **FR-9.6** The canonical document is still the **full** text (FR-6.1). Folding
+  derives a *view* plus a segment map from it; the textarea shows the view, and an
+  edit is remapped from view coordinates back into the canonical text. Folding
+  therefore never changes what a save sends, and a fold can be open or closed
+  anywhere in the document while the admin types anywhere else.
+- **FR-9.7** An edit that overlaps a fold placeholder replaces the **whole hidden
+  range** and drops that fold — the same thing a real editor does when you select
+  across a collapsed region and type. Silently keeping a fold whose text no longer
+  exists is how the mapping would start corrupting documents.
+- **FR-9.8** Lines do **not** wrap (`white-space: pre` + horizontal scroll). A
+  wrapped line occupies two rows in the text layer and one in the gutter, which
+  desynchronises the line numbers and every fold arrow below it.
+- **FR-9.9** The token→colour map lives in its own module with no admin or JSON
+  coupling, so the chat's markdown code blocks can adopt it later without
+  refactoring this screen. Highlighting those blocks is **not** in this change:
+  they are multi-language and arrive token-by-token while streaming, which needs a
+  grammar per language and per-block memoization.
+- **FR-9.10** No new dependency (NFR-1 holds). A JSON tokenizer is ~60 lines;
+  the folding and the view/canonical remapping are the parts a library would have
+  supplied, and they are pure functions here — which is what makes them testable
+  in this suite at all.
+
 ### FR-6 — State model
 
 - **FR-6.1** The **text** is the single source of truth. Tree mode derives its
@@ -247,6 +292,13 @@ its own `config.json`.
 | FR-7.1.2 | Proxy unit (`admin_instance_config_test.go`): the route bounces the named agent, reports `noop` when stopped, 403s a non-manager |
 | FR-7.3 | Component test: `reason: "config"` renders non-empty banner copy |
 | FR-8.1 | `parity.test.ts` (existing gate) |
+| FR-9.2 | Unit: concatenating every token's slice reproduces the input exactly, over valid, broken and empty documents |
+| FR-9.3 | Unit: `{"a": "b"}` tags `a` as a key and `b` as a string |
+| FR-9.4 | Unit: unterminated string, stray `@`, lone `-` — tokenizes without throwing and still covers the input |
+| FR-9.5 | Unit: fold ranges for nested objects/arrays; a same-line pair is not foldable |
+| FR-9.6 | Unit: `foldedView` segment map round-trips; view offsets translate to canonical offsets |
+| FR-9.7 | Unit: an edit overlapping a placeholder replaces the hidden range and drops the fold |
+| FR-9.8 | Component: the text layer carries `whitespace-pre` and no wrap |
 
 ---
 
@@ -321,3 +373,42 @@ files**, including 27 `json-tree`, 14 `instance-config-state`, 8
 has an empty diff, so its "do not add one" instruction is untouched; the only
 deletions in `members-panel.tsx` are the lucide import line and the `<UserFiles>`
 block being wrapped in a fragment.
+
+### FR-9 reconciliation
+
+Shipped. Five things differ from the FR-9 draft above.
+
+**The theme module is `syntax-theme.ts`, keyed by ROLE, not by JSON node type.**
+FR-9.9 asked for a reusable token→colour map; a map keyed by `key`/`boolean` would
+not have been one. It exposes `name`/`string`/`number`/`keyword`/`punct`/`comment`/
+`invalid`/`plain`, and `json-tokens.ts` owns the JSON-kind→role mapping, because
+the tokenizer is the thing that knows what its kinds mean. The colours themselves
+went into `globals.css` as `--syntax-*` in both light and dark, which is where this
+app's theming lives — a second caller inherits them for free.
+
+**Folds are cleared on any wholesale replacement of the document, which the draft
+did not say.** A fold id is an offset. Reformat, reload, or the document the proxy
+returns from a save all move every offset, and a surviving id would have collapsed
+whatever bracket happened to land there — silently hiding the wrong node. Only an
+incremental edit keeps them, because `applyViewEdit` shifts them itself.
+
+**A fold's id survives being edited *around*, but not being edited *through*.** The
+first implementation left the id in the set when an edit destroyed the range, on the
+grounds that a stale id stops matching and is filtered out. That is true and still
+harmless — but it lies in wait: collapse a list, type over the placeholder to get
+`[9]`, then press Enter inside it, and the range becomes multi-line again and
+springs back COLLAPSED. `applyViewEdit` now drops any fold the edit span touched.
+A test asserts it.
+
+**The textarea owns the scroll, not a shared scroller.** Putting both layers inside
+one scrolling element needs no sync at all, and was the first design — but the
+textarea then cannot scroll to follow the caret, so typing past the right edge
+walks the caret out of sight. The textarea scrolls and the painted layer plus the
+gutter are translated to match.
+
+**Measured, on the real seeded template** (470 lines, 12 KiB): a full
+tokenize + fold scan is **0.64 ms**, so running it per keystroke needs no
+debounce or incremental parse. Collapsing the top level takes the document from
+**470 lines to 17**. The whole feature added **3.3 KiB** to the `/admin` bundle
+(43.4 → 46.7 KiB), against roughly 100 KiB gzip for the CodeMirror route it
+replaced — which is the number that made the hand-rolled option worth it.

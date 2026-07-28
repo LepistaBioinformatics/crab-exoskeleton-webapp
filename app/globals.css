@@ -33,6 +33,20 @@
      A plain dark shadow vanishes on a dark background, so dark mode adds a
      faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
   --shadow-e: 0 1px 2px rgba(10, 41, 51, 0.10), 0 4px 12px rgba(10, 41, 51, 0.10);
+  /* Syntax roles, for code shown in a highlighted layer. Named by ROLE, not by
+     JSON node type, so a second language can reuse them without renaming
+     anything: `name` is a key or identifier, `keyword` covers true/false/null and
+     any language's reserved words.
+
+     Deliberately outside the accent: the accent means "interactive", and a string
+     literal is not. `name` borrows the structural violet so a key reads as
+     structure, which is what it is. */
+  --syntax-name: #663a88;
+  --syntax-string: #1f7a4d;
+  --syntax-number: #a35200;
+  --syntax-keyword: #0d6e8c;
+  --syntax-punct: #7c8a90;
+  --syntax-comment: #5a6b72;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +65,13 @@
     --retiring: #c9b45f;
     --retiring-weak: #2c2718;
     --shadow-e: 0 2px 8px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    /* Lifted for contrast on #14171a; the light values are far too dark to read. */
+    --syntax-name: #c79ae8;
+    --syntax-string: #7fd6a0;
+    --syntax-number: #f0b478;
+    --syntax-keyword: #7fd3ef;
+    --syntax-punct: #8b9aa1;
+    --syntax-comment: #9fb0b7;
   }
 }
 
@@ -68,6 +89,12 @@
   --color-blocked-weak: var(--blocked-weak);
   --color-retiring: var(--retiring);
   --color-retiring-weak: var(--retiring-weak);
+  --color-syntax-name: var(--syntax-name);
+  --color-syntax-string: var(--syntax-string);
+  --color-syntax-number: var(--syntax-number);
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-punct: var(--syntax-punct);
+  --color-syntax-comment: var(--syntax-comment);
 
   /* Theme-aware elevation utility -> `shadow-elevated`. Uses the runtime var so
      it flips with prefers-color-scheme (a baked literal here would not). */

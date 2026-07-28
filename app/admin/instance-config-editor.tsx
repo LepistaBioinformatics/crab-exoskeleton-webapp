@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useT } from "@/lib/i18n/context";
 import { adminCopy } from "@/lib/i18n/admin";
@@ -23,12 +22,12 @@ import {
   type InstanceRef,
 } from "@/lib/admin";
 import RestartPolicySelect from "./restart-policy-select";
+import JsonCodeEditor from "./json-code-editor";
 import { JsonTree } from "./json-tree-view";
 import { parseDocument, serialize, type JsonValue } from "./json-tree";
 import {
   canSave,
   initialMode,
-  insertTab,
   outcomeFor,
   outcomeForError,
   saveLabel,
@@ -80,6 +79,9 @@ export default function InstanceConfigEditor({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [reload, setReload] = useState(0);
+  // Which brackets are collapsed, by the offset of the opening bracket in the
+  // CANONICAL text. Folding is a view of the document, never a change to it.
+  const [folded, setFolded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +92,7 @@ export default function InstanceConfigEditor({
       .then((cfg) => {
         if (cancelled) return;
         setLoaded(cfg);
-        setText(cfg.raw);
+        replaceDocument(cfg.raw);
         setMode(initialMode(cfg.valid));
       })
       .catch((e: Error) => {
@@ -100,6 +102,15 @@ export default function InstanceConfigEditor({
       cancelled = true;
     };
   }, [instance, reload]);
+
+  // Fold ids are offsets into the text. Any wholesale replacement — load, reload,
+  // reformat, or the document the proxy returns from a save — moves every offset,
+  // and a surviving id would collapse whatever bracket now happens to sit there.
+  // Only an incremental edit may keep them (applyViewEdit shifts them itself).
+  function replaceDocument(next: string) {
+    setText(next);
+    setFolded(new Set());
+  }
 
   const parsed = useMemo(() => parseDocument(text), [text]);
   const dirty = loaded !== null && text !== loaded.raw;
@@ -150,7 +161,7 @@ export default function InstanceConfigEditor({
       // The response is the POST-materialization document. Replace state with it
       // rather than assuming the save landed as typed.
       setLoaded(res);
-      setText(res.raw);
+      replaceDocument(res.raw);
       setOutcome(outcomeFor(res, submitted));
     } catch (e) {
       setOutcome(outcomeForError(e instanceof Error ? e.message : "unknown"));
@@ -213,7 +224,7 @@ export default function InstanceConfigEditor({
               {parsed.ok && mode === "raw" && (
                 <Button
                   variant="text"
-                  onClick={() => setText(serialize(parsed.value as JsonValue))}
+                  onClick={() => replaceDocument(serialize(parsed.value as JsonValue))}
                 >
                   {t.format}
                 </Button>
@@ -228,30 +239,24 @@ export default function InstanceConfigEditor({
               <p className="mt-1 text-xs leading-relaxed text-fg-muted">{t.redactedNote}</p>
             )}
 
-            <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg border border-brand/30 bg-elevated p-2">
+            <div className="mt-3 flex min-h-[45vh] flex-1 flex-col overflow-hidden">
               {mode === "raw" ? (
-                <Textarea
-                  className="min-h-[45vh] resize-y font-mono text-xs leading-relaxed"
-                  spellCheck={false}
-                  aria-label={t.rawMode}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Tab") return;
-                    e.preventDefault();
-                    const el = e.currentTarget;
-                    const next = insertTab(text, el.selectionStart, el.selectionEnd);
-                    setText(next.text);
-                    requestAnimationFrame(() => el.setSelectionRange(next.caret, next.caret));
-                  }}
+                <JsonCodeEditor
+                  text={text}
+                  folded={folded}
+                  onChange={setText}
+                  onFoldedChange={setFolded}
+                  ariaLabel={t.rawMode}
                 />
               ) : (
+                <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-brand/30 bg-elevated p-2">
                 <JsonTree
                   doc={parsed.value as JsonValue}
                   managed={loaded.managedPaths}
                   redacted={loaded.redactedPaths}
                   onChange={(next) => setText(serialize(next))}
                 />
+                </div>
               )}
             </div>
 
