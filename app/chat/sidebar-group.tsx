@@ -53,7 +53,11 @@ export default function SidebarGroup({
 }) {
   return (
     <>
-      <div className="flex shrink-0 items-center gap-1 pr-1">
+      {/* pt-2 on the ROW, not on the toggle: the group's actions (the conversations
+          list/tree switch, the workspaces magnifier) sit here too, and they were flush
+          against whatever is above — the brand header for the first group, the
+          previous group's last row for the second. */}
+      <div className="flex shrink-0 items-center gap-1 pr-1 pt-2">
         {/* The toggle is the header text, not the whole row: the actions beside it
             are their own buttons, and nesting them inside a button is invalid and
             makes the whole header swallow their clicks. */}

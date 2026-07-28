@@ -276,7 +276,12 @@ export default function HistorySidebar({
       {/* Always present, never behind a threshold: history grows without bound and
           this is the rich query (tag:, content search). A field that appears once a
           count is crossed is a moving target. */}
-      <div className="shrink-0 px-2 pb-2 pt-1">
+      {/* Roomy above and below. The search plus its filter chips is one block
+          (ConversationSearchBar stacks them), so this wrapper is the only place the
+          spacing belongs — and it has to separate the block from the group header
+          above it and from the new-chat row below it, neither of which is its own
+          section divider. */}
+      <div className="shrink-0 px-2 pb-3 pt-3">
         <ConversationSearchBar
           value={query}
           onChange={setQuery}
