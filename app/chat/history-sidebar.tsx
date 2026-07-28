@@ -20,7 +20,6 @@ import {
   renameConversation,
   type ConversationSummary,
 } from "@/lib/chatSession";
-import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -274,23 +273,6 @@ export default function HistorySidebar({
         onMouseEnter={() => setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
       >
-      {/* Kept as a LABELLED button in the body rather than an icon in the header.
-          It is the most important action in this group, the header row is already
-          carrying the agent name, the title and the list/tree toggle, and an
-          icon-only new-chat is exactly the kind of discoverability this refactor has
-          no business spending. */}
-      <div className="px-3 pb-1 pt-1">
-        <Button
-          variant="text"
-          size="sm"
-          className="-ml-1 gap-1.5 px-1 text-accent"
-          onClick={onNewChat}
-        >
-          <MessageSquarePlus size={16} />
-          {t.history.newChat}
-        </Button>
-      </div>
-
       {/* Always present, never behind a threshold: history grows without bound and
           this is the rich query (tag:, content search). A field that appears once a
           count is crossed is a moving target. */}
@@ -301,6 +283,24 @@ export default function HistorySidebar({
           conversations={conversations}
           searching={searching}
         />
+      </div>
+
+      {/* Under the search, on the row the first conversation would occupy, and right
+          aligned. Icon-only with the label as its title: the plus already reads as
+          "add one of these" from where it sits — directly above the list of them —
+          and the generous vertical padding is what separates it from the first row so
+          it does not read as a conversation itself. */}
+      <div className="flex justify-end px-3 py-2.5">
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={t.history.newChat}
+          title={t.history.newChat}
+          onClick={onNewChat}
+          className="text-accent"
+        >
+          <MessageSquarePlus size={18} aria-hidden />
+        </IconButton>
       </div>
 
       <div className="px-2 pb-2">

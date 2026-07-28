@@ -71,9 +71,18 @@ and free of tree chrome when the member's account has nothing to branch.
   tenant row; a tenant with one subscription hides that subscription's row. — DEC-4
 - **FR-3.2** The literal case in the request — one tenant, one subscription, one
   workspace — is this rule applied three times, not a special case beside it.
-- **FR-3.3** When exactly one tenant exists, its identity (avatar, brand colour,
-  name) moves to the **Workspaces group header**, so hiding the row does not lose
-  who the workspaces belong to.
+- **FR-3.3** **A hoisted level's label is carried onto the surviving header, never
+  discarded.** Suppressing a row is a decision about vertical space; it is not licence
+  to drop what the row said.
+  - One tenant → its identity (avatar, brand colour, name) moves to the **Workspaces
+    group header**.
+  - One subscription under a tenant → its **name** moves onto whichever header
+    survived: the group header when the tenant was hoisted too, or the tenant's own
+    row when it was not.
+  - Which subscription a workspace belongs to is load-bearing (billing, membership,
+    who administers it), and the first implementation of this rule dropped it: a
+    member with one subscription saw agent names with nothing saying what they hung
+    from.
 - **FR-3.4** The rule is about *rendering*, never about selection: hoisting a level
   changes no workspace key, no fragment and no request.
 - **FR-3.5** While a workspace filter is active the tree renders every surviving
@@ -164,7 +173,7 @@ and free of tree chrome when the member's account has nothing to branch.
 | --- | --- |
 | FR-3.1 | Unit: 1 tenant/1 sub/4 agents hoists both levels; 2 tenants with 1 sub each hoists only the subs |
 | FR-3.2 | Unit: 1/1/1 yields a single agent row and no headers |
-| FR-3.3 | Unit: the plan reports the sole tenant; component: its avatar renders in the group header |
+| FR-3.3 | Unit: the plan reports the sole tenant, and carries a hoisted subscription's name onto the sole tenant, onto a surviving tenant row, and not at all when the subscription rows survived |
 | FR-3.4 | Unit: every agent leaf survives hoisting, with its key unchanged |
 | FR-3.5 | Unit: hoisting applied to a filtered tree |
 | FR-4.1 | Unit: `agentCount` counts leaves only. **Not** covered at component level — see below |
@@ -208,11 +217,13 @@ implies otherwise:
 Closing them needs jsdom plus a testing library, which is the same gap the
 admin instance-config spec records — one change, not four.
 
-**Kept deliberately.** New chat stayed a **labelled** button in the group body rather
-than becoming an icon in the header. It is the most important action in that group,
-the header row already carries the agent name, the title and the list/tree toggle, and
-an icon-only new-chat is exactly the discoverability this refactor has no business
-spending.
+**New chat moved twice.** It began as a labelled text button (as in the old sidebar),
+briefly became an icon in the group header — which was a discoverability regression the
+refactor had no reason to spend — and now sits **under the search, right-aligned, as a
+plus icon with the label as its title**, on the row the first conversation would
+occupy. That placement is what earns the icon: the plus is directly above the list of
+the things it adds, so it does not need a word. Generous vertical padding separates it
+from the first conversation so it does not read as one.
 
 **Also fixed in passing.** Both section titles were the literals `WORKSPACES` and
 `CONVERSATIONS`, hardcoded in JSX and untranslated. They now come from
@@ -223,3 +234,29 @@ panes' aria labels.
 files**, including 15 for the tree plan; `yarn build` succeeds. `/chat` 86.1 → 88.8 kB.
 `yarn lint` is not a gate in this repo — it is unconfigured and prompts
 interactively.
+
+---
+
+## Reconciliation, second pass
+
+Three defects reported from use, all mine, all from the shipped change.
+
+**A hoisted subscription's name vanished.** FR-3.3 was written for the tenant only and
+never generalized, so the rule as built suppressed a single subscription's row and threw
+its label away with it — leaving agent names with nothing saying which subscription they
+belong to. FR-3.3 is now the general clause and the plan reports `hoistedAccount`, which
+renders on the group header or on the surviving tenant row as appropriate. Four unit
+tests cover it, including the case where nothing should be carried.
+
+**The conversations list/tree switch rendered OUTSIDE the pane.** `SidebarGroup` gave
+its header toggle `w-full` while placing it in a row beside the group's actions;
+`width: 100%` took the whole row and pushed the actions past the pane's right edge. It
+is `min-w-0 flex-1` now, and `unified-sidebar.test.tsx` asserts the `w-full` class
+string is absent — a markup test cannot see the overflow, but it can see the cause.
+
+**Tree is now the default conversation view** (`fragment.ts`). It shows how
+conversations branch from one another and the flat list is the reduction of it, so `hv`
+is written into the URL for `list` and omitted for tree — the inverse of before.
+
+**Verification.** `yarn tsc --noEmit` clean; `yarn vitest run` **376 passed / 32
+files**; `yarn build` succeeds. `/chat` 89 kB.
