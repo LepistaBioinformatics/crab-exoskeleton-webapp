@@ -23,6 +23,7 @@ import {
 } from "@/lib/admin";
 import RestartPolicySelect from "./restart-policy-select";
 import JsonCodeEditor from "./json-code-editor";
+import { collapseAll } from "./json-folds";
 import { JsonTree } from "./json-tree-view";
 import { parseDocument, serialize, type JsonValue } from "./json-tree";
 import {
@@ -221,13 +222,25 @@ export default function InstanceConfigEditor({
                 <ListTree size={14} aria-hidden />
                 {t.treeMode}
               </button>
-              {parsed.ok && mode === "raw" && (
-                <Button
-                  variant="text"
-                  onClick={() => replaceDocument(serialize(parsed.value as JsonValue))}
-                >
-                  {t.format}
-                </Button>
+              {mode === "raw" && (
+                <>
+                  {/* Without these, the overview folding exists to give costs one
+                      click per bracket — the seeded template has 107 of them. */}
+                  <Button variant="text" onClick={() => setFolded(collapseAll(text))}>
+                    {t.collapseAll}
+                  </Button>
+                  <Button variant="text" onClick={() => setFolded(new Set())}>
+                    {t.expandAll}
+                  </Button>
+                  {parsed.ok && (
+                    <Button
+                      variant="text"
+                      onClick={() => replaceDocument(serialize(parsed.value as JsonValue))}
+                    >
+                      {t.format}
+                    </Button>
+                  )}
+                </>
               )}
               <span className="ml-auto text-xs text-fg-muted">
                 {parsed.ok ? t.validJson : parseMessage(t, parsed)}

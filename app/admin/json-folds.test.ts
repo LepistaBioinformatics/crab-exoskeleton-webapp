@@ -4,6 +4,8 @@ import {
   foldedView,
   applyViewEdit,
   lineStarts,
+  sameFolds,
+  collapseAll,
   FOLD_PLACEHOLDER,
 } from "./json-folds";
 
@@ -189,5 +191,49 @@ describe("lineStarts", () => {
   it("gives the offset each line begins at, including a trailing newline's line", () => {
     expect(lineStarts("a\nbb\n")).toEqual([0, 2, 5]);
     expect(lineStarts("")).toEqual([0]);
+  });
+});
+
+// The contract the component depends on, stated as a test because getting it wrong
+// is invisible: a shift-only edit returns a set of the SAME SIZE with DIFFERENT
+// contents. Any caller that decides "did the folds change?" by comparing sizes will
+// reuse stale offsets against new text, and every fold below the edit will pop open
+// (or, worse, collapse whichever bracket now sits at the old offset).
+describe("applyViewEdit — the fold set is not comparable by size", () => {
+  it("returns the same size but different ids for an edit above a fold", () => {
+    const open = doc.indexOf("[\n    1");
+    const folded = new Set([open]);
+    const view = foldedView(doc, folded);
+    const next = view.text.replace('"version": 3', '"version": 3000');
+
+    const res = applyViewEdit(doc, folded, view.text, next);
+    expect(res.folded.size).toBe(folded.size);
+    expect([...res.folded]).not.toEqual([...folded]);
+    expect(sameFolds(res.folded, folded)).toBe(false);
+  });
+
+  it("sameFolds compares contents, so it catches a shift a size check misses", () => {
+    expect(sameFolds(new Set([1, 2]), new Set([2, 1]))).toBe(true);
+    expect(sameFolds(new Set([1, 2]), new Set([1, 3]))).toBe(false);
+    expect(sameFolds(new Set(), new Set())).toBe(true);
+  });
+});
+
+describe("collapseAll", () => {
+  it("folds everything except the outermost bracket", () => {
+    const all = collapseAll(doc);
+    expect(all.has(0)).toBe(false); // the document itself stays open
+    expect(all.has(openOf('{\n    "defaults"'))).toBe(true);
+    expect(all.has(openOf("[\n    1"))).toBe(true);
+    // Which produces the overview: one row per top-level key.
+    const view = foldedView(doc, all);
+    expect(view.text.split("\n").length).toBeLessThan(doc.split("\n").length);
+    expect(view.text).toContain('"version": 3');
+    expect(view.text).not.toContain("max_tokens");
+  });
+
+  it("is empty for a document with nothing foldable", () => {
+    expect(collapseAll('{ "a": 1 }').size).toBe(0);
+    expect(collapseAll("").size).toBe(0);
   });
 });

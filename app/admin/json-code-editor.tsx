@@ -7,7 +7,7 @@ import { useT } from "@/lib/i18n/context";
 import { adminCopy } from "@/lib/i18n/admin";
 import { SYNTAX_ROLE, tokenize } from "./json-tokens";
 import { roleClass } from "./syntax-theme";
-import { applyViewEdit, foldedView, foldRanges, lineStarts } from "./json-folds";
+import { applyViewEdit, foldedView, foldRanges, lineStarts, sameFolds } from "./json-folds";
 import { insertTab } from "./instance-config-state";
 
 // The raw JSON editor: a coloured layer behind a TRANSPARENT TEXTAREA.
@@ -33,6 +33,18 @@ const gutterRow = cva("flex h-5 items-center justify-end gap-1 pr-1 text-[11px] 
   },
   defaultVariants: { foldable: false },
 });
+
+// lineOfOffset finds the 0-based row an offset falls on, given the line starts.
+function lineOfOffset(starts: number[], offset: number): number {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
 
 export default function JsonCodeEditor({
   text,
@@ -62,10 +74,15 @@ export default function JsonCodeEditor({
   // collapsed range higher up shifts every line under it.
   const arrows = useMemo(() => {
     const byLine = new Map<number, { open: number; collapsed: boolean; count: number }>();
+    // One arrow per row, and when several brackets open on the same line
+    // (`"a": [{`) it acts on the OUTERMOST — foldRanges is ordered by offset, so
+    // first-wins picks it. Collapsing the outer one hides the inner content anyway;
+    // last-wins picked the inner one and left the outer unreachable, which is
+    // strictly worse. Collapsing ONLY an inner bracket that shares a row with its
+    // parent is the one thing this cannot express (FR-9.5).
     for (const range of foldRanges(view.text)) {
-      const line = rows.findIndex(
-        (start, i) => start <= range.open && (i + 1 === rows.length || rows[i + 1] > range.open),
-      );
+      const line = lineOfOffset(rows, range.open);
+      if (byLine.has(line)) continue;
       const canonical = view.segments.find(
         (s) => !s.hidden && range.open >= s.viewStart && range.open < s.viewEnd,
       );
@@ -74,16 +91,17 @@ export default function JsonCodeEditor({
       byLine.set(line, { open: canonicalOpen, collapsed: false, count: range.count });
     }
     // A collapsed range's own arrow: its opening bracket is still visible, so the
-    // line it sits on is the line that must offer to reopen it.
+    // line it sits on is the row that must offer to reopen it. This overrides the
+    // pass above, which only sees ranges that are currently expanded.
+    const reopened = new Set<number>();
     for (const range of view.folded) {
       const seg = view.segments.find(
         (s) => !s.hidden && range.open >= s.canonicalStart && range.open < s.canonicalEnd,
       );
       if (!seg) continue;
-      const viewOpen = seg.viewStart + (range.open - seg.canonicalStart);
-      const line = rows.findIndex(
-        (start, i) => start <= viewOpen && (i + 1 === rows.length || rows[i + 1] > viewOpen),
-      );
+      const line = lineOfOffset(rows, seg.viewStart + (range.open - seg.canonicalStart));
+      if (reopened.has(line)) continue;
+      reopened.add(line);
       byLine.set(line, { open: range.open, collapsed: true, count: range.count });
     }
     return byLine;
@@ -192,7 +210,11 @@ export default function JsonCodeEditor({
             // the canonical document, which is the only text a save ever sees.
             const next = applyViewEdit(text, folded, view.text, e.target.value);
             onChange(next.text);
-            if (next.folded.size !== folded.size) onFoldedChange(next.folded);
+            // Compared by CONTENTS, never by size: an edit above a fold shifts its
+            // id without changing the count, and skipping the update there would
+            // apply stale offsets to new text — popping every fold below the caret
+            // open, or collapsing whichever bracket now sits at the old offset.
+            if (!sameFolds(next.folded, folded)) onFoldedChange(next.folded);
           }}
           onKeyDown={(e) => {
             if (e.key !== "Tab") return;
@@ -201,6 +223,9 @@ export default function JsonCodeEditor({
             const edited = insertTab(view.text, area.selectionStart, area.selectionEnd);
             const next = applyViewEdit(text, folded, view.text, edited.text);
             onChange(next.text);
+            // Two inserted characters shift every fold after the caret, so this
+            // path needs the update just as much as typing does.
+            if (!sameFolds(next.folded, folded)) onFoldedChange(next.folded);
             requestAnimationFrame(() => area.setSelectionRange(edited.caret, edited.caret));
           }}
         />

@@ -151,6 +151,32 @@ export function foldedView(text: string, folded: ReadonlySet<number>): FoldedVie
   return { text: view, segments, folded: applied };
 }
 
+// sameFolds compares fold sets by CONTENTS.
+//
+// It exists because comparing them by size is wrong in a way that leaves no trace:
+// an edit above a fold shifts its id without changing how many folds there are, and
+// a caller that skips the update on equal sizes then applies stale offsets to new
+// text. Every fold below the edit silently pops open, and if another foldable
+// bracket happens to sit at the old offset, the wrong node collapses instead.
+export function sameFolds(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+}
+
+// collapseAll folds everything EXCEPT the document's outermost bracket.
+//
+// Collapsing that one too would reduce the whole file to `{ … }`, which no one wants
+// to look at. Excluding it is what produces the useful overview: on the seeded
+// template, 470 lines become 17 — one row per top-level key.
+export function collapseAll(text: string): Set<number> {
+  const ranges = foldRanges(text);
+  const outermost = ranges.length > 0 ? Math.min(...ranges.map((r) => r.open)) : -1;
+  return new Set(ranges.filter((r) => r.open !== outermost).map((r) => r.open));
+}
+
 export interface ViewEdit {
   text: string;
   folded: Set<number>;

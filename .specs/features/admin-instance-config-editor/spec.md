@@ -169,8 +169,18 @@ from a value, no way to collapse the 15 channel blocks they are not looking at.
   document. An unterminated string or a stray character is tokenized and coloured
   as invalid; the file this feature repairs is by definition malformed.
 - **FR-9.5 (folding)** Every `{`/`[` whose match is on a later line can be
-  collapsed from a gutter arrow, and reopened. Line numbers sit in the same
-  gutter.
+  collapsed from a gutter arrow, and reopened. Line numbers sit in the same gutter.
+  - One arrow per row. When several brackets open on the same line (`"a": [{`) it
+    acts on the **outermost**, since collapsing that hides the inner content
+    anyway. Collapsing *only* an inner bracket that shares a row with its parent is
+    the one case this cannot express, and it is accepted: the seeded template is
+    one bracket per line, and a per-bracket gutter would need a column wide enough
+    for several arrows.
+- **FR-9.5.1** **Collapse all** and **Expand all**. Collapse-all excludes the
+  document's outermost bracket — folding that too reduces the file to `{ … }`,
+  which is no use — so it produces the overview: on the seeded template, 470 lines
+  become 17, one row per top-level key. Without it that overview costs one click
+  per bracket, and the template has 107 of them.
 - **FR-9.6** The canonical document is still the **full** text (FR-6.1). Folding
   derives a *view* plus a segment map from it; the textarea shows the view, and an
   edit is remapped from view coordinates back into the canonical text. Folding
@@ -299,6 +309,8 @@ from a value, no way to collapse the 15 channel blocks they are not looking at.
 | FR-9.6 | Unit: `foldedView` segment map round-trips; view offsets translate to canonical offsets |
 | FR-9.7 | Unit: an edit overlapping a placeholder replaces the hidden range and drops the fold |
 | FR-9.8 | Component: the text layer carries `whitespace-pre` and no wrap |
+| FR-9.5.1 | Unit: `collapseAll` excludes the outermost range and yields the overview; empty for a document with nothing foldable |
+| FR-9.6 (ids) | Unit: a shift-only edit returns the same-size set with different ids, so a size comparison is not a valid change test |
 
 ---
 
@@ -412,3 +424,21 @@ debounce or incremental parse. Collapsing the top level takes the document from
 **470 lines to 17**. The whole feature added **3.3 KiB** to the `/admin` bundle
 (43.4 → 46.7 KiB), against roughly 100 KiB gzip for the CodeMirror route it
 replaced — which is the number that made the hand-rolled option worth it.
+
+**Two bugs in the first cut of FR-9, both found in review after the tests passed.**
+
+The component decided "did the folds change?" by comparing set SIZES. An edit above
+a fold shifts its id without changing the count, so the update was skipped and stale
+offsets were applied to the new text: every fold below the caret popped open, and had
+another foldable bracket happened to sit at the old offset, the wrong node would have
+collapsed instead. `applyViewEdit` was already returning the correctly shifted set —
+and its test asserting the shift passed — the caller simply threw it away. The Tab
+handler discarded it outright, so two inserted characters dropped every fold after
+the caret. Both now compare by contents through `sameFolds`, which exists as a named
+function precisely so the wrong comparison is not the convenient one, and
+`json-folds.test.ts` asserts the property the component depends on.
+
+The gutter also picked the WRONG bracket when several open on one row. The map was
+keyed by line with last-write-wins, and `foldRanges` is ordered by offset, so the
+innermost won and the outer range had no arrow at all — unreachable. First-wins now
+picks the outermost, and FR-9.5 records what that gives up.
