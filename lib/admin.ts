@@ -235,6 +235,85 @@ export async function deleteUserFile(
   if (!res.ok) throw new Error(await errorCode(res));
 }
 
+// --- instance config (admin-instance-config-editor) ---
+
+// One member instance: a (member, agent) pair, which is one container and one
+// config.json. A member with grants on two agents has two instances.
+export interface InstanceRef {
+  tenantId: string;
+  subsAccId: string;
+  userAccId: string;
+  agent: string;
+}
+
+// One workspace's config.json as the admin screen sees it.
+//
+// `raw` is the document TEXT, not a parsed object: a config.json that does not
+// parse is exactly what this feature repairs, so the transport has to survive
+// one. `valid` / `parseError` / `offset` describe the bytes — an invalid document
+// still arrives with HTTP 200, because it is data rather than a failure.
+export interface InstanceConfig {
+  raw: string;
+  valid: boolean;
+  parseError?: string;
+  /** Byte offset of the syntax error, or -1 when the failure carries no position. */
+  offset?: number;
+  size: number;
+  modifiedAt: string;
+  /** Concurrency token: sent back on save so a write cannot clobber the proxy's. */
+  revision: string;
+  /**
+   * Dotted paths the PROXY owns (it rewrites them on every materialization). The
+   * editor renders these read-only from this list and never keeps its own copy.
+   */
+  managedPaths: string[];
+  /** Paths masked because a legacy layout still holds a credential there. */
+  redactedPaths?: string[];
+}
+
+export interface InstanceConfigWrite extends InstanceConfig {
+  /**
+   * The post-write materialization. `ok: false` means the configuration IS saved
+   * but the model resolution could not be re-imposed — never that the save
+   * failed.
+   */
+  reapplied: { ok: boolean; detail?: string };
+}
+
+function instanceParams(ref: InstanceRef): URLSearchParams {
+  return new URLSearchParams({
+    tenant_id: ref.tenantId,
+    subs_acc_id: ref.subsAccId,
+    user_acc_id: ref.userAccId,
+    agent: ref.agent,
+  });
+}
+
+export async function readInstanceConfig(ref: InstanceRef): Promise<InstanceConfig> {
+  const res = await fetch(`/api/admin/users/config?${instanceParams(ref).toString()}`);
+  if (!res.ok) throw new Error(await errorCode(res));
+  return (await res.json()) as InstanceConfig;
+}
+
+// `revision` is the token the read returned. A mismatch comes back as
+// `stale_revision`, which the editor surfaces with a Reload rather than retrying:
+// the proxy's own materialization is the other writer, and retrying would
+// overwrite it.
+export async function writeInstanceConfig(
+  ref: InstanceRef,
+  body: { raw: string; revision: string },
+  policy: RestartPolicy = DEFAULT_POLICY,
+): Promise<InstanceConfigWrite> {
+  const url = withPolicy(`/api/admin/users/config?${instanceParams(ref).toString()}`, policy);
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await errorCode(res));
+  return (await res.json()) as InstanceConfigWrite;
+}
+
 // Resolves display names before the scope tree renders (no uuid flash). Tenant
 // names come from the mycelium tenant lookup (/api/tenants/[id]). Subscription
 // account names ride in from /scopes when the caller is that subscription's
