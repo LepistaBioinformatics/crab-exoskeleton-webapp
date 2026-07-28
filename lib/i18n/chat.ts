@@ -22,6 +22,9 @@ const en = {
   nav: {
     collapseWorkspaces: "Collapse Workspaces",
     collapse: "Collapse",
+    // Shown under the Conversations header before a workspace is chosen. The group
+    // is present rather than absent, so it has to say what to do next.
+    pickWorkspaceForConversations: "Pick a workspace above to see its conversations.",
   },
   emptyState: {
     title: "Pick a workspace to start",
@@ -294,6 +297,7 @@ const pt: ChatDict = {
   nav: {
     collapseWorkspaces: "Recolher Workspaces",
     collapse: "Recolher",
+    pickWorkspaceForConversations: "Escolha um workspace acima para ver as conversas dele.",
   },
   emptyState: {
     title: "Escolha um workspace para começar",

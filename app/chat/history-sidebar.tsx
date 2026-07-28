@@ -7,7 +7,6 @@ import {
   GitBranch,
   List,
   MessageSquarePlus,
-  PanelLeftClose,
   Pencil,
   Tags,
   Trash2,
@@ -31,6 +30,7 @@ import { useFragment, setFragmentSid, setHistoryView, type Workspace } from "./f
 import ConversationTree from "./conversation-tree";
 import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
+import SidebarGroup from "./sidebar-group";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -71,11 +71,17 @@ const viewToggle = cva(
 export default function HistorySidebar({
   workspace,
   onSelect,
-  onCollapse,
+  open,
+  onToggle,
+  bodyRef,
 }: {
   workspace: Workspace;
   onSelect?: () => void;
-  onCollapse?: () => void;
+  /** Group open/closed, owned by the unified sidebar so it can be persisted. */
+  open: boolean;
+  onToggle: () => void;
+  /** So the sidebar can scroll this group into view when opened from mobile. */
+  bodyRef?: React.Ref<HTMLDivElement>;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -218,43 +224,62 @@ export default function HistorySidebar({
   const pendingDelete = deletingId ? visible.find((c) => c.id === deletingId) : null;
 
   return (
-    <div
-      className="flex h-full flex-col bg-surface"
-      onMouseEnter={() => setSidebarHovered(true)}
-      onMouseLeave={() => setSidebarHovered(false)}
-    >
-      <div className="flex h-16 shrink-0 items-center gap-2 px-4">
-        <Bot size={18} className="shrink-0 text-fg-muted" aria-hidden />
-        <span
-          className="min-w-0 flex-1 truncate font-display text-base font-semibold capitalize text-fg"
-          title={`${t.view.agentPrefix} ${workspace.r}`}
-        >
-          {workspace.r}
-        </span>
-        {onCollapse && (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.history.collapseConversations}
-            title={t.nav.collapse}
-            onClick={onCollapse}
-            className="hidden md:inline-flex"
+    <SidebarGroup
+      title={t.shell.conversations}
+      open={open}
+      onToggle={onToggle}
+      bodyRef={bodyRef}
+      // The agent whose conversations these are. It used to be this sidebar's own
+      // 16px header; in one pane that would be a second title bar six rows under
+      // the brand.
+      identity={
+        <span className="flex min-w-0 shrink items-center gap-1.5">
+          <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
+          <span
+            className="max-w-24 truncate text-[11px] capitalize text-fg-muted"
+            title={`${t.view.agentPrefix} ${workspace.r}`}
           >
-            <PanelLeftClose size={18} aria-hidden />
-          </IconButton>
-        )}
-      </div>
-
-      <div className="shrink-0 px-2 pb-2">
-        <ConversationSearchBar
-          value={query}
-          onChange={setQuery}
-          conversations={conversations}
-          searching={searching}
-        />
-      </div>
-
-      <div className="px-3 pb-1">
+            {workspace.r}
+          </span>
+        </span>
+      }
+      actions={
+        <>
+          <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
+            <button
+              type="button"
+              onClick={() => setHistoryView("list")}
+              className={viewToggle({ active: view === "list" })}
+              aria-label={t.history.listView}
+              aria-pressed={view === "list"}
+              title={t.history.list}
+            >
+              <List size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryView("tree")}
+              className={viewToggle({ active: view === "tree" })}
+              aria-label={t.history.treeView}
+              aria-pressed={view === "tree"}
+              title={t.history.tree}
+            >
+              <GitBranch size={14} aria-hidden />
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+      >
+      {/* Kept as a LABELLED button in the body rather than an icon in the header.
+          It is the most important action in this group, the header row is already
+          carrying the agent name, the title and the list/tree toggle, and an
+          icon-only new-chat is exactly the kind of discoverability this refactor has
+          no business spending. */}
+      <div className="px-3 pb-1 pt-1">
         <Button
           variant="text"
           size="sm"
@@ -266,36 +291,19 @@ export default function HistorySidebar({
         </Button>
       </div>
 
-      <div className="flex items-center gap-2 px-3 pb-1 pt-1">
-        <span className="h-2 w-2 shrink-0 bg-accent" />
-        <span className="min-w-0 flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          CONVERSATIONS
-        </span>
-        <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
-          <button
-            type="button"
-            onClick={() => setHistoryView("list")}
-            className={viewToggle({ active: view === "list" })}
-            aria-label={t.history.listView}
-            aria-pressed={view === "list"}
-            title={t.history.list}
-          >
-            <List size={14} aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => setHistoryView("tree")}
-            className={viewToggle({ active: view === "tree" })}
-            aria-label={t.history.treeView}
-            aria-pressed={view === "tree"}
-            title={t.history.tree}
-          >
-            <GitBranch size={14} aria-hidden />
-          </button>
-        </div>
+      {/* Always present, never behind a threshold: history grows without bound and
+          this is the rich query (tag:, content search). A field that appears once a
+          count is crossed is a moving target. */}
+      <div className="shrink-0 px-2 pb-2 pt-1">
+        <ConversationSearchBar
+          value={query}
+          onChange={setQuery}
+          conversations={conversations}
+          searching={searching}
+        />
       </div>
 
-      <div className="flex-1 overflow-auto px-2 pb-2">
+      <div className="px-2 pb-2">
         {view === "tree" ? (
           <ConversationTree
             workspace={workspace}
@@ -461,6 +469,7 @@ export default function HistorySidebar({
           setDeleteError(null);
         }}
       />
-    </div>
+      </div>
+    </SidebarGroup>
   );
 }
