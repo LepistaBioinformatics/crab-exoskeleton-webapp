@@ -113,6 +113,15 @@ const en = {
     startHeading: "Start a new chat",
     startBody: "Ask agent {agent} anything to get going.",
     agentPulse: "Agent pulse",
+    // Shown in the assistant band before the first word of the reply arrives.
+    // `working` is the honest fallback when the agent has gone quiet: it claims
+    // only that the turn is still open, which the client knows to be true.
+    thinking: "Thinking…",
+    working: "Still working…",
+    // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
+    usingTool: "Using {tool}",
+    // A message that has left the composer and is waiting for its turn.
+    queued: "Waiting to send",
   },
   commands: {
     renameUsage: "Usage: /rename <new title>",
@@ -373,6 +382,10 @@ const pt: ChatDict = {
     startHeading: "Comece uma nova conversa",
     startBody: "Pergunte qualquer coisa ao agente {agent} para começar.",
     agentPulse: "Pulso do agente",
+    thinking: "Pensando…",
+    working: "Ainda trabalhando…",
+    usingTool: "Usando {tool}",
+    queued: "Aguardando envio",
   },
   commands: {
     renameUsage: "Uso: /rename <novo título>",

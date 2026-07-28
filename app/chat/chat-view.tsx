@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createConversation,
@@ -30,6 +30,17 @@ import { Spinner } from "@/components/ui/spinner";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
+import {
+  MAX_SEND_ATTEMPTS,
+  bumpFlush as storeBumpFlush,
+  clearCompleted,
+  enqueue as storeEnqueue,
+  noteUpload,
+  parkFlush,
+  setPainter,
+  useTurn,
+} from "@/app/chat/turn-store";
+import TurnProgress from "@/app/chat/turn-progress";
 
 // Bands stretch the full width of the message area; the message content itself
 // stays centered at the composer width (an inner max-w wrapper in the render).
@@ -87,29 +98,12 @@ function buildQuote(reply: ReplyTo, t: ChatDict): string {
   return `> **${who}:** ${snippet}`;
 }
 
-// After an upload, picoclaw reloads to pick up the new workspace file. Give it a
-// moment to settle before firing the turn, so the first message right after an
-// attach doesn't hit the container mid-reload ("Can't reach the gateway").
-const UPLOAD_SETTLE_MS = 1500;
-
-// Sending a turn retries on transport / gateway failure (fetch throws or a 5xx)
-// with exponential backoff -- 1s, then doubling, capped -- up to
-// MAX_SEND_ATTEMPTS, showing a discreet notice while it retries. A 4xx
-// (auth/validation) is terminal and surfaced at once, never retried.
-const MAX_SEND_ATTEMPTS = 10;
-const RETRY_BASE_MS = 1000;
-const RETRY_MAX_MS = 30000;
-const retryDelay = (attempt: number) => Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Debounced batch send. A message isn't POSTed the instant you hit send: it
-// joins a pending queue and, after SEND_DEBOUNCE_MS of no further typing/sending,
-// the whole queue flushes as ONE turn (a single API call). Typing again re-arms
-// the timer -- since nothing has hit the API yet, the prior send is effectively
-// cancelled. The queue is keyed by conversation id at module scope so it
-// survives switching chats (and remounts): stacked messages are never lost.
-const SEND_DEBOUNCE_MS = 3000;
-const pendingOutbox = new Map<string, string[]>();
+// Turn state -- the send queue, the in-flight status, the retry ladder and the
+// reveal buffer -- lives in `turn-store`, keyed by conversation id at module
+// scope. It cannot live in this component: it resets on every `sid` change and
+// unmounts entirely on a workspace change (chat-shell.tsx keys it on t|s|r),
+// which is exactly why a running turn's indicator used to vanish the moment you
+// switched chats. See app/chat/turn-store.ts.
 
 export default function ChatView({
   workspace,
@@ -128,22 +122,19 @@ export default function ChatView({
   const fragment = useFragment();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
-  const [settling, setSettling] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
-  const [retrying, setRetrying] = useState<number | null>(null);
-  // Composed-but-not-yet-sent messages for the current conversation (mirrors
-  // pendingOutbox for reactivity); each shows as a pulsing user band.
-  const [pending, setPending] = useState<string[]>([]);
-  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Everything about the turn in flight for THIS conversation, read from the
+  // module-scope store -- so it is still here when you come back from another
+  // chat, or another workspace (which remounts this component).
+  const turn = useTurn(sessionId);
+  const { pending, queue, running: sending, retrying, error, revealed, progress, settling } = turn;
   // Transient feedback for slash commands (/rename, /tag).
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -155,7 +146,6 @@ export default function ChatView({
   // On touch (no hover), tapping a message opens its action row below the card;
   // holds the index of the message whose actions are open (mobile only).
   const [openActions, setOpenActions] = useState<number | null>(null);
-  const lastUploadAtRef = useRef(0);
   // When the current conversation is empty, the most-recent OTHER conversation
   // (if the user has one) is offered as a "resume where you left off" card.
   const [resumeCandidate, setResumeCandidate] = useState<ConversationSummary | null>(null);
@@ -199,10 +189,12 @@ export default function ChatView({
   // very first load of a conversation jumps to the most recent message.
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
-  // Pending bubbles live after the message list (not in messageRefs); a sentinel
-  // lets us scroll them into view so the "not sent yet" pulse is never below the
-  // fold in a long conversation.
-  const pendingEndRef = useRef<HTMLDivElement | null>(null);
+  // The newest thing the user just sent -- the last pending bubble, or the
+  // in-flight turn's message once the burst flushes. It is pinned to the TOP of
+  // the viewport rather than the bottom: at the bottom it lands under the
+  // floating composer, and the reply then grows downward off-screen. At the top
+  // the message stays visible and the answer fills the space beneath it.
+  const newestSentRef = useRef<HTMLDivElement | null>(null);
   const creatingSid = useRef(false);
 
   // Always mirrors the currently-viewed session, so an in-flight stream can
@@ -212,12 +204,12 @@ export default function ChatView({
   useEffect(() => {
     activeSidRef.current = sessionId;
   }, [sessionId]);
+  // The sid shown before the current one, so its debounce can be parked when we
+  // switch away.
+  const previousSidRef = useRef<string | undefined>(sessionId);
 
-  // Clear the pending flush timer on unmount. The queue itself lives in
-  // pendingOutbox (module scope), so it survives and is never lost.
   useEffect(
     () => () => {
-      if (flushTimer.current) clearTimeout(flushTimer.current);
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
     },
     [],
@@ -239,29 +231,23 @@ export default function ChatView({
 
   useEffect(() => {
     if (!sessionId) return;
-    setError(null);
-    // The newly-viewed conversation isn't the one mid-send (if any) -- reset so
-    // its composer isn't stuck disabled by another conversation's in-flight send.
-    setSending(false);
-    setRetrying(null);
-    // Pending attachments belong to the composer of the conversation you were
-    // in -- drop them when switching.
+    // NOTHING owned by turn-store is reset here. The turn status, send queue,
+    // retry counter, error and reveal buffer all belong to the CONVERSATION,
+    // not to this component -- clearing them on a sid change is precisely the
+    // bug that made a running turn look like it had never been sent. Only
+    // genuinely composer-scoped state is dropped: attachments and a reply draft
+    // belong to the composer you were typing in.
     setAttachments([]);
     setAttachError(null);
     setReplyTo(null);
     setOpenActions(null);
     setLoadingHistory(true);
 
-    // Restore this conversation's stacked (pending) messages and cancel any timer
-    // left from the previous conversation. We do NOT re-arm here: a stack parked
-    // by switching away stays parked (never force-sends just from looking at it);
-    // its countdown resumes only when the user re-engages -- types (bumpFlush) or
-    // sends (enqueue) -- both of which re-arm.
-    if (flushTimer.current) {
-      clearTimeout(flushTimer.current);
-      flushTimer.current = null;
-    }
-    setPending(pendingOutbox.get(sessionId) ?? []);
+    // Park the previous conversation's debounce without sending it: the burst
+    // stays in the store, and its countdown resumes only when the user
+    // re-engages (types or sends) -- never just from looking at the chat.
+    parkFlush(previousSidRef.current);
+    previousSidRef.current = sessionId;
 
     let cancelled = false;
     (async () => {
@@ -280,6 +266,13 @@ export default function ChatView({
         const data = await res.json();
         const loaded = Array.isArray(data.messages) ? data.messages : [];
         setMessages(loaded);
+        // A turn that finished while we were away left its in-flight bands in
+        // the store (the completion hook only reloads for the conversation on
+        // screen). The transcript we just loaded already contains that reply --
+        // without this the user sees it twice, once from history and once from
+        // the stale band. Also clears a turn that died while we were elsewhere,
+        // which would otherwise strand a phantom message forever.
+        clearCompleted(sessionId);
         // Opening a conversation lands on the most recent message -- UNLESS a
         // scroll anchor is set (a past point clicked in the tree view), which the
         // anchor effect below handles instead.
@@ -306,11 +299,22 @@ export default function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
 
-  // Keep the newest pending bubble in view when the stack grows (or is restored),
-  // so the pulsing "not sent yet" signal is visible even in a scrolled chat.
+  // Every time the user sends something, pin it to the TOP of the viewport --
+  // both while it is a pending bubble and again when it becomes the in-flight
+  // turn. `block: "start"` is the whole point: scrolled to the bottom the new
+  // message sits behind the floating composer, and the reply then grows
+  // downward out of sight. The trailing spacer below guarantees there is always
+  // room to push it up there, even in a short conversation.
+  //
+  // rAF because the band mounts in the same commit that fires this effect; the
+  // browser needs the new layout before scrollIntoView can land on it.
   useEffect(() => {
-    if (pending.length > 0) pendingEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [pending.length]);
+    if (pending.length === 0 && turn.activeUserMessage === null) return;
+    const frame = requestAnimationFrame(() => {
+      newestSentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pending.length, turn.activeUserMessage]);
 
   // Scroll anchor: when the fragment carries a `msg` (a message's created_at,
   // set by clicking a past point in the tree view), scroll to that message once
@@ -358,7 +362,7 @@ export default function ChatView({
         const attachment = await uploadMedia(workspace, file);
         setAttachments((prev) => [...prev, attachment]);
         setMediaRefresh((n) => n + 1); // the workspace-files panel picks it up
-        lastUploadAtRef.current = Date.now();
+        noteUpload(); // arms the store's settle wait for the next turn
       }
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : "unknown");
@@ -387,196 +391,48 @@ export default function ChatView({
     return [quote, trimmed, refs].filter(Boolean).join("\n\n");
   }
 
-  // (Re)arm the debounce: after SEND_DEBOUNCE_MS with no further activity, the
-  // pending queue for `sid` flushes as one turn.
-  function armFlush(sid: string) {
-    if (flushTimer.current) clearTimeout(flushTimer.current);
-    flushTimer.current = setTimeout(() => flushPending(sid), SEND_DEBOUNCE_MS);
-  }
+  // Sending is delegated to turn-store: it owns the debounce, the sequential
+  // per-conversation queue, the retry ladder and the reveal buffer -- all keyed
+  // by sid at module scope, so none of it dies when this component remounts.
+  const runContext = useCallback(
+    () => ({ workspace, onUnauthorized: () => router.push("/signin") }),
+    [workspace, router],
+  );
 
   // Enqueue a composed message as PENDING (pulsing), not sent yet. Consumes the
   // reply/attachments (as a real send would) and arms the debounce.
+  //
+  // There is deliberately no `sending` guard any more: a user who thinks of a
+  // second message while the agent is still answering can send it, and it
+  // queues behind the running turn instead of being silently refused.
   function enqueue(text: string): boolean {
-    if (!sessionId || sending) return false;
+    if (!sessionId) return false;
     const composed = compose(text);
     if (composed === null) return false;
-    const sid = sessionId;
     setReplyTo(null);
     setAttachments([]);
-    // The outbox (module scope) is the source of truth; mirror into state for
-    // rendering. Reading from it (not the `pending` closure) avoids stale state.
-    const next = [...(pendingOutbox.get(sid) ?? []), composed];
-    pendingOutbox.set(sid, next);
-    setPending(next);
-    armFlush(sid);
+    storeEnqueue(sessionId, composed, runContext());
     return true;
   }
 
-  // A keystroke while a stack is pending pushes the flush back, so the user can
+  // A keystroke while a burst is pending pushes the flush back, so the user can
   // keep adding messages before any of them hit the API.
   function bumpFlush() {
-    if (sessionId && (pendingOutbox.get(sessionId)?.length ?? 0) > 0) armFlush(sessionId);
+    if (sessionId) storeBumpFlush(sessionId);
   }
 
-  // The debounce fired: send the whole pending stack for `sid` as ONE turn. Only
-  // the actively-viewed conversation flushes (others keep their stack until the
-  // user returns to them).
-  function flushPending(sid: string) {
-    if (flushTimer.current) {
-      clearTimeout(flushTimer.current);
-      flushTimer.current = null;
-    }
-    // Only flush the conversation currently in view; if the user navigated away
-    // before the timer fired, leave the stack intact in the outbox for later.
-    if (sid !== activeSidRef.current) return;
-    const texts = pendingOutbox.get(sid);
-    if (!texts || texts.length === 0) return;
-    pendingOutbox.delete(sid);
-    setPending([]);
-    postTurn(texts.join("\n\n"), sid);
-  }
-
-  // POST one (already-composed) turn and stream the reply. Unchanged from the
-  // original send path other than taking the composed text + sid as arguments.
-  function postTurn(composed: string, sid: string): void {
-    // The new user message's index -- scroll its *top* into view once it (and
-    // the assistant placeholder after it) render.
-    setScrollToIndex(messages.length);
-    setMessages((prev) => [...prev, { role: "user", content: composed }, { role: "assistant", content: "" }]);
-    setSending(true);
-    setError(null);
-
-    void (async () => {
-    // If a file was just uploaded, wait for picoclaw to settle (reload) before
-    // firing the turn, so the first message after an attach doesn't hit the
-    // container mid-reload. Shows a friendly "saving your file" note meanwhile.
-    // Attachments were consumed at enqueue time, so detect them from the
-    // composed text (the "[anexo: …]" refs) rather than the now-cleared array.
-    const hadUpload = composed.includes("[anexo:");
-    const sinceUpload = Date.now() - lastUploadAtRef.current;
-    const settleWait = hadUpload ? Math.max(0, UPLOAD_SETTLE_MS - sinceUpload) : 0;
-    if (settleWait > 0) {
-      setSettling(true);
-      await new Promise((resolve) => setTimeout(resolve, settleWait));
-      setSettling(false);
-    }
-
-    // If the user switches to another conversation mid-stream, we STOP painting
-    // this reply (it would otherwise land in the wrong conversation) but keep
-    // DRAINING the response so the turn finishes server-side and picoclaw
-    // persists it -- the reply is never cut. Once detached we never repaint,
-    // even if the user comes back, to avoid racing the history reload.
-    let detached = false;
-
-    try {
-      const body = JSON.stringify({
-        message: composed,
-        session_id: sid,
-        tenant_id: workspace.t,
-        subs_acc_id: workspace.s,
-      });
-
-      // Retry the send until picoclaw accepts the turn (a streamable body):
-      // transport failures and 5xx are retried with exponential backoff; a 4xx
-      // is terminal (its real reason is surfaced and we stop).
-      let stream: ReadableStream<Uint8Array> | null = null;
-      let terminal = false;
-      for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS && !terminal; attempt++) {
-        try {
-          const r = await fetch(`/api/chat/${workspace.r}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-          });
-          if (r.status === 401) {
-            router.push("/signin");
-            return;
-          }
-          if (r.ok && r.body) {
-            stream = r.body; // accepted -- stop retrying
-            break;
-          }
-          if (r.status < 500) {
-            // 4xx: the proxy's real reason (403 not licensed, 409 not
-            // scaffolded, 400 bad request). Retrying won't help.
-            const data = await r.json().catch(() => null);
-            if (activeSidRef.current === sid) setError(typeof data?.error === "string" ? data.error : "unknown");
-            terminal = true;
-            break;
-          }
-          // 5xx / missing body -> fall through to the backoff retry
-        } catch {
-          // network/transport error -> fall through to the backoff retry
-        }
-        if (attempt < MAX_SEND_ATTEMPTS) {
-          if (activeSidRef.current === sid) setRetrying(attempt);
-          await sleep(retryDelay(attempt));
-        }
-      }
-      if (activeSidRef.current === sid) setRetrying(null);
-
-      if (!stream) {
-        // A terminal 4xx already set its error; otherwise every attempt failed.
-        if (activeSidRef.current === sid) {
-          if (!terminal) {
-            setError("gateway_retries_exhausted");
-          }
-          setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
-        }
-        return;
-      }
-
-      // The turn was accepted -- picoclaw is now running it and will persist
-      // the session. ONLY now create/bump the postgres row (deferred +
-      // success-gated), so clicking a chat or a failed/rejected send never
-      // leaves a conversation row with no picoclaw transcript behind it.
-      touchConversation(workspace, sid, composed).catch(() => {});
-      setAttachments([]); // consumed by this turn
-
-      await consumeStream(stream, (delta) => {
-        if (detached) return;
-        if (activeSidRef.current !== sid) {
-          detached = true; // user navigated away -- keep draining, stop painting
-          return;
-        }
-        setMessages((prev) => {
-          const next = [...prev];
-          const last = next[next.length - 1];
-          if (!last || last.role !== "assistant") return prev;
-          next[next.length - 1] = { role: "assistant", content: last.content + delta };
-          return next;
-        });
-      });
-
-      // Left mid-stream but came back before it finished -> pull the now-complete
-      // transcript so the finished reply replaces whatever partial was shown.
-      if (detached && activeSidRef.current === sid) {
-        await reloadHistory(sid);
-      }
-
-      // The turn is done and picoclaw has persisted the session -- resolve and
-      // store the proxy session ids on the postgres row (best-effort). Not
-      // gated on the active sid: the reply drained even if the user navigated
-      // away, so its refs are still correct.
-      syncSessionRefs(workspace, sid).catch(() => {});
-
-      // Nudge the sidebar to re-read the now-final transcript. recency was
-      // already bumped at send time (so the tree's updatedAt-keyed cache won't
-      // refetch on its own); the tree treats this event as a force-refresh of
-      // the active conversation, so the completed assistant reply shows up.
-      notifyConversationsUpdated();
-    } catch {
-      // Keep whatever partial content already streamed in -- only surface the
-      // error banner if the user is still viewing this conversation.
-      if (activeSidRef.current === sid) setError("connectivity");
-    } finally {
-      if (activeSidRef.current === sid) {
-        setSending(false);
-        setRetrying(null);
-      }
-    }
-    })();
-  }
+  // When a turn finishes, pull the now-durable transcript and only then let the
+  // store drop its in-flight bands -- otherwise the reply would blink out and
+  // back in. If the user is elsewhere the reload is skipped; the store keeps the
+  // finished text until they return, and this effect's next run picks it up.
+  useEffect(() => {
+    setPainter((sid) => {
+      if (activeSidRef.current !== sid) return;
+      void reloadHistory(sid).then(() => clearCompleted(sid));
+    });
+    return () => setPainter(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.t, workspace.s, workspace.r]);
 
   // Slash commands operate on the CURRENT chat instead of sending a message.
   // Returns true when the text was consumed as a command (so the composer
@@ -751,7 +607,10 @@ export default function ChatView({
         <div className="flex flex-1 items-center justify-center">
           <Spinner size={28} />
         </div>
-      ) : messages.length === 0 && pending.length === 0 ? (
+      ) : messages.length === 0 &&
+        pending.length === 0 &&
+        queue.length === 0 &&
+        turn.activeUserMessage === null ? (
         // Empty conversation: center the composer with a prompt to begin, so a
         // fresh chat invites a first message instead of showing a blank column.
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
@@ -798,10 +657,17 @@ export default function ChatView({
         </div>
       ) : (
         <div className="relative min-h-0 flex-1">
-          <div className="absolute inset-0 overflow-auto pt-6 pb-40">
+          {/* The bottom padding is deliberately a viewport fraction, not a fixed
+              gap for the composer. Pinning a new message to the TOP only works
+              if there is something below it to scroll against -- with a small
+              pad, a short conversation has nothing to scroll and the message
+              stays under the composer, which is the bug this fixes. Keeping it
+              constant (rather than adding a spacer only while a turn runs) is
+              what stops the page from lurching when the turn finishes and the
+              spacer would have vanished under the reader. */}
+          <div className="absolute inset-0 overflow-auto pt-6 pb-[80vh]">
             <div className="w-full">
               {messages.map((m, i) => {
-                const streaming = sending && i === messages.length - 1 && m.role === "assistant";
                 const { text, refs } = parseAnexos(m.content);
                 const prev = messages[i - 1];
                 const next = messages[i + 1];
@@ -852,9 +718,6 @@ export default function ChatView({
                             ))}
                           </div>
                         )}
-                        {streaming && (
-                          <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
-                        )}
                       </div>
                     </div>
                     {/* Mobile only: tapping the card opens this action row below
@@ -868,6 +731,55 @@ export default function ChatView({
                 );
               })}
 
+              {/* The turn in flight: the user's message, then the reply as it
+                  is revealed. Both come from the store, so they are still here
+                  after switching conversations (or workspaces) and back --
+                  which is what makes a running turn stop looking like it was
+                  never sent. */}
+              {turn.activeUserMessage !== null && (
+                <div
+                  className={bandGap({ changed: true })}
+                  // Only the anchor when nothing is still pending behind it --
+                  // otherwise the newest thing on screen is a pending bubble.
+                  ref={pending.length === 0 ? newestSentRef : undefined}
+                >
+                  <div className={`${messageBand({ role: "user" })} ${bandPad(false)}`}>
+                    <div className="relative mx-auto w-full max-w-[720px] px-4">
+                      <MessageContent content={parseAnexos(turn.activeUserMessage).text} />
+                    </div>
+                  </div>
+                  <div className={`${messageBand({ role: "assistant" })} ${bandPad(false)}`}>
+                    <div className="relative mx-auto w-full max-w-[720px] px-4">
+                      {revealed === "" ? (
+                        // Before the first word: progress only. The two never
+                        // share the band.
+                        <TurnProgress progress={progress} lastEventAt={turn.lastEventAt} />
+                      ) : (
+                        <>
+                          <MessageContent content={parseAnexos(revealed).text} />
+                          {sending && (
+                            <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Queued: committed, waiting behind the running turn. Quieter
+                  than a pending burst -- it is already on its way. */}
+              {queue.map((content, i) => (
+                <div key={`queued-${i}`} className={bandGap({ changed: false })}>
+                  <div className={`${messageBand({ role: "user" })} origin-queued ${bandPad(false)}`}>
+                    <div className="relative mx-auto w-full max-w-[720px] px-4">
+                      <MessageContent content={parseAnexos(content).text} />
+                      <span className="mt-1 block text-xs text-fg-muted/70">{t.view.queued}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
               {/* Stacked-but-not-yet-sent messages: same user band, its origin
                   bar pulsing to signal "pending" until the batch flushes. */}
               {pending.map((content, i) => {
@@ -877,7 +789,11 @@ export default function ChatView({
                 const prevIsUser = i > 0 || messages[messages.length - 1]?.role === "user";
                 const alone = !prevIsUser && i === pending.length - 1;
                 return (
-                  <div key={`pending-${i}`} className={bandGap({ changed: !prevIsUser })}>
+                  <div
+                    key={`pending-${i}`}
+                    className={bandGap({ changed: !prevIsUser })}
+                    ref={i === pending.length - 1 ? newestSentRef : undefined}
+                  >
                     <div className={`${messageBand({ role: "user" })} origin-pulse ${bandPad(alone)}`}>
                       <div className="relative mx-auto w-full max-w-[720px] px-4">
                         {text && <MessageContent content={text} />}
@@ -899,7 +815,6 @@ export default function ChatView({
                   </div>
                 );
               })}
-              <div ref={pendingEndRef} />
             </div>
           </div>
           {/* The composer floats, suspended over the chat; the scroll area's
@@ -927,40 +842,4 @@ export default function ChatView({
       />
     </div>
   );
-}
-
-// Parses the proxy's OpenAI-style SSE stream (`data: {...}\n\n`, terminated by
-// `data: [DONE]\n\n`) and calls onDelta with each chunk's
-// choices[0].delta.content as it arrives.
-async function consumeStream(
-  body: ReadableStream<Uint8Array>,
-  onDelta: (delta: string) => void,
-): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
-
-    for (const frame of frames) {
-      const line = frame.trim();
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice("data:".length).trim();
-      if (payload === "[DONE]") return;
-
-      try {
-        const parsed = JSON.parse(payload);
-        const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
-        if (delta) onDelta(delta);
-      } catch {
-        // skip a malformed frame rather than aborting the whole stream
-      }
-    }
-  }
 }

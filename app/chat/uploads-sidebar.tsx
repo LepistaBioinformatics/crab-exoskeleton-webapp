@@ -1,7 +1,7 @@
 "use client";
 
-import { MouseEvent, useEffect, useState } from "react";
-import { FileText, RefreshCw, Search, Trash2, X } from "lucide-react";
+import React, { MouseEvent, useEffect, useState } from "react";
+import { ChevronRight, FileText, Folder, FolderOpen, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { listWorkspaceMedia, deleteMedia, type Attachment } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import AttachmentButton from "@/app/chat/attachment-button";
@@ -20,6 +20,71 @@ const MIN_WIDTH = 240;
 const MAX_WIDTH = 480;
 const DEFAULT_WIDTH = 280;
 const WIDTH_KEY = "chat-files-width";
+
+// The agent organizes its workspace into real folders, so a listing entry's
+// `name` can be a path ("reports/2026/q2.pdf"). Rendering that flat gives a wall
+// of look-alike rows; this turns it into a tree the user can open and explore.
+
+export type FileNode = { kind: "file"; leaf: string; file: Attachment };
+export type DirNode = { kind: "dir"; leaf: string; path: string; children: TreeNode[] };
+export type TreeNode = FileNode | DirNode;
+
+// Folders before files, each alphabetical and case-insensitive -- the ordering
+// every file explorer uses, so the panel needs no explanation.
+function sortNodes(nodes: TreeNode[]): TreeNode[] {
+  return nodes.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+    return a.leaf.localeCompare(b.leaf, undefined, { sensitivity: "base" });
+  });
+}
+
+export function buildFileTree(files: Attachment[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  // Folder path -> its children array, so repeated prefixes reuse one node.
+  const dirs = new Map<string, TreeNode[]>();
+
+  const dirChildren = (segments: string[]): TreeNode[] => {
+    let siblings = root;
+    let prefix = "";
+    for (const seg of segments) {
+      prefix = prefix ? `${prefix}/${seg}` : seg;
+      let children = dirs.get(prefix);
+      if (!children) {
+        children = [];
+        dirs.set(prefix, children);
+        siblings.push({ kind: "dir", leaf: seg, path: prefix, children });
+      }
+      siblings = children;
+    }
+    return siblings;
+  };
+
+  for (const f of files) {
+    const parts = f.name.split("/").filter(Boolean);
+    const leaf = parts.pop();
+    if (!leaf) continue; // a name that is only slashes: nothing to show
+    dirChildren(parts).push({ kind: "file", leaf, file: f });
+  }
+
+  sortNodes(root);
+  for (const children of dirs.values()) sortNodes(children);
+  return root;
+}
+
+/** Every folder path in the tree — used to expand all while filtering. */
+export function allFolderPaths(nodes: TreeNode[]): string[] {
+  const out: string[] = [];
+  const walk = (list: TreeNode[]) => {
+    for (const n of list) {
+      if (n.kind === "dir") {
+        out.push(n.path);
+        walk(n.children);
+      }
+    }
+  };
+  walk(nodes);
+  return out;
+}
 
 function formatSize(bytes?: number): string {
   if (bytes == null) return "";
@@ -50,6 +115,18 @@ export default function UploadsSidebar({
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
+  // Folders the user has opened. Collapsed by default so a deep workspace shows
+  // its shape first rather than dumping every file at once.
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
+
+  function toggleFolder(path: string) {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const raw = Number(localStorage.getItem(WIDTH_KEY));
@@ -110,6 +187,80 @@ export default function UploadsSidebar({
   const q = query.trim().toLowerCase();
   const visible = (files ?? []).filter((f) => !q || f.name.toLowerCase().includes(q));
   const pending = deletingPath ? (files ?? []).find((f) => f.path === deletingPath) : null;
+  const tree = buildFileTree(visible);
+  // While filtering, every folder opens: a match buried three levels down is
+  // useless if the user still has to guess which folder to click.
+  const expanded = q ? new Set(allFolderPaths(tree)) : openFolders;
+
+  // Indentation is inline rather than a Tailwind class because the depth is
+  // dynamic; a per-level class would need a lookup table for no gain.
+  const indent = (depth: number) => ({ paddingLeft: depth * 12 });
+
+  function renderNode(node: TreeNode, depth: number): React.ReactNode {
+    if (node.kind === "dir") {
+      const isOpen = expanded.has(node.path);
+      return (
+        <li key={`dir:${node.path}`} role="treeitem" aria-expanded={isOpen}>
+          <button
+            type="button"
+            onClick={() => toggleFolder(node.path)}
+            style={indent(depth)}
+            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left text-xs font-semibold text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
+          >
+            <ChevronRight
+              size={13}
+              aria-hidden
+              className={`shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+            />
+            {isOpen ? (
+              <FolderOpen size={13} className="shrink-0" aria-hidden />
+            ) : (
+              <Folder size={13} className="shrink-0" aria-hidden />
+            )}
+            <span className="truncate" title={node.path}>
+              {node.leaf}
+            </span>
+            <span className="ml-auto shrink-0 font-mono text-[10px] opacity-70">
+              {node.children.length}
+            </span>
+          </button>
+          {isOpen && (
+            <ul role="group" className="mt-1 flex flex-col gap-1">
+              {node.children.map((child) => renderNode(child, depth + 1))}
+            </ul>
+          )}
+        </li>
+      );
+    }
+
+    const f = node.file;
+    return (
+      <li
+        key={`file:${f.path}`}
+        role="treeitem"
+        style={indent(depth)}
+        className="group flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-2 py-1.5"
+      >
+        <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
+        {/* The row shows only the leaf; the folder is the branch above it. */}
+        <AttachmentButton workspace={workspace} path={f.path} name={node.leaf} tone="row" />
+        <span className="shrink-0 font-mono text-[11px] text-fg-muted">{formatSize(f.size)}</span>
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={`${t.uploads.deletePrefix} ${f.name}`}
+          title={c.actions.delete}
+          onClick={() => {
+            setDeleteError(null);
+            setDeletingPath(f.path);
+          }}
+          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Trash2 size={14} aria-hidden />
+        </IconButton>
+      </li>
+    );
+  }
 
   return (
     <>
@@ -182,31 +333,11 @@ export default function UploadsSidebar({
           </p>
         )}
 
-        <ul className="flex flex-col gap-1">
-          {visible.map((f) => (
-            <li
-              key={f.path}
-              className="group flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-2 py-1.5"
-            >
-              <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
-              <AttachmentButton workspace={workspace} path={f.path} name={f.name} tone="row" />
-              <span className="shrink-0 font-mono text-[11px] text-fg-muted">{formatSize(f.size)}</span>
-              <IconButton
-                variant="ghost"
-                size="sm"
-                aria-label={`${t.uploads.deletePrefix} ${f.name}`}
-                title={c.actions.delete}
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeletingPath(f.path);
-                }}
-                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <Trash2 size={14} aria-hidden />
-              </IconButton>
-            </li>
-          ))}
-        </ul>
+        {tree.length > 0 && (
+          <ul role="tree" aria-label={t.uploads.files} className="flex flex-col gap-1">
+            {tree.map((node) => renderNode(node, 0))}
+          </ul>
+        )}
       </div>
 
       <ConfirmDialog

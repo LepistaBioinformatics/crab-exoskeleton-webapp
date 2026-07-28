@@ -162,8 +162,11 @@ export default function Composer({
     ? parseAnexos(replyTo.content).text.replace(/\s+/g, " ").trim()
     : "";
 
+  // `sending` deliberately does NOT block a send. A running turn used to lock
+  // the composer, so a user who thought of a second message had to wait out the
+  // whole reply; now it queues behind the turn in flight.
   const canSend =
-    (value.trim().length > 0 || attachments.length > 0) && !sending && !loadingHistory && !uploading;
+    (value.trim().length > 0 || attachments.length > 0) && !loadingHistory && !uploading;
 
   // Open the OS picker filtered to `accept`, then let onChange handle the files.
   function pick(accept: string) {
@@ -309,22 +312,24 @@ export default function Composer({
                 setSlashHidden(true);
                 return;
               }
-              if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 pickSlash(slashMatches[slashIndex].cmd);
                 return;
               }
             }
-            if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
+            // Enter sends everywhere, touch included. It used to insert a
+            // newline on a coarse pointer, on the reasoning that a soft
+            // keyboard has no usable Shift+Enter -- but the far more common
+            // intent is to send, and a stray newline where a send was meant is
+            // the worse failure. Multi-line composing on touch is still
+            // available through the advanced markdown editor.
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               if (canSend) submit();
             }
           }}
-          placeholder={
-            coarsePointer
-              ? t.composer.placeholder
-              : t.composer.placeholderHint
-          }
+          placeholder={coarsePointer ? t.composer.placeholder : t.composer.placeholderHint}
           className="max-h-[200px] py-1.5 text-base leading-relaxed"
         />
 
@@ -337,7 +342,7 @@ export default function Composer({
             size="md"
             aria-label={t.composer.attach}
             title={t.composer.attach}
-            disabled={sending || loadingHistory}
+            disabled={loadingHistory}
             onClick={() => setMenuOpen((o) => !o)}
             className="shrink-0"
           >
@@ -381,7 +386,7 @@ export default function Composer({
           size="md"
           aria-label={t.composer.advancedEditor}
           title={t.composer.advancedEditor}
-          disabled={sending || loadingHistory}
+          disabled={loadingHistory}
           onClick={() => setAdvancedOpen(true)}
           className="shrink-0"
         >

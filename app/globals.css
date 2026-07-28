@@ -103,6 +103,31 @@
   animation: originPulse 1.1s ease-in-out infinite;
 }
 
+/* Queued: past the debounce, committed, waiting behind a running turn. Quieter
+   than origin-pulse on purpose -- a pulsing band means "you can still change
+   your mind", and by this point the message is on its way. */
+.origin-queued {
+  opacity: 0.72;
+}
+
+/* Progress lines in the assistant band fade in rather than snapping, so a
+   sequence of tool-call narrations reads as one settling surface instead of
+   flickering. Auto-neutralized by the reduced-motion guard below. */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@theme {
+  --animate-fade-in: fadeIn 420ms ease-out both;
+}
+
 /* The composer breathes a soft accent ring while the user is actively typing.
    Auto-neutralized by the reduced-motion guard below. */
 @keyframes composerPulse {
@@ -116,6 +141,25 @@
 }
 .composer-typing {
   animation: composerPulse 1.15s ease-in-out infinite;
+}
+
+/* Sidebar spotlight: at rest every conversation but the active one dims, and
+   moving the cursor over the list lifts it. That is a HOVER affordance, so it
+   only exists where hover does. On a touch device there is no resting cursor to
+   lift the dim with -- the list opened permanently faded and only un-faded after
+   a tap, which read as broken. Outside `hover: hover` these are no-ops, so the
+   list is simply always legible.
+
+   These are plain classes rather than Tailwind opacity utilities because the
+   tree view applies the same emphasis to nodes whose color is an inline style;
+   keeping one mechanism keeps the two views in step. */
+@media (hover: hover) {
+  .spotlight-dim {
+    opacity: 0.4;
+  }
+  .spotlight-dim-strong {
+    opacity: 0.3;
+  }
 }
 
 /* Respect reduced-motion everywhere without policing each transition. */

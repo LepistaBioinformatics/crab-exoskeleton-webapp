@@ -310,20 +310,23 @@ export default function ConversationTree({
                       <span key={l} className="relative w-3.5">
                         {seg && (
                           <span
-                            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-opacity duration-200"
                             // Full lane color + opacity dim, so the connecting
                             // line matches its dot exactly (same color and fade)
-                            // instead of a washed-out low-alpha tint.
-                            style={{
-                              backgroundColor: laneColorFor(convById.get(seg.id), seg.id),
-                              opacity: isDimmed(seg.id) ? 0.3 : 1,
-                            }}
+                            // instead of a washed-out low-alpha tint. The dim
+                            // is a class, not an inline opacity, so it can be
+                            // scoped to hover-capable pointers (globals.css).
+                            className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-opacity duration-200${
+                              isDimmed(seg.id) ? " spotlight-dim-strong" : ""
+                            }`}
+                            style={{ backgroundColor: laneColorFor(convById.get(seg.id), seg.id) }}
                           />
                         )}
                         {dotHere && (
                           <span
-                            className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface transition-opacity duration-200"
-                            style={{ backgroundColor: color, opacity: dimmed ? 0.3 : 1 }}
+                            className={`absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface transition-opacity duration-200${
+                              dimmed ? " spotlight-dim-strong" : ""
+                            }`}
+                            style={{ backgroundColor: color }}
                           />
                         )}
                       </span>
@@ -335,8 +338,9 @@ export default function ConversationTree({
                     and tags show only on the conversation's most recent visit;
                     everything fades when another thread is focused. */}
                 <span
-                  className="flex min-w-0 flex-1 flex-col gap-0.5 py-2 pr-2 transition-opacity duration-200"
-                  style={{ opacity: dimmed ? 0.4 : 1 }}
+                  className={`flex min-w-0 flex-1 flex-col gap-0.5 py-2 pr-2 transition-opacity duration-200${
+                    dimmed ? " spotlight-dim" : ""
+                  }`}
                 >
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm text-fg">{b.text}</span>
