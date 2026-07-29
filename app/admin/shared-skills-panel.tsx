@@ -39,11 +39,17 @@ type Editor =
 export default function SharedSkillsPanel({
   scope,
   restartPolicy = DEFAULT_POLICY,
+  readOnly = false,
 }: {
   scope: ScopeRef;
   // How the resulting container bounce is delivered; chosen once in the admin
   // screen and applied to every write here (restart-control FR-8.1).
   restartPolicy?: RestartPolicy;
+  /**
+   * Set for the legacy all-agents store. Hides create, upload and save; preview,
+   * download and DELETE stay, because the legacy entry exists to empty that store.
+   */
+  readOnly?: boolean;
 }) {
   const t = useT(adminCopy);
   const c = useT(commonCopy);
@@ -140,35 +146,41 @@ export default function SharedSkillsPanel({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          ref={zipInput}
-          type="file"
-          accept=".zip"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUploadZip(f);
-          }}
-        />
-        <Button
-          variant="filled"
-          size="sm"
-          disabled={saving}
-          onClick={() => setEditor({ mode: "create", name: "", body: SKILL_TEMPLATE })}
-        >
-          <Plus size={16} aria-hidden />
-          {t.sharedSkills.newSkill}
-        </Button>
-        <Button
-          variant="tonal"
-          size="sm"
-          disabled={uploading}
-          onClick={() => zipInput.current?.click()}
-        >
-          <Upload size={16} aria-hidden />
-          {uploading ? t.sharedSkills.uploading : t.sharedSkills.uploadZip}
-        </Button>
-        <span className="text-xs text-fg-muted">{t.sharedSkills.cascades}</span>
+        {!readOnly && (
+          <>
+            <input
+              ref={zipInput}
+              type="file"
+              accept=".zip"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onUploadZip(f);
+              }}
+            />
+            <Button
+              variant="filled"
+              size="sm"
+              disabled={saving}
+              onClick={() => setEditor({ mode: "create", name: "", body: SKILL_TEMPLATE })}
+            >
+              <Plus size={16} aria-hidden />
+              {t.sharedSkills.newSkill}
+            </Button>
+            <Button
+              variant="tonal"
+              size="sm"
+              disabled={uploading}
+              onClick={() => zipInput.current?.click()}
+            >
+              <Upload size={16} aria-hidden />
+              {uploading ? t.sharedSkills.uploading : t.sharedSkills.uploadZip}
+            </Button>
+          </>
+        )}
+        <span className="text-xs text-fg-muted">
+          {readOnly ? t.legacyStore.readOnlyNote : t.sharedSkills.cascades}
+        </span>
       </div>
 
       {error && <Alert severity="error">{error}</Alert>}

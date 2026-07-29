@@ -52,11 +52,17 @@ const SCOPE_FORMATS = SECRET_FORMATS.filter((f) => f !== "file");
 export default function SharedSecretsPanel({
   scope,
   restartPolicy = DEFAULT_POLICY,
+  readOnly = false,
 }: {
   scope: ScopeRef;
   // How the resulting container bounce is delivered; chosen once in the admin
   // screen and applied to every write here (restart-control FR-8.1).
   restartPolicy?: RestartPolicy;
+  /**
+   * Set for the legacy all-agents store. Hides the write form entirely; the name
+   * list and DELETE stay, because the legacy entry exists to empty that store.
+   */
+  readOnly?: boolean;
 }) {
   const t = useT(adminCopy);
   const c = useT(commonCopy);
@@ -178,10 +184,23 @@ export default function SharedSecretsPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-fg-muted">
-        {t.sharedSecrets.injectedAs} Values are write-only: never shown or retrieved. Writing or deleting restarts
-        running containers under the scope.
+        {readOnly ? (
+          t.legacyStore.readOnlyNote
+        ) : (
+          <>
+            {t.sharedSecrets.injectedAs} Values are write-only: never shown or retrieved. Writing or
+            deleting restarts running containers under the scope.
+          </>
+        )}
       </p>
 
+      {/* The whole write form goes under readOnly — there is no partial version of
+          "you may not put anything new in here". Removed from the tree rather than
+          hidden with CSS: a display:none form still holds real controls, and Preflight
+          is one `[hidden]` override away from putting them back on screen. The name
+          list below stays, and so does delete: emptying the legacy store is the point
+          of reaching it. */}
+      {!readOnly && (
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <Field
           label={t.sharedSecrets.howReceived}
@@ -319,6 +338,7 @@ export default function SharedSecretsPanel({
           {submitting ? t.sharedSecrets.saving : t.sharedSecrets.save}
         </Button>
       </form>
+      )}
 
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />

@@ -29,9 +29,13 @@ export interface RestartTarget {
   agent?: string;
 }
 
-// ALL_AGENTS is a picker sentinel, not an agent key. Forwarding it would make
-// the proxy look for a record filed under an agent literally named "all" and
-// report the scope as clean while a scope-wide notice sits unread.
+// ALL_AGENTS addresses the scope-wide store; it is not an agent key. Forwarding it
+// would make the proxy look for a record filed under an agent literally named "all"
+// and report the scope as clean while a scope-wide notice sits unread.
+//
+// Still reachable, and so still stripped: the admin screen no longer WRITES to that
+// store, but it lists and deletes from it through the legacy entry, and a delete
+// bounces the same containers a write would have.
 function targetQuery(target: RestartTarget): string {
   const q = new URLSearchParams({ tenantId: target.tenantId });
   if (target.subsAccId) q.set("subsAccId", target.subsAccId);
