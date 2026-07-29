@@ -1,17 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot, Search } from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
-import {
-  groupWorkspaces,
-  accessLabel,
-  type Subscription,
-  type TenantGroup,
-  type AgentLeaf,
-} from "@/lib/subscriptions";
+import { accessLabel, type TenantGroup, type AgentLeaf } from "@/lib/subscriptions";
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import SidebarPanel from "./sidebar-panel";
@@ -72,13 +65,23 @@ const groupHeaderLabel = cva("min-w-0 flex-1 truncate", {
 
 type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 
-// The workspaces PANEL: fetches the caller's subscriptions, collapses
-// permission-duplicated rows, and renders a tenant -> account -> agent tree.
-// The agent leaf is the selectable workspace.
+// The workspaces PANEL: renders the caller's workspaces as a tenant -> subscription ->
+// agent tree, every level with its own row. The agent leaf is the selectable
+// workspace. The list itself is fetched by the sidebar, which needs it for both panels.
 export default function WorkspaceNav({
+  groups,
+  error,
   onSelect,
   autoSelect,
 }: {
+  /**
+   * The caller's workspaces, fetched by the sidebar. Null while loading. It is owned
+   * up there because BOTH panels need it: the conversations panel names the
+   * subscription its chats belong to, which only this tree knows.
+   */
+  groups: TenantGroup[] | null;
+  /** An error CODE from the load, resolved to a sentence at render time. */
+  error: string | null;
   onSelect?: () => void;
   /**
    * Whether a lone workspace may be entered without being clicked. False while the
@@ -89,12 +92,7 @@ export default function WorkspaceNav({
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
-  const router = useRouter();
   const fragment = useFragment();
-  const [groups, setGroups] = useState<TenantGroup[] | null>(null);
-  // An error *code*, not a sentence: resolving at render time means a locale
-  // switch while the banner is up re-renders it.
-  const [error, setError] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
@@ -102,28 +100,6 @@ export default function WorkspaceNav({
   const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/subscriptions");
-        if (res.status === 401) {
-          router.push("/signin");
-          return;
-        }
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          setError(typeof data?.error === "string" ? data.error : "workspaces_load_failed");
-          return;
-        }
-        const data = await res.json();
-        const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-        setGroups(groupWorkspaces(subs));
-      } catch {
-        setError("connectivity");
-      }
-    })();
-  }, [router]);
 
   // Enrich the agent list from the gateway's public /tools catalog, joined by
   // tool.name === role. Best-effort: listTools never throws (yields [] on any
@@ -197,10 +173,10 @@ export default function WorkspaceNav({
   const q = filter.trim().toLowerCase();
   const visibleGroups = groups && q ? filterGroups(groups, tenantNames, q) : groups;
 
-  // The tree's SHAPE comes from the plan, which hoists away any level holding a
-  // single node (sidebar-tree.ts). The plan is built from the FILTERED groups, so
-  // filtering down to one tenant hides that tenant's row too.
-  const plan = planWorkspaceTree(visibleGroups ?? [], tenantNames);
+  // Every level earns a row (sidebar-tree.ts). The plan is built from the FILTERED
+  // groups, so a tenant with no surviving leaf drops out entirely — but a tenant that
+  // does survive still renders its own row, whether it is the only one or one of ten.
+  const nodes = planWorkspaceTree(visibleGroups ?? [], tenantNames);
 
   // A member with exactly one workspace is answering a question with one possible
   // answer. Enter it for them and land on its conversations, which is where they were
@@ -217,33 +193,20 @@ export default function WorkspaceNav({
     // on it would fire a pick over a fragment that already names one.
     if (fragment === null || activeKey) return;
     if (!groups) return;
-    const leaves = planLeaves(plan.nodes);
+    const leaves = planLeaves(nodes);
     if (leaves.length !== 1) return;
     autoSelected.current = true;
     onPick(leaves[0], true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSelect, fragment, activeKey, groups]);
 
-  // Both hoisted labels ride here when there is a single tenant: its name AND its
-  // sole subscription's. Suppressing a row saves vertical space; it is not licence to
-  // drop what the row said, and which subscription a workspace belongs to is
-  // load-bearing (billing, membership, who administers it).
-  const identity = plan.soleTenant ? (
-    <span className="flex min-w-0 shrink items-center gap-1.5">
-      <TenantAvatar
-        name={plan.soleTenant.label}
-        logo={tenantBrands[plan.soleTenant.id]?.logo}
-        color={tenantBrands[plan.soleTenant.id]?.color}
-      />
-      <ScopeLabel tenant={plan.soleTenant.label} account={plan.soleTenant.hoistedAccount} />
-    </span>
-  ) : undefined;
-
   return (
     <SidebarPanel
+      // No tenant identity beside the title any more. It existed to carry the name of
+      // a tenant row that hoisting had suppressed; the tenant now always has its own
+      // row, avatar included, so repeating it here would be the same thing twice.
       header={
         <span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
-          {identity}
           <span className="min-w-0 flex-1 truncate font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
             {t.shell.workspaces}
           </span>
@@ -294,11 +257,11 @@ export default function WorkspaceNav({
           </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.none}</p>
-        ) : plan.nodes.length === 0 ? (
+        ) : nodes.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>
         ) : (
           <PlanNodes
-            nodes={plan.nodes}
+            nodes={nodes}
             q={q}
             collapsed={collapsed}
             toggle={toggle}
@@ -380,10 +343,6 @@ function PlanNodes({
                 )
               }
               label={node.label}
-              // A hoisted subscription's name shows on the tenant row that survived
-              // it, for the same reason it shows on the group header when the tenant
-              // was hoisted too.
-              subLabel={node.kind === "tenant" ? node.hoistedAccount : undefined}
               open={open}
               level={node.kind === "tenant" ? "tenant" : "account"}
               onClick={() => toggle(node.id)}
@@ -413,15 +372,12 @@ function PlanNodes({
 function GroupHeader({
   icon,
   label,
-  subLabel,
   open,
   level,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
-  /** A hoisted child level's label, shown after this one. */
-  subLabel?: string;
   open: boolean;
   level: GroupLevel;
   onClick: () => void;
@@ -434,49 +390,10 @@ function GroupHeader({
         <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
       )}
       <span className="shrink-0 text-fg-muted">{icon}</span>
-      {subLabel ? (
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={groupHeaderLabel({ level })} title={label}>
-            {label}
-          </span>
-          <span className="shrink-0 text-fg-muted/60" aria-hidden>
-            /
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={subLabel}>
-            {subLabel}
-          </span>
-        </span>
-      ) : (
-        <span className={groupHeaderLabel({ level })} title={label}>
-          {label}
-        </span>
-      )}
+      <span className={groupHeaderLabel({ level })} title={label}>
+        {label}
+      </span>
     </button>
-  );
-}
-
-// The tenant plus, when its row was hoisted away too, its sole subscription. Rendered
-// in the Workspaces group header, where the space is tightest — so the tenant stays
-// small and monospaced (it is an id or an org name, context) and the subscription
-// carries the weight, since that is the thing a member recognizes.
-function ScopeLabel({ tenant, account }: { tenant: string; account?: string }) {
-  if (!account) {
-    return (
-      <span className="max-w-32 truncate font-mono text-[11px] text-fg-muted" title={tenant}>
-        {tenant}
-      </span>
-    );
-  }
-  return (
-    <span className="flex min-w-0 items-baseline gap-1" title={`${tenant} / ${account}`}>
-      <span className="max-w-20 shrink-0 truncate font-mono text-[11px] text-fg-muted">
-        {tenant}
-      </span>
-      <span className="shrink-0 text-[11px] text-fg-muted/60" aria-hidden>
-        /
-      </span>
-      <span className="min-w-0 truncate text-[11px] font-medium text-fg">{account}</span>
-    </span>
   );
 }
 

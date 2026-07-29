@@ -123,6 +123,10 @@ export default function ConversationSearchBar({
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
         <Input
           ref={inputRef}
+          // The bar is mounted only while the panel's magnifier is toggled open, so
+          // mounting IS opening — and reaching for the field after asking for it is a
+          // step nobody wants.
+          autoFocus
           variant="subtle"
           inputSize="sm"
           className={cn("pl-8", searching && "pr-8")}

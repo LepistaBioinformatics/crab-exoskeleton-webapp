@@ -96,6 +96,21 @@ export function groupWorkspaces(subs: Subscription[]): TenantGroup[] {
   return [...tenants.values()];
 }
 
+// The subscription's display name for a chosen workspace, or null when the tree has
+// not loaded yet or the subscription carries no name. NULL RATHER THAN THE UUID: this
+// feeds a header where the name is the primary label, and a uuid in that position says
+// less than the agent's own name does.
+export function accountName(
+  groups: TenantGroup[] | null,
+  tenantId: string,
+  subsAccId: string,
+): string | null {
+  const account = groups
+    ?.find((tenant) => tenant.tenantId === tenantId)
+    ?.accounts.find((acc) => acc.subsAccId === subsAccId);
+  return account?.accName?.trim() || null;
+}
+
 // Badge text for a leaf's permission union. Empty set -> "" (render no badge,
 // mirroring the old picker's `sub.perm ?` guard). read-then-write ordering.
 export function accessLabel(perms: string[]): string {

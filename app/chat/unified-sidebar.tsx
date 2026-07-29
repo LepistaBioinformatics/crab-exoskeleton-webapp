@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cva } from "class-variance-authority";
 import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
@@ -13,6 +14,12 @@ import HistorySidebar from "./history-sidebar";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
 import { resolvePanel, type SidebarPanel } from "./sidebar-panel-state";
+import {
+  accountName,
+  groupWorkspaces,
+  type Subscription,
+  type TenantGroup,
+} from "@/lib/subscriptions";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
@@ -78,6 +85,41 @@ export default function UnifiedSidebar({
   onCollapse?: () => void;
 }) {
   const t = useT(chatCopy);
+  const router = useRouter();
+
+  // WHO OWNS THE WORKSPACE LIST. It used to be the tree's own, but both panels need
+  // it now: the conversations panel names the subscription its chats belong to, and
+  // that name lives on the agent leaf. The tree is mounted in the other slot at all
+  // times (both panels stay mounted), so fetching it here rather than there costs
+  // nothing and saves the conversations panel a second request per agent switch.
+  const [groups, setGroups] = useState<TenantGroup[] | null>(null);
+  // An error CODE, not a sentence: resolving at render time means a locale switch
+  // while the banner is up re-renders it.
+  const [workspacesError, setWorkspacesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/subscriptions");
+        if (res.status === 401) {
+          router.push("/signin");
+          return;
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          setWorkspacesError(
+            typeof data?.error === "string" ? data.error : "workspaces_load_failed",
+          );
+          return;
+        }
+        const data = await res.json();
+        const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        setGroups(groupWorkspaces(subs));
+      } catch {
+        setWorkspacesError("connectivity");
+      }
+    })();
+  }, [router]);
 
   // The back control was pressed. Deliberately not persisted: a stored panel outlives
   // the fragment that justified it, so a reload or a shared link would open on the
@@ -167,6 +209,8 @@ export default function UnifiedSidebar({
             inert={showingChats || undefined}
           >
             <WorkspaceNav
+              groups={groups}
+              error={workspacesError}
               // Picking a workspace slides to its conversations. No onSelect closing
               // the drawer: see the prop's note above.
               onSelect={() => {
@@ -195,6 +239,10 @@ export default function UnifiedSidebar({
                 // of showing the previous agent's conversations for a beat.
                 key={`${workspace.t}|${workspace.s}|${workspace.r}`}
                 workspace={workspace}
+                // Null until the tree loads, or when the subscription carries no name.
+                // The header falls back to the agent alone rather than showing a uuid
+                // where a name belongs.
+                subscription={accountName(groups, workspace.t, workspace.s)}
                 onSelect={onConversationSelect}
                 onBack={() => {
                   setBrowsing(true);

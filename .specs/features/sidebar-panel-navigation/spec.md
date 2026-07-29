@@ -81,8 +81,8 @@ exist. `FILTER_THRESHOLD` and `needsFilter` are deleted.
 **R2.3** The filter stays behind the magnifier toggle: pressing it opens the
 input, pressing it again closes the input AND clears the query.
 
-**R2.4** The tree's shape, hoisting rules, and sole-tenant identity in the panel
-header are unchanged (`planWorkspaceTree`).
+**R2.4** ~~The tree's shape, hoisting rules, and sole-tenant identity in the
+panel header are unchanged (`planWorkspaceTree`).~~ **Superseded by R9.**
 
 **R2.5** Picking an agent leaf creates a conversation, writes the workspace to
 the fragment, and clears `browsing` — which slides the column to `chats`.
@@ -99,8 +99,8 @@ view on the right keeps rendering the current conversation throughout.
 **R3.3** The List/Tree view toggle stays in the panel header, beside the back
 control.
 
-**R3.4** Search, new-chat, the conversation list, rename/delete/enrich and the
-spotlight hover behaviour are unchanged.
+**R3.4** New-chat, the conversation list, rename/delete/enrich and the spotlight
+hover behaviour are unchanged. (Search: superseded by R11.)
 
 **R3.5** The list still remounts when the workspace changes (`key` on
 tenant|subs|role).
@@ -159,6 +159,70 @@ closes it.
 **R8.1** A new key `nav.backToWorkspaces` exists in `en` and `pt`, with
 different values in each.
 
+## Amendment — after first use
+
+Three changes from using the shipped panels. They supersede R2.4 and the search
+clause of R3.4; the requirements they replace are struck above rather than
+deleted, so the spec does not silently contradict its committed version.
+
+### R9 — The full tree, nothing hoisted
+
+**R9.1** `planWorkspaceTree` renders a row for every level: tenant →
+subscription → agent, always, whatever the number of siblings.
+
+**R9.2** The hoisting rule and everything that served it are removed:
+`TreePlan.soleTenant`, `PlanNode.hoistedAccount`, `TreePlan.agentCount`, the
+`subLabel` on group headers, and `ScopeLabel`. `planWorkspaceTree` returns
+`PlanNode[]` directly.
+
+**R9.3** The sole-tenant identity beside the panel title goes with it. The
+tenant now always has its own row, avatar included; repeating it in the header
+would be the same thing twice.
+
+**Why:** hoisting saved vertical space at the cost of a shape that changed with
+the data — the same account rendered at a different depth, under a different
+header, depending on how many siblings it happened to have. There was nothing
+stable for a member to learn. It is also cheap to drop: the case hoisting was
+designed for (one tenant, one subscription, one agent) is exactly the case R4
+takes straight to the conversations, so that member never sees the tree at all.
+
+**R9.4** Leaf identity is untouched, as before: hoisting was render-only, so
+removing it changes no workspace key and no request, and the single-workspace
+shortcut (R4) still reads its leaf off the plan.
+
+### R10 — The chats panel names its subscription
+
+**R10.1** The back control shows the SUBSCRIPTION name as the primary label,
+with the agent's name beneath it in smaller, muted type.
+
+**R10.2** With no subscription name available — the tree has not loaded, or the
+subscription carries none — the agent takes the line alone. A uuid is never
+rendered in the primary position: it says less there than the agent's own name
+does.
+
+**R10.3** `/api/subscriptions` moves from `WorkspaceNav` to `UnifiedSidebar`,
+along with the 401 → `/signin` redirect and the error code. `WorkspaceNav`
+receives `groups` and `error` as props.
+
+**Why the lift:** the subscription name lives on the agent leaf, which only the
+workspace tree holds. The tree is mounted in the other slot at all times (R1.4),
+so fetching one level up costs nothing and saves the conversations panel a
+second request on load and another on every agent switch.
+
+### R11 — Conversation search behind a magnifier
+
+**R11.1** The search bar and its filter pills are folded behind a magnifier
+toggle in the chats panel header, matching the workspaces panel.
+
+**R11.2** The toggle is offered at any conversation count — this is not a
+threshold. Closing it clears the query, for the same reason R2.3 gives.
+
+**R11.3** The field takes focus when opened.
+
+**Why:** the search plus four filter pills is a four-row block sitting
+permanently above the list whose first rows are what a member came to click, for
+a query most visits never make.
+
 ## Out of scope
 
 - Desktop collapse/resize of the sidebar column (`ResizablePane`) — unchanged.
@@ -178,3 +242,9 @@ are obsolete by design, not broken:
   (R5.1).
 
 This is expected churn from the redesign and must not be read as regression.
+
+`sidebar-tree.test.ts` is likewise **rewritten** for R9. Its entire second
+`describe` block — "a hoisted level's label is carried, not discarded" — tested
+a rule that no longer exists. What replaced it asserts the opposite property:
+that an agent sits at the same depth whatever the tree around it looks like.
+Coverage moved, it was not lost.

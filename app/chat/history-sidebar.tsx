@@ -9,6 +9,7 @@ import {
   List,
   MessageSquarePlus,
   Pencil,
+  Search,
   Tags,
   Trash2,
   X,
@@ -70,10 +71,16 @@ const viewToggle = cva(
 
 export default function HistorySidebar({
   workspace,
+  subscription,
   onSelect,
   onBack,
 }: {
   workspace: Workspace;
+  /**
+   * The subscription these conversations belong to. Null while the workspace tree is
+   * still loading, and for a subscription with no name of its own.
+   */
+  subscription: string | null;
   onSelect?: () => void;
   /**
    * Slides the sidebar back to the workspace tree. It writes NOTHING to the fragment:
@@ -94,6 +101,10 @@ export default function HistorySidebar({
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");
+  // Behind a magnifier, matching the workspaces panel. The search and its filter pills
+  // are a four-row block, and they sat permanently above a list whose first rows are
+  // what a member came here to click.
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<ConversationSummary[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -233,17 +244,54 @@ export default function HistorySidebar({
           onClick={onBack}
           aria-label={t.nav.backToWorkspaces}
           title={t.nav.backToWorkspaces}
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-elevated/60"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-elevated/60"
         >
           <ChevronLeft size={16} className="shrink-0 text-fg-muted" aria-hidden />
-          <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
-            {workspace.r}
-          </span>
+          {/* The SUBSCRIPTION leads and the agent sits under it in lighter type. Which
+              subscription a workspace belongs to is what a member navigates by — it is
+              the billing and membership boundary, and it is what distinguishes two
+              otherwise identical agents. The agent name is the qualifier within it, not
+              the heading.
+
+              With no subscription name to show, the agent takes the line alone rather
+              than being demoted under a uuid. */}
+          {subscription ? (
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-fg" title={subscription}>
+                {subscription}
+              </span>
+              <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
+                <Bot size={11} className="shrink-0" aria-hidden />
+                <span className="truncate">{workspace.r}</span>
+              </span>
+            </span>
+          ) : (
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
+                {workspace.r}
+              </span>
+            </span>
+          )}
         </button>
       }
       actions={
         <>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label={t.search.placeholder}
+            aria-expanded={searchOpen}
+            onClick={() => {
+              // Closing clears the query, for the reason the workspace filter does: a
+              // hidden search still narrowing the list is the worst of both, since the
+              // reason conversations are missing is off screen.
+              if (searchOpen) setQuery("");
+              setSearchOpen((v) => !v);
+            }}
+          >
+            <Search size={16} aria-hidden />
+          </IconButton>
           <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
             <button
               type="button"
@@ -273,22 +321,27 @@ export default function HistorySidebar({
         onMouseEnter={() => setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
       >
-      {/* Always present, never behind a threshold: history grows without bound and
-          this is the rich query (tag:, content search). A field that appears once a
-          count is crossed is a moving target. */}
-      {/* Roomy above and below. The search plus its filter chips is one block
+      {/* Behind the magnifier, not permanently open. It is NOT a threshold — the
+          control is offered whatever the conversation count, exactly as in the
+          workspaces panel; it is the block itself that is folded away, because the
+          search and its four filter pills push the first conversations down the panel
+          for a query most visits never make.
+
+          Roomy above and below. The search plus its pills is one block
           (ConversationSearchBar stacks them), so this wrapper is the only place the
-          spacing belongs — and it has to separate the block from the group header
+          spacing belongs — and it has to separate the block from the panel header
           above it and from the new-chat row below it, neither of which is its own
           section divider. */}
-      <div className="shrink-0 px-2 pb-3 pt-3">
-        <ConversationSearchBar
-          value={query}
-          onChange={setQuery}
-          conversations={conversations}
-          searching={searching}
-        />
-      </div>
+      {searchOpen && (
+        <div className="shrink-0 px-2 pb-3 pt-3">
+          <ConversationSearchBar
+            value={query}
+            onChange={setQuery}
+            conversations={conversations}
+            searching={searching}
+          />
+        </div>
+      )}
 
       {/* Under the search, on the row the first conversation would occupy, and right
           aligned. Icon-only with the label as its title: the plus already reads as
