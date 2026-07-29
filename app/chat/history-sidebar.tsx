@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   Bot,
   Check,
+  ChevronLeft,
   GitBranch,
   List,
   MessageSquarePlus,
@@ -29,7 +30,7 @@ import { useFragment, setFragmentSid, setHistoryView, type Workspace } from "./f
 import ConversationTree from "./conversation-tree";
 import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
-import SidebarGroup from "./sidebar-group";
+import SidebarPanel from "./sidebar-panel";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -70,14 +71,16 @@ const viewToggle = cva(
 export default function HistorySidebar({
   workspace,
   onSelect,
-  open,
-  onToggle,
+  onBack,
 }: {
   workspace: Workspace;
   onSelect?: () => void;
-  /** Group open/closed, owned by the unified sidebar so it can be persisted. */
-  open: boolean;
-  onToggle: () => void;
+  /**
+   * Slides the sidebar back to the workspace tree. It writes NOTHING to the fragment:
+   * the selection stays, so the chat on the right keeps rendering while another
+   * workspace is chosen — and if none is, nothing was lost.
+   */
+  onBack: () => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -220,23 +223,24 @@ export default function HistorySidebar({
   const pendingDelete = deletingId ? visible.find((c) => c.id === deletingId) : null;
 
   return (
-    <SidebarGroup
-      title={t.shell.conversations}
-      open={open}
-      onToggle={onToggle}
-      // The agent whose conversations these are. It used to be this sidebar's own
-      // 16px header; in one pane that would be a second title bar six rows under
-      // the brand.
-      identity={
-        <span className="flex min-w-0 shrink items-center gap-1.5">
+    <SidebarPanel
+      // The header IS the way back. There is no "Conversations" label: this panel
+      // holds nothing else, so a title would only say what is already visible, while
+      // the agent whose conversations these are is the thing that isn't.
+      header={
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label={t.nav.backToWorkspaces}
+          title={t.nav.backToWorkspaces}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-elevated/60"
+        >
+          <ChevronLeft size={16} className="shrink-0 text-fg-muted" aria-hidden />
           <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
-          <span
-            className="max-w-24 truncate text-[11px] capitalize text-fg-muted"
-            title={`${t.view.agentPrefix} ${workspace.r}`}
-          >
+          <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
             {workspace.r}
           </span>
-        </span>
+        </button>
       }
       actions={
         <>
@@ -471,6 +475,6 @@ export default function HistorySidebar({
         }}
       />
       </div>
-    </SidebarGroup>
+    </SidebarPanel>
   );
 }

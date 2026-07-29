@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  planWorkspaceTree,
-  planLeaves,
-  needsFilter,
-  leafKey,
-  FILTER_THRESHOLD,
-  type PlanNode,
-} from "./sidebar-tree";
+import { planWorkspaceTree, planLeaves, leafKey, type PlanNode } from "./sidebar-tree";
 import type { AgentLeaf, TenantGroup } from "@/lib/subscriptions";
 
 function agent(tenantId: string, subsAccId: string, role: string): AgentLeaf {
@@ -171,13 +164,6 @@ describe("agentCount and the filter threshold", () => {
       {},
     );
     expect(plan.agentCount).toBe(5);
-  });
-
-  it("withholds the filter at the threshold and offers it above", () => {
-    expect(FILTER_THRESHOLD).toBe(5);
-    expect(needsFilter(0)).toBe(false);
-    expect(needsFilter(5)).toBe(false);
-    expect(needsFilter(6)).toBe(true);
   });
 });
 

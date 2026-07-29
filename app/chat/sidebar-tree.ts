@@ -133,15 +133,6 @@ export function planWorkspaceTree(
   };
 }
 
-// The workspace filter earns its place only above this many agent leaves. Below it,
-// scanning the list is faster than reaching for a text field — and the field would be
-// the second one in a narrow pane.
-export const FILTER_THRESHOLD = 5;
-
-export function needsFilter(agentCount: number): boolean {
-  return agentCount > FILTER_THRESHOLD;
-}
-
 /** Every agent leaf in the plan, in render order. Used by tests and by keyboard nav. */
 export function planLeaves(nodes: PlanNode[]): AgentLeaf[] {
   return nodes.flatMap((node) =>

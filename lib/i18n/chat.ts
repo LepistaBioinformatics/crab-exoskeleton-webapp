@@ -10,7 +10,6 @@ const en = {
   shell: {
     openWorkspaces: "Open workspaces",
     closeMenu: "Close menu",
-    conversations: "Conversations",
     workspaces: "Workspaces",
     // Rendered as "<agentPrefix> <role>" in the mobile top bar.
     agentPrefix: "agent",
@@ -23,9 +22,9 @@ const en = {
   nav: {
     collapseWorkspaces: "Collapse Workspaces",
     collapse: "Collapse",
-    // Shown under the Conversations header before a workspace is chosen. The group
-    // is present rather than absent, so it has to say what to do next.
-    pickWorkspaceForConversations: "Pick a workspace above to see its conversations.",
+    // The chats panel's header control. Its visible text is the agent's name, so the
+    // label is what says where the button goes.
+    backToWorkspaces: "Back to workspaces",
   },
   emptyState: {
     title: "Pick a workspace to start",
@@ -288,7 +287,6 @@ const pt: ChatDict = {
   shell: {
     openWorkspaces: "Abrir workspaces",
     closeMenu: "Fechar menu",
-    conversations: "Conversas",
     workspaces: "Workspaces",
     agentPrefix: "agente",
   },
@@ -299,7 +297,7 @@ const pt: ChatDict = {
   nav: {
     collapseWorkspaces: "Recolher Workspaces",
     collapse: "Recolher",
-    pickWorkspaceForConversations: "Escolha um workspace acima para ver as conversas dele.",
+    backToWorkspaces: "Voltar aos workspaces",
   },
   emptyState: {
     title: "Escolha um workspace para começar",

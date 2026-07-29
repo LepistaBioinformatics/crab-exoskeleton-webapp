@@ -14,80 +14,79 @@ const t = chatCopy.en;
 const workspace: Workspace = { t: "acme", s: "growth", r: "alpha" };
 
 // The suite runs `environment: "node"`, so effects never fire and no fetch resolves:
-// what these assert is the FIRST PAINT — which groups exist and what the pane says
-// before any data arrives. The conditional rules (which group renders, the empty
-// state) are all decided at that point; the tree's own shape is covered by
-// sidebar-tree.test.ts, which needs no DOM at all.
+// what these assert is the FIRST PAINT — which panel the track is translated to, and
+// that both panels are in the markup either way. The derivation itself is covered
+// exhaustively by sidebar-panel-state.test.ts, which needs no React at all.
 function render(over: Partial<Parameters<typeof UnifiedSidebar>[0]> = {}) {
   return renderToStaticMarkup(
-    <UnifiedSidebar
-      email="member@example.com"
-      workspace={workspace}
-      hideConversations={false}
-      {...over}
-    />,
+    <UnifiedSidebar email="member@example.com" workspace={workspace} forceWorkspaces={false} {...over} />,
   );
 }
 
+// The track is the one element whose class list decides which panel is showing, so
+// assertions read it directly rather than searching the whole document — where any
+// future utility containing `translate-x-0` in another slot would make an absence
+// check quietly meaningless.
+function trackClasses(html: string): string {
+  const track = /class="([^"]*w-\[200%\][^"]*)"/.exec(html);
+  expect(track, "no track element in the markup").not.toBeNull();
+  return track![1];
+}
+
 describe("UnifiedSidebar", () => {
-  // The headers are uppercased by CSS, so the DOM carries the copy as written — and
-  // it IS copy now: both titles used to be the literals "WORKSPACES" and
-  // "CONVERSATIONS" hardcoded in JSX, untranslated.
-  it("renders one pane holding both groups", () => {
+  // The point of the redesign: one question at a time. Both panels are MOUNTED —
+  // animating to an unmounted panel is how a slide lands on a blank column — but the
+  // track only ever shows one.
+  it("mounts both panels and slides the track to the chats one", () => {
     const html = render();
+    expect(trackClasses(html)).toContain("-translate-x-1/2");
+    // The workspaces panel is present behind the slide, not conditionally rendered.
     expect(html).toContain(t.shell.workspaces);
-    expect(html).toContain(t.shell.conversations);
+    // ...and so is the chats panel's own header, in the other direction.
+    expect(html).toContain(t.nav.backToWorkspaces);
   });
 
-  it("keeps the account footer, which is on every /chat and /admin view", () => {
-    const html = render();
-    expect(html).toContain("member@example.com");
+  it("rests on the workspaces panel before a workspace is chosen", () => {
+    expect(trackClasses(render({ workspace: null }))).toContain("translate-x-0");
   });
 
-  // The canvas already lanes every conversation. Listing them beside it is the same
-  // information twice, competing for height with the tree.
-  it("renders no Conversations group in the canvas view", () => {
-    const html = render({ hideConversations: true });
-    expect(html).toContain(t.shell.workspaces);
-    expect(html).not.toContain(t.shell.conversations);
+  // The canvas already lanes every conversation; switching agent is the only
+  // navigation it needs. It PINS the tree rather than hiding a group.
+  it("pins the workspaces panel in the canvas view", () => {
+    expect(trackClasses(render({ forceWorkspaces: true }))).toContain("translate-x-0");
   });
 
-  // Present with an empty state, not absent: a group that appears once a workspace is
-  // picked makes the pane's shape depend on selection, and the first-run member is
-  // exactly who needs telling what to do next.
-  it("keeps the Conversations group with an empty state before a workspace is picked", () => {
-    const html = render({ workspace: null });
-    expect(html).toContain(t.shell.conversations);
-    expect(html).toContain(t.nav.pickWorkspaceForConversations);
+  // The off-screen panel is MOUNTED, so without `inert` its controls stay tabbable and
+  // a keyboard member walks into a list they cannot see. React 19 emits the attribute;
+  // this is the assertion that catches it silently going away.
+  it("takes the off-screen panel out of the tab order", () => {
+    // The ATTRIBUTE, not the substring: `toContain("inert")` would pass on a class name
+    // and would not notice React silently dropping the prop on an upgrade. Exactly one
+    // slot carries it — the parked one.
+    for (const html of [render({ workspace: null }), render()]) {
+      expect(html.match(/inert=""/g)).toHaveLength(1);
+    }
+  });
+
+  // The header of the chats panel is the way back, and its visible text is the agent's
+  // name — so the accessible label is the only thing that says where it goes.
+  it("labels the way back out of the chats panel", () => {
+    expect(render()).toContain(t.nav.backToWorkspaces);
   });
 
   it("says the same thing in both locales", () => {
-    expect(chatCopy.pt.nav.pickWorkspaceForConversations).toBeTruthy();
-    expect(chatCopy.pt.nav.pickWorkspaceForConversations).not.toBe(
-      chatCopy.en.nav.pickWorkspaceForConversations,
-    );
+    expect(chatCopy.pt.nav.backToWorkspaces).toBeTruthy();
+    expect(chatCopy.pt.nav.backToWorkspaces).not.toBe(chatCopy.en.nav.backToWorkspaces);
   });
 
-  // Workspaces is capped so it cannot push Conversations off screen; Conversations
-  // takes the remainder. Both headers stay visible either way.
-  // The cap is asserted as vh rather than %, because that is the part that is
-  // load-bearing: a percentage max-height against a flex-sized parent is indefinite
-  // and simply ignored, so the tree would push the Conversations header off screen.
-  // This asserts the class is the right ONE — that it constrains anything is layout,
-  // which a markup test cannot see.
-  it("caps the workspaces group in vh and gives the remainder to conversations", () => {
-    const html = render();
-    expect(html).toContain("max-h-[40vh]");
-    expect(html).not.toContain("max-h-[40%]");
-    expect(html).toContain("flex-1");
+  // A slide is decoration; landing on the right panel is not. Under reduced motion the
+  // transform must apply instantly rather than not at all.
+  it("lands instantly under reduced motion", () => {
+    expect(trackClasses(render())).toContain("motion-reduce:transition-none");
   });
 
-  // A group header's toggle sits in a row beside that group's actions. With `w-full`
-  // it took the whole row and pushed the actions past the pane's right edge, where
-  // they rendered outside the sidebar altogether — which is how the conversations
-  // list/tree switch ended up on the outside.
-  it("never gives a group header's toggle w-full, which pushes its actions out", () => {
-    expect(render()).not.toContain("flex w-full shrink-0 items-center gap-2 px-3");
+  it("keeps the account footer, which is on every /chat and /admin view", () => {
+    expect(render()).toContain("member@example.com");
   });
 
   it("offers the desktop collapse control only when the shell passes one", () => {

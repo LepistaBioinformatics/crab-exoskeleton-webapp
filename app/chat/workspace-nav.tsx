@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot, Search } from "lucide-react";
@@ -14,8 +14,8 @@ import {
 } from "@/lib/subscriptions";
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
-import SidebarGroup from "./sidebar-group";
-import { planWorkspaceTree, needsFilter, type PlanNode } from "./sidebar-tree";
+import SidebarPanel from "./sidebar-panel";
+import { planWorkspaceTree, planLeaves, type PlanNode } from "./sidebar-tree";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
@@ -72,18 +72,20 @@ const groupHeaderLabel = cva("min-w-0 flex-1 truncate", {
 
 type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 
-// The "Workspaces" section body: fetches the caller's subscriptions, collapses
+// The workspaces PANEL: fetches the caller's subscriptions, collapses
 // permission-duplicated rows, and renders a tenant -> account -> agent tree.
 // The agent leaf is the selectable workspace.
 export default function WorkspaceNav({
   onSelect,
-  open,
-  onToggle,
+  autoSelect,
 }: {
   onSelect?: () => void;
-  /** Group open/closed, owned by the unified sidebar so it can be persisted. */
-  open: boolean;
-  onToggle: () => void;
+  /**
+   * Whether a lone workspace may be entered without being clicked. False while the
+   * member is browsing (they pressed back): with one workspace they would land on a
+   * one-leaf tree and be thrown straight forward again.
+   */
+  autoSelect: boolean;
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -175,14 +177,18 @@ export default function WorkspaceNav({
     });
   }
 
-  async function onPick(leaf: AgentLeaf) {
+  // `auto` marks the entry as one nobody asked for (the lone-workspace shortcut). It
+  // suppresses onSelect, which means "the member chose this" — the signal the sidebar
+  // uses to move keyboard focus. Moving focus for a selection the member did not make
+  // is how a page steals the caret out from under someone on first paint.
+  async function onPick(leaf: AgentLeaf, auto = false) {
     if (entering) return;
     setEntering(true);
     const workspace: Workspace = { t: leaf.tenantId, s: leaf.subsAccId, r: leaf.role };
     try {
       const conversation = await createConversation(workspace);
       setWorkspace(workspace, conversation.id);
-      onSelect?.();
+      if (!auto) onSelect?.();
     } finally {
       setEntering(false);
     }
@@ -195,10 +201,28 @@ export default function WorkspaceNav({
   // single node (sidebar-tree.ts). The plan is built from the FILTERED groups, so
   // filtering down to one tenant hides that tenant's row too.
   const plan = planWorkspaceTree(visibleGroups ?? [], tenantNames);
-  // Counted over the unfiltered tree: whether the filter exists must not depend on
-  // what the filter currently matches, or typing could remove the field mid-word.
-  const fullCount = planWorkspaceTree(groups ?? [], tenantNames).agentCount;
-  const filterAvailable = needsFilter(fullCount);
+
+  // A member with exactly one workspace is answering a question with one possible
+  // answer. Enter it for them and land on its conversations, which is where they were
+  // going anyway.
+  //
+  // A REF, not state: it must not cause a render, and it has to survive the `groups`
+  // update that follows the fetch. And a one-shot effect, not a derived invariant —
+  // "if there is one workspace then select it" evaluated every render is how you get
+  // a member who cannot stay on the tree.
+  const autoSelected = useRef(false);
+  useEffect(() => {
+    if (autoSelected.current || !autoSelect) return;
+    // `null` is "the hash has not been read yet", which is NOT "no workspace": acting
+    // on it would fire a pick over a fragment that already names one.
+    if (fragment === null || activeKey) return;
+    if (!groups) return;
+    const leaves = planLeaves(plan.nodes);
+    if (leaves.length !== 1) return;
+    autoSelected.current = true;
+    onPick(leaves[0], true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelect, fragment, activeKey, groups]);
 
   // Both hoisted labels ride here when there is a single tenant: its name AND its
   // sole subscription's. Suppressing a row saves vertical space; it is not licence to
@@ -216,34 +240,39 @@ export default function WorkspaceNav({
   ) : undefined;
 
   return (
-    <SidebarGroup
-      title={t.shell.workspaces}
-      open={open}
-      onToggle={onToggle}
-      identity={identity}
+    <SidebarPanel
+      header={
+        <span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+          {identity}
+          <span className="min-w-0 flex-1 truncate font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            {t.shell.workspaces}
+          </span>
+        </span>
+      }
       actions={
-        filterAvailable ? (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.workspaceNav.filterPlaceholder}
-            aria-expanded={filterOpen}
-            onClick={() => {
-              // Closing the field clears it: a hidden filter still narrowing the
-              // tree is the worst of both, since the reason rows are missing is
-              // off screen.
-              if (filterOpen) setFilter("");
-              setFilterOpen((v) => !v);
-            }}
-          >
-            <Search size={16} aria-hidden />
-          </IconButton>
-        ) : undefined
+        // Offered at ANY number of workspaces. It used to appear only above five
+        // leaves, on the reasoning that a short list is faster to scan than a text
+        // field is to reach for — but a control that materialises once a count is
+        // crossed is a moving target, and searching is how members expect to find a
+        // workspace whatever the count.
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={t.workspaceNav.filterPlaceholder}
+          aria-expanded={filterOpen}
+          onClick={() => {
+            // Closing the field clears it: a hidden filter still narrowing the
+            // tree is the worst of both, since the reason rows are missing is
+            // off screen.
+            if (filterOpen) setFilter("");
+            setFilterOpen((v) => !v);
+          }}
+        >
+          <Search size={16} aria-hidden />
+        </IconButton>
       }
     >
-      {/* A field rather than a permanently open input: two open text boxes six rows
-          apart in one narrow pane is what unifying is meant to remove. */}
-      {filterAvailable && filterOpen && (
+      {filterOpen && (
         <div className="px-2 pb-1 pt-1">
           <Input
             variant="subtle"
@@ -281,7 +310,7 @@ export default function WorkspaceNav({
           />
         )}
       </div>
-    </SidebarGroup>
+    </SidebarPanel>
   );
 }
 
