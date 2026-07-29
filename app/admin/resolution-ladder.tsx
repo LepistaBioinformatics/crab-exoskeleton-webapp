@@ -2,7 +2,7 @@
 
 import { cva } from "class-variance-authority";
 import { ArrowDown, Lock } from "lucide-react";
-import { type LadderLevel, type LadderRung } from "@/lib/models";
+import { rungSelectable, type LadderLevel, type LadderRung } from "@/lib/models";
 import { Ident } from "./field";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
@@ -43,6 +43,7 @@ const rung = cva(
         empty: "",
         locked: "",
         outOfScope: "",
+        notEditable: "",
       },
       selectable: { true: "hover:bg-elevated/70", false: "" },
     },
@@ -59,6 +60,9 @@ const dot = cva("absolute left-[3px] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounde
       locked: "border-brand/30 bg-bg",
       // Hollow and dashed: the level exists, but nothing about it is decided here.
       outOfScope: "border-dashed border-brand/30 bg-bg",
+      // Solid outline, no fill: the level is real and READ — its value is on the
+      // rung — it is simply not written from this screen.
+      notEditable: "border-brand/40 bg-bg",
     },
   },
   defaultVariants: { tone: "empty" },
@@ -72,6 +76,7 @@ const levelText = cva("text-[13px]", {
       empty: "font-medium text-fg-muted/80",
       locked: "font-medium text-fg-muted/80",
       outOfScope: "font-medium text-fg-muted/70",
+      notEditable: "font-medium text-fg-muted",
     },
   },
   defaultVariants: { tone: "empty" },
@@ -85,19 +90,26 @@ const tag = cva("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px
       empty: "bg-elevated text-fg-muted",
       locked: "bg-elevated text-fg-muted",
       outOfScope: "border border-dashed border-brand/40 text-fg-muted",
+      notEditable: "border border-brand/30 text-fg-muted",
     },
   },
   defaultVariants: { tone: "empty" },
 });
 
-type Tone = "effect" | "overridden" | "empty" | "locked" | "outOfScope";
+type Tone = "effect" | "overridden" | "empty" | "locked" | "outOfScope" | "notEditable";
 
 function toneOf(r: LadderRung): Tone {
-  // Both checks come before inEffect for the same reason: a rung nobody can act
-  // on here must not be dressed as the one that decides.
+  // outOfScope wins over notEditable where a rung is both: it carries the more
+  // specific message ("select a subscription") against the general one.
   if (r.outOfScope) return "outOfScope";
   if (r.unreadable) return "locked";
+  // inEffect stays AHEAD of notEditable. Which level decides is the ladder's
+  // central fact, and a global default that happens to be the winner has to read
+  // as the winner — marking it "not editable here" instead would leave no rung
+  // showing in effect at all, which is the ladder saying something false. That the
+  // rung cannot be written is carried by it not being selectable.
   if (r.inEffect) return "effect";
+  if (r.notEditable) return "notEditable";
   if (r.overridden) return "overridden";
   return "empty";
 }
@@ -123,6 +135,7 @@ export function ResolutionLadder({
     // scope for one reason — no subscription is selected — which the detail line
     // states.
     outOfScope: t.ladder.outOfScope,
+    notEditable: t.ladder.notEditable,
   };
   return (
     <div className="flex flex-col">
@@ -135,10 +148,16 @@ export function ResolutionLadder({
       <ul className="flex flex-col">
       {rungs.map((r, i) => {
         const tone = toneOf(r);
-        // Every readable rung is selectable, the pin rung included: selecting it
-        // swaps the editor below for the per-person list, so one ladder addresses
-        // every level of the cascade instead of four of the five.
-        const selectable = !r.unreadable && !r.outOfScope;
+        // Selectable = this screen writes it. The pin rung is included when the
+        // rail sits on a subscription: selecting it swaps the editor below for the
+        // per-person list, and those people are inside the selected subscription.
+        // The agent and global rungs are never selectable, whatever the rail says.
+        //
+        // The rule lives in models.ts, not here. This component draws a decision it
+        // does not own — and the panel re-checks it on receipt, because a
+        // presentational component must not be the only thing between a click and a
+        // write to the wrong scope.
+        const selectable = rungSelectable(r);
         const isSelected = selected === r.level;
         const body = (
           <>

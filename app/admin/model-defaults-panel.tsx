@@ -16,6 +16,7 @@ import {
   pinnedModel,
   defaultOptions,
   buildLadder,
+  editableLevels,
   fallbackIfCleared,
   type LadderLevel,
   type LadderRung,
@@ -35,14 +36,18 @@ import { ResolutionLadder } from "./resolution-ladder";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
 
+// The levels this screen WRITES. Narrower than DefaultScope["kind"], which keeps
+// `global` and `agent` because the ladder still READS those to draw them — what
+// shrank is the writable set, not the readable one.
+export type WritableLevel = "tenant" | "subscription";
+
 // The level -> DefaultScope derivation, extracted and tested (see
 // model-defaults-panel.test.ts) rather than left as an inline ladder in the
 // component body: it's exactly the kind of branching that hides a desync bug,
 // and Task 20's chain-editor `key` fix showed that shape is easy to miss without
 // a test that exercises the target-changed case directly.
-export function resolveDefaultScope(level: DefaultScope["kind"], scope: ScopeRef): DefaultScope | null {
-  if (level === "global") return { kind: "global" };
-  if (level === "agent") return { kind: "agent" };
+
+export function resolveDefaultScope(level: WritableLevel, scope: ScopeRef): DefaultScope | null {
   if (level === "subscription") {
     return scope.kind === "subscription" && scope.subsAccId
       ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
@@ -99,15 +104,18 @@ export default function ModelDefaultsPanel({
 
   const assignable = models.filter((m) => m.status !== "disabled");
 
-  // Which cascade level the default control addresses. global and agent are
-  // instance-wide (the proxy gates them at proxy-admin); tenant and subscription
-  // follow the scope tree on the left. Without this selector there is no way to set
-  // an instance-wide default at all, and a fresh install with no scope default
-  // refuses to provision every new workspace.
-  // The whole cascade, not just the four writable scopes: the pin rung is part of
-  // the same ladder, and selecting it swaps the editor below for the per-person
-  // list. `resolveDefaultScope` keeps its narrower, tested signature — the "user"
+  // Which cascade level the editor below addresses. Only ever one of the levels
+  // the scope tree is sitting on — the ladder marks the rest notEditable and does
+  // not offer them (editableLevels in lib/models.ts states the rule).
+  //
+  // The pin rung is in that set for a subscription: selecting it swaps the editor
+  // for the per-person list, and those people are inside the selected
+  // subscription. `resolveDefaultScope` keeps its narrower signature — the "user"
   // case is guarded at the call site rather than widened into it.
+  //
+  // This deliberately leaves NO path to a global or agent default. See the spec's
+  // "accepted consequence": an instance with nothing set anywhere cannot provision
+  // a workspace, and the first default has to be written out of band.
   const [level, setLevel] = useState<LadderLevel>(
     scope.kind === "subscription" ? "subscription" : "tenant",
   );
@@ -126,7 +134,11 @@ export default function ModelDefaultsPanel({
     setLevel(scope.kind === "subscription" ? "subscription" : "tenant");
   }, [scope.kind, scope.tenantId, scope.subsAccId]);
 
-  const defaultScope = level === "user" ? null : resolveDefaultScope(level, scope);
+  // Only the writable levels reach resolveDefaultScope. `level` cannot hold agent
+  // or global — no rung offers them — but the check is here rather than assumed,
+  // because a widened selection would otherwise write to the wrong scope silently.
+  const defaultScope =
+    level === "tenant" || level === "subscription" ? resolveDefaultScope(level, scope) : null;
 
   // One serialized dependency instead of picking fields off a union: the scope's
   // identity IS its serialization, and casting to read optional fields would be a
@@ -251,6 +263,7 @@ export default function ModelDefaultsPanel({
     // the admin a subscription had no default when the truth was that they had
     // not selected one.
     outOfScope: scope.kind === "subscription" ? [] : ["subscription", "user"],
+    editable: editableLevels(scope.kind),
   });
   const clearedFallback = fallbackIfCleared(rungs);
   const inEffect = rungs.find((r) => r.inEffect);
@@ -271,14 +284,12 @@ export default function ModelDefaultsPanel({
           .replace("{total}", String(users.length))}`;
   // What the control below is about to write to, in the admin's words. "the
   // tenant level" names a rank; this names the tenant.
+  // Only the two writable levels remain: `level` cannot hold agent or global, and
+  // the `user` case never reaches here (the pin list replaces this editor).
   const targetLabel =
     level === "subscription"
       ? (scopeNames.subscription ?? "this subscription")
-      : level === "tenant"
-        ? (scopeNames.tenant ?? "this tenant")
-        : level === "agent"
-          ? routed
-          : "every workspace no other level claims";
+      : (scopeNames.tenant ?? "this tenant");
 
   // gap-3 matches the inventory section above: the Models tab is one evenly
   // spaced stack of sections, not two panels bolted together.
@@ -340,7 +351,18 @@ export default function ModelDefaultsPanel({
           </div>
         ) : (
           <>
-            <ResolutionLadder rungs={rungs} selected={level} onSelect={setLevel} />
+            {/* Filtered ON RECEIPT, not just at the click. The ladder decides
+                which rungs render as buttons, but it is a presentational
+                component — it must not be the only thing standing between a
+                click and a write to the wrong scope. The rule is stated once, in
+                editableLevels, and enforced here where the state lives. */}
+            <ResolutionLadder
+              rungs={rungs}
+              selected={level}
+              onSelect={(next) => {
+                if (editableLevels(scope.kind).includes(next)) setLevel(next);
+              }}
+            />
 
             {level === "user" ? (
               // The scope check inside is load-bearing, not defensive: the resync
@@ -445,11 +467,10 @@ export default function ModelDefaultsPanel({
             ) : (
               <Field
                 label={t.defaults.modelFor.replace("{target}", targetLabel)}
-                job={
-                  level === "global" || level === "agent"
-                    ? t.defaults.instanceJob
-                    : t.defaults.scopeJob
-                }
+                // Always the scope wording now: the instance-wide levels are no
+                // longer writable from here, so the instance variant lost its only
+                // caller.
+                job={t.defaults.scopeJob}
                 htmlFor="default-model"
                 consequence={
                   clearedFallback !== null ? (

@@ -13,9 +13,11 @@ import {
   serializeDraft,
   emptyDraft,
   buildLadder,
+  editableLevels,
+  rungSelectable,
   fallbackIfCleared,
 } from "./models";
-import type { ScopeDefault } from "./models";
+import type { LadderLevel, ScopeDefault } from "./models";
 import type { InventoryModel, ModelAssignment } from "./models";
 import { adminCopy } from "@/lib/i18n/admin";
 
@@ -328,6 +330,111 @@ describe("defaultOptions", () => {
   });
 });
 
+// These ladder cases are about the cascade DECISION — which level wins, what is
+// overridden, what is out of scope — not about what this screen may write, so they
+// hand buildLadder the full set. The editable rule has its own tests below.
+const allEditable: LadderLevel[] = ["user", "subscription", "tenant", "agent", "global"];
+
+describe("editableLevels", () => {
+  // The rail states what is being administered; before this, the ladder let a
+  // write land outside it. The agent rung was the worst of them: labelled with the
+  // selected agent's name but stored at `agent/<agent>`, so it reached every tenant
+  // running that agent while sitting in a screen whose rail said "this subscription".
+  it("gives a tenant scope only its own level", () => {
+    expect(editableLevels("tenant")).toEqual(["tenant"]);
+  });
+
+  // Pins are per person WITHIN the selected subscription, so they are already
+  // inside the rail's scope.
+  it("gives a subscription its own level and the per-person pins", () => {
+    expect(editableLevels("subscription")).toEqual(["subscription", "user"]);
+  });
+
+  it("never offers agent or global from either scope", () => {
+    for (const kind of ["tenant", "subscription"] as const) {
+      expect(editableLevels(kind)).not.toContain("agent");
+      expect(editableLevels(kind)).not.toContain("global");
+    }
+  });
+});
+
+describe("buildLadder marks what this screen cannot write", () => {
+  const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
+  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+  const ladder = (kind: "tenant" | "subscription") =>
+    buildLadder({
+      pinnedCount: 0,
+      subscription: def("sub-model"),
+      tenant: def("tenant-model"),
+      agent: def("agent-model"),
+      global: def("global-model"),
+      names,
+      copy: adminCopy.en.ladderRungs,
+      outOfScope: kind === "subscription" ? [] : ["subscription", "user"],
+      editable: editableLevels(kind),
+    });
+  const notEditable = (kind: "tenant" | "subscription") =>
+    ladder(kind)
+      .filter((r) => r.notEditable)
+      .map((r) => r.level)
+      .sort();
+
+  it("leaves only the tenant rung writable on a tenant", () => {
+    expect(notEditable("tenant")).toEqual(["agent", "global", "subscription", "user"].sort());
+  });
+
+  // The case the request named directly: writing the tenant default while the rail
+  // sits on a subscription silently reached every other subscription under it.
+  it("leaves only the subscription and its pins writable on a subscription", () => {
+    expect(notEditable("subscription")).toEqual(["agent", "global", "tenant"].sort());
+  });
+
+  // notEditable is a THIRD state, not a rename of the two that exist. An
+  // instance-admin reads agent and global perfectly well, and their values stay on
+  // the rungs — the ladder exists to show what a write overrides.
+  it("keeps a level it cannot write readable, with its value shown", () => {
+    const global = ladder("subscription").find((r) => r.level === "global")!;
+    expect(global.notEditable).toBe(true);
+    expect(global.unreadable).toBe(false);
+    expect(global.outOfScope).toBe(false);
+    expect(global.modelName).toBe("global-model");
+  });
+
+  // The promise the rule actually makes: a rung this screen cannot write is not
+  // pickable, so the editor below can never address it. Asserted on the predicate
+  // the component renders from, which is why it lives in models.ts rather than
+  // inline in the ladder — a rule enforced only inside JSX is untestable here.
+  it("makes every rung it cannot write unselectable", () => {
+    for (const kind of ["tenant", "subscription"] as const) {
+      for (const r of ladder(kind)) {
+        expect(rungSelectable(r)).toBe(editableLevels(kind).includes(r.level));
+      }
+    }
+  });
+
+  it("keeps an unreadable or out-of-scope rung unselectable too", () => {
+    const [refused] = buildLadder({
+      pinnedCount: 0,
+      subscription: undefined,
+      tenant: def("t"),
+      agent: undefined,
+      global: undefined,
+      names,
+      copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
+    }).filter((r) => r.unreadable);
+    expect(refused).toBeDefined();
+    expect(rungSelectable(refused)).toBe(false);
+  });
+
+  // Which level DECIDES is the ladder's central fact and is computed from the
+  // cascade alone. Marking a level unwritable must not change who wins.
+  it("does not change which level is in effect", () => {
+    expect(ladder("subscription").find((r) => r.inEffect)?.level).toBe("subscription");
+    expect(ladder("tenant").find((r) => r.inEffect)?.level).toBe("tenant");
+  });
+});
+
 describe("buildLadder", () => {
   const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
   const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
@@ -341,6 +448,7 @@ describe("buildLadder", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
     expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["agent", "tenant"]);
@@ -360,6 +468,7 @@ describe("buildLadder", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
       outOfScope: ["subscription", "user"],
     });
     const subs = rungs.find((r) => r.level === "subscription")!;
@@ -386,6 +495,7 @@ describe("buildLadder", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     const subs = inScope.find((r) => r.level === "subscription")!;
     expect(subs.outOfScope).toBe(false);
@@ -405,6 +515,7 @@ describe("buildLadder", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(rungs.map((r) => r.level)).toEqual(["global", "agent", "tenant", "subscription", "user"]);
     expect(rungs.at(-2)?.inEffect).toBe(true);
@@ -425,6 +536,7 @@ describe("buildLadder", () => {
       global: def("gpt-5.4"),
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
     // The agent, skipping the unset tenant — and NOT the global below it.
@@ -440,6 +552,7 @@ describe("buildLadder", () => {
       global: def("gpt-5.4"),
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("agent");
   });
@@ -455,6 +568,7 @@ describe("buildLadder", () => {
       global: undefined,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(rungs.find((r) => r.level === "agent")?.unreadable).toBe(true);
     expect(rungs.find((r) => r.level === "agent")?.overridden).toBe(false);
@@ -470,6 +584,7 @@ describe("buildLadder", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     // Last, not first: the pin is the narrowest level, so it sits at the bottom of
     // the ladder — right where the per-person list that edits it is rendered.
@@ -494,6 +609,7 @@ describe("fallbackIfCleared", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(fallbackIfCleared(rungs)).toBe("gpt-5.4");
   });
@@ -507,6 +623,7 @@ describe("fallbackIfCleared", () => {
       global: null,
       names,
       copy: adminCopy.en.ladderRungs,
+      editable: allEditable,
     });
     expect(fallbackIfCleared(rungs)).toBeNull();
   });
