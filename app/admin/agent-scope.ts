@@ -19,10 +19,22 @@ import { SECTION_TABS, type Tab } from "./tabs";
 // wire format are untouched.
 export const LEGACY_AGENT = ALL_AGENTS;
 
+// Sections only a PICOCLAW agent offers.
+//
+// `model`: the registry governs picoclaw agents; hermes reads its model from the
+// proxy's own config.yaml.
+//
+// `persona`: the read-only identity files (AGENT.md, SOUL.md, HEARTBEAT.md and the
+// USER.md seed) are picoclaw's workspace layout. Hermes provisions from a different
+// template — config.yaml plus a SOUL.md — and the proxy delivers persona only on
+// the picoclaw create path, so offering the section for one would be a form whose
+// writes reach nothing.
+const PICOCLAW_ONLY: Tab[] = ["persona", "model"];
+
 // The sections every agent has: the shared content stores. Derived from the full
 // section list rather than spelled out again, so adding a section is one edit — the
 // two enumerations would otherwise have to be kept in agreement by hand.
-const CONTENT_TABS: Tab[] = SECTION_TABS.filter((s) => s !== "model");
+const CONTENT_TABS: Tab[] = SECTION_TABS.filter((s) => !PICOCLAW_ONLY.includes(s));
 
 // `?agent=` is user-editable, so this has to resolve to something. An unknown key
 // yields null — the agent list, never an empty working view whose header names an
@@ -35,17 +47,15 @@ export function resolveAgent(raw: string | null | undefined, agents: AgentRef[])
 
 // The sections a given agent offers.
 //
-// The model registry is the only one that is not universal. It governs picoclaw
-// agents: hermes reads its model from the proxy's own config.yaml, so a pin or an
-// agent default written for one is a record nothing reads — the proxy rejects it. The
-// tab is ABSENT rather than present-and-explaining-itself.
+// A tab a given agent cannot use is ABSENT rather than present-and-explaining-itself.
 //
-// The legacy store has no model tab either, for a different reason: the registry is
-// stored per agent (`agent/<agent>`), so an all-agents address was never a place a
-// model record could live.
+// The legacy store gets neither picoclaw-only section, and for its own reason: both
+// are addressed PER AGENT — the model registry is stored under `agent/<agent>`, and
+// the proxy rejects an agent-less persona write outright — so an all-agents address
+// was never a place either record could live.
 export function agentTabs(agent: string, agents: AgentRef[]): Tab[] {
   if (agent === LEGACY_AGENT) return CONTENT_TABS;
-  return picoclawAgentKeys(agents).includes(agent) ? [...CONTENT_TABS, "model"] : CONTENT_TABS;
+  return picoclawAgentKeys(agents).includes(agent) ? [...SECTION_TABS] : CONTENT_TABS;
 }
 
 // The tab to render for an agent, given what the URL asked for. A URL can name a

@@ -36,6 +36,7 @@ const en = {
       files: "Files",
       secrets: "Secrets",
       skills: "Skills",
+      persona: "Identity",
       model: "Models",
       members: "Members",
     },
@@ -66,6 +67,24 @@ const en = {
     entryNote: "Read-only. Written before content was scoped per agent.",
     readOnlyNote:
       "This store belongs to no agent. Nothing writes to it any more; what is here can be read and removed, and every container under the scope still reads it.",
+  },
+  persona: {
+    intro:
+      "The files this agent reads as its identity. What you put here is delivered to every workspace under this scope, overriding the agent template — and a more specific scope wins over a broader one.",
+    injectedHere: "set here",
+    inherited: "inherited",
+    // The promise differs per file, and the difference is the whole point.
+    readOnlyNote:
+      "Delivered read-only. Members cannot change it in their workspace, and an edit never survives a restart.",
+    seedOnlyNote:
+      "Starting content only. The agent records what it learns about the user here, so it stays writable — this sets what a NEW workspace begins with and never touches an existing one.",
+    edit: "Edit",
+    clear: "Clear",
+    save: "Save",
+    saving: "Saving…",
+    clearTitle: "Clear this file?",
+    clearMessage:
+      "{name} stops being set at this scope. Workspaces fall back to the broader scope, or to the agent template.",
   },
   scope: {
     label: "Scope",
@@ -570,6 +589,7 @@ const pt: AdminDict = {
       files: "Arquivos",
       secrets: "Segredos",
       skills: "Skills",
+      persona: "Identidade",
       model: "Modelos",
       members: "Membros",
     },
@@ -594,6 +614,23 @@ const pt: AdminDict = {
     entryNote: "Somente leitura. Gravado antes do conteúdo passar a ter escopo por agente.",
     readOnlyNote:
       "Este store não pertence a nenhum agente. Nada mais grava nele; o que está aqui pode ser lido e removido, e todos os contêineres sob o escopo continuam lendo.",
+  },
+  persona: {
+    intro:
+      "Os arquivos que este agente lê como sua identidade. O que você colocar aqui é entregue a todos os workspaces sob este escopo, sobrepondo o template do agente — e um escopo mais específico vence um mais amplo.",
+    injectedHere: "definido aqui",
+    inherited: "herdado",
+    readOnlyNote:
+      "Entregue somente leitura. Os membros não conseguem alterá-lo no workspace, e uma edição nunca sobrevive a um restart.",
+    seedOnlyNote:
+      "Apenas o conteúdo inicial. O agente registra aqui o que aprende sobre o usuário, então o arquivo continua gravável — isto define com o que um workspace NOVO começa, e nunca toca em um existente.",
+    edit: "Editar",
+    clear: "Limpar",
+    save: "Salvar",
+    saving: "Salvando…",
+    clearTitle: "Limpar este arquivo?",
+    clearMessage:
+      "{name} deixa de ser definido neste escopo. Os workspaces passam a usar o escopo mais amplo, ou o template do agente.",
   },
   scope: {
     label: "Escopo",

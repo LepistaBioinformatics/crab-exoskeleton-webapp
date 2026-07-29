@@ -37,23 +37,33 @@ describe("resolveAgent", () => {
 });
 
 describe("agentTabs", () => {
-  it("offers the model registry to the agents it governs", () => {
-    expect(agentTabs("alpha", agents)).toEqual(["files", "secrets", "skills", "model"]);
+  it("offers every section to a picoclaw agent", () => {
+    expect(agentTabs("alpha", agents)).toEqual([
+      "files",
+      "secrets",
+      "skills",
+      "persona",
+      "model",
+    ]);
   });
 
-  it("counts an agent with no reported harness as one it governs", () => {
+  it("counts an agent with no reported harness as picoclaw", () => {
     expect(agentTabs("legacy-shaped", agents)).toContain("model");
+    expect(agentTabs("legacy-shaped", agents)).toContain("persona");
   });
 
   // hermes reads its model from the proxy's config.yaml, so a pin written for one is
-  // a record nothing reads. Absent beats present-and-explaining-itself.
-  it("withholds the model registry from a hermes agent", () => {
+  // a record nothing reads — and its workspace is provisioned from a different
+  // template, so the identity files the persona cascade delivers are picoclaw's
+  // layout, not its own. Absent beats present-and-explaining-itself.
+  it("withholds both picoclaw-only sections from a hermes agent", () => {
     expect(agentTabs("hermes-glm", agents)).toEqual(["files", "secrets", "skills"]);
   });
 
-  // The registry is stored per agent (`agent/<agent>`), so an all-agents address was
-  // never a place a model record could live.
-  it("withholds it from the legacy store too", () => {
+  // Both are addressed PER AGENT — the registry is stored under `agent/<agent>`, and
+  // the proxy refuses an agent-less persona write outright — so an all-agents
+  // address was never a place either record could live.
+  it("withholds them from the legacy store too", () => {
     expect(agentTabs(LEGACY_AGENT, agents)).toEqual(["files", "secrets", "skills"]);
   });
 });

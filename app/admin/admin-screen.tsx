@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   Cpu,
   FileBox,
+  IdCard,
   KeyRound,
   Palette,
   ShieldCheck,
@@ -36,6 +37,7 @@ import { DEFAULT_TAB, availableModes, parseTab, resolveMode, type Tab } from "./
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
 import SharedSkillsPanel from "./shared-skills-panel";
+import PersonaPanel from "./persona-panel";
 import ModelRegistryPanel from "./model-registry-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
@@ -97,6 +99,7 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
   files: <FileBox size={15} aria-hidden />,
   secrets: <KeyRound size={15} aria-hidden />,
   skills: <Wrench size={15} aria-hidden />,
+  persona: <IdCard size={15} aria-hidden />,
   model: <Cpu size={15} aria-hidden />,
 };
 
@@ -657,6 +660,14 @@ export default function AdminScreen() {
                           scope={{ ...selected, agent }}
                           restartPolicy={restartPolicy}
                           readOnly={legacy}
+                        />
+                      ) : sectionTab === "persona" ? (
+                        // No readOnly counterpart: the section is not offered for the
+                        // legacy store at all (agent-scope.ts), because the proxy
+                        // refuses an agent-less persona write outright.
+                        <PersonaPanel
+                          scope={{ ...selected, agent }}
+                          restartPolicy={restartPolicy}
                         />
                       ) : (
                         <ModelRegistryPanel

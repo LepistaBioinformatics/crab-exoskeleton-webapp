@@ -32,8 +32,8 @@ describe("parseTab", () => {
 // belongs to a subscription whatever agents that subscription runs, so putting it
 // under an agent would have meant filtering by a selection it does not depend on.
 describe("SECTION_TABS", () => {
-  it("is the four sections of an agent", () => {
-    expect(SECTION_TABS).toEqual(["files", "secrets", "skills", "model"]);
+  it("is the sections of an agent", () => {
+    expect(SECTION_TABS).toEqual(["files", "secrets", "skills", "persona", "model"]);
   });
 
   it("holds neither mode", () => {

@@ -2,7 +2,15 @@
 // or Back land on the same section. Pure and separate from the screen component so
 // the parse is unit-testable without mounting the whole admin tree.
 
-export const TAB_KEYS = ["files", "secrets", "skills", "model", "members", "branding"] as const;
+export const TAB_KEYS = [
+  "files",
+  "secrets",
+  "skills",
+  "persona",
+  "model",
+  "members",
+  "branding",
+] as const;
 export type Tab = (typeof TAB_KEYS)[number];
 
 export const DEFAULT_TAB: Tab = "files";
@@ -14,7 +22,7 @@ export const DEFAULT_TAB: Tab = "files";
 // Which of these a given agent actually offers is not fixed: the model registry
 // governs picoclaw agents only. That rule lives in `agent-scope.ts`, with the rest of
 // the agent's vocabulary; this is the full set it draws from.
-export const SECTION_TABS: Tab[] = ["files", "secrets", "skills", "model"];
+export const SECTION_TABS: Tab[] = ["files", "secrets", "skills", "persona", "model"];
 
 // An absent or unrecognized value falls back to the default rather than rendering
 // an empty panel — the query string is user-editable, so `?tab=garbage` has to
