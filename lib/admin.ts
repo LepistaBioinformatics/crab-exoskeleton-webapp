@@ -24,9 +24,13 @@ export interface ScopeRef {
   agent?: string;
 }
 
-// The sentinel the proxy understands for "the store every agent reads". Kept as
-// an explicit value (rather than an empty string) so the picker has something to
-// render and the wire format is self-describing.
+// The address the proxy understands for "the store every agent reads".
+//
+// It is NO LONGER a picker sentinel. The admin screen asks for an agent before
+// anything else and every action it offers is that agent's, so nothing writes here
+// any more. The value survives because what was already written here is still on disk
+// and still read by every container under the scope: the screen reaches it through a
+// read-only legacy entry (see app/admin/agent-scope.ts), which exists to empty it.
 export const ALL_AGENTS = "all";
 
 // One agent key this deployment runs (GET /api/admin/agents). Sourced from the

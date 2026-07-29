@@ -18,7 +18,10 @@ const en = {
     selectScope: "Select a scope on the left to manage it.",
 
     areaAria: "Admin area",
-    scopedActions: "Scoped actions",
+    // Was "Scoped actions". That name described the old model, in which the scope
+    // came first and the agent was a setting inside each section.
+    agents: "Agents",
+    members: "Members",
     branding: "Branding",
     brandingNote:
       "Instance-wide. Branding applies to everyone on this deployment, so it has no scope to select.",
@@ -27,7 +30,8 @@ const en = {
     scopes: "Scopes",
     subscriptions: "Subscriptions",
     resizeScopes: "Resize scopes",
-    sectionsAria: "Sections of this scope",
+    sectionsAria: "Sections of this agent",
+    backToAgents: "Back to agents",
     tabs: {
       files: "Files",
       secrets: "Secrets",
@@ -43,12 +47,25 @@ const en = {
     inventoryProxyWideAfter: ". Only the defaults and pins below it belong to ",
     inventoryAnd: " and ",
     // "Reaches <scope> and every subscription under it, through <agent> only."
+    // The all-agents branch is gone with the all-agents action: there is no longer
+    // any way to write to a store belonging to no agent in particular.
     reaches: "Reaches",
     andEverySubscription: " and every subscription under it",
     throughBefore: ", through ",
-    everyAgent: "every agent",
     throughAfter: " only.",
     period: ".",
+  },
+  agentGate: {
+    heading: "Choose an agent",
+    note: "Agents exist before any tenant or subscription does — they come from this deployment's proxy configuration. Pick one, then choose the tenant or subscription to configure it for.",
+    none: "The proxy reported no agents. Check its configuration, or ask whoever administers this deployment.",
+  },
+  legacyStore: {
+    groupLabel: "Legacy",
+    entryLabel: "Shared by all agents",
+    entryNote: "Read-only. Written before content was scoped per agent.",
+    readOnlyNote:
+      "This store belongs to no agent. Nothing writes to it any more; what is here can be read and removed, and every container under the scope still reads it.",
   },
   scope: {
     label: "Scope",
@@ -57,25 +74,6 @@ const en = {
     expandTenant: "Expand tenant",
     tenantPrefix: "Tenant",
     subscriptionPrefix: "Subscription",
-  },
-  agentTarget: {
-    appliesTo: "Applies to",
-    // Shown instead of appliesTo where "all agents" cannot be honoured, so the
-    // label does not promise a breadth the panel cannot deliver.
-    routedThrough: "Routed through",
-    allAgents: "All agents",
-    noAgentsAvailable: "no agents available",
-    noAgentToTarget: "No agent to target.",
-    // "Only alpha" -- the agent id follows the word.
-    onlyPrefix: "Only",
-    contentAll: "Every agent under this scope reads this content.",
-    // "{agent}" is substituted with the selected agent's identifier.
-    contentOne:
-      "Only {agent} workspaces read this content. An entry here overrides the all-agents one with the same name.",
-    registryAll:
-      "The model inventory is shared by every picoclaw agent. This picker only chooses the route the request takes; a per-user pin addresses the agent that user's workspace runs under.",
-    registryOne:
-      "The inventory is shared by every picoclaw agent, but the agent level of the cascade and each per-user pin belong to {agent} alone.",
   },
   models: {
     // The accordion shell around the inventory. Separate from active/inactive:
@@ -556,7 +554,8 @@ const pt: AdminDict = {
     selectScope: "Selecione um escopo à esquerda para administrá-lo.",
 
     areaAria: "Área administrativa",
-    scopedActions: "Ações por escopo",
+    agents: "Agentes",
+    members: "Membros",
     branding: "Marca",
     brandingNote:
       "Vale para toda a instância. A marca se aplica a todos neste deployment, então não há escopo a selecionar.",
@@ -565,7 +564,8 @@ const pt: AdminDict = {
     scopes: "Escopos",
     subscriptions: "Assinaturas",
     resizeScopes: "Redimensionar escopos",
-    sectionsAria: "Seções deste escopo",
+    sectionsAria: "Seções deste agente",
+    backToAgents: "Voltar aos agentes",
     tabs: {
       files: "Arquivos",
       secrets: "Segredos",
@@ -580,9 +580,20 @@ const pt: AdminDict = {
     reaches: "Alcança",
     andEverySubscription: " e todas as assinaturas sob ele",
     throughBefore: ", através de ",
-    everyAgent: "todos os agentes",
     throughAfter: " apenas.",
     period: ".",
+  },
+  agentGate: {
+    heading: "Escolha um agente",
+    note: "Agentes existem antes de qualquer tenant ou assinatura — eles vêm da configuração do proxy deste deployment. Escolha um e depois selecione o tenant ou a assinatura para configurá-lo.",
+    none: "O proxy não reportou nenhum agente. Verifique a configuração dele, ou fale com quem administra este deployment.",
+  },
+  legacyStore: {
+    groupLabel: "Legado",
+    entryLabel: "Compartilhado por todos os agentes",
+    entryNote: "Somente leitura. Gravado antes do conteúdo passar a ter escopo por agente.",
+    readOnlyNote:
+      "Este store não pertence a nenhum agente. Nada mais grava nele; o que está aqui pode ser lido e removido, e todos os contêineres sob o escopo continuam lendo.",
   },
   scope: {
     label: "Escopo",
@@ -591,21 +602,6 @@ const pt: AdminDict = {
     expandTenant: "Expandir tenant",
     tenantPrefix: "Tenant",
     subscriptionPrefix: "Assinatura",
-  },
-  agentTarget: {
-    appliesTo: "Aplica-se a",
-    routedThrough: "Roteado por",
-    allAgents: "Todos os agentes",
-    noAgentsAvailable: "nenhum agente disponível",
-    noAgentToTarget: "Nenhum agente a endereçar.",
-    onlyPrefix: "Apenas",
-    contentAll: "Todos os agentes deste escopo leem este conteúdo.",
-    contentOne:
-      "Apenas os workspaces de {agent} leem este conteúdo. Uma entrada aqui sobrepõe a de todos os agentes com o mesmo nome.",
-    registryAll:
-      "O inventário de modelos é compartilhado por todos os agentes picoclaw. Este seletor escolhe apenas a rota da requisição; um pin por usuário endereça o agente sob o qual o workspace daquele usuário roda.",
-    registryOne:
-      "O inventário é compartilhado por todos os agentes picoclaw, mas o nível de agente da cascata e cada pin por usuário pertencem apenas a {agent}.",
   },
   models: {
     readingInventory: "Lendo o inventário…",

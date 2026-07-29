@@ -26,7 +26,19 @@ import { useT } from "@/lib/i18n/context";
 // download / delete. Shared content is scope-owned and cascades read-only to
 // every container below (FR-4), so download here is expected (FR-7.1) --
 // distinct from user private files, which never expose bytes.
-export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
+export default function SharedFilesPanel({
+  scope,
+  readOnly = false,
+}: {
+  scope: ScopeRef;
+  /**
+   * Set for the legacy all-agents store, which nothing writes to any more. It hides
+   * the WRITE affordances only — listing, downloading and DELETING stay, because the
+   * legacy entry exists to empty that store. A read-only that also hid delete would
+   * be a museum rather than an exit.
+   */
+  readOnly?: boolean;
+}) {
   const t = useT(adminCopy);
   const c = useT(commonCopy);
   const err = useT(errorCopy);
@@ -86,25 +98,31 @@ export default function SharedFilesPanel({ scope }: { scope: ScopeRef }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <input
-          ref={fileInput}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUpload(f);
-          }}
-        />
-        <Button
-          variant="filled"
-          size="sm"
-          disabled={uploading}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload size={16} aria-hidden />
-          {uploading ? t.sharedFiles.uploading : t.sharedFiles.upload}
-        </Button>
-        <span className="text-xs text-fg-muted">{t.sharedFiles.cascades}</span>
+        {!readOnly && (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onUpload(f);
+              }}
+            />
+            <Button
+              variant="filled"
+              size="sm"
+              disabled={uploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Upload size={16} aria-hidden />
+              {uploading ? t.sharedFiles.uploading : t.sharedFiles.upload}
+            </Button>
+          </>
+        )}
+        <span className="text-xs text-fg-muted">
+          {readOnly ? t.legacyStore.readOnlyNote : t.sharedFiles.cascades}
+        </span>
       </div>
 
       {error && <Alert severity="error">{error}</Alert>}
