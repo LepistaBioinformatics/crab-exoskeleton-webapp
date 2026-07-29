@@ -464,6 +464,17 @@ export interface LadderRung {
    * written while the rail sits on the tenant.
    */
   outOfScope: boolean;
+  /**
+   * True when the level is readable and shown, but this screen does not write it.
+   *
+   * A THIRD state on purpose, not a reuse of the two above. `outOfScope` means
+   * "belongs to a scope you have not selected" and prompts an action; `unreadable`
+   * means the caller was refused. The agent and global levels are neither: an
+   * instance-admin reads them perfectly well, and no selection in the rail makes
+   * them editable here. Collapsing this into either would make the rung say
+   * something false, which is the same reason null and undefined are kept apart.
+   */
+  notEditable: boolean;
 }
 
 export interface LadderInput {
@@ -485,8 +496,41 @@ export interface LadderInput {
    * selected, so there is nothing to set until they select one.
    */
   outOfScope?: LadderLevel[];
+  /**
+   * The levels this screen may WRITE. Everything else is drawn but not editable.
+   * See editableLevels, which is where the rule lives.
+   */
+  editable: LadderLevel[];
   /** Rung wording, injected so this module emits no UI text of its own. */
   copy: LadderCopy;
+}
+
+// THE RULE: an admin edits the level the scope tree is sitting on, and nothing
+// else.
+//
+// The rail states what is being administered; the ladder used to let a write land
+// outside it. Two cases were actively misleading. The agent rung is labelled with
+// the selected agent's name but is stored at `agent/<agent>` and reaches EVERY
+// tenant running that agent — inside a screen whose rail says "this subscription",
+// it reads as a setting of the thing on the left. And writing the tenant default
+// while the rail sits on a subscription silently reached every other subscription
+// under that tenant.
+//
+// Pins stay editable for a subscription because they are per person WITHIN it —
+// already inside the rail's scope. With a tenant selected they are out of scope
+// anyway, since a pin needs a subscription.
+export function editableLevels(scopeKind: "tenant" | "subscription"): LadderLevel[] {
+  return scopeKind === "subscription" ? ["subscription", "user"] : ["tenant"];
+}
+
+// Whether a rung can be picked, i.e. whether the editor below may address it.
+//
+// Here rather than inline in the ladder component so the rule is testable without
+// mounting anything, and so the component renders a decision it does not own. The
+// panel enforces the same rule again on receipt: a presentational component must
+// not be the only thing standing between a click and a write to the wrong scope.
+export function rungSelectable(r: LadderRung): boolean {
+  return !r.unreadable && !r.outOfScope && !r.notEditable;
 }
 
 export interface LadderCopy {
@@ -599,6 +643,7 @@ export function buildLadder(input: LadderInput): LadderRung[] {
       overridden: !inEffect && !unreadable && !outOfScope && modelName !== null,
       unreadable,
       outOfScope,
+      notEditable: !input.editable.includes(r.level),
     };
   });
 

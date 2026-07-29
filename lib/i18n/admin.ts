@@ -235,8 +235,6 @@ const en = {
     intro:
       "Most specific wins. Pick a level to change what new workspaces land on; the levels below stay set and take over if you clear it.",
     setLevel: "Set the {level} level",
-    instanceJob:
-      "Instance-wide. Needs instance-admin, and reaches each workspace on its next start rather than restarting the fleet.",
     scopeJob:
       "New workspaces at this level land on this model unless a more specific level or a per-user pin overrides it.",
     clearWarnBefore: "Nothing is set below this. Clearing it would leave new workspaces with ",
@@ -500,6 +498,10 @@ const en = {
     notSet: "not set",
     locked: "not yours to see",
     outOfScope: "out of scope",
+    // Distinct from `locked`: this level is readable, and its value is right
+    // there on the rung. It is simply not written from this screen, which edits
+    // the level the scope tree is sitting on and nothing else.
+    notEditable: "set elsewhere",
     // The two end caps. Read as one sentence, top to bottom, they teach the
     // direction the ladder is meant to be read in — the one thing the rungs
     // themselves cannot say.
@@ -772,8 +774,6 @@ const pt: AdminDict = {
     intro:
       "O mais específico vence. Escolha um nível para mudar onde novos workspaces caem; os níveis abaixo continuam definidos e assumem se você limpar este.",
     setLevel: "Definir o nível {level}",
-    instanceJob:
-      "Vale para toda a instância. Exige admin da instância e alcança cada workspace na próxima inicialização, sem reiniciar a frota.",
     scopeJob:
       "Novos workspaces neste nível caem neste modelo, a menos que um nível mais específico ou um pin por usuário sobreponha.",
     clearWarnBefore: "Nada está definido abaixo disto. Limpar deixaria novos workspaces ",
@@ -1011,6 +1011,7 @@ const pt: AdminDict = {
     notSet: "não definido",
     locked: "fora do seu alcance",
     outOfScope: "fora de escopo",
+    notEditable: "definido em outro lugar",
     readDown: "Leia de cima para baixo. Cada nível restringe quem ele cobre e sobrepõe os de cima.",
     winnerNote: "O último nível com um modelo é o que a pessoa recebe.",
   },

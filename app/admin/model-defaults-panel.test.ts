@@ -5,17 +5,11 @@ import type { ScopeRef } from "@/lib/admin";
 const tenantScope: ScopeRef = { kind: "tenant", tenantId: "t1" };
 const subsScope: ScopeRef = { kind: "subscription", tenantId: "t1", subsAccId: "s1" };
 
+// The global and agent cases are gone with the branches that served them. This
+// screen writes only the level the scope tree is sitting on, so nothing can select
+// either any more — and the type says so, which is why the deleted assertions no
+// longer compile rather than merely no longer running.
 describe("resolveDefaultScope", () => {
-  it("resolves global regardless of the current scope", () => {
-    expect(resolveDefaultScope("global", tenantScope)).toEqual({ kind: "global" });
-    expect(resolveDefaultScope("global", subsScope)).toEqual({ kind: "global" });
-  });
-
-  it("resolves agent regardless of the current scope", () => {
-    expect(resolveDefaultScope("agent", tenantScope)).toEqual({ kind: "agent" });
-    expect(resolveDefaultScope("agent", subsScope)).toEqual({ kind: "agent" });
-  });
-
   it("resolves tenant from a tenant scope", () => {
     expect(resolveDefaultScope("tenant", tenantScope)).toEqual({ kind: "tenant", tenantId: "t1" });
   });
