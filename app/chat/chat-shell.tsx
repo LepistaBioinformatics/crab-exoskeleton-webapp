@@ -131,7 +131,7 @@ export default function ChatShell({ email }: { email: string }) {
           <UnifiedSidebar
             email={email}
             workspace={workspace}
-            hideConversations={canvas}
+            forceWorkspaces={canvas}
             onConversationSelect={closeDrawer}
             onCollapse={() => setCollapsed(true)}
           />

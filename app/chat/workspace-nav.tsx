@@ -1,21 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot, Search } from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
-import {
-  groupWorkspaces,
-  accessLabel,
-  type Subscription,
-  type TenantGroup,
-  type AgentLeaf,
-} from "@/lib/subscriptions";
+import { accessLabel, type TenantGroup, type AgentLeaf } from "@/lib/subscriptions";
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
-import SidebarGroup from "./sidebar-group";
-import { planWorkspaceTree, needsFilter, type PlanNode } from "./sidebar-tree";
+import SidebarPanel from "./sidebar-panel";
+import { planWorkspaceTree, planLeaves, type PlanNode } from "./sidebar-tree";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
@@ -72,27 +65,34 @@ const groupHeaderLabel = cva("min-w-0 flex-1 truncate", {
 
 type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 
-// The "Workspaces" section body: fetches the caller's subscriptions, collapses
-// permission-duplicated rows, and renders a tenant -> account -> agent tree.
-// The agent leaf is the selectable workspace.
+// The workspaces PANEL: renders the caller's workspaces as a tenant -> subscription ->
+// agent tree, every level with its own row. The agent leaf is the selectable
+// workspace. The list itself is fetched by the sidebar, which needs it for both panels.
 export default function WorkspaceNav({
+  groups,
+  error,
   onSelect,
-  open,
-  onToggle,
+  autoSelect,
 }: {
+  /**
+   * The caller's workspaces, fetched by the sidebar. Null while loading. It is owned
+   * up there because BOTH panels need it: the conversations panel names the
+   * subscription its chats belong to, which only this tree knows.
+   */
+  groups: TenantGroup[] | null;
+  /** An error CODE from the load, resolved to a sentence at render time. */
+  error: string | null;
   onSelect?: () => void;
-  /** Group open/closed, owned by the unified sidebar so it can be persisted. */
-  open: boolean;
-  onToggle: () => void;
+  /**
+   * Whether a lone workspace may be entered without being clicked. False while the
+   * member is browsing (they pressed back): with one workspace they would land on a
+   * one-leaf tree and be thrown straight forward again.
+   */
+  autoSelect: boolean;
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
-  const router = useRouter();
   const fragment = useFragment();
-  const [groups, setGroups] = useState<TenantGroup[] | null>(null);
-  // An error *code*, not a sentence: resolving at render time means a locale
-  // switch while the banner is up re-renders it.
-  const [error, setError] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
@@ -100,28 +100,6 @@ export default function WorkspaceNav({
   const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/subscriptions");
-        if (res.status === 401) {
-          router.push("/signin");
-          return;
-        }
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          setError(typeof data?.error === "string" ? data.error : "workspaces_load_failed");
-          return;
-        }
-        const data = await res.json();
-        const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-        setGroups(groupWorkspaces(subs));
-      } catch {
-        setError("connectivity");
-      }
-    })();
-  }, [router]);
 
   // Enrich the agent list from the gateway's public /tools catalog, joined by
   // tool.name === role. Best-effort: listTools never throws (yields [] on any
@@ -175,14 +153,18 @@ export default function WorkspaceNav({
     });
   }
 
-  async function onPick(leaf: AgentLeaf) {
+  // `auto` marks the entry as one nobody asked for (the lone-workspace shortcut). It
+  // suppresses onSelect, which means "the member chose this" — the signal the sidebar
+  // uses to move keyboard focus. Moving focus for a selection the member did not make
+  // is how a page steals the caret out from under someone on first paint.
+  async function onPick(leaf: AgentLeaf, auto = false) {
     if (entering) return;
     setEntering(true);
     const workspace: Workspace = { t: leaf.tenantId, s: leaf.subsAccId, r: leaf.role };
     try {
       const conversation = await createConversation(workspace);
       setWorkspace(workspace, conversation.id);
-      onSelect?.();
+      if (!auto) onSelect?.();
     } finally {
       setEntering(false);
     }
@@ -191,59 +173,69 @@ export default function WorkspaceNav({
   const q = filter.trim().toLowerCase();
   const visibleGroups = groups && q ? filterGroups(groups, tenantNames, q) : groups;
 
-  // The tree's SHAPE comes from the plan, which hoists away any level holding a
-  // single node (sidebar-tree.ts). The plan is built from the FILTERED groups, so
-  // filtering down to one tenant hides that tenant's row too.
-  const plan = planWorkspaceTree(visibleGroups ?? [], tenantNames);
-  // Counted over the unfiltered tree: whether the filter exists must not depend on
-  // what the filter currently matches, or typing could remove the field mid-word.
-  const fullCount = planWorkspaceTree(groups ?? [], tenantNames).agentCount;
-  const filterAvailable = needsFilter(fullCount);
+  // Every level earns a row (sidebar-tree.ts). The plan is built from the FILTERED
+  // groups, so a tenant with no surviving leaf drops out entirely — but a tenant that
+  // does survive still renders its own row, whether it is the only one or one of ten.
+  const nodes = planWorkspaceTree(visibleGroups ?? [], tenantNames);
 
-  // Both hoisted labels ride here when there is a single tenant: its name AND its
-  // sole subscription's. Suppressing a row saves vertical space; it is not licence to
-  // drop what the row said, and which subscription a workspace belongs to is
-  // load-bearing (billing, membership, who administers it).
-  const identity = plan.soleTenant ? (
-    <span className="flex min-w-0 shrink items-center gap-1.5">
-      <TenantAvatar
-        name={plan.soleTenant.label}
-        logo={tenantBrands[plan.soleTenant.id]?.logo}
-        color={tenantBrands[plan.soleTenant.id]?.color}
-      />
-      <ScopeLabel tenant={plan.soleTenant.label} account={plan.soleTenant.hoistedAccount} />
-    </span>
-  ) : undefined;
+  // A member with exactly one workspace is answering a question with one possible
+  // answer. Enter it for them and land on its conversations, which is where they were
+  // going anyway.
+  //
+  // A REF, not state: it must not cause a render, and it has to survive the `groups`
+  // update that follows the fetch. And a one-shot effect, not a derived invariant —
+  // "if there is one workspace then select it" evaluated every render is how you get
+  // a member who cannot stay on the tree.
+  const autoSelected = useRef(false);
+  useEffect(() => {
+    if (autoSelected.current || !autoSelect) return;
+    // `null` is "the hash has not been read yet", which is NOT "no workspace": acting
+    // on it would fire a pick over a fragment that already names one.
+    if (fragment === null || activeKey) return;
+    if (!groups) return;
+    const leaves = planLeaves(nodes);
+    if (leaves.length !== 1) return;
+    autoSelected.current = true;
+    onPick(leaves[0], true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelect, fragment, activeKey, groups]);
 
   return (
-    <SidebarGroup
-      title={t.shell.workspaces}
-      open={open}
-      onToggle={onToggle}
-      identity={identity}
+    <SidebarPanel
+      // No tenant identity beside the title any more. It existed to carry the name of
+      // a tenant row that hoisting had suppressed; the tenant now always has its own
+      // row, avatar included, so repeating it here would be the same thing twice.
+      header={
+        <span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+          <span className="min-w-0 flex-1 truncate font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            {t.shell.workspaces}
+          </span>
+        </span>
+      }
       actions={
-        filterAvailable ? (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.workspaceNav.filterPlaceholder}
-            aria-expanded={filterOpen}
-            onClick={() => {
-              // Closing the field clears it: a hidden filter still narrowing the
-              // tree is the worst of both, since the reason rows are missing is
-              // off screen.
-              if (filterOpen) setFilter("");
-              setFilterOpen((v) => !v);
-            }}
-          >
-            <Search size={16} aria-hidden />
-          </IconButton>
-        ) : undefined
+        // Offered at ANY number of workspaces. It used to appear only above five
+        // leaves, on the reasoning that a short list is faster to scan than a text
+        // field is to reach for — but a control that materialises once a count is
+        // crossed is a moving target, and searching is how members expect to find a
+        // workspace whatever the count.
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={t.workspaceNav.filterPlaceholder}
+          aria-expanded={filterOpen}
+          onClick={() => {
+            // Closing the field clears it: a hidden filter still narrowing the
+            // tree is the worst of both, since the reason rows are missing is
+            // off screen.
+            if (filterOpen) setFilter("");
+            setFilterOpen((v) => !v);
+          }}
+        >
+          <Search size={16} aria-hidden />
+        </IconButton>
       }
     >
-      {/* A field rather than a permanently open input: two open text boxes six rows
-          apart in one narrow pane is what unifying is meant to remove. */}
-      {filterAvailable && filterOpen && (
+      {filterOpen && (
         <div className="px-2 pb-1 pt-1">
           <Input
             variant="subtle"
@@ -265,11 +257,11 @@ export default function WorkspaceNav({
           </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.none}</p>
-        ) : plan.nodes.length === 0 ? (
+        ) : nodes.length === 0 ? (
           <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>
         ) : (
           <PlanNodes
-            nodes={plan.nodes}
+            nodes={nodes}
             q={q}
             collapsed={collapsed}
             toggle={toggle}
@@ -281,7 +273,7 @@ export default function WorkspaceNav({
           />
         )}
       </div>
-    </SidebarGroup>
+    </SidebarPanel>
   );
 }
 
@@ -351,10 +343,6 @@ function PlanNodes({
                 )
               }
               label={node.label}
-              // A hoisted subscription's name shows on the tenant row that survived
-              // it, for the same reason it shows on the group header when the tenant
-              // was hoisted too.
-              subLabel={node.kind === "tenant" ? node.hoistedAccount : undefined}
               open={open}
               level={node.kind === "tenant" ? "tenant" : "account"}
               onClick={() => toggle(node.id)}
@@ -384,15 +372,12 @@ function PlanNodes({
 function GroupHeader({
   icon,
   label,
-  subLabel,
   open,
   level,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
-  /** A hoisted child level's label, shown after this one. */
-  subLabel?: string;
   open: boolean;
   level: GroupLevel;
   onClick: () => void;
@@ -405,49 +390,10 @@ function GroupHeader({
         <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
       )}
       <span className="shrink-0 text-fg-muted">{icon}</span>
-      {subLabel ? (
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={groupHeaderLabel({ level })} title={label}>
-            {label}
-          </span>
-          <span className="shrink-0 text-fg-muted/60" aria-hidden>
-            /
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={subLabel}>
-            {subLabel}
-          </span>
-        </span>
-      ) : (
-        <span className={groupHeaderLabel({ level })} title={label}>
-          {label}
-        </span>
-      )}
+      <span className={groupHeaderLabel({ level })} title={label}>
+        {label}
+      </span>
     </button>
-  );
-}
-
-// The tenant plus, when its row was hoisted away too, its sole subscription. Rendered
-// in the Workspaces group header, where the space is tightest — so the tenant stays
-// small and monospaced (it is an id or an org name, context) and the subscription
-// carries the weight, since that is the thing a member recognizes.
-function ScopeLabel({ tenant, account }: { tenant: string; account?: string }) {
-  if (!account) {
-    return (
-      <span className="max-w-32 truncate font-mono text-[11px] text-fg-muted" title={tenant}>
-        {tenant}
-      </span>
-    );
-  }
-  return (
-    <span className="flex min-w-0 items-baseline gap-1" title={`${tenant} / ${account}`}>
-      <span className="max-w-20 shrink-0 truncate font-mono text-[11px] text-fg-muted">
-        {tenant}
-      </span>
-      <span className="shrink-0 text-[11px] text-fg-muted/60" aria-hidden>
-        /
-      </span>
-      <span className="min-w-0 truncate text-[11px] font-medium text-fg">{account}</span>
-    </span>
   );
 }
 

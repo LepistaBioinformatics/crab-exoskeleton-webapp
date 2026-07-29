@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { cva } from "class-variance-authority";
 import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
@@ -11,62 +13,54 @@ import WorkspaceNav from "./workspace-nav";
 import HistorySidebar from "./history-sidebar";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
+import { resolvePanel, type SidebarPanel } from "./sidebar-panel-state";
+import {
+  accountName,
+  groupWorkspaces,
+  type Subscription,
+  type TenantGroup,
+} from "@/lib/subscriptions";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
 
-// The one sidebar: brand header, a Workspaces group, a Conversations group, and the
-// account footer.
+// The one sidebar: brand header, ONE OF TWO PANELS, and the account footer.
 //
-// It replaced two independent ResizablePanes that between them cost up to 580px of
-// horizontal chrome (280 + 300) before the conversation got any width, and that
-// duplicated two headers, two search inputs, two collapse buttons and two scroll
-// containers — for what a member reads as one question: which agent, and which
-// conversation.
+// The two panels answer the two questions a member asks in sequence — which agent,
+// then which conversation — and they are shown in that sequence. The previous version
+// stacked them, splitting the column horizontally with the tree capped at 40vh above
+// the conversation list. That put both questions on screen at once, competing for the
+// same vertical space, and members read the result as one confusing pane rather than
+// two clear steps.
 //
-// HEIGHT is this component's job and nowhere else's:
-//
-//   Workspaces takes its content's height, capped at 40vh, scrolling inside itself
-//   past that. Conversations takes the remainder and scrolls inside itself. Both
-//   headers stay visible. (vh and not %, for the reason at the wrapper below.)
-//
-// Not an accordion (switching agent then picking a conversation is the pane's main
-// job, and both lists are visible for that today) and not one pane-wide scroll (with
-// many workspaces that pushes the Conversations header, and its search, below the
-// fold).
+// Everything the stacked version needed to arbitrate height is therefore gone: the
+// 40vh cap and its vh-not-% argument, the per-group collapse, and the localStorage key
+// that persisted which groups were open. Each panel now simply takes the body's full
+// height and scrolls inside itself.
 
-// There is no "focus" prop any more. Mobile had two buttons — a hamburger for
-// workspaces, a message icon for conversations — and this component opened and
-// scrolled to whichever group was asked for. Unifying the panes made the second button
-// redundant: both groups are open by default, so the single drawer already lands with
-// the conversation list on screen, and the request only differed for a member who had
-// collapsed Conversations by hand. One toggling button replaced the pair, so the
-// request, its counter and the deferred scroll all went with it.
+// The TRACK holds both panels side by side at exactly twice the viewport width and
+// slides by half. Percent widths are safe here in a way the old percentage max-height
+// was not: this resolves against a definite inline size (the pane's `--pane-w` on
+// desktop, the drawer's fixed 300px on mobile), not against a flex-resolved height.
+const track = cva("flex h-full w-[200%] transition-transform duration-300 ease-out motion-reduce:transition-none", {
+  variants: {
+    panel: {
+      workspaces: "translate-x-0",
+      chats: "-translate-x-1/2",
+    },
+  },
+  defaultVariants: { panel: "workspaces" },
+});
 
-const GROUPS_KEY = "chat-sidebar-groups";
-
-interface GroupState {
-  workspaces: boolean;
-  conversations: boolean;
-}
-
-const BOTH_OPEN: GroupState = { workspaces: true, conversations: true };
-
-// Module-level so effects can persist without closing over anything that changes per
-// render — which is what made the first version's focus effect omit a dependency.
-function persist(next: GroupState): GroupState {
-  try {
-    window.localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
-  } catch {
-    // Private-mode storage failures must not block the toggle itself.
-  }
-  return next;
-}
+// Half the track, i.e. exactly the sidebar's width. `outline-none` because the slot is
+// focused programmatically after a slide (tabIndex -1) and a focus ring around the
+// whole panel would read as a selection rather than a landing point.
+const slot = cva("flex w-1/2 min-h-0 shrink-0 flex-col outline-none");
 
 export default function UnifiedSidebar({
   email,
   workspace,
-  hideConversations,
+  forceWorkspaces,
   onConversationSelect,
   onCollapse,
 }: {
@@ -74,46 +68,109 @@ export default function UnifiedSidebar({
   /** Null until the fragment resolves a workspace. */
   workspace: Workspace | null;
   /**
-   * True in the canvas view. The canvas already lanes every conversation, so listing
-   * them beside it is the same information twice, competing for height with the tree
-   * — and switching agent is the only navigation the canvas still needs.
+   * True in the canvas view, which pins the tree. The canvas already lanes every
+   * conversation, so listing them beside it is the same information twice — and
+   * switching agent is the only navigation it still needs.
    */
-  hideConversations: boolean;
+  forceWorkspaces: boolean;
   /**
    * Closes the mobile drawer. Wired to CONVERSATION selection only.
    *
-   * Picking a workspace deliberately leaves the drawer open: it swaps which agent's
-   * conversations the group below is listing, and that list is the thing the member
-   * came for. Closing there made choosing an agent and then one of its chats two
-   * open-close cycles.
+   * Picking a workspace deliberately leaves the drawer open: the slide to that
+   * workspace's conversations happens INSIDE the open drawer, and that list is the
+   * thing the member came for. Closing there made choosing an agent and then one of
+   * its chats two open-close cycles.
    */
   onConversationSelect?: () => void;
   onCollapse?: () => void;
 }) {
   const t = useT(chatCopy);
-  const [groups, setGroups] = useState<GroupState>(BOTH_OPEN);
+  const router = useRouter();
 
-  // Restore the persisted open/closed state once. Both open is the default: the pair
-  // is what the two sidebars always showed at the same time.
+  // WHO OWNS THE WORKSPACE LIST. It used to be the tree's own, but both panels need
+  // it now: the conversations panel names the subscription its chats belong to, and
+  // that name lives on the agent leaf. The tree is mounted in the other slot at all
+  // times (both panels stay mounted), so fetching it here rather than there costs
+  // nothing and saves the conversations panel a second request per agent switch.
+  const [groups, setGroups] = useState<TenantGroup[] | null>(null);
+  // An error CODE, not a sentence: resolving at render time means a locale switch
+  // while the banner is up re-renders it.
+  const [workspacesError, setWorkspacesError] = useState<string | null>(null);
+
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(GROUPS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<GroupState>;
-      setGroups({
-        workspaces: parsed.workspaces ?? true,
-        conversations: parsed.conversations ?? true,
-      });
-    } catch {
-      // A corrupt value is not worth a broken sidebar; both-open is a fine answer.
-    }
-  }, []);
+    (async () => {
+      try {
+        const res = await fetch("/api/subscriptions");
+        if (res.status === 401) {
+          router.push("/signin");
+          return;
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          setWorkspacesError(
+            typeof data?.error === "string" ? data.error : "workspaces_load_failed",
+          );
+          return;
+        }
+        const data = await res.json();
+        const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        setGroups(groupWorkspaces(subs));
+      } catch {
+        setWorkspacesError("connectivity");
+      }
+    })();
+  }, [router]);
 
-  function setGroup(key: keyof GroupState, open: boolean) {
-    setGroups((prev) => persist({ ...prev, [key]: open }));
-  }
+  // The back control was pressed. Deliberately not persisted: a stored panel outlives
+  // the fragment that justified it, so a reload or a shared link would open on the
+  // wrong one. Everything else is derived.
+  const [browsing, setBrowsing] = useState(false);
+  const panel = resolvePanel({ workspace, browsing, forceWorkspaces });
+  const showingChats = panel === "chats";
 
-  const showConversations = !hideConversations;
+  // FOCUS HAS TO FOLLOW THE SLIDE. The control the member just activated — the back
+  // button, an agent leaf — is inside the panel that is leaving, and `inert` on its
+  // ancestor blurs it. Without this, pressing back drops focus to <body>, and inside
+  // the mobile drawer (an overlay) there is no way back in except tabbing from the top
+  // of the document.
+  //
+  // It is a REQUEST recorded by the handlers, not an effect watching `panel`, because
+  // not every panel change is something the member asked for: the lone-workspace
+  // shortcut flips to chats on its own, and stealing focus there is exactly the bug
+  // this is meant to avoid.
+  const [focusRequest, setFocusRequest] = useState<SidebarPanel | null>(null);
+  const workspacesSlot = useRef<HTMLDivElement>(null);
+  const chatsSlot = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Wait for the panel to actually BE the requested one. Picking a workspace writes
+    // the fragment, and the `hashchange` that resolves it lands a task later — so on
+    // the render that records the request the chats panel is still inert, and focusing
+    // an inert subtree does nothing at all.
+    //
+    // It also has to be an EFFECT rather than a `focus()` in the handler: on the
+    // render this fires, `inert` has already been lifted off the incoming slot. Call
+    // it at handler time and you are focusing a still-inert subtree, which does
+    // nothing at all and fails silently.
+    if (!focusRequest || panel !== focusRequest) return;
+    // The SLOT, not the first control inside it. The slot is stable; the conversation
+    // list is keyed by workspace and remounts when the agent changes, which lands a
+    // beat after the panel flips — so focus placed on a control in there is blown away
+    // by the remount moments later. The container survives it, and Tab from there
+    // walks into the panel exactly as if the control had been focused.
+    //
+    // preventScroll IS LOAD-BEARING, not a nicety. `overflow-hidden` stops a user from
+    // scrolling; it does not stop the browser, and focusing an element scrolls it into
+    // view. Without this the viewport's scrollLeft jumps a full panel width to "reveal"
+    // the chats slot — which the track had ALREADY revealed by translating — and the
+    // two offsets compound, sliding the panel clean out of the box. The result is a
+    // sidebar that animates over to nothing at all, and comes back on reload only
+    // because a fresh document has scrollLeft 0.
+    (focusRequest === "chats" ? chatsSlot : workspacesSlot).current?.focus({
+      preventScroll: true,
+    });
+    setFocusRequest(null);
+  }, [focusRequest, panel]);
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -134,54 +191,72 @@ export default function UnifiedSidebar({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* The cap is in vh, NOT 40%. A percentage max-height resolves against the
-            parent's height, and this parent is a flex item sized by flex resolution —
-            the case browsers treat as indefinite, where the percentage is ignored. The
-            tree would then render at full content height and push the Conversations
-            header off screen, which is the exact failure that ruled out a single
-            pane-wide scroll. vh resolves against the viewport and needs no definite
-            parent; the pane is full-height, so it means the same thing in practice.
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {/* BOTH PANELS STAY MOUNTED for the whole transition. Unmounting the outgoing
+            one is how a slide animates to a blank column — and back preserves the
+            workspace precisely so the conversation list never loses its prop. Only the
+            off-screen panel is taken out of the tab order. */}
+        <div className={track({ panel })}>
+          <div
+            ref={workspacesSlot}
+            // Focusable only programmatically (tabIndex -1) and named, so landing here
+            // after a slide announces which panel you landed on.
+            tabIndex={-1}
+            role="group"
+            aria-label={t.shell.workspaces}
+            className={slot()}
+            aria-hidden={showingChats}
+            inert={showingChats || undefined}
+          >
+            <WorkspaceNav
+              groups={groups}
+              error={workspacesError}
+              // Picking a workspace slides to its conversations. No onSelect closing
+              // the drawer: see the prop's note above.
+              onSelect={() => {
+                setBrowsing(false);
+                setFocusRequest("chats");
+              }}
+              // A lone workspace is entered automatically — unless the member came
+              // back here on purpose, in which case selecting it for them would throw
+              // them straight forward again.
+              autoSelect={!browsing}
+            />
+          </div>
 
-            shrink-0 with a cap: the group takes min(content, 40vh) and never grows,
-            so a small tree still leaves Conversations nearly everything. */}
-        <div className="flex max-h-[40vh] min-h-0 shrink-0 flex-col border-b border-brand/20">
-          {/* No onSelect: picking an agent must not close the drawer. */}
-          <WorkspaceNav
-            open={groups.workspaces}
-            onToggle={() => setGroup("workspaces", !groups.workspaces)}
-          />
-        </div>
-
-        {showConversations && (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div
+            ref={chatsSlot}
+            tabIndex={-1}
+            role="group"
+            aria-label={workspace ? `${t.shell.agentPrefix} ${workspace.r}` : undefined}
+            className={slot()}
+            aria-hidden={!showingChats}
+            inert={!showingChats || undefined}
+          >
             {workspace ? (
               <HistorySidebar
                 // Keyed by workspace so switching agents remounts the list instead
                 // of showing the previous agent's conversations for a beat.
                 key={`${workspace.t}|${workspace.s}|${workspace.r}`}
                 workspace={workspace}
+                // Null until the tree loads, or when the subscription carries no name.
+                // The header falls back to the agent alone rather than showing a uuid
+                // where a name belongs.
+                subscription={accountName(groups, workspace.t, workspace.s)}
                 onSelect={onConversationSelect}
-                open={groups.conversations}
-                onToggle={() => setGroup("conversations", !groups.conversations)}
+                onBack={() => {
+                  setBrowsing(true);
+                  setFocusRequest("workspaces");
+                }}
               />
             ) : (
-              // Present with an empty state, not absent: a group that appears once a
-              // workspace is picked makes the pane's shape depend on selection, and
-              // the first-run member is exactly who needs telling what to do next.
-              <div className="flex shrink-0 items-center gap-2 px-3 py-1.5">
-                <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  {t.shell.conversations}
-                </span>
-              </div>
-            )}
-            {!workspace && (
-              <p className="px-3 pb-2 text-xs leading-relaxed text-fg-muted">
-                {t.nav.pickWorkspaceForConversations}
-              </p>
+              // Unreachable in practice — the track only moves here once a workspace
+              // is set — but the slot is always rendered, so it needs something that
+              // is not a crash on a required prop.
+              <div className="flex-1" />
             )}
           </div>
-        )}
+        </div>
       </div>
 
       <div className="flex shrink-0 flex-col gap-0.5 border-t border-brand/20 px-2 py-2">
