@@ -68,7 +68,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  const upstream = new FormData();
+  // Urlencoded upstream, NOT multipart like /api/admin/skills. These are text
+  // fields with no file part, and the deployed proxy's persona handler parses
+  // only urlencoded bodies: it calls ParseForm, which on a multipart body fills
+  // r.Form from the query string alone and left every field empty, so each save
+  // came back `"tenant_id" is required and must be a UUID`. The proxy fix accepts
+  // both encodings, so this works before and after that deploy.
+  const upstream = new URLSearchParams();
   upstream.set("scope", scope);
   upstream.set("tenant_id", tenantId);
   if (scope === "subscription" && typeof subsAccId === "string") {
@@ -78,10 +84,12 @@ export async function POST(req: NextRequest) {
   upstream.set("name", name as string);
   upstream.set("body", body);
 
-  // No explicit Content-Type: fetch sets the multipart boundary for a FormData
-  // body (same as /api/admin/skills).
   const suffix = withRestart("/persona", restartParams(req));
-  return proxyAdminJson(session, suffix, { method: "POST", body: upstream });
+  return proxyAdminJson(session, suffix, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: upstream,
+  });
 }
 
 export async function DELETE(req: NextRequest) {
