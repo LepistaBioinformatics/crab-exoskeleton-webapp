@@ -156,6 +156,25 @@ keeps native/web (works per-user).
 - Investigate the agent tool-thrashing (persona/skills vs the minimal picoclaw
   container: `python3` missing, workspace isolation, `exec` schema mismatch).
 
+## Quick tasks
+
+- **001 — expired session routed to onboarding** (2026-07-30, done, runtime-unverified).
+  `myceliumRpc` resolves non-2xx instead of throwing, so `hasAccount` read a 401
+  as "no account" and `/chat` sent expired sessions to `/onboarding`. Added an
+  `"expired"` status (401 on either beginners RPC) → `redirect("/signin")` in both
+  `/chat` and `/onboarding`. See `.specs/quick/001-expired-session-routes-to-onboarding/`.
+
+## Deferred ideas
+
+- **Validate the token in `getSession()`** (e.g. decode a JWT `exp`) so an expired
+  session becomes no session and the middleware's presence check handles it for
+  free — structurally cleaner than per-caller 401 classification, but it touches
+  every `getSession()` caller. Not a quick fix.
+- **Clear the stale cookie on an expired-session redirect.** Server Components
+  can't mutate cookies, so quick task 001 leaves the dead `myc_session` in place;
+  `/` → `/chat` → `/signin` re-bounces on each visit until re-signin. Would need
+  `/signin?expired=1` + a one-shot `POST /api/auth/logout`, or a GET logout route.
+
 ## Known limitations / latent issues
 
 - **`agents.defaults.model_name` owned by two systems:** per-user
