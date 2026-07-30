@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchMycelium, MyceliumConnectivityError } from "@/lib/mycelium";
-import { setSession } from "@/lib/session";
+import { isSessionExpired, setSession } from "@/lib/session";
 
 // Mycelium's verify response returns `email` as a structured object
 // ({ username, domain }), not a plain string -- verified empirically against
@@ -49,6 +49,18 @@ export async function POST(req: NextRequest) {
 
   const data = (await res.json()) as VerifyResponse;
   const resolvedEmail = displayEmail(data.email, email);
+
+  // A token that reads as already expired must not become a session. Now that
+  // getSession and the middleware honour `exp`, storing one would sign the user in
+  // and bounce them straight back here — a silent loop with no error on screen.
+  // It takes a clock ahead of the gateway's (or an absurdly short token) to happen,
+  // which is exactly the sort of environment problem worth failing loudly on. The
+  // client has no copy for this case and maps any non-401 to "could not reach the
+  // gateway", which points at the stack; the distinct code is here to be readable
+  // in logs.
+  if (isSessionExpired({ token: data.token, email: resolvedEmail })) {
+    return NextResponse.json({ error: "token_already_expired" }, { status: 502 });
+  }
 
   // Verify only authenticates + sets the session; account creation is the
   // explicit onboarding action now (onboarding OB-05 / CTX-OB-02).
