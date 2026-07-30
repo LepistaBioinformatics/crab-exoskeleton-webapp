@@ -156,6 +156,51 @@ keeps native/web (works per-user).
 - Investigate the agent tool-thrashing (persona/skills vs the minimal picoclaw
   container: `python3` missing, workspace isolation, `exec` schema mismatch).
 
+## Quick tasks
+
+- **001 — expired session routed to onboarding** (2026-07-30, done, runtime-unverified).
+  `myceliumRpc` resolves non-2xx instead of throwing, so `hasAccount` read a 401
+  as "no account" and `/chat` sent expired sessions to `/onboarding`. Added an
+  `"expired"` status (401 on either beginners RPC) → `redirect("/signin")` in both
+  `/chat` and `/onboarding`. See `.specs/quick/001-expired-session-routes-to-onboarding/`.
+
+## DONE (visually unverified) — pre-auth theme + sign-in URL state (2026-07-30)
+
+`.specs/features/pre-auth-theme-and-signin-url-state/spec.md`. Three fixes on
+`/signin`: it now follows `prefers-color-scheme` (light block scoped to
+`.backdrop`, so the landing keeps its committed dark), the code step lives in the
+URL (`?step=code&email=`) so a reload no longer drops the user back to the e-mail
+form, and the "Back to home" link is not rendered under `START_AT_SIGNIN`. The
+route split into a server page (reads the flag, provides the Suspense boundary)
+plus `signin-form.tsx`. Behaviour verified against the served production build;
+the light *rendering* was never looked at — no headless browser here.
+
+**Decision:** no theme selector. The user was offered a light/dark/system switcher
+(cookie-persisted like the locale) and chose OS-follow only, and chose to leave
+the landing dark. Onboarding needed no change — it was already token-based.
+
+## Quick tasks (cont.)
+
+- **002 — expired session hardening** (2026-07-30, done). Closes both of 001's
+  deferred ideas: `getSession()` now reads the token's `exp` (tolerantly — an
+  unreadable token stays live), and the middleware checks expiry *and* deletes the
+  dead cookie on the redirect, which a Server Component cannot do. `/` with an
+  expired cookie renders the landing instead of bouncing via `/chat`. Verified
+  against the served production build with crafted cookies.
+  See `.specs/quick/002-expired-session-hardening/`.
+- **003 — persona writes go upstream as urlencoded** (2026-07-30, done). The
+  Identity tab's 400 (`"tenant_id" is required and must be a UUID`) is a
+  crab-shell-proxy defect (`ParseForm` on a multipart body); the BFF now sends
+  urlencoded, which the **already deployed** proxy reads, so Identity works without
+  waiting for a proxy deploy. The proxy fix accepts both encodings so deploy order
+  cannot break it again. See `.specs/quick/003-persona-urlencoded-upstream/` and
+  `crab-shell-proxy/.specs/features/persona-injection/multipart-parse-fix-report.md`.
+
+## Deferred ideas
+
+_Both entries here (JWT `exp` validation, clearing the stale cookie) were
+implemented in quick task 002._
+
 ## Known limitations / latent issues
 
 - **`agents.defaults.model_name` owned by two systems:** per-user

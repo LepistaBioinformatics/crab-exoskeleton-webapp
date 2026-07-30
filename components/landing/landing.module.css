@@ -24,7 +24,65 @@
   --l-line: rgba(169, 136, 201, 0.22);
   --l-line-strong: rgba(169, 136, 201, 0.4);
   --l-cyan-glow: rgba(100, 197, 235, 0.28);
+  --l-violet-bloom: rgba(102, 58, 136, 0.18);
+  /* The sign-in card's own surfaces. Tokens rather than literals inside the
+     rules because .backdrop flips with the OS scheme (see the light block
+     below) and a baked rgba() could not follow. */
+  --l-card-bg-2: rgba(10, 18, 21, 0.35);
+  --l-card-shadow: 0 40px 80px -32px rgba(0, 0, 0, 0.8), 0 0 60px -20px var(--l-cyan-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --l-field: rgba(10, 18, 21, 0.6);
+  --l-alert: #f0788a;
+  --l-alert-fg: #ffd5db;
+  /* The focused-input border, split from --l-cyan because the two carry
+     different loads: --l-cyan is a FILL (the button) and the accent is the right
+     colour for that in either scheme, while this is a 1px boundary that has to
+     read against the field it sits on. On the dark field the accent does read,
+     so here they are the same value. */
+  --l-focus: var(--l-cyan);
   --l-maxw: 1120px;
+}
+
+/* The sign-in screen -- and ONLY it -- follows the OS scheme, like the rest of
+   the app. The landing keeps its committed dark first impression, which is why
+   this overrides `.backdrop` alone and never `.root`: every auth rule reads its
+   colours through these vars, so inheritance does the work and no landing rule
+   changes. (MyceliumBg/.backdrop is imported by app/signin only.)
+   Values track globals.css's light `:root` -- teal ink, #5a6b72 muted, the cyan
+   accent, structural violet -- with one exception: --l-cyan-soft becomes a
+   DARKENED cyan, because it colours label text and link hovers and the accent
+   itself is illegible on white. */
+@media (prefers-color-scheme: light) {
+  .backdrop {
+    --l-bg: #eef4f7;
+    --l-bg-2: #f7fafb;
+    --l-panel: rgba(255, 255, 255, 0.82);
+    --l-cyan: #64c5eb;
+    --l-cyan-soft: #0d6e8c;
+    --l-violet: #663a88;
+    --l-violet-deep: #663a88;
+    --l-fg: #0a2933;
+    --l-muted: #5a6b72;
+    --l-line: rgba(102, 58, 136, 0.16);
+    /* Same alpha as the dark theme on purpose: measured, the two land at 2.07:1
+       and 2.09:1 against their own fills, so an input boundary carries equal
+       weight in both schemes. (Neither reaches WCAG 1.4.11's 3:1 for non-text
+       boundaries -- a pre-existing gap in the dark design, not one this scheme
+       introduces, and not one to close on one side only.) */
+    --l-line-strong: rgba(102, 58, 136, 0.4);
+    --l-cyan-glow: rgba(100, 197, 235, 0.3);
+    --l-violet-bloom: rgba(102, 58, 136, 0.08);
+    --l-card-bg-2: rgba(255, 255, 255, 0.6);
+    --l-card-shadow: 0 24px 60px -34px rgba(10, 41, 51, 0.3), 0 0 48px -26px var(--l-cyan-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    --l-field: #ffffff;
+    --l-alert: #b4544a;
+    --l-alert-fg: #7a2e27;
+    /* The accent as a 1px border on white measures 1.96:1 -- too weak to be the
+       focus indicator (WCAG 2.4.11 wants 3:1). The darkened cyan reaches 5.8:1
+       and keeps the hue. */
+    --l-focus: #0d6e8c;
+  }
 }
 .root {
   position: relative;
@@ -60,7 +118,7 @@
   pointer-events: none;
   background:
     radial-gradient(120% 60% at 50% -10%, var(--l-cyan-glow), transparent 60%),
-    radial-gradient(80% 50% at 90% 110%, rgba(102, 58, 136, 0.18), transparent 60%),
+    radial-gradient(80% 50% at 90% 110%, var(--l-violet-bloom), transparent 60%),
     linear-gradient(var(--l-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--l-line) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 46px 46px, 46px 46px;
@@ -774,10 +832,18 @@
   max-width: 420px;
   border: 1px solid var(--l-line-strong);
   border-radius: 1.1rem;
-  background: linear-gradient(160deg, var(--l-panel), rgba(10, 18, 21, 0.35));
-  box-shadow: 0 40px 80px -32px rgba(0, 0, 0, 0.8), 0 0 60px -20px var(--l-cyan-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(160deg, var(--l-panel), var(--l-card-bg-2));
+  box-shadow: var(--l-card-shadow);
   padding: clamp(1.6rem, 4vw, 2.4rem);
+}
+/* Card header row: back link (absent under START_AT_SIGNIN) + language switcher.
+   The bottom spacing belongs to the ROW, not to the link -- hung off the link it
+   disappeared along with it whenever the flag hid it. */
+.authTop {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
 }
 .backLink {
   display: inline-flex;
@@ -788,7 +854,6 @@
   letter-spacing: 0.05em;
   color: var(--l-muted);
   text-decoration: none;
-  margin-bottom: 1.2rem;
   transition: color 0.2s;
 }
 .backLink:hover {
@@ -831,7 +896,7 @@
   width: 100%;
   border: 1px solid var(--l-line-strong);
   border-radius: 0.7rem;
-  background: rgba(10, 18, 21, 0.6);
+  background: var(--l-field);
   color: var(--l-fg);
   font-family: var(--ff-sans), sans-serif;
   font-size: 0.95rem;
@@ -843,7 +908,7 @@
   color: color-mix(in srgb, var(--l-muted) 80%, transparent);
 }
 .authInput:focus {
-  border-color: var(--l-cyan);
+  border-color: var(--l-focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--l-cyan) 22%, transparent);
 }
 .authText {
@@ -855,9 +920,9 @@
   color: var(--l-fg);
 }
 .authAlert {
-  border: 1px solid color-mix(in srgb, #f0788a 55%, transparent);
-  background: color-mix(in srgb, #f0788a 12%, transparent);
-  color: #ffd5db;
+  border: 1px solid color-mix(in srgb, var(--l-alert) 55%, transparent);
+  background: color-mix(in srgb, var(--l-alert) 12%, transparent);
+  color: var(--l-alert-fg);
   border-radius: 0.6rem;
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
@@ -912,7 +977,7 @@
   aspect-ratio: 3 / 4;
   border: 1.5px solid var(--l-line-strong);
   border-radius: 0.6rem;
-  background: rgba(10, 18, 21, 0.6);
+  background: var(--l-field);
   font-family: var(--ff-mono), monospace;
   font-size: clamp(1.3rem, 6vw, 1.7rem);
   font-weight: 700;
@@ -924,7 +989,7 @@
   color: var(--l-cyan-soft);
 }
 .codeWrap:focus-within .codeSlotActive {
-  border-color: var(--l-cyan);
+  border-color: var(--l-focus);
   background: color-mix(in srgb, var(--l-cyan) 12%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--l-cyan) 22%, transparent), 0 0 20px 2px var(--l-cyan-glow);
   animation: caret 1.1s step-start infinite;

@@ -85,6 +85,14 @@ const en = {
     clearTitle: "Clear this file?",
     clearMessage:
       "{name} stops being set at this scope. Workspaces fall back to the broader scope, or to the agent template.",
+    // Shown above the editor when the text on screen is NOT this scope's yet. The
+    // editor preloads what the agent actually runs, so an admin edits an identity
+    // instead of replacing one they never saw — but it has to be obvious that
+    // saving is what makes it this scope's.
+    fromTemplate: "Loaded from the agent template. Saving sets it at this scope.",
+    fromTenant: "Loaded from the tenant's file. Saving sets it at this subscription.",
+    emptyNothingResolves:
+      "Nothing provides this file yet — not this scope, not a broader one, not the agent template. Saving creates it here.",
   },
   scope: {
     label: "Scope",
@@ -633,6 +641,10 @@ const pt: AdminDict = {
     clearTitle: "Limpar este arquivo?",
     clearMessage:
       "{name} deixa de ser definido neste escopo. Os workspaces passam a usar o escopo mais amplo, ou o template do agente.",
+    fromTemplate: "Carregado do template do agente. Salvar define o arquivo neste escopo.",
+    fromTenant: "Carregado do arquivo do tenant. Salvar define o arquivo nesta assinatura.",
+    emptyNothingResolves:
+      "Nada fornece este arquivo ainda — nem este escopo, nem um mais amplo, nem o template do agente. Salvar cria o arquivo aqui.",
   },
   scope: {
     label: "Escopo",
