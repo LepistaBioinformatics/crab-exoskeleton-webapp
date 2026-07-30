@@ -13,6 +13,7 @@ import {
   readPersona,
   savePersona,
   type PersonaFile,
+  type PersonaSource,
 } from "@/lib/adminPersona";
 import { formatBytes } from "./format";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,17 @@ const row = cva("flex flex-col gap-2 rounded-lg border px-3.5 py-3 transition-co
   defaultVariants: { injected: false },
 });
 
+// Which sentence explains the text in an open editor that this scope does not own:
+// where it was borrowed from, or that nothing provides the file at all.
+function borrowedNote(
+  source: PersonaSource | null,
+  copy: { fromTemplate: string; fromTenant: string; emptyNothingResolves: string },
+): string {
+  if (source === "template") return copy.fromTemplate;
+  if (source === "tenant") return copy.fromTenant;
+  return copy.emptyNothingResolves;
+}
+
 export default function PersonaPanel({
   scope,
   restartPolicy = DEFAULT_POLICY,
@@ -57,7 +69,16 @@ export default function PersonaPanel({
 
   const [injected, setInjected] = useState<Map<string, { size: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ name: PersonaFile; body: string } | null>(null);
+  // `source` is where the open text came from — null when no layer had the file at
+  // all. It drives the note above the editor and nothing else; whether a row reads
+  // as injected still comes only from `injected` (the scope-only listing).
+  const [editing, setEditing] = useState<{
+    name: PersonaFile;
+    body: string;
+    source: PersonaSource | null;
+    /** What was loaded, kept so Save can require an actual change. */
+    loaded: string;
+  } | null>(null);
   const [loadingDoc, setLoadingDoc] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingClear, setPendingClear] = useState<PersonaFile | null>(null);
@@ -83,16 +104,19 @@ export default function PersonaPanel({
   const refresh = () =>
     listPersona(scope).then((files) => setInjected(new Map(files.map((f) => [f.name, { size: f.size }]))));
 
-  // Loads the injected text, or opens an empty editor when this scope inherits —
-  // deliberately NOT prefilled with the inherited content. The proxy resolves the
-  // cascade per workspace; showing one layer's text as the starting point of
-  // another would suggest this screen knows what a given workspace ends up with.
+  // Opens on what the agent actually runs: the proxy resolves this scope → the
+  // layer below → the agent template, and says which one answered. An empty editor
+  // used to be the starting point whenever this scope injected nothing, which is
+  // the normal state — so the first save replaced an identity the admin had never
+  // read. The `source` note above the editor is what keeps the preload honest:
+  // borrowed text is labelled as borrowed until it is saved here.
   async function openEditor(name: PersonaFile) {
     setLoadingDoc(name);
     setError(null);
     try {
-      const body = await readPersona(scope, name);
-      setEditing({ name, body: body ?? "" });
+      const doc = await readPersona(scope, name);
+      const body = doc?.content ?? "";
+      setEditing({ name, body, source: doc?.source ?? null, loaded: body });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -105,7 +129,7 @@ export default function PersonaPanel({
   // that had already landed, on a screen where redoing it also re-bounces every
   // container under the scope.
   async function onSave() {
-    if (!editing || !editing.body.trim()) return;
+    if (!editing || !editing.body.trim() || editing.body === editing.loaded) return;
     setSaving(true);
     setError(null);
     try {
@@ -217,6 +241,13 @@ export default function PersonaPanel({
               <X size={16} aria-hidden />
             </IconButton>
           </div>
+          {/* Only for text this scope does not own yet. An injection of its own
+              needs no explanation — it is what the row already says. */}
+          {editing.source !== "scope" && (
+            <p className="text-[11px] leading-relaxed text-fg-muted">
+              {borrowedNote(editing.source, t.persona)}
+            </p>
+          )}
           <Textarea
             rows={18}
             className="font-mono text-xs"
@@ -231,7 +262,13 @@ export default function PersonaPanel({
             <Button
               variant="filled"
               size="sm"
-              disabled={saving || !editing.body.trim()}
+              // Requires an actual change, not just text. With the editor
+              // preloading the resolved content, Edit is also the only way to READ
+              // a file — and a Save on untouched template text would write a
+              // verbatim copy as this scope's injection, which then wins over the
+              // template forever. That is the exact failure the cascade exists to
+              // remove, one stray click away, so an unchanged body cannot be saved.
+              disabled={saving || !editing.body.trim() || editing.body === editing.loaded}
               onClick={onSave}
             >
               <Check size={15} aria-hidden />

@@ -41,19 +41,39 @@ export async function listPersona(scope: ScopeRef): Promise<PersonaEntry[]> {
   return Array.isArray(data.files) ? (data.files as PersonaEntry[]) : [];
 }
 
+// Which layer a read resolved to. `scope` is this scope's own injection;
+// `tenant` is the layer below a subscription scope; `template` is the agent's base
+// template — the identity workspaces run when nobody has injected anything.
+export type PersonaSource = "scope" | "tenant" | "template";
+
+export interface PersonaDoc {
+  content: string;
+  source: PersonaSource;
+}
+
 /**
- * The injected content, or null when nothing is injected at this scope — which is
- * not an error: it means the next cascade layer, or the agent template, is what
- * workspaces get.
+ * The content an editor at this scope should start from, and where it came from.
+ * The proxy resolves the cascade (this scope → the layer below → the template), so
+ * a scope that injects nothing still opens on the agent's real identity instead of
+ * a blank page. null only when NO layer has the file at all.
  */
-export async function readPersona(scope: ScopeRef, name: PersonaFile): Promise<string | null> {
+export async function readPersona(scope: ScopeRef, name: PersonaFile): Promise<PersonaDoc | null> {
   const q = scopeParams(scope);
   q.set("name", name);
   const res = await fetch(`/api/admin/persona/doc?${q.toString()}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
-  return typeof data.content === "string" ? data.content : "";
+  return {
+    content: typeof data.content === "string" ? data.content : "",
+    // An older proxy answers without `source`. Only its own injection could
+    // reach the editor there, so that is what an absent field means.
+    source: isPersonaSource(data.source) ? data.source : "scope",
+  };
+}
+
+function isPersonaSource(value: unknown): value is PersonaSource {
+  return value === "scope" || value === "tenant" || value === "template";
 }
 
 export async function savePersona(
