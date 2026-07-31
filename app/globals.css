@@ -253,16 +253,13 @@
   animation: composerPulse 1.15s ease-in-out infinite;
 }
 
-/* Sidebar spotlight: at rest every conversation but the active one dims, and
-   moving the cursor over the list lifts it. That is a HOVER affordance, so it
-   only exists where hover does. On a touch device there is no resting cursor to
-   lift the dim with -- the list opened permanently faded and only un-faded after
-   a tap, which read as broken. Outside `hover: hover` these are no-ops, so the
-   list is simply always legible.
+/* Tree spotlight: hovering one thread fades the others back so its lane reads
+   as a single strand. Nothing fades at rest. That is a HOVER affordance, so it
+   only exists where hover does -- outside `hover: hover` these are no-ops.
 
-   These are plain classes rather than Tailwind opacity utilities because the
-   tree view applies the same emphasis to nodes whose color is an inline style;
-   keeping one mechanism keeps the two views in step. */
+   They are plain classes rather than Tailwind opacity utilities because the tree
+   applies the same emphasis to nodes whose color is an inline style; one
+   mechanism keeps the lane lines and their dots in step. */
 @media (hover: hover) {
   .spotlight-dim {
     opacity: 0.4;

@@ -60,16 +60,12 @@ export default function ConversationTree({
   workspace,
   conversations,
   activeSessionId,
-  sidebarHovered = false,
   onSelect,
   onApply,
 }: {
   workspace: Workspace;
   conversations: ConversationSummary[];
   activeSessionId?: string;
-  // Whether the cursor is anywhere over the sidebar (owned by the parent so the
-  // resting dim lifts on hover of the whole sidebar, matching the list view).
-  sidebarHovered?: boolean;
   onSelect?: () => void;
   // Optimistic update of a conversation's metadata (alias/tags), so editing from
   // the tree updates the shared list the same way the list view does.
@@ -89,13 +85,10 @@ export default function ConversationTree({
   // Which node has its alias/tags editor expanded.
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
 
-  // Hovered conversation: while set it becomes the "focused" thread, overriding
-  // the selected one. The focused thread stays vivid; the rest fade back.
+  // Hovered conversation: while set it is the spotlighted thread and the others
+  // fade back. Nothing fades at rest -- the selection is marked by its row
+  // background alone.
   const [hoveredConv, setHoveredConv] = useState<string | null>(null);
-
-  // The focus/dim treatment is gated on the cursor being over the tree area:
-  // outside it the whole tree stays at full emphasis regardless of selection.
-  // Only while hovering does one thread stand out and the rest fade back.
 
   // Always-current active sid, read inside the fetch effect without making it a
   // dependency (navigating shouldn't refetch; only sends/completions should).
@@ -249,13 +242,9 @@ export default function ConversationTree({
 
   const { bursts, dotLaneOf, laneCount, laneSegments } = model;
 
-  // Three emphasis states, matching the list view. At rest (cursor off the
-  // sidebar) everything dims but the active chat; hovering the sidebar lifts the
-  // dim; hovering one row spotlights just that conversation.
-  const spotlightId = hoveredConv ?? (sidebarHovered ? null : activeSessionId ?? null);
-  const uniformLit = hoveredConv == null && sidebarHovered;
-  const isDimmed = (id: string) =>
-    uniformLit ? false : spotlightId != null ? id !== spotlightId : true;
+  // Hover-only spotlight: at rest the whole tree is lit, and only while one
+  // thread is hovered do the others fade back so its lane reads as one strand.
+  const isDimmed = (id: string) => hoveredConv != null && id !== hoveredConv;
 
   return (
     <div role="tree" aria-label={t.history.treeAria} className="flex min-h-full flex-col">
