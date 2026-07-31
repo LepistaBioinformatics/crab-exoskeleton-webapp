@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   availableLevels,
+  embeddedRole,
   emailText,
   isValidEmail,
   mergeRoster,
   permissionLevel,
   resolveRoleId,
+  roleRefId,
   type GuestRole,
   type GuestUser,
 } from "./invitations";
@@ -222,6 +224,55 @@ describe("mergeRoster", () => {
       ROLES,
     );
     expect(roster.map((r) => r.email)).toEqual(["amy@x.com", "zoe@x.com"]);
+  });
+});
+
+// The shape `listGuestOnSubscriptionAccount` actually returns. `Parent<T, Id>` is
+// an externally tagged enum, so the role arrives wrapped under its variant name —
+// NOT as the flat {id, name} the reference TS types describe. Reading it flat
+// yielded no name and no permission, every label came out "unknown", and because
+// members-panel derives the revoke button from that label, the whole uninvite
+// affordance disappeared. A silent wire-shape mismatch is exactly the failure
+// these assertions exist to catch.
+describe("guestRole wire shapes", () => {
+  const record = (id: string, name: string, permission: number | string): GuestUser => ({
+    email: "wire@x.com",
+    guestRole: { record: { id, name, slug: name, permission } },
+  });
+
+  it("reads the embedded record mycelium actually sends", () => {
+    expect(embeddedRole({ record: { id: "r", name: "alpha", slug: "alpha", permission: 1 } })?.name)
+      .toBe("alpha");
+    expect(roleRefId({ record: { id: "r-1", name: "alpha", slug: "alpha", permission: 1 } }))
+      .toBe("r-1");
+  });
+
+  it("labels a guest from its own payload, with no roles list at all", () => {
+    // A TenantManager profile can list guests but is refused by guestRoles.list,
+    // and that list truncates at mycelium's default page size — so the label must
+    // not depend on cross-referencing it.
+    const roster = mergeRoster([record("r-x", "alpha", "write")], [], []);
+    expect(roster[0].roles).toEqual(["alpha (write)"]);
+  });
+
+  it("accepts the numeric permission form in the embedded record too", () => {
+    const roster = mergeRoster([record("r-y", "beta", 0)], [], ROLES);
+    expect(roster[0].roles).toEqual(["beta (read)"]);
+  });
+
+  it("still reads the other Parent variant and the legacy shapes", () => {
+    expect(roleRefId({ id: "r-alpha-write" })).toBe("r-alpha-write");
+    expect(roleRefId("r-alpha-write")).toBe("r-alpha-write");
+    expect(mergeRoster([{ email: "a@x.com", guestRole: "r-alpha-write" }], [], ROLES)[0].roles)
+      .toEqual(["alpha (write)"]);
+  });
+
+  it("returns null rather than a guess for a record it cannot read", () => {
+    expect(embeddedRole({ record: null })).toBeNull();
+    expect(embeddedRole({ id: "r-1" })).toBeNull();
+    expect(embeddedRole(undefined)).toBeNull();
+    expect(roleRefId({ record: null })).toBeNull();
+    expect(roleRefId({ id: "   " })).toBeNull();
   });
 });
 

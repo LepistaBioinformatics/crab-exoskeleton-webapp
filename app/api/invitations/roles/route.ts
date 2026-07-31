@@ -10,6 +10,16 @@ import { requireSession } from "@/lib/adminProxy";
 // `guestRoles.list` answers with either a bare array or a paginated envelope
 // depending on the server build, so both shapes are handled here rather than in
 // every caller.
+//
+// pageSize is explicit because mycelium defaults it to TEN. Silently dropping the
+// eleventh role does not degrade gracefully: a role that exists but is missing
+// from this list makes the Members panel refuse to grant it AND refuse to remove
+// it, since both verbs turn (agent, level) into a roleId through this response.
+// Guest roles are global rather than tenant-scoped -- there is no tenant_id column
+// on guest_role, and tenantId here is a permission scope only -- so one deployment
+// can accumulate a role per agent per permission across every tenant.
+const ROLE_PAGE_SIZE = 500;
+
 export async function GET(req: NextRequest) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
@@ -22,7 +32,7 @@ export async function GET(req: NextRequest) {
   try {
     const rpc = await myceliumRpc<unknown>(
       "subscriptionsManager.guestRoles.list",
-      { tenantId },
+      { tenantId, pageSize: ROLE_PAGE_SIZE },
       session.token,
     );
     if (!rpc.ok) {
