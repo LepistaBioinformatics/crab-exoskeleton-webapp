@@ -16,6 +16,13 @@ Persistent memory across sessions. Last updated: 2026-07-20.
   mycelium's default page size of 10 (`/api/invitations/roles` now sends an explicit
   `pageSize`). Guest roles are global, not tenant-scoped.
 
+  Preferring the embedded record forced a second change: `RosterEntry.roles` is now
+  `RoleGrant[]` carrying the `roleId`, and `parseRoleLabel` is gone. Recovering
+  `(agent, level)` from the badge text and re-resolving it was safe only while the label
+  came from the same `roles` array; once it can come from the guest row instead, a role
+  absent from that array still renders a button that re-resolves to null and silently
+  does nothing. Revoke now uses the id mycelium put on the grant.
+
 - **Tenant brand avatar in sidebar** — `app/chat/workspace-nav.tsx` +
   `components/ui/avatar.tsx` (+ test). The tenant brand logo (mycelium tag
   `value:"brand"`, `meta.base64Logo`) shows as a small rounded-square avatar

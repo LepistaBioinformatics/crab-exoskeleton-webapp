@@ -16,11 +16,9 @@ import {
   listGuests,
   mergeRoster,
   revokeMember,
-  resolveRoleId,
-  permissionLevel,
   type GuestRole,
   type GuestUser,
-  type AccessLevel,
+  type RoleGrant,
 } from "@/lib/invitations";
 import InviteMember from "./invite-member";
 import InstanceConfigEditor from "./instance-config-editor";
@@ -61,7 +59,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [pendingRevoke, setPendingRevoke] = useState<
-    { email: string; agentKey: string; level: AccessLevel } | null
+    { email: string; grant: RoleGrant } | null
   >(null);
   // The config editor is mounted once at panel level rather than per row, so two
   // instances can never be open at the same time.
@@ -109,10 +107,12 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
 
   const roster = mergeRoster(guests, users ?? [], roles);
 
-  async function revoke(email: string, agentKey: string, level: AccessLevel) {
+  // Revokes by the role id the grant carried out of mycelium's own guest row. It
+  // is deliberately NOT re-derived from the badge text: that round-trip depended
+  // on the label having been built from `roles`, which is no longer always true,
+  // and a failed re-resolution would have made this button do nothing at all.
+  async function revoke(email: string, roleId: string) {
     if (!scope.subsAccId) return;
-    const roleId = resolveRoleId(roles, agentKey, level);
-    if (!roleId) return;
     try {
       await revokeMember({
         tenantId: scope.tenantId,
@@ -153,15 +153,18 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
           pendingRevoke
             ? t.roster.revokeMessage
                 .replace("{email}", pendingRevoke.email)
-                .replace("{level}", t.invite[pendingRevoke.level])
-                .replace("{agent}", pendingRevoke.agentKey)
+                .replace(
+                  "{level}",
+                  pendingRevoke.grant.level ? t.invite[pendingRevoke.grant.level] : "",
+                )
+                .replace("{agent}", pendingRevoke.grant.agentKey)
             : undefined
         }
         confirmLabel={t.roster.revoke}
         onCancel={() => setPendingRevoke(null)}
         onConfirm={() => {
-          if (pendingRevoke) {
-            void revoke(pendingRevoke.email, pendingRevoke.agentKey, pendingRevoke.level);
+          if (pendingRevoke?.grant.roleId) {
+            void revoke(pendingRevoke.email, pendingRevoke.grant.roleId);
           }
           setPendingRevoke(null);
         }}
@@ -209,19 +212,18 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                     </div>
                   )}
 
-                  {entry.roles.map((r) => {
-                    const parsed = parseRoleLabel(r);
+                  {entry.roles.map((grant) => {
                     return (
-                      <span key={r} className="flex shrink-0 items-center gap-0.5">
-                        <Badge>{r}</Badge>
-                        {parsed && (
+                      <span key={grant.label} className="flex shrink-0 items-center gap-0.5">
+                        <Badge>{grant.label}</Badge>
+                        {grant.roleId && (
                           <IconButton
                             variant="ghost"
                             size="sm"
                             aria-label={t.roster.revokeAria
-                        .replace("{role}", r)
+                        .replace("{role}", grant.label)
                         .replace("{email}", entry.email)}
-                            onClick={() => setPendingRevoke({ email: entry.email, ...parsed })}
+                            onClick={() => setPendingRevoke({ email: entry.email, grant })}
                           >
                             <UserMinus size={14} aria-hidden />
                           </IconButton>
@@ -420,14 +422,4 @@ function UserFiles({
       />
     </div>
   );
-}
-
-// Roster labels are rendered as "alpha (write)"; parse one back into the pair a
-// revoke needs. A label with no level came from the workspace feed alone (the
-// person has a workspace but no matching guest row), and there is no guest
-// record to revoke, so it offers no button.
-function parseRoleLabel(label: string): { agentKey: string; level: AccessLevel } | null {
-  const m = /^(.+) \((read|write)\)$/.exec(label);
-  if (!m) return null;
-  return { agentKey: m[1], level: m[2] as AccessLevel };
 }

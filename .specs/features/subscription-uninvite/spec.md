@@ -1,7 +1,7 @@
 # Feature: subscription uninvite
 
-**Status:** implemented — `tsc --noEmit` clean, `next build` clean, 420 vitest tests pass
-(30 in `lib/invitations.test.ts`, 5 of them new). Runtime verification against a live
+**Status:** implemented — `tsc --noEmit` clean, `next build` clean, 422 vitest tests pass
+(32 in `lib/invitations.test.ts`, 7 of them new). Runtime verification against a live
 mycelium is still operator-gated: nothing here was exercised against a real gateway.
 **Scope:** Medium (webapp only; no proxy change, no new BFF route)
 **Extends:** `.specs/features/subscription-invitations/` — read that spec first for the
@@ -97,8 +97,22 @@ repo).
   cross-referenced roles list, so a label resolves even when FR-3 has not been applied or the
   caller lacks `SubscriptionsManager` (a `TenantManager` profile can list guests but is
   refused by `guestRoles.list`).
-- **FR-2.3** Consequence, not a separate change: labels become `"alpha (write)"`,
-  `parseRoleLabel()` matches, and the per-row revoke icon renders.
+- **FR-2.3** The roster's revoke stops round-tripping through the badge text. `RosterEntry.roles`
+  becomes `RoleGrant[]` — `{ label, roleId, agentKey, level }` — and `revoke()` takes the
+  `roleId` mycelium itself put on the guest row.
+
+  This is required *by* FR-2.2, not merely tidier. `members-panel.tsx` used to parse
+  `"alpha (write)"` back into `(agent, level)` and re-resolve it via `resolveRoleId(roles, …)`;
+  that was safe only while the label had been **built** from the same `roles` array. Once the
+  embedded record wins, a role absent from `roles` — exactly the truncation and
+  `TenantManager` cases FR-2.2 exists for — still produces a label and therefore a button,
+  but re-resolves to `null` and hits `if (!roleId) return`: a **silent no-op**, strictly worse
+  than no button. Carrying the id removes the failure mode instead of reporting it.
+  `parseRoleLabel()` is deleted.
+
+- **FR-2.4** A roster row that came from the workspace feed alone carries `roleId: null` and
+  offers no revoke button — the same outcome as before, now for an explicit reason (there is
+  no guest grant behind it) rather than as a side effect of a label that would not parse.
 
 ### FR-3 — Do not lose roles to the default page size
 
@@ -133,8 +147,8 @@ repo).
 |---|---|
 | FR-1.1, FR-1.4, FR-1.5, FR-1.6 | `app/admin/invite-member.tsx` |
 | FR-1.2, FR-1.3 | `lib/invitations.ts` (`resolveRoleId`, `revokeMember` — both pre-existing) |
-| FR-2.1, FR-2.2 | `lib/invitations.ts` (`GuestRoleRef`, `embeddedRole`, `roleLabel`) |
-| FR-2.3 | `app/admin/members-panel.tsx` (`parseRoleLabel`, unchanged — it starts matching) |
+| FR-2.1, FR-2.2 | `lib/invitations.ts` (`GuestRoleRef`, `embeddedRole`, `roleRefId`, `roleGrant`) |
+| FR-2.3, FR-2.4 | `lib/invitations.ts` (`RoleGrant`, `mergeRoster`) + `app/admin/members-panel.tsx` (`revoke`, `pendingRevoke`; `parseRoleLabel` deleted) |
 | FR-3.1 | `app/api/invitations/roles/route.ts` |
 | NFR-1 | `lib/i18n/admin.ts` |
 | NFR-3 | `lib/invitations.test.ts` |
