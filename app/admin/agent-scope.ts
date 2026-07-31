@@ -29,7 +29,11 @@ export const LEGACY_AGENT = ALL_AGENTS;
 // template — config.yaml plus a SOUL.md — and the proxy delivers persona only on
 // the picoclaw create path, so offering the section for one would be a form whose
 // writes reach nothing.
-const PICOCLAW_ONLY: Tab[] = ["persona", "model"];
+//
+// `config`: `config.json` is picoclaw's file. Hermes agents provision from a
+// `config.yaml` instead, so a key edited in bulk here would land in a document those
+// agents never read.
+const PICOCLAW_ONLY: Tab[] = ["persona", "model", "config"];
 
 // The sections every agent has: the shared content stores. Derived from the full
 // section list rather than spelled out again, so adding a section is one edit — the

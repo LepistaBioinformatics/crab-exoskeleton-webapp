@@ -15,6 +15,7 @@ import {
   KeyRound,
   Palette,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
   Wrench,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import SharedSecretsPanel from "./shared-secrets-panel";
 import SharedSkillsPanel from "./shared-skills-panel";
 import PersonaPanel from "./persona-panel";
 import ModelRegistryPanel from "./model-registry-panel";
+import BulkConfigPanel from "./bulk-config-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
 import { adminCopy } from "@/lib/i18n/admin";
@@ -101,6 +103,7 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
   skills: <Wrench size={15} aria-hidden />,
   persona: <IdCard size={15} aria-hidden />,
   model: <Cpu size={15} aria-hidden />,
+  config: <SlidersHorizontal size={15} aria-hidden />,
 };
 
 // The administrative screen (FR-9). Server-side authz in the proxy is the real
@@ -667,6 +670,16 @@ export default function AdminScreen() {
                         // refuses an agent-less persona write outright.
                         <PersonaPanel
                           scope={{ ...selected, agent }}
+                          restartPolicy={restartPolicy}
+                        />
+                      ) : sectionTab === "config" ? (
+                        // Takes the scope WITHOUT the agent folded in: the agent is a
+                        // separate parameter upstream (the proxy resolves it from
+                        // `agent=`, not from the routing vehicle), and the panel needs
+                        // `scope.kind` intact to refuse a tenant selection itself.
+                        <BulkConfigPanel
+                          scope={selected}
+                          agent={agent}
                           restartPolicy={restartPolicy}
                         />
                       ) : (

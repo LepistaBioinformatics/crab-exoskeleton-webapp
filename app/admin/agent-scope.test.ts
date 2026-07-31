@@ -44,6 +44,7 @@ describe("agentTabs", () => {
       "skills",
       "persona",
       "model",
+      "config",
     ]);
   });
 
@@ -66,6 +67,21 @@ describe("agentTabs", () => {
   it("withholds them from the legacy store too", () => {
     expect(agentTabs(LEGACY_AGENT, agents)).toEqual(["files", "secrets", "skills"]);
   });
+
+  // `config.json` is picoclaw's file. A hermes agent provisions from `config.yaml`
+  // instead, so the bulk editor would be writing a key into a document that agent
+  // never reads.
+  it("offers config to a picoclaw agent and withholds it from a hermes one", () => {
+    expect(agentTabs("alpha", agents)).toContain("config");
+    expect(agentTabs("legacy-shaped", agents)).toContain("config");
+    expect(agentTabs("hermes-glm", agents)).not.toContain("config");
+  });
+
+  // `config` is picoclaw-only, and the legacy all-agents store gets no picoclaw-only
+  // section — CONTENT_TABS filters them out, so this needs no rule of its own.
+  it("withholds config from the legacy store", () => {
+    expect(agentTabs(LEGACY_AGENT, agents)).not.toContain("config");
+  });
 });
 
 describe("resolveAgentTab", () => {
@@ -78,5 +94,14 @@ describe("resolveAgentTab", () => {
   it("falls back to the agent's first section for one it does not", () => {
     expect(resolveAgentTab("model", "hermes-glm", agents)).toBe("files");
     expect(resolveAgentTab("model", LEGACY_AGENT, agents)).toBe("files");
+  });
+
+  // `?tab=config` needs no rule of its own: config is picoclaw-only, so the existing
+  // "a section this agent does not offer falls back to its first" rule already covers
+  // a hand-typed URL pointing a hermes agent at picoclaw's `config.json`.
+  it("treats config as any other picoclaw-only section in the URL", () => {
+    expect(resolveAgentTab("config", "alpha", agents)).toBe("config");
+    expect(resolveAgentTab("config", "hermes-glm", agents)).toBe("files");
+    expect(resolveAgentTab("config", LEGACY_AGENT, agents)).toBe("files");
   });
 });

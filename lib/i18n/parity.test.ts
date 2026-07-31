@@ -43,6 +43,10 @@ const SHARED = new Set([
   "chat.canvas.msgOne",
   "chat.canvas.msgOther",
   "admin.shell.tabs.skills",
+  // A dotted config.json path and a JSON literal. Both are what the admin types
+  // verbatim into the field, so translating either would be wrong.
+  "admin.bulkConfig.keyPlaceholder",
+  "admin.bulkConfig.valuePlaceholder",
   "admin.shell.period",
   "admin.scope.tenantPrefix",
   "admin.ladderRungs.tenant",
