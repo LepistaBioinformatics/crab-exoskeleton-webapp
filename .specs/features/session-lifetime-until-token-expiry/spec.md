@@ -80,10 +80,35 @@ does — no longer, no shorter.
 
 ## Verification
 
-1. `yarn test` — `lib/session.test.ts` green, including the S-02/S-03/S-04 cases.
-2. Sign in, inspect the `myc_session` cookie: `Expires` present and equal to the
-   token's `exp` (decode the JWT payload's `exp` × 1000).
-3. Complete onboarding (re-set path), re-inspect: `Expires` unchanged.
-4. Close the browser entirely, reopen, hit `/chat`: still signed in.
-5. Past `exp`, `/chat` redirects to `/signin` and the cookie is dropped
+1. `yarn test` — 419 passed (36 files), including the S-02/S-03/S-04 cases.
+   `npx tsc --noEmit` clean.
+2. **The token really does carry a readable `exp` — done, against the live
+   gateway.** This is the assumption the whole fix rests on, and no unit test can
+   check it: `lib/session.test.ts` builds its JWTs with a synthetic helper that
+   has an `exp` by construction. An opaque or `exp`-less real token would send
+   `tokenExpiry` down the `null` branch and ship the bug unchanged and green.
+   Worth checking rather than assuming, because the two halves fail
+   asymmetrically: with an unreadable `exp`, PR #20's enforcement silently
+   no-ops (`isSessionExpired` → `false`, no symptom anyone reports), so "#20
+   works" is not evidence.
+
+   Exercised the real magic-link flow (request → the standalone stack prints the
+   e-mail to the gateway's stdout → `display` → `verify`). The token is a
+   3-segment JWT with claims `aud, email, exp, iat, iss, sub`;
+   `exp - iat = 43200`, matching `jwtExpiresIn` exactly. `tokenExpiry`, run
+   verbatim over that token, returns `1785540863000` — 12.00 hours out. So
+   `expires` will be set, and set to the token's own instant.
+3. **No client-side tab-lifetime auth state.** The user described the symptom as
+   the *tab* closing, and a cookie with no `Expires` survives tab close (it dies
+   on full browser close). Grepped `app/`, `components/`, `lib/` for
+   `sessionStorage`, `beforeunload`, `visibilitychange`, `pagehide` — no matches.
+   The cookie is the only auth state, so nothing else can bounce the UI.
+
+Remaining, manual, in a browser:
+
+4. Sign in, inspect `myc_session`: `Expires` present and equal to the token's
+   `exp` (payload `exp` × 1000).
+5. Complete onboarding (the re-set path), re-inspect: `Expires` unchanged.
+6. Close the browser entirely, reopen, hit `/chat`: still signed in.
+7. Past `exp`, `/chat` redirects to `/signin` and the cookie is dropped
    (middleware behaviour, already covered — confirm it did not regress).
