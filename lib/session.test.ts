@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSessionExpired, parseSession, tokenExpiry } from "./session";
+import { isSessionExpired, parseSession, sessionCookieOptions, tokenExpiry } from "./session";
 
 // A JWT-shaped token: the middle segment is base64url with the padding stripped,
 // which is what a real one looks like and what the decoder has to cope with.
@@ -62,5 +62,33 @@ describe("isSessionExpired", () => {
   // as it did before this check existed.
   it("treats a token with no readable exp as live", () => {
     expect(isSessionExpired({ token: "opaque-token", email: "a@x" }, now)).toBe(false);
+  });
+});
+
+describe("sessionCookieOptions", () => {
+  it("expires the cookie at the token's own exp, so it survives a browser restart", () => {
+    const opts = sessionCookieOptions({ token: jwt({ exp: 1_700_000_000 }), email: "a@x" });
+    expect(opts.expires).toEqual(new Date(1_700_000_000_000));
+  });
+
+  // The onboarding accountReady write re-sets the session with the SAME token. An
+  // expiry computed as "now + jwtExpiresIn" would slide forward here and hand the
+  // browser a cookie outliving the token it carries.
+  it("gives the same expiry on a re-set with an unchanged token", () => {
+    const token = jwt({ exp: 1_700_000_000 });
+    expect(sessionCookieOptions({ token, email: "a@x" }).expires).toEqual(
+      sessionCookieOptions({ token, email: "a@x", accountReady: true }).expires,
+    );
+  });
+
+  // No default lifetime is invented: unreadable exp falls back to the session
+  // cookie this always used to emit.
+  it("omits expires when the token has no readable exp", () => {
+    expect(sessionCookieOptions({ token: "opaque-token", email: "a@x" })).not.toHaveProperty("expires");
+  });
+
+  it("keeps the attributes the middleware's delete has to match", () => {
+    const opts = sessionCookieOptions({ token: "opaque-token", email: "a@x" });
+    expect(opts).toEqual({ httpOnly: true, sameSite: "lax", secure: false, path: "/" });
   });
 });

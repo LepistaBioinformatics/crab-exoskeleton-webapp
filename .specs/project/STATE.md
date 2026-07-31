@@ -198,8 +198,14 @@ the landing dark. Onboarding needed no change — it was already token-based.
 
 ## Deferred ideas
 
-_Both entries here (JWT `exp` validation, clearing the stale cookie) were
-implemented in quick task 002._
+_The two original entries here (JWT `exp` validation, clearing the stale cookie)
+were implemented in quick task 002._
+
+- **Sliding sessions / token refresh.** The session now lasts exactly as long as
+  the mycelium token (`session-lifetime-until-token-expiry`) — a hard 12h ceiling
+  (`jwtExpiresIn = 43200`), after which an active user is bounced to `/signin`.
+  Extending it needs a mycelium refresh endpoint plus a re-auth path in the BFF;
+  deliberately not built, since the ask was "until the token expires", not longer.
 
 ## Known limitations / latent issues
 

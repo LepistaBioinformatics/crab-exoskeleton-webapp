@@ -12,11 +12,24 @@ export interface SessionCookie {
   accountReady?: boolean;
 }
 
-export async function setSession(session: SessionCookie): Promise<void> {
-  const store = await cookies();
-  store.set(SESSION_COOKIE, JSON.stringify(session), {
+// Split out of setSession for the same reason parseSession was split out of
+// getSession: it is the part worth unit-testing, and next/headers is not
+// available to reach for in a test.
+//
+// `expires` is derived from the token's OWN `exp`, as an absolute instant. Not a
+// relative maxAge: setSession is called a second time with the same token (the
+// onboarding `accountReady` write), and "now + 12h" on that second write would
+// hand the browser a cookie that outlives the token inside it. Absolute means the
+// re-set is idempotent.
+//
+// No readable `exp` (opaque token, no claim) leaves `expires` off entirely, which
+// is the session cookie this used to always emit -- same tolerance tokenExpiry and
+// isSessionExpired already apply, rather than inventing a default lifetime.
+export function sessionCookieOptions(session: SessionCookie) {
+  const exp = tokenExpiry(session.token);
+  return {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     // This stack has no TLS in front of any service (mycelium-gateway's own
     // `tls = "disabled"`, see mycelium/config.standalone.toml) -- a `Secure`
     // cookie here would be set but never sent back by the browser over
@@ -24,7 +37,13 @@ export async function setSession(session: SessionCookie): Promise<void> {
     // curl doesn't care and hid this, a real browser would).
     secure: false,
     path: "/",
-  });
+    ...(exp === null ? {} : { expires: new Date(exp) }),
+  };
+}
+
+export async function setSession(session: SessionCookie): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE, JSON.stringify(session), sessionCookieOptions(session));
 }
 
 // Pure cookie parse, split out so the middleware can reuse it: middleware runs on
