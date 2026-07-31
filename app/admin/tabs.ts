@@ -8,6 +8,7 @@ export const TAB_KEYS = [
   "skills",
   "persona",
   "model",
+  "config",
   "members",
   "branding",
 ] as const;
@@ -22,7 +23,7 @@ export const DEFAULT_TAB: Tab = "files";
 // Which of these a given agent actually offers is not fixed: the model registry
 // governs picoclaw agents only. That rule lives in `agent-scope.ts`, with the rest of
 // the agent's vocabulary; this is the full set it draws from.
-export const SECTION_TABS: Tab[] = ["files", "secrets", "skills", "persona", "model"];
+export const SECTION_TABS: Tab[] = ["files", "secrets", "skills", "persona", "model", "config"];
 
 // An absent or unrecognized value falls back to the default rather than rendering
 // an empty panel — the query string is user-editable, so `?tab=garbage` has to

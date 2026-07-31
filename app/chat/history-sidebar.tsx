@@ -48,13 +48,8 @@ const conversationRow = cva(
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
-      // When another conversation is hovered, the rest fade back so the row
-      // under the cursor is spotlighted. `spotlight-dim` is inert without a
-      // hovering pointer (globals.css), so on touch the list is never faded --
-      // there is no cursor there to lift the dim again.
-      dimmed: { true: "spotlight-dim", false: "opacity-100" },
     },
-    defaultVariants: { active: false, dimmed: false },
+    defaultVariants: { active: false },
   },
 );
 
@@ -113,12 +108,6 @@ export default function HistorySidebar({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
-  // The conversation currently under the cursor: the others dim (spotlight).
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  // Whether the cursor is anywhere over the sidebar. At rest the whole list is
-  // dimmed (only the active chat stays lit); hovering the sidebar lifts the dim,
-  // and hovering one row then spotlights just that chat.
-  const [sidebarHovered, setSidebarHovered] = useState(false);
 
   // Applies a change to a single conversation across both the base list and the
   // (optional) search results, mirroring the optimistic updates rename/delete do.
@@ -317,10 +306,6 @@ export default function HistorySidebar({
         </>
       }
     >
-      <div
-        onMouseEnter={() => setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-      >
       {/* Behind the magnifier, not permanently open. It is NOT a threshold — the
           control is offered whatever the conversation count, exactly as in the
           workspaces panel; it is the block itself that is folded away, because the
@@ -367,7 +352,6 @@ export default function HistorySidebar({
             workspace={workspace}
             conversations={visible}
             activeSessionId={activeSessionId}
-            sidebarHovered={sidebarHovered}
             onSelect={onSelect}
             onApply={applyToLists}
           />
@@ -426,23 +410,9 @@ export default function HistorySidebar({
               );
             }
             const enriching = enrichingId === conversation.id;
-            // Resting: dim all but the active chat. Sidebar hovered (no row):
-            // everything lit. A row hovered: only that chat stays lit.
-            const dimmed =
-              hoveredId !== null
-                ? hoveredId !== conversation.id
-                : sidebarHovered
-                  ? false
-                  : !active;
             return (
               <div key={conversation.id}>
-                <div
-                  onMouseEnter={() => setHoveredId(conversation.id)}
-                  onMouseLeave={() =>
-                    setHoveredId((cur) => (cur === conversation.id ? null : cur))
-                  }
-                  className={conversationRow({ active, dimmed })}
-                >
+                <div className={conversationRow({ active })}>
                   <button
                     type="button"
                     onClick={() => onOpenConversation(conversation.id)}
@@ -527,7 +497,6 @@ export default function HistorySidebar({
           setDeleteError(null);
         }}
       />
-      </div>
     </SidebarPanel>
   );
 }

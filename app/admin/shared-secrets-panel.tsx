@@ -7,7 +7,6 @@ import {
   listSharedSecrets,
   setSharedSecret,
   deleteSharedSecret,
-  ALL_AGENTS,
   type ScopeRef,
 } from "@/lib/admin";
 import {
@@ -17,7 +16,6 @@ import {
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
-import { listModels, describeError, type InventoryModel } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
@@ -71,19 +69,9 @@ export default function SharedSecretsPanel({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<SecretFormat>("dotenv");
-  const [nativeKind, setNativeKind] = useState<"web" | "model">("web");
   const [provider, setProvider] = useState<string>(WEB_PROVIDERS[0]);
-  const [modelName, setModelName] = useState("");
-  const [models, setModels] = useState<InventoryModel[] | null>(null);
-  const [modelsError, setModelsError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
-
-  // A model_list slot must name a single agent (the proxy rejects it for an
-  // all-agents scope): the inventory itself is per-agent, so there is no
-  // catalog to offer without one.
-  const routedAgent = scope.agent && scope.agent !== ALL_AGENTS ? scope.agent : null;
-  const availableModels = models?.filter((m) => m.status !== "disabled") ?? [];
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -108,28 +96,12 @@ export default function SharedSecretsPanel({
     };
   }, [scope.kind, scope.tenantId, scope.subsAccId, scope.agent]);
 
-  useEffect(() => {
-    setModelName("");
-    setModels(null);
-    setModelsError(null);
-    if (!routedAgent) return;
-    let cancelled = false;
-    listModels(routedAgent)
-      .then((m) => !cancelled && setModels(m))
-      .catch((e) => !cancelled && setModelsError(describeError(e).code));
-    return () => {
-      cancelled = true;
-    };
-  }, [routedAgent]);
-
-  // A native secret addresses a picoclaw slot, not a free-form name. The web
-  // family is the fixed `web.<provider>` enum; the model family reads
-  // `model_list.<model>.api_keys`, where `<model>` must be a name the
-  // inventory (T17's listModels) actually knows -- the proxy validates this
-  // slot against the inventory, so a hand-typed name would only 400.
+  // A native secret addresses a picoclaw slot, not a free-form name: the fixed
+  // `web.<provider>` enum. A model's key is NOT set here — the Models tab owns
+  // the inventory, which is the single writer of `model_list.<model>.api_keys`.
   function targetName(): string {
     if (format !== "native") return name.trim();
-    return nativeKind === "web" ? `web.${provider}` : `model_list.${modelName}.api_keys`;
+    return `web.${provider}`;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -139,10 +111,6 @@ export default function SharedSecretsPanel({
 
     if (format !== "native" && !SECRET_NAME_RE.test(finalName)) {
       setSubmitError(t.sharedSecrets.invalidName);
-      return;
-    }
-    if (format === "native" && nativeKind === "model" && !modelName) {
-      setSubmitError(t.sharedSecrets.selectModel);
       return;
     }
     if (!value) {
@@ -222,83 +190,25 @@ export default function SharedSecretsPanel({
         </Field>
 
         {format === "native" ? (
-          <>
-            <Field
-              label={t.sharedSecrets.whichSetting}
-              job={t.sharedSecrets.whichSettingJob}
-              htmlFor="s-slot"
+          <Field
+            label={t.sharedSecrets.whichSearch}
+            job={t.sharedSecrets.whichSearchJob}
+            htmlFor="s-provider"
+            consequence={t.sharedSecrets.whichSearchConsequence}
+          >
+            <select
+              id="s-provider"
+              className={fieldControlClass(true)}
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
             >
-              <select
-                id="s-slot"
-                className={fieldControlClass()}
-                value={nativeKind}
-                onChange={(e) => setNativeKind(e.target.value as "web" | "model")}
-              >
-                <option value="web">{t.sharedSecrets.slotWeb}</option>
-                <option value="model">{t.sharedSecrets.slotModel}</option>
-              </select>
-            </Field>
-            {nativeKind === "web" ? (
-              <Field
-                label={t.sharedSecrets.whichSearch}
-                job={t.sharedSecrets.whichSearchJob}
-                htmlFor="s-provider"
-                consequence={t.sharedSecrets.whichSearchConsequence}
-              >
-                <select
-                  id="s-provider"
-                  className={fieldControlClass(true)}
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  {WEB_PROVIDERS.map((pv) => (
-                    <option key={pv} value={pv}>
-                      {pv}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            ) : !routedAgent ? (
-              <Alert severity="info">{t.sharedSecrets.pickAgentFirst}</Alert>
-            ) : modelsError ? (
-              <Alert severity="error">{errorText(errs, modelsError)}</Alert>
-            ) : models === null ? (
-              <div className="flex justify-center py-2">
-                <Spinner size={16} />
-              </div>
-            ) : availableModels.length === 0 ? (
-              <Alert severity="info">
-                {t.sharedSecrets.noRegisteredModels.replace("{agent}", routedAgent)}
-              </Alert>
-            ) : (
-              <Field
-                label={t.sharedSecrets.whichModel}
-                job={t.sharedSecrets.whichModelJob.replace("{agent}", routedAgent)}
-                htmlFor="s-model"
-                consequence={
-                  <>
-                    {t.sharedSecrets.modelConsequenceBefore}
-                    <b>{t.sharedSecrets.modelConsequenceBold}</b>
-                    {t.sharedSecrets.modelConsequenceAfter}
-                  </>
-                }
-              >
-                <select
-                  id="s-model"
-                  className={fieldControlClass(true)}
-                  value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
-                >
-                  <option value="">{t.sharedSecrets.selectModelOption}</option>
-                  {availableModels.map((m) => (
-                    <option key={m.model_name} value={m.model_name}>
-                      {m.model_name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-          </>
+              {WEB_PROVIDERS.map((pv) => (
+                <option key={pv} value={pv}>
+                  {pv}
+                </option>
+              ))}
+            </select>
+          </Field>
         ) : (
           <Field
             label={t.sharedSecrets.nameLabel}

@@ -38,6 +38,7 @@ const en = {
       skills: "Skills",
       persona: "Identity",
       model: "Models",
+      config: "Config",
       members: "Members",
     },
     // "The inventory is proxy-wide. Only the defaults and pins below it belong
@@ -432,33 +433,17 @@ const en = {
   },
   sharedSecrets: {
     invalidName: "Name may only contain letters, numbers, and . _ -",
-    formatNative: "native (picoclaw search-provider / model key)",
-    slotWeb: "A web search provider's key",
-    slotModel: "A model's API key",
-    noRegisteredModels:
-      "{agent} has no registered models yet — register one in the Model tab first.",
+    formatNative: "native (picoclaw search-provider key)",
     injectedAs:
       "Injected as environment into every container below this scope, merged under each user's own secrets.",
-    selectModel: "Select a model.",
     valueRequired: "Enter a value.",
     howReceived: "How the agent receives it",
     howReceivedJob:
       "Environment variable, a JSON entry, a file on disk, or a slot in picoclaw's own config.",
-    whichSetting: "Which picoclaw setting",
-    whichSettingJob:
-      "The two config slots a scope admin may write. Everything else in picoclaw's config is off limits.",
     whichSearch: "Which search provider",
     whichSearchJob: "Picoclaw's web tool uses whichever provider has a key.",
     whichSearchConsequence:
       "Written into every workspace below this scope, on their next start.",
-    pickAgentFirst: "Pick a single agent above to set a model API key.",
-    whichModel: "Which model",
-    whichModelJob: "Only models registered for {agent}. A name typed by hand would be rejected.",
-    modelConsequenceBefore: "A key here ",
-    modelConsequenceBold: "overrides the one stored on the model itself",
-    modelConsequenceAfter:
-      ", for this scope only. Workspaces below this scope that resolve to a different model are skipped.",
-    selectModelOption: "Select a model…",
     nameLabel: "Name the agent will read it by",
     nameJob: "Exactly as the agent's code expects it — case and underscores included.",
     valueLabel: "Value",
@@ -474,6 +459,64 @@ const en = {
     deleteTitle: "Delete shared secret?",
     deleteMessage:
       "“{name}” will be removed. Containers below this scope restart to drop it.",
+  },
+  bulkConfig: {
+    subscriptionOnly:
+      "Bulk config editing works on one subscription at a time. Pick a subscription in the rail to see how a key varies across its members.",
+    keyLabel: "Which config.json key",
+    keyJob: "A dotted path to one value, e.g. tools.web.brave.enabled.",
+    keyPlaceholder: "tools.web.brave.enabled",
+    managedSuffix: "(owned by the proxy)",
+    managedPicked:
+      "The proxy owns this key and rewrites it on every materialization, so a bulk change here could not survive. Pick another key.",
+    inspect: "See current values",
+    inspecting: "Reading…",
+    reinspect: "Read again",
+    noInstances: "No provisioned instances of this agent in this subscription yet.",
+    distribution: "What each member holds now",
+    stateAbsent: "key not present",
+    statePathConflict: "path blocked",
+    stateUnreadable: "config unreadable",
+    excludedNote: "Excluded from a bulk change — repair these one at a time in Members.",
+    instancesCount: "{n} member(s)",
+    valueLabel: "New value",
+    valueJob: "Written as JSON: true is a boolean, \"true\" is a string.",
+    valuePlaceholder: "true",
+    valueRequired: "Enter a value.",
+    valueInvalidJson: "Not valid JSON. Quote a text value, like \"gpt-4o\".",
+    previewWillChange: "{n} will change",
+    previewAlreadyMatch: "{n} already match",
+    previewExcluded: "{n} excluded",
+    futureLabel: "Members created later",
+    futureNone: "Only the members that exist now",
+    futureNoneReach:
+      "A member created later is seeded from the agent template and gets the old value.",
+    futureSubscription: "Also this subscription's future members",
+    futureSubscriptionReach:
+      "Stored as this subscription's default and applied when a new workspace is created here. Does not touch the agent template, so no other subscription is affected.",
+    futureTemplate: "Also every future member of this agent",
+    futureTemplateReach:
+      "Writes the agent template, which seeds EVERY subscription running this agent — not only this one.",
+    scopedApplied: "Saved as this subscription's default for members created later.",
+    scopedFailed: "The subscription default was not saved:",
+    apply: "Apply to this subscription",
+    applying: "Applying…",
+    resultTitle: "What happened",
+    outcomeApplied: "changed",
+    outcomeUnchanged: "already matched",
+    outcomeStale: "skipped — changed since you read it",
+    outcomePathConflict: "skipped — path blocked",
+    outcomeUnreadable: "skipped — config unreadable",
+    outcomeError: "failed",
+    stalePrompt:
+      "Some instances changed after you read them. Read again before applying, so you are not overwriting a change you have not seen.",
+    reapplyWarning: "Written, but the proxy could not re-resolve this member's model afterwards.",
+    templateApplied: "Template updated — members created later inherit this value.",
+    templateFailed: "The instances above were changed, but the template was not:",
+    restartNote: "{n} member(s) will pick this up on restart.",
+    restartNoteNone: "Nothing changed, so no container is restarted.",
+    noticeOverride:
+      "Changed members are NOTIFIED, not restarted — a bulk change would otherwise take every one of their agents down at once. Use the scope restart action if you need an immediate bounce.",
   },
   sharedSkills: {
     newSkill: "New skill",
@@ -617,6 +660,7 @@ const pt: AdminDict = {
       skills: "Skills",
       persona: "Identidade",
       model: "Modelos",
+      config: "Configuração",
       members: "Membros",
     },
     inventoryProxyWideBefore: "O inventário é ",
@@ -966,33 +1010,17 @@ const pt: AdminDict = {
   },
   sharedSecrets: {
     invalidName: "O nome só pode conter letras, números e . _ -",
-    formatNative: "native (chave de provedor de busca / modelo do picoclaw)",
-    slotWeb: "A chave de um provedor de busca web",
-    slotModel: "A chave de API de um modelo",
-    noRegisteredModels:
-      "{agent} ainda não tem modelos registrados — registre um na aba Modelos primeiro.",
+    formatNative: "native (chave de provedor de busca do picoclaw)",
     injectedAs:
       "Injetado como ambiente em todo container abaixo deste escopo, mesclado sob os segredos de cada usuário.",
-    selectModel: "Selecione um modelo.",
     valueRequired: "Informe um valor.",
     howReceived: "Como o agente recebe",
     howReceivedJob:
       "Variável de ambiente, entrada JSON, arquivo em disco ou um slot na própria config do picoclaw.",
-    whichSetting: "Qual configuração do picoclaw",
-    whichSettingJob:
-      "Os dois slots de config que um admin de escopo pode escrever. Todo o resto da config do picoclaw é intocável.",
     whichSearch: "Qual provedor de busca",
     whichSearchJob: "A ferramenta web do picoclaw usa o provedor que tiver uma chave.",
     whichSearchConsequence:
       "Escrito em todos os workspaces abaixo deste escopo, na próxima inicialização.",
-    pickAgentFirst: "Escolha um único agente acima para definir uma chave de API de modelo.",
-    whichModel: "Qual modelo",
-    whichModelJob: "Apenas modelos registrados para {agent}. Um nome digitado à mão seria rejeitado.",
-    modelConsequenceBefore: "Uma chave aqui ",
-    modelConsequenceBold: "sobrepõe a que está guardada no próprio modelo",
-    modelConsequenceAfter:
-      ", apenas para este escopo. Workspaces abaixo deste escopo que resolvem para outro modelo são ignorados.",
-    selectModelOption: "Selecione um modelo…",
     nameLabel: "Nome pelo qual o agente vai lê-lo",
     nameJob: "Exatamente como o código do agente espera — maiúsculas e sublinhados inclusos.",
     valueLabel: "Valor",
@@ -1008,6 +1036,66 @@ const pt: AdminDict = {
     deleteTitle: "Excluir segredo compartilhado?",
     deleteMessage:
       "“{name}” será removido. Os containers abaixo deste escopo reiniciam para descartá-lo.",
+  },
+  bulkConfig: {
+    subscriptionOnly:
+      "A edição em massa de configuração atua em uma subscription por vez. Escolha uma subscription na barra para ver como uma chave varia entre os membros.",
+    keyLabel: "Qual chave do config.json",
+    keyJob: "Um caminho pontilhado até um valor, ex. tools.web.brave.enabled.",
+    keyPlaceholder: "tools.web.brave.enabled",
+    managedSuffix: "(pertence ao proxy)",
+    managedPicked:
+      "Esta chave pertence ao proxy, que a reescreve em cada materialização — uma mudança em massa aqui não sobreviveria. Escolha outra chave.",
+    inspect: "Ver valores atuais",
+    inspecting: "Lendo…",
+    reinspect: "Ler de novo",
+    noInstances: "Nenhuma instância deste agente provisionada nesta subscription ainda.",
+    distribution: "O que cada membro tem agora",
+    stateAbsent: "chave ausente",
+    statePathConflict: "caminho bloqueado",
+    stateUnreadable: "config ilegível",
+    excludedNote:
+      "Fora da mudança em massa — conserte estas uma a uma em Membros.",
+    instancesCount: "{n} membro(s)",
+    valueLabel: "Novo valor",
+    valueJob: "Escrito como JSON: true é booleano, \"true\" é texto.",
+    valuePlaceholder: "true",
+    valueRequired: "Informe um valor.",
+    valueInvalidJson: "JSON inválido. Coloque texto entre aspas, como \"gpt-4o\".",
+    previewWillChange: "{n} vão mudar",
+    previewAlreadyMatch: "{n} já estão iguais",
+    previewExcluded: "{n} fora",
+    futureLabel: "Membros criados depois",
+    futureNone: "Só os membros que já existem",
+    futureNoneReach:
+      "Um membro criado depois nasce do template do agente e recebe o valor antigo.",
+    futureSubscription: "Também os membros futuros desta subscription",
+    futureSubscriptionReach:
+      "Guardado como padrão desta subscription e aplicado quando um workspace novo é criado aqui. Não toca o template do agente, então nenhuma outra subscription é afetada.",
+    futureTemplate: "Também todo membro futuro deste agente",
+    futureTemplateReach:
+      "Escreve o template do agente, que semeia TODAS as subscriptions que rodam este agente — não só esta.",
+    scopedApplied: "Salvo como padrão desta subscription para membros criados depois.",
+    scopedFailed: "O padrão da subscription não foi salvo:",
+    apply: "Aplicar nesta subscription",
+    applying: "Aplicando…",
+    resultTitle: "O que aconteceu",
+    outcomeApplied: "alterados",
+    outcomeUnchanged: "já estavam iguais",
+    outcomeStale: "ignorados — mudaram depois da leitura",
+    outcomePathConflict: "ignorados — caminho bloqueado",
+    outcomeUnreadable: "ignorados — config ilegível",
+    outcomeError: "falharam",
+    stalePrompt:
+      "Algumas instâncias mudaram depois de você ler. Leia de novo antes de aplicar, para não sobrescrever uma mudança que você não viu.",
+    reapplyWarning:
+      "Gravado, mas o proxy não conseguiu re-resolver o modelo deste membro depois.",
+    templateApplied: "Template atualizado — membros criados depois herdam este valor.",
+    templateFailed: "As instâncias acima foram alteradas, mas o template não:",
+    restartNote: "{n} membro(s) vão pegar isso ao reiniciar.",
+    restartNoteNone: "Nada mudou, então nenhum container é reiniciado.",
+    noticeOverride:
+      "Os membros alterados são AVISADOS, não reiniciados — uma mudança em massa derrubaria o agente de todos eles de uma vez. Use o restart por escopo se precisar de reinício imediato.",
   },
   sharedSkills: {
     newSkill: "Nova skill",
