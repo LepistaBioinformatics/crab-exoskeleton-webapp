@@ -20,3 +20,19 @@ All spec-driven development (SDD / `tlc-spec-driven`) artifacts live under
   matching `.specs/features/<feature>/` folder instead.
 
 `.specs/` is the default and only location for these documents.
+
+## Calling mycelium
+
+**Always JSON-RPC.** The monorepo rule is canonical — see
+`zombie-crab-project/.claude/CLAUDE.md`, "Calling mycelium". It is restated here
+because every mycelium call in the stack is made from this repo.
+
+In practice, in this codebase:
+
+- Use `myceliumRpc(method, params, token)` from `lib/mycelium.ts`, which POSTs
+  `{jsonrpc: "2.0", method, params, id}` to `/_adm/rpc`. Never add a new call to
+  mycelium's REST surface (`/_adm/beginners/...`, `/alpha/v1/...` on the gateway).
+- `fetchMycelium()` stays REST **only** for the pre-session magic-link endpoints,
+  which have no token to authenticate an RPC call with.
+- Routing through **crab-shell-proxy** (`/{agent}/v1/...`, `/alpha/v1/admin/...`)
+  is the proxy's own HTTP API, not mycelium. This rule does not apply to it.

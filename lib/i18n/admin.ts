@@ -265,6 +265,22 @@ const en = {
     invited: "Invited {email} to {agent} ({level}).",
     alreadyInvited: "{email} already had this access.",
     failed: "Could not send the invitation.",
+    actionAria: "What to do",
+    actionInvite: "Invite",
+    actionUninvite: "Uninvite",
+    uninviteTitle: "Remove someone's access",
+    // "{agent}" is the agent identifier, which is never translated.
+    noRoleUninvite:
+      "This deployment declares no guest role for {agent}, so there is nothing to remove here.",
+    uninviteSubmit: "Remove invitation",
+    uninviting: "Removing…",
+    uninvited: "Removed {email}'s access to {agent} ({level}).",
+    uninviteFailed: "Could not remove the invitation.",
+    uninviteConfirmTitle: "Remove this invitation?",
+    uninviteConfirmMessage: "{email} will lose {level} access to {agent}.",
+    uninviteConfirmDetail:
+      "Their workspace and files are kept — deleting those is a separate action in the list below.",
+    uninviteConfirm: "Remove",
   },
   roster: {
     notYetActive: "not yet active",
@@ -807,6 +823,22 @@ const pt: AdminDict = {
     invited: "{email} convidado para {agent} ({level}).",
     alreadyInvited: "{email} já tinha este acesso.",
     failed: "Não foi possível enviar o convite.",
+    actionAria: "O que fazer",
+    actionInvite: "Convidar",
+    actionUninvite: "Desconvidar",
+    uninviteTitle: "Remover o acesso de alguém",
+    // "{agent}" é o identificador do agente, que nunca é traduzido.
+    noRoleUninvite:
+      "Esta instalação não declara nenhum guest role para {agent}, então não há nada a remover aqui.",
+    uninviteSubmit: "Remover convite",
+    uninviting: "Removendo…",
+    uninvited: "Acesso de {email} a {agent} ({level}) removido.",
+    uninviteFailed: "Não foi possível remover o convite.",
+    uninviteConfirmTitle: "Remover este convite?",
+    uninviteConfirmMessage: "{email} perderá o acesso de {level} a {agent}.",
+    uninviteConfirmDetail:
+      "O espaço de trabalho e os arquivos são mantidos — excluí-los é uma ação separada na lista abaixo.",
+    uninviteConfirm: "Remover",
   },
   roster: {
     notYetActive: "ainda não ativo",

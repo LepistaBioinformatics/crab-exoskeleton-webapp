@@ -32,12 +32,52 @@ export interface GuestRole {
 // Accept both, and never touch the raw value directly.
 export type MyceliumEmail = string | { username?: string; domain?: string };
 
+// Mycelium's `Parent<T, Id>` is an EXTERNALLY TAGGED enum -- plain `Serialize`
+// derive plus `rename_all = "camelCase"`, no `untagged` (lib/base parent.rs) --
+// so the variant name is a wrapper key, not a flat object:
+//
+//   "guestRole": { "record": { "id": …, "name": "alpha", "permission": "write" } }
+//   "guestRole": { "id": "<uuid>" }
+//
+// On `listGuestOnSubscriptionAccount` only `record` occurs: the repository
+// inner-joins guest_role and hard-codes `Some(role)`, and guest_role_id is NOT
+// NULL. Reading the flat `{id, name}` shape the reference TS types describe found
+// neither field, so every roster label came out "unknown" -- which
+// parseRoleLabel rejects, which is what hid the revoke button. The id-only and
+// legacy shapes stay accepted; each costs one line.
+export type GuestRoleRef =
+  | string
+  | { record?: GuestRole | null }
+  | { id?: string | null; name?: string }
+  | null;
+
 export interface GuestUser {
   id?: string | null;
   email: MyceliumEmail;
-  guestRole?: { id?: string | null; name?: string } | string | null;
+  guestRole?: GuestRoleRef;
   created?: string;
   wasVerified?: boolean;
+}
+
+// The role a guest row carries inside its own payload. Preferred over a lookup in
+// the tenant's role list, because that list can legitimately fail to contain a
+// role the guest plainly holds: `guestRoles.list` is refused to a TenantManager
+// profile, and mycelium truncates it at its default page size.
+export function embeddedRole(ref: GuestRoleRef | undefined): GuestRole | null {
+  if (!ref || typeof ref !== "object" || !("record" in ref)) return null;
+  const record = ref.record;
+  return record && typeof record.name === "string" ? record : null;
+}
+
+// The role id a reference points at, whichever shape carried it. Null for a
+// missing one -- never the empty string: matching on that would pair the guest
+// with the first role that also has no id, an unrelated agent and permission.
+export function roleRefId(ref: GuestRoleRef | undefined): string | null {
+  if (typeof ref === "string") return ref.trim() || null;
+  const embedded = embeddedRole(ref);
+  if (embedded?.id) return embedded.id;
+  if (!ref || typeof ref !== "object" || !("id" in ref)) return null;
+  return typeof ref.id === "string" && ref.id.trim() ? ref.id : null;
 }
 
 // emailText renders either shape as the address a human reads. An unusable
@@ -95,6 +135,25 @@ export function availableLevels(roles: GuestRole[], agentKey: string): AccessLev
   );
 }
 
+// One role a person holds, carrying the id the revoke call needs alongside the
+// text the badge shows.
+//
+// The id travels with the grant rather than being recovered from `label` later.
+// Parsing a rendered string back into (agent, level) and re-resolving it against
+// the tenant role list only works while the label was BUILT from that same list —
+// and it no longer always is, because a guest row's own embedded role is the
+// better source (see roleLabel). A round-trip that silently fails to re-resolve
+// would render a revoke button that does nothing when clicked.
+export interface RoleGrant {
+  // e.g. "alpha (write)", or a bare agent key when the level is unknown.
+  label: string;
+  // The mycelium guest role id, straight from the guest row. Null for a row that
+  // came from the workspace feed alone: there is no guest record to revoke.
+  roleId: string | null;
+  agentKey: string;
+  level: AccessLevel | null;
+}
+
 export interface RosterEntry {
   email: string;
   // Whether mycelium has verified the invitation. An unverified guest has been
@@ -102,7 +161,7 @@ export interface RosterEntry {
   // never used the agent" (see `active`).
   verified?: boolean;
   // The agent roles this person is guested with, e.g. ["alpha (write)"].
-  roles: string[];
+  roles: RoleGrant[];
   // True once they have a workspace on disk — i.e. they have actually used the
   // agent. A guest who has never chatted is invited but not yet active.
   active: boolean;
@@ -110,17 +169,27 @@ export interface RosterEntry {
   invitedAt?: string;
 }
 
-function roleLabel(guest: GuestUser, roles: GuestRole[]): string {
+// The name a legacy id-and-name reference carries. Never consulted when a full
+// record is present — that record's own name wins.
+function roleRefName(ref: GuestRoleRef | undefined): string | undefined {
+  if (!ref || typeof ref !== "object" || !("name" in ref)) return undefined;
+  return typeof ref.name === "string" && ref.name ? ref.name : undefined;
+}
+
+function roleGrant(guest: GuestUser, roles: GuestRole[]): RoleGrant {
   const gr = guest.guestRole;
-  const rawId = typeof gr === "string" ? gr : gr?.id;
-  const id = typeof rawId === "string" && rawId ? rawId : null;
-  const named = typeof gr === "object" && gr?.name ? gr.name : undefined;
-  // Only look up a real id. Matching on a missing one would pair this guest with
-  // the first role that also has no id — an unrelated agent and permission.
-  const found = id ? roles.find((r) => r.id === id) : undefined;
-  const name = found?.name ?? named ?? "unknown";
+  const roleId = roleRefId(gr);
+  // The guest row already inlines its whole role, so prefer that; the tenant role
+  // list is only a fallback for the shapes that carry an id alone.
+  const found = embeddedRole(gr) ?? (roleId ? roles.find((r) => r.id === roleId) : undefined);
+  const agentKey = found?.name ?? roleRefName(gr) ?? "unknown";
   const level = found ? permissionLevel(found.permission) : null;
-  return level ? `${name} (${level})` : name;
+  return {
+    label: level ? `${agentKey} (${level})` : agentKey,
+    roleId,
+    agentKey,
+    level,
+  };
 }
 
 // One roster from two feeds that answer different questions: the guest list is
@@ -140,8 +209,8 @@ export function mergeRoster(guests: GuestUser[], users: UserRef[], roles: GuestR
     if (!address) continue;
     const key = address.toLowerCase();
     const entry = byEmail.get(key) ?? { email: address, roles: [], active: false };
-    const label = roleLabel(g, roles);
-    if (!entry.roles.includes(label)) entry.roles.push(label);
+    const grant = roleGrant(g, roles);
+    if (!entry.roles.some((r) => r.label === grant.label)) entry.roles.push(grant);
     if (g.created && !entry.invitedAt) entry.invitedAt = g.created;
     // Any verified grant makes the person verified; several rows for one email
     // are separate role grants, not separate people.
@@ -163,7 +232,11 @@ export function mergeRoster(guests: GuestUser[], users: UserRef[], roles: GuestR
     entry.active = true;
     entry.accId = u.accId;
     const role = u.role;
-    if (role && !entry.roles.some((r) => r.startsWith(role))) entry.roles.push(role);
+    // No roleId: the workspace feed records which agent a workspace belongs to,
+    // not which guest grant produced it, so this row cannot be revoked.
+    if (role && !entry.roles.some((r) => r.label.startsWith(role))) {
+      entry.roles.push({ label: role, roleId: null, agentKey: role, level: null });
+    }
     byEmail.set(key || u.accId, entry);
   }
 

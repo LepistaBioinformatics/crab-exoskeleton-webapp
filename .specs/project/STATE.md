@@ -4,6 +4,25 @@ Persistent memory across sessions. Last updated: 2026-07-20.
 
 ## Completed this session
 
+- **Subscription uninvite** — `features/subscription-uninvite`. The Members invite panel
+  gained an Invite/Uninvite toggle over the same three fields, calling the DELETE route
+  that already existed. Both verbs were already JSON-RPC; nothing moved off REST. The
+  reason the operator had *no* uninvite affordance was a wire-shape bug:
+  mycelium's `Parent<T,Id>` is **externally tagged** (`{"record": {...}}`), the webapp
+  read it flat, so every roster label resolved to `"unknown"`, `parseRoleLabel` rejected
+  it and the per-row revoke icon never rendered. `lib/invitations.ts` now reads the
+  embedded record and prefers it over the tenant role list — which is also more robust,
+  since `guestRoles.list` is refused to a TenantManager profile and truncates at
+  mycelium's default page size of 10 (`/api/invitations/roles` now sends an explicit
+  `pageSize`). Guest roles are global, not tenant-scoped.
+
+  Preferring the embedded record forced a second change: `RosterEntry.roles` is now
+  `RoleGrant[]` carrying the `roleId`, and `parseRoleLabel` is gone. Recovering
+  `(agent, level)` from the badge text and re-resolving it was safe only while the label
+  came from the same `roles` array; once it can come from the guest row instead, a role
+  absent from that array still renders a button that re-resolves to null and silently
+  does nothing. Revoke now uses the id mycelium put on the grant.
+
 - **Tenant brand avatar in sidebar** — `app/chat/workspace-nav.tsx` +
   `components/ui/avatar.tsx` (+ test). The tenant brand logo (mycelium tag
   `value:"brand"`, `meta.base64Logo`) shows as a small rounded-square avatar

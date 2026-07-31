@@ -1,15 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
   availableLevels,
+  embeddedRole,
   emailText,
   isValidEmail,
   mergeRoster,
   permissionLevel,
   resolveRoleId,
+  roleRefId,
   type GuestRole,
   type GuestUser,
 } from "./invitations";
 import type { UserRef } from "./admin";
+
+// Roster rows carry a grant per role now; most assertions only care about the
+// text, so read it through one helper rather than restating the shape.
+const labels = (entry: { roles: { label: string }[] }) => entry.roles.map((r) => r.label);
 
 // A tenant whose gateway config declares alpha read+write and beta read only —
 // the shape a real deployment produces, including the asymmetry.
@@ -109,7 +115,7 @@ describe("mergeRoster", () => {
     const roster = mergeRoster([guest("new@x.com", "r-alpha-write")], [], ROLES);
     expect(roster).toHaveLength(1);
     expect(roster[0].active).toBe(false);
-    expect(roster[0].roles).toEqual(["alpha (write)"]);
+    expect(labels(roster[0])).toEqual(["alpha (write)"]);
   });
 
   it("merges a guest and their workspace into one entry", () => {
@@ -149,7 +155,7 @@ describe("mergeRoster", () => {
       { id: "r-alpha-write", name: "alpha", slug: "alpha", permission: 1 },
     ];
     const roster = mergeRoster([{ email: "x@x.com", guestRole: { id: null } }], [], roles);
-    expect(roster[0].roles).toEqual(["unknown"]);
+    expect(labels(roster[0])).toEqual(["unknown"]);
   });
 
   it("carries the verification state through", () => {
@@ -212,7 +218,7 @@ describe("mergeRoster", () => {
       ROLES,
     );
     expect(roster).toHaveLength(1);
-    expect(roster[0].roles).toEqual(["alpha (write)", "beta (read)"]);
+    expect(labels(roster[0])).toEqual(["alpha (write)", "beta (read)"]);
   });
 
   it("sorts by email so the list does not reshuffle between loads", () => {
@@ -222,6 +228,73 @@ describe("mergeRoster", () => {
       ROLES,
     );
     expect(roster.map((r) => r.email)).toEqual(["amy@x.com", "zoe@x.com"]);
+  });
+});
+
+// The shape `listGuestOnSubscriptionAccount` actually returns. `Parent<T, Id>` is
+// an externally tagged enum, so the role arrives wrapped under its variant name —
+// NOT as the flat {id, name} the reference TS types describe. Reading it flat
+// yielded no name and no permission, every label came out "unknown", and because
+// members-panel derives the revoke button from that label, the whole uninvite
+// affordance disappeared. A silent wire-shape mismatch is exactly the failure
+// these assertions exist to catch.
+describe("guestRole wire shapes", () => {
+  const record = (id: string, name: string, permission: number | string): GuestUser => ({
+    email: "wire@x.com",
+    guestRole: { record: { id, name, slug: name, permission } },
+  });
+
+  it("reads the embedded record mycelium actually sends", () => {
+    expect(embeddedRole({ record: { id: "r", name: "alpha", slug: "alpha", permission: 1 } })?.name)
+      .toBe("alpha");
+    expect(roleRefId({ record: { id: "r-1", name: "alpha", slug: "alpha", permission: 1 } }))
+      .toBe("r-1");
+  });
+
+  it("labels a guest from its own payload, with no roles list at all", () => {
+    // A TenantManager profile can list guests but is refused by guestRoles.list,
+    // and that list truncates at mycelium's default page size — so the label must
+    // not depend on cross-referencing it.
+    const roster = mergeRoster([record("r-x", "alpha", "write")], [], []);
+    expect(labels(roster[0])).toEqual(["alpha (write)"]);
+  });
+
+  it("carries the role id on the grant, so revoking never re-parses the label", () => {
+    // The revoke button used to recover (agent, level) from the badge text and
+    // re-resolve it against the tenant roles list. That only worked while the
+    // label had been BUILT from that list. Now that a guest's own embedded record
+    // wins, a role absent from `roles` would re-resolve to null and the button
+    // would silently do nothing. The id has to travel with the grant.
+    const [entry] = mergeRoster([record("r-embedded", "Analyst", "write")], [], []);
+    expect(entry.roles[0].roleId).toBe("r-embedded");
+    expect(entry.roles[0].agentKey).toBe("Analyst");
+    expect(entry.roles[0].level).toBe("write");
+  });
+
+  it("gives a workspace-only row no role id, because there is nothing to revoke", () => {
+    const [entry] = mergeRoster([], [{ accId: "acc-1", email: "solo@x.com", role: "alpha" }], ROLES);
+    expect(entry.roles[0].roleId).toBeNull();
+    expect(entry.roles[0].level).toBeNull();
+  });
+
+  it("accepts the numeric permission form in the embedded record too", () => {
+    const roster = mergeRoster([record("r-y", "beta", 0)], [], ROLES);
+    expect(labels(roster[0])).toEqual(["beta (read)"]);
+  });
+
+  it("still reads the other Parent variant and the legacy shapes", () => {
+    expect(roleRefId({ id: "r-alpha-write" })).toBe("r-alpha-write");
+    expect(roleRefId("r-alpha-write")).toBe("r-alpha-write");
+    expect(labels(mergeRoster([{ email: "a@x.com", guestRole: "r-alpha-write" }], [], ROLES)[0]))
+      .toEqual(["alpha (write)"]);
+  });
+
+  it("returns null rather than a guess for a record it cannot read", () => {
+    expect(embeddedRole({ record: null })).toBeNull();
+    expect(embeddedRole({ id: "r-1" })).toBeNull();
+    expect(embeddedRole(undefined)).toBeNull();
+    expect(roleRefId({ record: null })).toBeNull();
+    expect(roleRefId({ id: "   " })).toBeNull();
   });
 });
 
