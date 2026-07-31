@@ -31,7 +31,7 @@ import {
 // A message isn't POSTed the instant you hit send: it joins a burst and, after
 // this long with no further typing/sending, the whole burst flushes as ONE
 // turn. Typing again re-arms the timer.
-export const SEND_DEBOUNCE_MS = 3000;
+export const SEND_DEBOUNCE_MS = 500;
 
 // Sending retries on transport / gateway failure (fetch throws or a 5xx) with
 // exponential backoff. A 4xx (auth/validation) is terminal and never retried.

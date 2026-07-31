@@ -308,7 +308,7 @@ The debounce stays exactly as designed (DEC-2, FR-3.3) — the only change is th
 `enqueue` no longer refuses while busy.
 
 ```
-enqueue(text)             → push to pending[sid]; arm 3s debounce   (FR-3.1)
+enqueue(text)             → push to pending[sid]; arm 500ms debounce (FR-3.1)
 debounce fires            → pending.join("\n\n") → push to queue[]; clear pending
 queue non-empty && idle   → shift one, run it                        (FR-3.2)
 turn completes            → status = idle → drains the next          (FR-3.2)

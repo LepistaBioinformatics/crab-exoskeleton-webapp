@@ -67,7 +67,7 @@ reset unconditionally on every conversation switch (`chat-view.tsx:245`).
 | ID | Decision | Rejected alternative and why |
 |---|---|---|
 | **DEC-1** | Intermediate text comes from **real picoclaw frames**, forwarded by the proxy. | Frontend-only mocked filler: it is theatre — it cannot say *what* the agent is doing and it keeps reassuring the user when a turn has actually hung. |
-| **DEC-2** | **Burst merges, bursts queue.** The existing 3s debounce keeps its meaning *within* a typing burst — messages sent within the window still merge into one turn (today's `\n\n` join). *Across* bursts, each burst becomes its own turn, fired sequentially. | (a) Every send its own turn with no debounce: a user reformulating in three quick messages would trigger three turns and three replies. (b) Merging everything queued during a turn into one next turn: distinct questions asked minutes apart would reach the agent as a single blob. |
+| **DEC-2** | **Burst merges, bursts queue.** The send debounce keeps its meaning *within* a typing burst — messages sent within the window still merge into one turn (today's `\n\n` join). *Across* bursts, each burst becomes its own turn, fired sequentially. | (a) Every send its own turn with no debounce: a user reformulating in three quick messages would trigger three turns and three replies. (b) Merging everything queued during a turn into one next turn: distinct questions asked minutes apart would reach the agent as a single blob. |
 | **DEC-3** | In-flight state survives **conversation switch and workspace switch**, in module scope. Not page reload. | Reload survival needs a durable proxy-side "turn in flight" endpoint + polling; deferred (see Out of scope). |
 | **DEC-4** | The typewriter reveals at a **constant readable pace, always**, whatever the arrival shape. | Pacing only large blocks: rhythm would vary turn to turn, and the same reply would feel different depending on network timing. |
 
@@ -171,7 +171,7 @@ reset unconditionally on every conversation switch (`chat-view.tsx:245`).
   never blocks on `sending`.
 - **FR-3.2** Each typing burst becomes one turn. Bursts fire as separate turns,
   strictly one at a time per conversation, in submission order (DEC-2).
-- **FR-3.3** The existing 3s debounce keeps its current meaning *within* a
+- **FR-3.3** The send debounce (500ms) keeps its current meaning *within* a
   burst: messages sent within the window still merge into one turn via the
   current `\n\n` join. What changes is only that the debounce may now re-arm
   while a previous turn is still running — today it cannot, because `enqueue`
