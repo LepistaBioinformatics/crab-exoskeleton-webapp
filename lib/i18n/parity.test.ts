@@ -57,6 +57,11 @@ const SHARED = new Set([
   "landing.thought.index",
   "landing.memory.index",
   "landing.memory.filterHint",
+  "landing.graph.index",
+  // The entity in the knowledge-graph figure is a product name, so it is the same in
+  // both locales. Its TYPE ("project"/"projeto") is translated, which is what proves
+  // the figure is localised rather than just left in English.
+  "landing.graph.entity",
   "landing.isolation.index",
   "landing.defense.index",
   "landing.hierarchy.index",

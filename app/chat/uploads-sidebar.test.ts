@@ -76,3 +76,51 @@ describe("allFolderPaths", () => {
     expect(allFolderPaths(buildFileTree([file("a.txt")]))).toEqual([]);
   });
 });
+
+// An EMPTY folder is listed in its own right (the proxy marks it isDir), because a tree
+// derived only from file-path prefixes cannot show one — and a member who created a
+// folder then saw no row, and no drop target to put a file into.
+describe("buildFileTree with explicit folders", () => {
+  it("shows a folder that contains nothing", () => {
+    const tree = buildFileTree([{ path: "uploads/empty", name: "empty", isDir: true }]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0].kind).toBe("dir");
+    expect(tree[0].leaf).toBe("empty");
+    if (tree[0].kind === "dir") expect(tree[0].children).toEqual([]);
+  });
+
+  it("creates the whole chain for a nested empty folder", () => {
+    const tree = buildFileTree([
+      { path: "uploads/a/b/c", name: "a/b/c", isDir: true },
+    ]);
+    expect(tree[0].kind).toBe("dir");
+    expect(tree[0].leaf).toBe("a");
+    const a = tree[0];
+    if (a.kind !== "dir") throw new Error("expected a dir");
+    expect(a.children[0].leaf).toBe("b");
+  });
+
+  // A folder is a branch, never a row of its own inside itself.
+  it("never turns a folder entry into a file node", () => {
+    const tree = buildFileTree([
+      { path: "uploads/reports", name: "reports", isDir: true },
+      { path: "uploads/reports/q1.pdf", name: "reports/q1.pdf" },
+    ]);
+    expect(tree).toHaveLength(1);
+    const dir = tree[0];
+    if (dir.kind !== "dir") throw new Error("expected a dir");
+    expect(dir.children).toHaveLength(1);
+    expect(dir.children[0].kind).toBe("file");
+  });
+
+  // The listing carries a folder AND is a prefix of its files; the node must be reused,
+  // not duplicated.
+  it("does not duplicate a folder that also holds files", () => {
+    const tree = buildFileTree([
+      { path: "uploads/reports/q1.pdf", name: "reports/q1.pdf" },
+      { path: "uploads/reports", name: "reports", isDir: true },
+      { path: "uploads/reports/2026", name: "reports/2026", isDir: true },
+    ]);
+    expect(tree.filter((n) => n.leaf === "reports")).toHaveLength(1);
+  });
+});

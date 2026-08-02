@@ -17,6 +17,7 @@ import {
   ComponentLegend,
   HierarchyTree,
   MemoryMock,
+  GraphMock,
   FilesMock,
   TemplatesMock,
   NextIcon,
@@ -85,10 +86,13 @@ export default function Landing() {
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const items = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const items = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-reveal]"),
+    );
     const vh = window.innerHeight;
     for (const el of items) {
-      if (el.getBoundingClientRect().top < vh * 0.9) el.classList.add(styles.in);
+      if (el.getBoundingClientRect().top < vh * 0.9)
+        el.classList.add(styles.in);
     }
     root.classList.add(styles.js);
 
@@ -103,7 +107,8 @@ export default function Landing() {
       },
       { threshold: 0.15 },
     );
-    for (const el of items) if (!el.classList.contains(styles.in)) io.observe(el);
+    for (const el of items)
+      if (!el.classList.contains(styles.in)) io.observe(el);
     return () => io.disconnect();
   }, [locale]);
 
@@ -117,7 +122,11 @@ export default function Landing() {
           <BrandName />
         </span>
         <div className={styles.topActions}>
-          <div className={styles.langWrap} role="group" aria-label={t.top.language}>
+          <div
+            className={styles.langWrap}
+            role="group"
+            aria-label={t.top.language}
+          >
             {LOCALES.map((l) => (
               <button
                 key={l}
@@ -145,7 +154,10 @@ export default function Landing() {
             <h1 className={styles.heroTitle}>{t.hero.title}</h1>
             <p className={styles.heroLead}>{t.hero.lead}</p>
             <div className={styles.heroCtas}>
-              <Link href="/signin" className={`${styles.enter} ${styles.enterLg}`}>
+              <Link
+                href="/signin"
+                className={`${styles.enter} ${styles.enterLg}`}
+              >
                 {t.hero.cta}
               </Link>
               <a
@@ -171,7 +183,8 @@ export default function Landing() {
           <div className={`${styles.grid} ${styles.gridWide}`}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.thought.index}</span> {t.thought.eyebrow}
+                <span className={styles.idx}>{t.thought.index}</span>{" "}
+                {t.thought.eyebrow}
               </span>
               <h2 className={styles.title}>{t.thought.title}</h2>
               <p className={styles.body}>{t.thought.body}</p>
@@ -180,12 +193,16 @@ export default function Landing() {
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
                 <CanvasMini label={t.diagrams.canvas} />
-                <div className={styles.panelCaption}>{t.thought.canvasCaption}</div>
+                <div className={styles.panelCaption}>
+                  {t.thought.canvasCaption}
+                </div>
               </div>
               <div style={{ height: "1rem" }} />
               <div className={styles.panel}>
                 <TreeMini label={t.diagrams.tree} />
-                <div className={styles.panelCaption}>{t.thought.treeCaption}</div>
+                <div className={styles.panelCaption}>
+                  {t.thought.treeCaption}
+                </div>
               </div>
             </div>
           </div>
@@ -196,26 +213,60 @@ export default function Landing() {
           <div className={`${styles.grid} ${styles.flip}`}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.memory.index}</span> {t.memory.eyebrow}
+                <span className={styles.idx}>{t.memory.index}</span>{" "}
+                {t.memory.eyebrow}
               </span>
               <h2 className={styles.title}>{t.memory.title}</h2>
               <p className={styles.body}>{t.memory.body}</p>
-              <NextNudge href="#s3" label={t.memory.next} />
+              <NextNudge href="#s4" label={t.memory.next} />
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <MemoryMock dict={t.memory} samples={t.diagrams.sampleConversations} />
+                <MemoryMock
+                  dict={t.memory}
+                  samples={t.diagrams.sampleConversations}
+                />
               </div>
             </div>
           </div>
         </section>
 
-        {/* 03 — isolation & secrets */}
+        {/* 03 — the knowledge graph. Sits next to 02 because both are memory: that one
+            is about organising CONVERSATIONS, this one about what the agent learns on
+            its own. Every claim is narrowed on purpose — see
+            .specs/features/landing-refresh-memory-graph/spec.md, especially that the
+            search is lexical and there is no network diagram to show. */}
         <section className={styles.section} id="s3">
           <div className={styles.grid}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.isolation.index}</span> {t.isolation.eyebrow}
+                <span className={styles.idx}>{t.graph.index}</span>{" "}
+                {t.graph.eyebrow}
+              </span>
+              <h2 className={styles.title}>{t.graph.title}</h2>
+              <p className={styles.body}>{t.graph.body}</p>
+              <ul className={styles.points}>
+                {t.graph.points.map((pt) => (
+                  <li key={pt}>{pt}</li>
+                ))}
+              </ul>
+              <NextNudge href="#s4" label={t.graph.next} />
+            </div>
+            <div className={styles.artCol} data-reveal>
+              <div className={styles.panel}>
+                <GraphMock dict={t.graph} label={t.diagrams.graph} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 04 — isolation & secrets */}
+        <section className={styles.section} id="s4">
+          <div className={styles.grid}>
+            <div className={styles.copyCol} data-reveal>
+              <span className={styles.eyebrow}>
+                <span className={styles.idx}>{t.isolation.index}</span>{" "}
+                {t.isolation.eyebrow}
               </span>
               <h2 className={styles.title}>{t.isolation.title}</h2>
               <p className={styles.body}>{t.isolation.body}</p>
@@ -224,7 +275,7 @@ export default function Landing() {
                   <li key={p}>{p}</li>
                 ))}
               </ul>
-              <NextNudge href="#s4" label={t.isolation.next} />
+              <NextNudge href="#s5" label={t.isolation.next} />
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
@@ -235,19 +286,23 @@ export default function Landing() {
         </section>
 
         {/* 04 — defense in depth (component map) */}
-        <section className={styles.section} id="s4">
+        <section className={styles.section} id="s5">
           <div className={`${styles.grid} ${styles.flip}`}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.defense.index}</span> {t.defense.eyebrow}
+                <span className={styles.idx}>{t.defense.index}</span>{" "}
+                {t.defense.eyebrow}
               </span>
               <h2 className={styles.title}>{t.defense.title}</h2>
               <p className={styles.body}>{t.defense.body}</p>
-              <NextNudge href="#s5" label={t.defense.next} />
+              <NextNudge href="#s6" label={t.defense.next} />
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
-                <ComponentMap doorLabel={t.defense.doorLabel} label={t.diagrams.map} />
+                <ComponentMap
+                  doorLabel={t.defense.doorLabel}
+                  label={t.diagrams.map}
+                />
                 <ComponentLegend groups={t.defense.groups} />
                 <div className={styles.panelCaption}>{t.defense.caption}</div>
               </div>
@@ -256,15 +311,16 @@ export default function Landing() {
         </section>
 
         {/* 05 — hierarchy */}
-        <section className={styles.section} id="s5">
+        <section className={styles.section} id="s6">
           <div className={styles.grid}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.hierarchy.index}</span> {t.hierarchy.eyebrow}
+                <span className={styles.idx}>{t.hierarchy.index}</span>{" "}
+                {t.hierarchy.eyebrow}
               </span>
               <h2 className={styles.title}>{t.hierarchy.title}</h2>
               <p className={styles.body}>{t.hierarchy.body}</p>
-              <NextNudge href="#s6" label={t.hierarchy.next} />
+              <NextNudge href="#s7" label={t.hierarchy.next} />
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
@@ -275,11 +331,12 @@ export default function Landing() {
         </section>
 
         {/* 06 — agent templates */}
-        <section className={styles.section} id="s6">
+        <section className={styles.section} id="s7">
           <div className={`${styles.grid} ${styles.flip}`}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.templates.index}</span> {t.templates.eyebrow}
+                <span className={styles.idx}>{t.templates.index}</span>{" "}
+                {t.templates.eyebrow}
               </span>
               <h2 className={styles.title}>{t.templates.title}</h2>
               <p className={styles.body}>{t.templates.body}</p>
@@ -288,7 +345,7 @@ export default function Landing() {
                   <li key={p}>{p}</li>
                 ))}
               </ul>
-              <NextNudge href="#s7" label={t.templates.next} />
+              <NextNudge href="#s8" label={t.templates.next} />
             </div>
             <div className={styles.artCol} data-reveal>
               <div className={styles.panel}>
@@ -299,11 +356,12 @@ export default function Landing() {
         </section>
 
         {/* 07 — files */}
-        <section className={styles.section} id="s7">
+        <section className={styles.section} id="s8">
           <div className={styles.grid}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
-                <span className={styles.idx}>{t.files.index}</span> {t.files.eyebrow}
+                <span className={styles.idx}>{t.files.index}</span>{" "}
+                {t.files.eyebrow}
               </span>
               <h2 className={styles.title}>{t.files.title}</h2>
               <p className={styles.body}>{t.files.body}</p>
@@ -334,8 +392,15 @@ export default function Landing() {
 
       {/* Lepista Brand Bar (Shadow-DOM web component) — landing only, pinned to
           the very bottom as a footer. Its locale follows the page's. */}
-      <Script src="https://lepista.com.br/embed/lbl-bar.v1.js" strategy="afterInteractive" />
-      <lbl-brand-bar ref={barRef} className={styles.brandBarFooter} style={{ minHeight: "48px" }} />
+      <Script
+        src="https://lepista.com.br/embed/lbl-bar.v1.js"
+        strategy="afterInteractive"
+      />
+      <lbl-brand-bar
+        ref={barRef}
+        className={styles.brandBarFooter}
+        style={{ minHeight: "48px" }}
+      />
     </div>
   );
 }

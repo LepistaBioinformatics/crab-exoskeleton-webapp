@@ -840,6 +840,7 @@ export default function ChatView({
         onClose={() => setSecretsOpen(false)}
         onRestartNeeded={onRestartNeeded}
       />
+
     </div>
   );
 }

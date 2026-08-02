@@ -35,10 +35,33 @@ const en = {
     body: "Give any conversation an alias, tag it, and pick a color. Later, filter your whole history by tag, alias, text, or date. A mini-tag opens on hover to show what's inside — nothing important gets lost in the scroll.",
     filterHint: "tag:   alias:   text:   date:",
     tagExamples: ["research", "urgent", "draft"],
+    next: "But what does it remember about your work?",
+  },
+  graph: {
+    index: "03",
+    eyebrow: "What it learns on its own",
+    // Every claim here is deliberately narrow — see
+    // .specs/features/landing-refresh-memory-graph/spec.md. It is a browsable
+    // record, not a network diagram; the search ranks text, it does not understand
+    // meaning; and the graph belongs to one member and one agent.
+    title: "It remembers the things, not just the words.",
+    body: "As you talk, your agent records what matters — people, projects, systems, and how they connect — into a knowledge graph it keeps for you. Not a transcript it re-reads: named things it can look up. You can open that graph, browse it by type, search it, and see which conversation each fact came out of when it can be traced.",
+    entity: "Zombie Crab",
+    entityType: "project",
+    observation: "Runs DeepSeek on the alpha instance",
+    relationVerb: "depends on",
+    relationTo: "Mycelium gateway",
+    sourceLabel: "from",
+    sourceChat: "Stack review",
+    points: [
+      "Served by an MCP server inside the gateway — no extra container, no external service, nothing to download.",
+      "Yours alone: one graph per member, per agent. Nothing is pooled.",
+      "Read-only for you: the agent writes it, you audit it.",
+    ],
     next: "So who gets to see any of this?",
   },
   isolation: {
-    index: "03",
+    index: "04",
     eyebrow: "Isolation & secrets",
     title: "A real agent of your own, walled off by the kernel.",
     body: "Every user gets a private agent in its own container — separate volume, non-root, no shared surface. Isolation between users' agents is enforced by the Linux kernel, not by application filters.",
@@ -55,7 +78,7 @@ const en = {
     next: "Zoom out: how the whole thing stays sealed",
   },
   defense: {
-    index: "04",
+    index: "05",
     eyebrow: "One authenticated door",
     title: "Many parts. A single way in.",
     body: "Every request enters through the Mycelium API Gateway — one authenticated door. Behind it, each piece does one job and each user's agent stays isolated. Security here isn't a single wall; it's the shape of the whole system.",
@@ -65,7 +88,7 @@ const en = {
     next: "Behind the door: a structure built for teams",
   },
   hierarchy: {
-    index: "05",
+    index: "06",
     eyebrow: "Built for organizations",
     title: "A hierarchy your company already recognizes.",
     body: "Powered by Mycelium's multitenancy, access nests the way an organization does: a tenant holds subscription accounts, each account holds agents, and each agent is shared with members — with read or write permission, per person. Corporate structure, expressed as software.",
@@ -86,7 +109,7 @@ const en = {
     next: "And every agent can be shaped to fit",
   },
   templates: {
-    index: "06",
+    index: "07",
     eyebrow: "Agents, templated",
     title: "Custom agents, cloned clean for everyone.",
     body: "Operators define an agent from a template — its persona, skills, and memory. Every user gets a private, isolated clone on first use. Admins register and assign models per user, and publish shared skills and files that cascade read-only to everyone in scope.",
@@ -98,12 +121,13 @@ const en = {
     next: "One last piece: your files",
   },
   files: {
-    index: "07",
+    index: "08",
     eyebrow: "Files, in reach",
     title: "Drop a file in. Find it by name.",
-    body: "Attach files straight from the composer; they land in your agent's own workspace, and it reads them by path — the bytes never clutter the chat. Filter your uploads by name to pull one back in seconds. Admins can share files that cascade read-only to a whole scope.",
+    body: "Attach files straight from the composer; they land in your agent's own workspace, and it reads them by path — the bytes never clutter the chat. Organise them the way you think: make folders, rename them, and drag files and folders between them. Filter by name to pull one back in seconds. Admins can share files that cascade read-only to a whole scope.",
     filterPlaceholder: "Filter files",
     sample: ["assay-results.csv", "protocol.pdf", "notes.md", "figure-2.png"],
+    folderSample: ["protocols", "figures"],
     next: "Ready to see your first thought take shape?",
   },
   // Accessible names for the SVG figures, and the mock conversation titles
@@ -114,7 +138,12 @@ const en = {
     canvas: "Canvas timeline: conversations as lanes with message nodes",
     tree: "Conversation tree: an idea branching into paths",
     map: "The zombie-crab stack: components behind a single authenticated gateway",
-    sampleConversations: ["Assay pipeline v3 — normalization", "Grant draft — methods section"],
+    graph:
+      "A knowledge-graph entry: an entity with its type, an observation, a link and the conversation it came from",
+    sampleConversations: [
+      "Assay pipeline v3 — normalization",
+      "Grant draft — methods section",
+    ],
   },
   cta: {
     eyebrow: "Your agent is waiting",
@@ -155,10 +184,29 @@ const pt: LandingDict = {
     body: "Dê um alias a qualquer conversa, marque com tags e escolha uma cor. Depois, filtre todo o histórico por tag, alias, texto ou data. Uma mini-tag se abre ao passar o mouse para mostrar o que há dentro — nada importante se perde na rolagem.",
     filterHint: "tag:   alias:   text:   date:",
     tagExamples: ["pesquisa", "urgente", "rascunho"],
-    next: "Então, quem pode ver tudo isso?",
+    next: "Mas o que ele lembra do seu trabalho?",
+  },
+  graph: {
+    index: "03",
+    eyebrow: "O que ele aprende por conta própria",
+    title: "Ele lembra das coisas, não só das palavras.",
+    body: "Conforme vocês conversam, seu agente registra o que importa — pessoas, projetos, sistemas e como se ligam — num grafo de conhecimento que ele mantém para você. Não é um histórico relido: são coisas nomeadas que ele consulta. Você abre esse grafo, navega por tipo, busca nele e vê de qual conversa cada fato saiu, quando dá para rastrear.",
+    entity: "Zombie Crab",
+    entityType: "projeto",
+    observation: "Usa DeepSeek na instância alpha",
+    relationVerb: "depende de",
+    relationTo: "Gateway mycelium",
+    sourceLabel: "de",
+    sourceChat: "Revisão da stack",
+    points: [
+      "Servido por um MCP dentro do gateway — sem container extra, sem serviço externo, sem nada para baixar.",
+      "Só seu: um grafo por membro, por agente. Nada é agrupado.",
+      "Somente leitura para você: o agente escreve, você audita.",
+    ],
+    next: "E quem pode ver tudo isso?",
   },
   isolation: {
-    index: "03",
+    index: "04",
     eyebrow: "Isolamento & segredos",
     title: "Um agente de verdade, só seu, isolado pelo kernel.",
     body: "Cada usuário recebe um agente privado no próprio contêiner — volume separado, sem root, nenhuma superfície compartilhada. O isolamento entre os agentes dos usuários é garantido pelo kernel do Linux, não por filtros de aplicação.",
@@ -175,7 +223,7 @@ const pt: LandingDict = {
     next: "Afaste a lente: como tudo permanece vedado",
   },
   defense: {
-    index: "04",
+    index: "05",
     eyebrow: "Uma única porta autenticada",
     title: "Muitas partes. Uma só entrada.",
     body: "Toda requisição entra pelo Mycelium API Gateway — uma única porta autenticada. Atrás dela, cada peça faz uma coisa e o agente de cada usuário permanece isolado. Segurança aqui não é um muro só; é o formato do sistema inteiro.",
@@ -185,7 +233,7 @@ const pt: LandingDict = {
     next: "Atrás da porta: uma estrutura feita para times",
   },
   hierarchy: {
-    index: "05",
+    index: "06",
     eyebrow: "Feito para organizações",
     title: "Uma hierarquia que sua empresa já reconhece.",
     body: "Movida pela multitenancy do Mycelium, o acesso se aninha como uma organização: um tenant contém contas de subscrição, cada conta contém agentes, e cada agente é compartilhado com membros — com permissão de leitura ou escrita, por pessoa. Estrutura corporativa, expressa em software.",
@@ -206,7 +254,7 @@ const pt: LandingDict = {
     next: "E cada agente pode ser moldado sob medida",
   },
   templates: {
-    index: "06",
+    index: "07",
     eyebrow: "Agentes, com template",
     title: "Agentes customizados, clonados limpos para cada um.",
     body: "Operadores definem um agente a partir de um template — sua persona, skills e memória. Cada usuário recebe um clone privado e isolado no primeiro uso. Admins registram e atribuem modelos por usuário e publicam skills e arquivos compartilhados que cascateiam read-only para todos no escopo.",
@@ -218,20 +266,32 @@ const pt: LandingDict = {
     next: "Uma última peça: seus arquivos",
   },
   files: {
-    index: "07",
+    index: "08",
     eyebrow: "Arquivos ao alcance",
     title: "Solte um arquivo. Ache pelo nome.",
-    body: "Anexe arquivos direto do compositor; eles chegam ao workspace do seu próprio agente, que os lê por caminho — os bytes nunca poluem o chat. Filtre seus uploads pelo nome para resgatar um em segundos. Admins podem compartilhar arquivos que cascateiam read-only para um escopo inteiro.",
+    body: "Anexe arquivos direto do compositor; eles chegam ao workspace do seu próprio agente, que os lê por caminho — os bytes nunca poluem o chat. Organize do jeito que você pensa: crie pastas, renomeie e arraste arquivos e pastas entre elas. Filtre pelo nome para resgatar um em segundos. Admins podem compartilhar arquivos que cascateiam read-only para um escopo inteiro.",
     filterPlaceholder: "Filtrar arquivos",
-    sample: ["resultados-ensaio.csv", "protocolo.pdf", "notas.md", "figura-2.png"],
+    sample: [
+      "resultados-ensaio.csv",
+      "protocolo.pdf",
+      "notas.md",
+      "figura-2.png",
+    ],
+    folderSample: ["protocolos", "figuras"],
     next: "Pronto para ver seu primeiro pensamento tomar forma?",
   },
   diagrams: {
     hero: "Linhas de pensamento se ramificando como micélio",
-    canvas: "Linha do tempo do Canvas: conversas como faixas com nós de mensagens",
+    canvas:
+      "Linha do tempo do Canvas: conversas como faixas com nós de mensagens",
     tree: "Árvore de conversas: uma ideia se ramificando em caminhos",
     map: "A stack zombie-crab: componentes atrás de um único gateway autenticado",
-    sampleConversations: ["Pipeline de ensaio v3 — normalização", "Rascunho de projeto — seção de métodos"],
+    graph:
+      "Um registro do grafo de conhecimento: uma entidade com seu tipo, uma observação, uma ligação e a conversa de onde veio",
+    sampleConversations: [
+      "Pipeline de ensaio v3 — normalização",
+      "Rascunho de projeto — seção de métodos",
+    ],
   },
   cta: {
     eyebrow: "Seu agente está esperando",
