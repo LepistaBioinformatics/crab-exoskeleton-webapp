@@ -98,7 +98,49 @@ const en = {
   memory: {
     title: "Workspace memory",
     hint: "Saved to MEMORY_CUSTOM.md — the agent reads it on every message.",
+    // The old collapsible editor hardcoded "Save"/"Saved" in English, which the
+    // parity test could not see because they never reached a locale dict.
+    saved: "Saved",
     placeholder: "e.g. Always answer in Portuguese. Our stack is Next.js + Go…",
+  },
+  memoryGraph: {
+    // Deliberately NOT "memory": the panel already has one, and t.memory.* is
+    // MEMORY_CUSTOM.md. Two different memories need two different visible names.
+    title: "Knowledge graph",
+    open: "Open the knowledge graph",
+    hint: "What the agent has learned on its own — entities, how they relate, and the observations behind each one. Read-only: the agent writes this, you inspect it.",
+    tabs: {
+      browse: "Entities",
+      search: "Search",
+      recent: "Recent",
+    },
+    searchPlaceholder: "Search the graph…",
+    searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
+    observations: "observations",
+    relations: "relations",
+    noResults: "Nothing matched that query.",
+    noObservations: "No observations recorded yet.",
+    confidence: "confidence",
+    archived: "Archived — hidden from the agent's own browsing.",
+    allTypes: "All",
+    noneOfType: "Nothing of that type.",
+    closeDetail: "Close details",
+    resizeDetail: "Resize the details panel",
+    sources: "Where this came from",
+    sourcesHint: "Click a conversation to open it.",
+    noSources: "No conversation recorded. The agent writes without a source when a scheduled job saved it, or when two chats were open at once.",
+    goneConversation: "Conversation no longer available",
+    mergedInto: "Merged into",
+    empty: {
+      title: "Nothing learned yet",
+      body: "The agent builds this as you talk to it. Ask it to remember something and it will show up here.",
+    },
+    recentCopy: {
+      learned: "Learned in the last 24h",
+      newEntities: "New entities",
+      newRelations: "New relations",
+      nothing: "Nothing new in the last 24 hours.",
+    },
   },
   view: {
     // Attribution inside the blockquote a reply inserts into the message.
@@ -255,6 +297,26 @@ const en = {
     valueRequired: "Enter a value.",
   },
   uploads: {
+    newFolder: "New folder",
+    // The system folder's DISPLAYED name. The path on disk stays `attachments` —
+    // the proxy owns it — so this is a label, never a rename.
+    attachmentsFolder: "Agent deliveries",
+    systemFolder: "Managed by the system",
+    newFolderPrompt: "Folder name",
+    rename: "Rename",
+    renameAria: "Rename",
+    deleteFolder: "Delete folder",
+    deleteFolderAria: "Delete folder",
+    organiseHint: "Drag files and folders to reorganise. The agent references these paths in its memory and skills — renaming or moving something it mentioned breaks that reference.",
+    deleteFolderTitle: "Delete this folder?",
+    deleteFolderMessage: "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
+    // One-line blurbs under each of the three workspace sections, so the menu says
+    // what each is for instead of making the member click to find out.
+    sections: {
+      memory: "Standing notes you write for the agent.",
+      graph: "What the agent learned on its own.",
+      files: "Uploads and files in this workspace.",
+    },
     resize: "Resize Workspace files",
     workspace: "Workspace",
     closePanel: "Close panel",
@@ -371,7 +433,45 @@ const pt: ChatDict = {
   memory: {
     title: "Memória do workspace",
     hint: "Salvo em MEMORY_CUSTOM.md — o agente lê a cada mensagem.",
+    saved: "Salvo",
     placeholder: "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
+  },
+  memoryGraph: {
+    title: "Grafo de conhecimento",
+    open: "Abrir o grafo de conhecimento",
+    hint: "O que o agente aprendeu por conta própria — entidades, como se relacionam e as observações por trás de cada uma. Somente leitura: o agente escreve, você confere.",
+    tabs: {
+      browse: "Entidades",
+      search: "Busca",
+      recent: "Recentes",
+    },
+    searchPlaceholder: "Buscar no grafo…",
+    searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
+    observations: "observações",
+    relations: "relações",
+    noResults: "Nada corresponde a essa busca.",
+    noObservations: "Nenhuma observação registrada ainda.",
+    confidence: "confiança",
+    archived: "Arquivada — oculta da navegação do próprio agente.",
+    allTypes: "Todos",
+    noneOfType: "Nada desse tipo.",
+    closeDetail: "Fechar detalhes",
+    resizeDetail: "Redimensionar o painel de detalhes",
+    sources: "De onde isso veio",
+    sourcesHint: "Clique numa conversa para abri-la.",
+    noSources: "Nenhuma conversa registrada. O agente grava sem origem quando foi uma tarefa agendada, ou quando havia dois chats abertos ao mesmo tempo.",
+    goneConversation: "Conversa não está mais disponível",
+    mergedInto: "Fundida em",
+    empty: {
+      title: "Nada aprendido ainda",
+      body: "O agente constrói isso conversando com você. Peça para ele lembrar de algo e vai aparecer aqui.",
+    },
+    recentCopy: {
+      learned: "Aprendido nas últimas 24h",
+      newEntities: "Novas entidades",
+      newRelations: "Novas relações",
+      nothing: "Nada novo nas últimas 24 horas.",
+    },
   },
   view: {
     quoteUser: "Você",
@@ -509,6 +609,22 @@ const pt: ChatDict = {
     valueRequired: "Informe um valor.",
   },
   uploads: {
+    newFolder: "Nova pasta",
+    attachmentsFolder: "Entregas do agente",
+    systemFolder: "Gerenciada pelo sistema",
+    newFolderPrompt: "Nome da pasta",
+    rename: "Renomear",
+    renameAria: "Renomear",
+    deleteFolder: "Excluir pasta",
+    deleteFolderAria: "Excluir pasta",
+    organiseHint: "Arraste arquivos e pastas para reorganizar. O agente referencia esses caminhos na memória e nas skills — renomear ou mover algo que ele citou quebra a referência.",
+    deleteFolderTitle: "Excluir esta pasta?",
+    deleteFolderMessage: "{name} e {count} arquivo(s) dentro dela serão excluídos. O agente pode referenciá-los.",
+    sections: {
+      memory: "Notas fixas que você escreve para o agente.",
+      graph: "O que o agente aprendeu por conta própria.",
+      files: "Uploads e arquivos deste workspace.",
+    },
     resize: "Redimensionar Arquivos do workspace",
     workspace: "Workspace",
     closePanel: "Fechar painel",
