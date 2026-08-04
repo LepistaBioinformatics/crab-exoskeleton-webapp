@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cva } from "class-variance-authority";
 import {
   AlertTriangle,
@@ -22,6 +22,8 @@ import {
 } from "@/lib/cronTasks";
 import type { Workspace } from "./fragment";
 import MessageContent from "./message-content";
+import CodeBlock from "./code-block";
+import { formatToolBody } from "./tool-output";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -720,6 +722,9 @@ function CollapsibleTool({
   t: typeof chatCopy.en;
 }) {
   const [shown, setShown] = useState(false);
+  // Only once opened: formatting and highlighting a body nobody expanded is work for nothing,
+  // and a run can carry dozens of these.
+  const formatted = useMemo(() => (shown ? formatToolBody(body) : null), [shown, body]);
   return (
     <div>
       <button
@@ -734,10 +739,18 @@ function CollapsibleTool({
           {shown ? t.scheduledTasks.collapseTool : t.scheduledTasks.expandTool}
         </span>
       </button>
-      {shown && (
-        <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-elevated p-2 text-[10px] leading-snug text-fg-muted">
-          {body}
-        </pre>
+      {shown && formatted && (
+        <div className="mt-1 max-h-64 overflow-auto rounded-md bg-elevated text-[10px] leading-snug">
+          {formatted.className ? (
+            // Reuses the chat's own code block, so a tool's JSON is highlighted the same way
+            // a fenced block in a message is, rather than getting a second treatment.
+            <CodeBlock code={formatted.text} className={formatted.className} streaming={false} />
+          ) : (
+            // Not JSON — prose, or something that only starts like it. Highlighting this
+            // would be confident, meaningless colour.
+            <pre className="whitespace-pre-wrap p-2 text-fg-muted">{formatted.text}</pre>
+          )}
+        </div>
       )}
     </div>
   );
