@@ -194,6 +194,9 @@ const en = {
     hint: "What the agent has learned on its own — entities, how they relate, and the observations behind each one. Read-only: the agent writes this, you inspect it.",
     tabs: {
       browse: "Entities",
+      // The node-link view. "Map" rather than "Graph": the panel is already called the
+      // knowledge graph, so a tab with that name would say nothing about what differs.
+      map: "Map",
       search: "Search",
       recent: "Recent",
     },
@@ -595,6 +598,7 @@ const pt: ChatDict = {
     hint: "O que o agente aprendeu por conta própria — entidades, como se relacionam e as observações por trás de cada uma. Somente leitura: o agente escreve, você confere.",
     tabs: {
       browse: "Entidades",
+      map: "Mapa",
       search: "Busca",
       recent: "Recentes",
     },

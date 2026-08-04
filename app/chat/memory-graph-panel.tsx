@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Clock, Network, Search } from "lucide-react";
+import { Clock, Network, Search, Share2 } from "lucide-react";
 import {
   openNodes,
   readGraph,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/memoryGraph";
 import { setFragmentSid, type Workspace } from "./fragment";
 import { listConversations, type ConversationSummary } from "@/lib/chatSession";
+import MemoryGraphView from "./memory-graph-view";
 import {
   BrowseList,
   EntityDetail,
@@ -56,7 +57,11 @@ const tab = cva(
   },
 );
 
-type Mode = "browse" | "search" | "recent";
+// "map" is the node-link view. It reads the SAME browse projection the list does and
+// drives the SAME select(), so choosing a node opens the existing detail pane — which
+// already answers "where did this come from" with the conversations behind each fact.
+// That reuse is the point: the graph adds a way to SEE the shape, not a second data path.
+type Mode = "browse" | "map" | "search" | "recent";
 
 // The detail pane's size. It opens roughly half the column so both it and the list
 // above are usable at once; the ceiling leaves the list a visible sliver, because a
@@ -305,6 +310,15 @@ export default function MemoryGraphPanel({
           </button>
           <button
             type="button"
+            className={tab({ active: mode === "map" })}
+            aria-pressed={mode === "map"}
+            onClick={() => setMode("map")}
+          >
+            <Share2 size={12} aria-hidden />
+            {t.memoryGraph.tabs.map}
+          </button>
+          <button
+            type="button"
             className={tab({ active: mode === "search" })}
             aria-pressed={mode === "search"}
             onClick={() => setMode("search")}
@@ -365,6 +379,20 @@ export default function MemoryGraphPanel({
                 allLabel={t.memoryGraph.allTypes}
                 noneOfTypeLabel={t.memoryGraph.noneOfType}
               />
+            )}
+
+            {mode === "map" && graph && (
+              // Fills the pane: a graph in a narrow column is unreadable, and this panel
+              // deliberately has no max width (see uploads-sidebar) precisely for this.
+              <div className="h-full min-h-[320px]">
+                <MemoryGraphView
+                  entities={graph.entities}
+                  relations={graph.relations}
+                  selected={selected}
+                  onSelect={(name) => (name ? select(name) : setSelected(null))}
+                  emptyLabel={t.memoryGraph.empty.body}
+                />
+              </div>
             )}
 
             {mode === "search" && hits && (
