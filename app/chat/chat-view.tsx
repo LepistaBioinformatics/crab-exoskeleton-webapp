@@ -22,7 +22,7 @@ import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
-import { buildTaskRef, type TaskReference } from "@/lib/cronTasks";
+import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { TagChip } from "@/app/chat/conversation-enrichment";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
@@ -109,6 +109,8 @@ function buildQuote(reply: ReplyTo, t: ChatDict): string {
 export default function ChatView({
   workspace,
   subscription,
+  chatRef,
+  onChatRef,
   sessionId,
   onRestartNeeded,
 }: {
@@ -119,6 +121,13 @@ export default function ChatView({
    * alone rather than being demoted under a uuid.
    */
   subscription: string | null;
+  /**
+   * The composer's context slot, owned by the shell — see chat-shell. A reference picked
+   * in Canvas has to outlive the view it was picked from, and this component is exactly
+   * what Canvas replaces.
+   */
+  chatRef: ChatReference | null;
+  onChatRef: (ref: ChatReference | null) => void;
   sessionId: string | undefined;
   // Forwarded to the secrets drawer: a saved secret now needs an explicit
   // restart (restart-control DEC-3), and the banner above lives in the shell.
@@ -138,10 +147,6 @@ export default function ChatView({
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
-  // A scheduled task or one of its executions, picked in the workspace panel. Same
-  // shape of slot as replyTo: held here, shown in the composer, serialized by
-  // compose() into the next message, consumed on send.
-  const [taskRef, setTaskRef] = useState<TaskReference | null>(null);
   // Everything about the turn in flight for THIS conversation, read from the
   // module-scope store -- so it is still here when you come back from another
   // chat, or another workspace (which remounts this component).
@@ -397,11 +402,11 @@ export default function ChatView({
   // there's nothing to send.
   function compose(text: string): string | null {
     const trimmed = text.trim();
-    if (!trimmed && attachments.length === 0 && !taskRef) return null;
+    if (!trimmed && attachments.length === 0 && !chatRef) return null;
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
     const quote = replyTo ? buildQuote(replyTo, t) : "";
-    const task = taskRef ? buildTaskRef(taskRef, t) : "";
-    return [quote, task, trimmed, refs].filter(Boolean).join("\n\n");
+    const ref = chatRef ? buildReferenceMarker(chatRef, t) : "";
+    return [quote, ref, trimmed, refs].filter(Boolean).join("\n\n");
   }
 
   // Sending is delegated to turn-store: it owns the debounce, the sequential
@@ -424,7 +429,7 @@ export default function ChatView({
     if (composed === null) return false;
     setReplyTo(null);
     setAttachments([]);
-    setTaskRef(null);
+    onChatRef(null);
     storeEnqueue(sessionId, composed, runContext());
     return true;
   }
@@ -555,8 +560,8 @@ export default function ChatView({
       onRemoveAttachment={removeAttachment}
       replyTo={replyTo}
       onCancelReply={() => setReplyTo(null)}
-      taskRef={taskRef}
-      onCancelTaskRef={() => setTaskRef(null)}
+      chatRef={chatRef}
+      onCancelChatRef={() => onChatRef(null)}
     />
   );
 
@@ -871,7 +876,7 @@ export default function ChatView({
           workspace={workspace}
           refreshSignal={mediaRefresh}
           onClose={() => setFilesOpen(false)}
-          onReference={setTaskRef}
+          onReference={onChatRef}
         />
       )}
 

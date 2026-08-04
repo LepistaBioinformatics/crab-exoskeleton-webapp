@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Boxes, Menu, MessagesSquare, X } from "lucide-react";
-import { useFragment, toWorkspace } from "./fragment";
+import { useFragment, setView, toWorkspace } from "./fragment";
 import { resolvePanel } from "./sidebar-panel-state";
 import { useWorkspaceGroups } from "./use-workspaces";
+import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
 import ChatView from "./chat-view";
@@ -107,6 +108,10 @@ export default function ChatShell({ email }: { email: string }) {
   // collapse on an already-collapsed pane — a no-op, so the button a member could
   // plainly see did nothing. Here it can end the preview, which is what it means.
   const [peeking, setPeeking] = useState(false);
+  // The composer's context slot, owned HERE rather than in ChatView: Canvas replaces the
+  // chat view entirely, so a reference picked on the timeline would unmount with the view
+  // it was picked from. Held above both, it survives the switch.
+  const [chatRef, setChatRef] = useState<ChatReference | null>(null);
   // The tree, for the subscription NAME the chat header leads with. Same hook the
   // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
   const { groups } = useWorkspaceGroups();
@@ -233,12 +238,22 @@ export default function ChatShell({ email }: { email: string }) {
                 <Spinner size={28} />
               </div>
             ) : canvas && workspace ? (
-              <CanvasTimeline workspace={workspace} />
+              <CanvasTimeline
+                workspace={workspace}
+                onReference={(ref) => {
+                  setChatRef(ref);
+                  // Back to the chat, because that is where the composer is — picking a
+                  // reference is the member saying they want to say something about it.
+                  setView("chat");
+                }}
+              />
             ) : workspace ? (
               <ChatView
                 workspace={workspace}
                 subscription={subscription}
                 sessionId={sessionId}
+                chatRef={chatRef}
+                onChatRef={setChatRef}
                 onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
               />
             ) : (

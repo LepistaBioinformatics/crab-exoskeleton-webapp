@@ -14,8 +14,8 @@ import ScheduledTasksPanel, {
 } from "./scheduled-tasks-panel";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
+import { buildReferenceMarker } from "@/lib/chatReference";
 import {
-  buildTaskRef,
   isFinished,
   type CronRun,
   type CronTask,
@@ -61,7 +61,7 @@ describe("chat reference markers", () => {
   };
 
   it("names the task, its id and its schedule", () => {
-    const marker = buildTaskRef(taskRef, t);
+    const marker = buildReferenceMarker(taskRef, t);
     expect(marker).toContain("Relatório diário");
     expect(marker).toContain("e520b224e7714d16");
     expect(marker).toContain("Cron 0 18 * * *");
@@ -69,20 +69,20 @@ describe("chat reference markers", () => {
   });
 
   it("names the run, so the agent can find that exact transcript", () => {
-    const marker = buildTaskRef(runRef, t);
+    const marker = buildReferenceMarker(runRef, t);
     expect(marker).toContain("5e055123-b25a");
     expect(marker).toContain("e520b224e7714d16");
   });
 
   it("distinguishes a task from one of its executions", () => {
-    expect(buildTaskRef(taskRef, t)).not.toBe(buildTaskRef(runRef, t));
-    expect(buildTaskRef(taskRef, t)).toContain(t.scheduledTasks.markerTask);
-    expect(buildTaskRef(runRef, t)).toContain(t.scheduledTasks.markerRun);
+    expect(buildReferenceMarker(taskRef, t)).not.toBe(buildReferenceMarker(runRef, t));
+    expect(buildReferenceMarker(taskRef, t)).toContain(t.scheduledTasks.markerTask);
+    expect(buildReferenceMarker(runRef, t)).toContain(t.scheduledTasks.markerRun);
   });
 
   it("stays a single bracketed line", () => {
     for (const ref of [taskRef, runRef]) {
-      const marker = buildTaskRef(ref, t);
+      const marker = buildReferenceMarker(ref, t);
       expect(marker, "a multi-line marker would break up the member's prose").not.toContain("\n");
       expect(marker.startsWith("[")).toBe(true);
       expect(marker.endsWith("]")).toBe(true);
@@ -293,5 +293,39 @@ describe("scheduled tasks section", () => {
       html,
       "the tasks panel is showing the files tree's refresh label",
     ).not.toContain(t.uploads.refreshAria);
+  });
+});
+
+// The span variant, added when Canvas gained a way out. Same rule as the other two: one
+// bracketed line, and never the content — a thread's messages are exactly what must not
+// be inlined.
+describe("conversation span markers", () => {
+  const span = {
+    kind: "span" as const,
+    conversationId: "conv-a",
+    title: "Assay pipeline v3",
+    from: "01 Aug",
+    to: "03 Aug",
+    messages: 12,
+  };
+
+  it("names the thread, its window and how much is in it", () => {
+    const marker = buildReferenceMarker(span, t);
+    expect(marker).toContain("Assay pipeline v3");
+    expect(marker).toContain("01 Aug");
+    expect(marker).toContain("03 Aug");
+    expect(marker).toContain("12");
+  });
+
+  it("stays a single bracketed line", () => {
+    const marker = buildReferenceMarker(span, t);
+    expect(marker).not.toContain("\n");
+    expect(marker.startsWith("[")).toBe(true);
+    expect(marker.endsWith("]")).toBe(true);
+  });
+
+  it("is distinguishable from a task or a run reference", () => {
+    expect(buildReferenceMarker(span, t)).toContain(t.canvasActivity.markerSpan);
+    expect(buildReferenceMarker(span, t)).not.toContain(t.scheduledTasks.markerTask);
   });
 });

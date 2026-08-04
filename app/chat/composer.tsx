@@ -8,6 +8,7 @@ import {
   FileArchive,
   FileText,
   Files,
+  GitBranch,
   Image as ImageIcon,
   Maximize2,
   Paperclip,
@@ -23,7 +24,7 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
 import type { ReplyTo } from "@/app/chat/chat-view";
-import type { TaskReference } from "@/lib/cronTasks";
+import { referenceChip, type ChatReference } from "@/lib/chatReference";
 import MarkdownEditor from "@/app/chat/markdown-editor";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
@@ -67,9 +68,9 @@ interface ComposerProps {
   onRemoveAttachment: (path: string) => void;
   replyTo: ReplyTo | null;
   onCancelReply: () => void;
-  /** A scheduled task or execution the member picked in the workspace panel. */
-  taskRef: TaskReference | null;
-  onCancelTaskRef: () => void;
+  /** What the next message will carry besides the prose — see lib/chatReference. */
+  chatRef: ChatReference | null;
+  onCancelChatRef: () => void;
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -89,8 +90,8 @@ export default function Composer({
   onRemoveAttachment,
   replyTo,
   onCancelReply,
-  taskRef,
-  onCancelTaskRef,
+  chatRef,
+  onCancelChatRef,
 }: ComposerProps) {
   const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -224,22 +225,13 @@ export default function Composer({
         />
       )}
 
-      {taskRef && (
+      {chatRef && (
         <ContextChip
-          Icon={CalendarClock}
+          Icon={chatRef.kind === "span" ? GitBranch : CalendarClock}
           tone="task"
-          title={
-            taskRef.kind === "task"
-              ? t.scheduledTasks.referencedTask
-              : t.scheduledTasks.referencedRun
-          }
-          preview={
-            taskRef.kind === "task"
-              ? `${taskRef.name} · ${taskRef.schedule}`
-              : `${taskRef.name} · ${taskRef.instant}`
-          }
+          {...referenceChip(chatRef, t)}
           cancelLabel={t.scheduledTasks.cancelReference}
-          onCancel={onCancelTaskRef}
+          onCancel={onCancelChatRef}
         />
       )}
 

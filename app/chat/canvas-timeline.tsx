@@ -13,6 +13,7 @@ import {
 } from "@/lib/chatSession";
 import { getHistory } from "./history-cache";
 import { listTasks, type CronTasks } from "@/lib/cronTasks";
+import type { SpanReference } from "@/lib/chatReference";
 import { recentChanges, type RecentChanges } from "@/lib/memoryGraph";
 import {
   buildActivity,
@@ -99,7 +100,18 @@ function ago(ms: number, t: ChatDict): string {
   return t.canvas.daysAgo.replace("{n}", String(days));
 }
 
-export default function CanvasTimeline({ workspace }: { workspace: Workspace }) {
+export default function CanvasTimeline({
+  workspace,
+  onReference,
+}: {
+  workspace: Workspace;
+  /**
+   * Hands a lane to the composer as a span reference. The shell owns that slot and
+   * switches back to the chat, because picking a reference is the member saying they want
+   * to say something about it — and the composer is not here.
+   */
+  onReference: (ref: SpanReference) => void;
+}) {
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -396,6 +408,22 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
           onClose={() => setPreviewId(null)}
           onSolo={() => setSoloId((s) => (s === previewLane.id ? null : previewLane.id))}
           onOpen={() => openTraditional(previewLane.id)}
+          onReference={() => {
+            // The lane's own span, formatted here where the locale is. The oldest and
+            // newest visits bound it; bursts arrive newest-first.
+            const times = previewLane.bursts.map((b) => b.ts);
+            onReference({
+              kind: "span",
+              conversationId: previewLane.id,
+              title:
+                convById.get(previewLane.id)?.alias ||
+                convById.get(previewLane.id)?.title ||
+                previewLane.id,
+              from: fmtDate(Math.min(...times), tag),
+              to: fmtDate(Math.max(...times), tag),
+              messages: previewLane.bursts.reduce((n, b) => n + b.count, 0),
+            });
+          }}
         />
       )}
     </div>
@@ -508,7 +536,7 @@ function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number
 
 // Inline preview: last bursts + Solo / Full-transcript, without leaving Canvas.
 function Preview({
-  lane, conv, color, isSolo, onClose, onSolo, onOpen,
+  lane, conv, color, isSolo, onClose, onSolo, onOpen, onReference,
 }: {
   lane: ConversationLane;
   conv: ConversationSummary | undefined;
@@ -517,6 +545,8 @@ function Preview({
   onClose: () => void;
   onSolo: () => void;
   onOpen: () => void;
+  /** Sends this lane to the composer as a span, so the member can ask about it. */
+  onReference: () => void;
 }) {
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
@@ -634,9 +664,21 @@ function Preview({
           );
         })}
       </div>
-      <div className="flex gap-2 border-t border-brand/20 px-4 py-3">
+      <div className="flex flex-wrap gap-2 border-t border-brand/20 px-4 py-3">
         <Button variant="outlined" size="sm" className="flex-1" onClick={onSolo}>
           {isSolo ? t.canvas.showAll : t.canvas.soloLane}
+        </Button>
+        {/* The one action that LEAVES with something rather than just navigating. Canvas
+            was read-only: you could look at a thread and then had to go find it again in
+            the chat to say anything about it. */}
+        <Button
+          variant="outlined"
+          size="sm"
+          className="flex-1"
+          aria-label={t.canvasActivity.referenceAria}
+          onClick={onReference}
+        >
+          {t.canvasActivity.reference}
         </Button>
         <Button variant="filled" size="sm" className="flex-1" onClick={onOpen}>
           {t.canvas.fullTranscript}

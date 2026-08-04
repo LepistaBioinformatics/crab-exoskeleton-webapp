@@ -179,6 +179,12 @@ const en = {
     unattributedHint: "Scheduled runs and facts the agent could not tie to a chat.",
     legendRuns: "scheduled run",
     legendLearned: "learned a fact",
+    referencedSpan: "Conversation span",
+    // Travels inside the sent message, like the `[anexo: …]` refs.
+    markerSpan: "conversation span",
+    markerMessages: "messages",
+    reference: "Reference in chat",
+    referenceAria: "Reference this conversation in the chat",
   },
   memoryGraph: {
     // Deliberately NOT "memory": the panel already has one, and t.memory.* is
@@ -577,6 +583,11 @@ const pt: ChatDict = {
     unattributedHint: "Execuções agendadas e fatos que o agente não conseguiu ligar a um chat.",
     legendRuns: "execução agendada",
     legendLearned: "aprendeu um fato",
+    referencedSpan: "Trecho de conversa",
+    markerSpan: "trecho de conversa",
+    markerMessages: "mensagens",
+    reference: "Referenciar no chat",
+    referenceAria: "Referenciar esta conversa no chat",
   },
   memoryGraph: {
     title: "Grafo de conhecimento",

@@ -1,5 +1,4 @@
 import type { Workspace } from "@/app/chat/fragment";
-import type { ChatDict } from "@/lib/i18n/chat";
 import { getJson, workspaceQuery } from "@/lib/workspaceApi";
 
 // Read-only client for the agent's scheduled tasks (picoclaw cron jobs) and the
@@ -164,20 +163,6 @@ export type TaskReference =
       runId: string;
       instant: string;
     };
-
-// Turns a referenced scheduled task or execution into one self-contained line.
-//
-// Self-contained, and never the transcript: a run can be six figures of bytes, so
-// what travels is what identifies it plus enough to answer without a lookup. The
-// agent owns the job store and the run transcripts on its own filesystem, so the ids
-// are all it needs to read the rest. Same principle as buildQuote, which inlines a
-// truncated snippet rather than a whole message.
-export function buildTaskRef(ref: TaskReference, t: ChatDict): string {
-  if (ref.kind === "task") {
-    return `[${t.scheduledTasks.markerTask}: "${ref.name}" (${ref.jobId}) — ${ref.schedule}, ${t.scheduledTasks.markerLastRun} ${ref.lastRun}]`;
-  }
-  return `[${t.scheduledTasks.markerRun}: "${ref.name}" (${ref.jobId}), run ${ref.runId}, ${ref.instant}]`;
-}
 
 export function listTasks(workspace: Workspace): Promise<CronTasks> {
   return getJson<CronTasks>("/api/cron/tasks", workspaceQuery(workspace));
