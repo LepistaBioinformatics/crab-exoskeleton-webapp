@@ -54,6 +54,13 @@ export interface CronRun {
   jobId: string;
   runId: string;
   basename: string;
+  /**
+   * The conversation that owned the task when it was scheduled, as the proxy's derived
+   * session KEY (not the conversation id — `ConversationSummary.sessionKey` is what it
+   * matches). Empty when picoclaw's marker was missing, which callers must treat as "no
+   * conversation" rather than guessing one.
+   */
+  sessionKey: string;
   startedAt: string;
   updatedAt: string;
   count: number;

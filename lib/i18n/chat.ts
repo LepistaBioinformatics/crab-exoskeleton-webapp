@@ -169,6 +169,17 @@ const en = {
     showMoreRuns: "Show {count} older run(s)",
     showFewerRuns: "Show fewer runs",
   },
+  canvasActivity: {
+    ran: "{name} ran",
+    learned: "learned: {entity}",
+    // The row for work no conversation claims. Its own lane rather than hidden: an agent
+    // that did something your history does not mention is the most useful thing this
+    // view can surface.
+    unattributed: "No conversation",
+    unattributedHint: "Scheduled runs and facts the agent could not tie to a chat.",
+    legendRuns: "scheduled run",
+    legendLearned: "learned a fact",
+  },
   memoryGraph: {
     // Deliberately NOT "memory": the panel already has one, and t.memory.* is
     // MEMORY_CUSTOM.md. Two different memories need two different visible names.
@@ -558,6 +569,14 @@ const pt: ChatDict = {
     allFinishedHint: "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
     showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
     showFewerRuns: "Mostrar menos execuções",
+  },
+  canvasActivity: {
+    ran: "{name} rodou",
+    learned: "aprendeu: {entity}",
+    unattributed: "Sem conversa",
+    unattributedHint: "Execuções agendadas e fatos que o agente não conseguiu ligar a um chat.",
+    legendRuns: "execução agendada",
+    legendLearned: "aprendeu um fato",
   },
   memoryGraph: {
     title: "Grafo de conhecimento",

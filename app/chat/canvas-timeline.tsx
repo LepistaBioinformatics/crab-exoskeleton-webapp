@@ -12,6 +12,14 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import { getHistory } from "./history-cache";
+import { listTasks, type CronTasks } from "@/lib/cronTasks";
+import { recentChanges, type RecentChanges } from "@/lib/memoryGraph";
+import {
+  buildActivity,
+  marksForConversation,
+  unattributedMarks,
+  type ActivityMark,
+} from "./canvas-activity";
 import {
   buildEvents,
   aggregateBursts,
@@ -97,6 +105,15 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
   const [bursts, setBursts] = useState<Burst[] | null>(null);
+  // What the agent DID: scheduled runs and facts it learned, both already timestamped
+  // and already carrying a conversation. Two bounded calls, not one per conversation —
+  // unlike the histories above, this does not scale with the workspace.
+  //
+  // Best-effort on purpose: the timeline is the conversations, and this is an overlay.
+  // A workspace with no tasks, or a graph the member never populated, renders exactly as
+  // before rather than erroring.
+  const [tasks, setTasks] = useState<CronTasks | null>(null);
+  const [graph, setGraph] = useState<RecentChanges | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [soloId, setSoloId] = useState<string | null>(null);
@@ -172,6 +189,39 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsKey, signature, listLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listTasks(workspace)
+      .then((r) => {
+        if (!cancelled) setTasks(r);
+      })
+      .catch(() => {});
+    // A wide window, because the timeline spans whatever the member has: the axis is
+    // built from conversations, and a fact older than this simply has no marker.
+    recentChanges(workspace, 24 * 30)
+      .then((r) => {
+        if (!cancelled) setGraph(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.t, workspace.s, workspace.r]);
+
+  const activity = useMemo(
+    () =>
+      buildActivity({
+        tasks,
+        graph,
+        conversations,
+        taskLabel: (name) => t.canvasActivity.ran.replace("{name}", name),
+        learnedLabel: (entity) => t.canvasActivity.learned.replace("{entity}", entity),
+      }),
+    [tasks, graph, conversations, t],
+  );
+  const orphanMarks = useMemo(() => unattributedMarks(activity), [activity]);
 
   // Derive stable lanes (one per conversation) + the time range.
   const model = useMemo(() => (bursts ? deriveLanes(bursts, MAX_LANES) : null), [bursts]);
@@ -311,6 +361,9 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                       </circle>
                     );
                   })}
+                  {/* What the agent DID on this lane, drawn OFF the line so it never
+                      competes with the conversation's own dots: runs below, facts above. */}
+                  <ActivityMarks marks={marksForConversation(activity, lane.id)} y={y} xOf={xOf} />
                   <text x={x1} y={y - 12} fontSize={16} fontWeight={700} fill={FG}>{title}</text>
                 </g>
               );
@@ -350,6 +403,58 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 }
 
 // Aggregate message volume bucketed over the time range -- the agent's "pulse".
+/**
+ * Scheduled runs and learned facts as marks around a lane's line.
+ *
+ * Two shapes rather than two colours: a square below for a run, a triangle above for a
+ * fact. The lane's colour already means "which conversation", so encoding a second
+ * meaning in colour would collide with the one the whole view is built on.
+ *
+ * Deliberately smaller than the conversation dots. These are annotations on the member's
+ * activity, not the activity itself.
+ */
+function ActivityMarks({
+  marks,
+  y,
+  xOf,
+}: {
+  marks: ActivityMark[];
+  y: number;
+  xOf: (ts: number) => number;
+}) {
+  return (
+    <>
+      {marks.map((m, i) => {
+        const x = xOf(m.ts);
+        const key = `${m.kind}-${m.ts}-${i}`;
+        return m.kind === "run" ? (
+          <rect
+            key={key}
+            x={x - 3}
+            y={y + 7}
+            width={6}
+            height={6}
+            rx={1}
+            fill={MUTED}
+            opacity={0.85}
+          >
+            <title>{m.label}</title>
+          </rect>
+        ) : (
+          <polygon
+            key={key}
+            points={`${x},${y - 13} ${x - 4},${y - 6} ${x + 4},${y - 6}`}
+            fill={MUTED}
+            opacity={0.7}
+          >
+            <title>{m.label}</title>
+          </polygon>
+        );
+      })}
+    </>
+  );
+}
+
 function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number; width: number }) {
   const t = useT(chatCopy);
   const { area, line, total } = useMemo(() => {
