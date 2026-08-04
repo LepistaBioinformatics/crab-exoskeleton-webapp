@@ -100,3 +100,50 @@ describe("typeColorIndex", () => {
     expect(typeColorIndex(types, "ghost", 6)).toBe(0);
   });
 });
+
+// The map has to be REPRODUCIBLE: leaving the tab and coming back must show the same
+// picture, because a member builds a mental map of their own graph. Cytoscape's cose
+// randomises initial placement, so the determinism has to come from the seed we hand it.
+describe("seedPosition — why the layout is reproducible", () => {
+  it("gives the same entity set the same seeds on every call", () => {
+    const once = buildElements([entity("b"), entity("a"), entity("c")], []);
+    const twice = buildElements([entity("b"), entity("a"), entity("c")], []);
+    expect(once.nodes.map((n) => n.position)).toEqual(twice.nodes.map((n) => n.position));
+  });
+
+  // The API's ordering is not a contract, so the seed must not depend on it — otherwise a
+  // reordered response reshuffles the whole picture for no reason the member can see.
+  it("does not depend on the order entities arrive in", () => {
+    const forwards = buildElements([entity("a"), entity("b"), entity("c")], []);
+    const backwards = buildElements([entity("c"), entity("b"), entity("a")], []);
+    const seedOf = (g: typeof forwards, id: string) =>
+      g.nodes.find((n) => n.data.id === id)!.position;
+    for (const id of ["a", "b", "c"]) {
+      expect(seedOf(forwards, id)).toEqual(seedOf(backwards, id));
+    }
+  });
+
+  it("separates the seeds instead of piling them at the origin", () => {
+    const { nodes } = buildElements(
+      Array.from({ length: 12 }, (_, i) => entity(`e${i}`)),
+      [],
+    );
+    const distinct = new Set(nodes.map((n) => `${n.position.x}:${n.position.y}`));
+    expect(distinct.size).toBe(nodes.length);
+  });
+
+  it("uses no randomness at all", () => {
+    const before = Math.random;
+    let called = false;
+    Math.random = () => {
+      called = true;
+      return 0.5;
+    };
+    try {
+      buildElements([entity("a"), entity("b")], []);
+    } finally {
+      Math.random = before;
+    }
+    expect(called, "a random seed would reshuffle the map on every visit").toBe(false);
+  });
+});

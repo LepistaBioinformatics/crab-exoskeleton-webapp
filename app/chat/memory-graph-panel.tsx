@@ -393,6 +393,9 @@ export default function MemoryGraphPanel({
                   emptyLabel={t.memoryGraph.empty.body}
                   expandLabel={t.memoryGraph.expandMap}
                   collapseLabel={t.memoryGraph.collapseMap}
+                  spreadOutLabel={t.memoryGraph.spreadOut}
+                  spreadInLabel={t.memoryGraph.spreadIn}
+                  fitLabel={t.memoryGraph.fitMap}
                 />
               </div>
             )}

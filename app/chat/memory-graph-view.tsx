@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import cytoscape, { type Core } from "cytoscape";
 import { buildElements, typeColorIndex } from "./graph-elements";
 import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
@@ -59,6 +60,9 @@ export default function MemoryGraphView({
   emptyLabel,
   expandLabel,
   collapseLabel,
+  spreadOutLabel,
+  spreadInLabel,
+  fitLabel,
 }: {
   entities: SummaryEntity[];
   relations: Relation[];
@@ -67,6 +71,9 @@ export default function MemoryGraphView({
   emptyLabel: string;
   expandLabel: string;
   collapseLabel: string;
+  spreadOutLabel: string;
+  spreadInLabel: string;
+  fitLabel: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
@@ -74,6 +81,10 @@ export default function MemoryGraphView({
   // is what made the previous version unreadable. Full screen is the state this view is
   // usable in.
   const [expanded, setExpanded] = useState(false);
+  // How far apart the layout pushes things. Exposed because the right spread depends on the
+  // graph: a dozen entities want them close enough to read as one picture, a hundred want
+  // room to separate into clusters, and no single constant serves both.
+  const [spread, setSpread] = useState(1);
   // Kept in a ref so the tap handler never goes stale without rebuilding the graph, which
   // would re-run the layout and move every node.
   const select = useRef(onSelect);
@@ -143,8 +154,15 @@ export default function MemoryGraphView({
       layout: {
         name: "cose",
         animate: false,
-        nodeRepulsion: () => 9000,
-        idealEdgeLength: () => 110,
+        // The elements carry deterministic seed positions, so cose must RELAX from them
+        // rather than throw them away. This is what makes leaving the tab and coming back
+        // show the same picture instead of a reshuffled one.
+        randomize: false,
+        // Both scale together: repulsion alone pushes nodes apart while the edges pull
+        // them back, so the graph fights itself and the result barely changes.
+        nodeRepulsion: () => 9000 * spread,
+        idealEdgeLength: () => 110 * spread,
+        nodeOverlap: 12 * spread,
       },
     });
 
@@ -158,7 +176,7 @@ export default function MemoryGraphView({
       instance.destroy();
       cy.current = null;
     };
-  }, [entities, relations]);
+  }, [entities, relations, spread]);
 
   // Selection is applied as CLASSES, never by rebuilding: a rebuild re-runs the layout, so
   // clicking a node would rearrange the picture around it.
@@ -191,27 +209,71 @@ export default function MemoryGraphView({
     );
   }
 
-  return (
-    <div className={expanded ? "fixed inset-0 z-50 bg-bg" : "relative h-full min-h-[320px]"}>
-      <div ref={box} className="h-full w-full" />
-      <div className="absolute bottom-2 right-2 flex gap-1">
+  const controls = (
+    <div className="absolute bottom-2 right-2 flex gap-1">
+      {[
+        {
+          key: "expand",
+          label: expanded ? "⤡" : "⤢",
+          title: expanded ? collapseLabel : expandLabel,
+          disabled: false,
+          onClick: () => setExpanded((v) => !v),
+        },
+        {
+          key: "spread-out",
+          label: "↔",
+          title: spreadOutLabel,
+          disabled: spread >= 4,
+          onClick: () => setSpread((v) => Math.min(4, +(v * 1.5).toFixed(2))),
+        },
+        {
+          key: "spread-in",
+          label: "↮",
+          title: spreadInLabel,
+          disabled: spread <= 0.5,
+          onClick: () => setSpread((v) => Math.max(0.5, +(v / 1.5).toFixed(2))),
+        },
+        {
+          key: "fit",
+          label: "⤾",
+          title: fitLabel,
+          disabled: false,
+          onClick: () => cy.current?.fit(undefined, 40),
+        },
+      ].map((b) => (
         <button
+          key={b.key}
           type="button"
-          title={expanded ? collapseLabel : expandLabel}
-          aria-label={expanded ? collapseLabel : expandLabel}
-          onClick={() => setExpanded((v) => !v)}
-          className="flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg"
+          title={b.title}
+          aria-label={b.title}
+          disabled={b.disabled}
+          onClick={b.onClick}
+          className="flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-40"
         >
-          {expanded ? "⤡" : "⤢"}
+          {b.label}
         </button>
-        <button
-          type="button"
-          onClick={() => cy.current?.fit(undefined, 40)}
-          className="flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg"
-        >
-          ⤾
-        </button>
-      </div>
+      ))}
     </div>
   );
+
+  const stage = (
+    <>
+      <div ref={box} className="h-full w-full" />
+      {controls}
+    </>
+  );
+
+  // PORTALLED when expanded, and that is not a style choice. The panel sits inside the
+  // sidebar's sliding track, which carries a `transform` — and a transformed ancestor
+  // becomes the containing block for `position: fixed`, so "full screen" was positioned
+  // against a 200%-wide translated element instead of the viewport. Escaping to <body> is
+  // the fix; nothing inside this subtree could have been.
+  if (expanded) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 bg-bg">{stage}</div>,
+      document.body,
+    );
+  }
+
+  return <div className="relative h-full min-h-[320px]">{stage}</div>;
 }
