@@ -166,3 +166,31 @@ describe("the map reads the browse projection and nothing more", () => {
     expect(edges[0].label).toBe("feeds");
   });
 });
+
+// The map was unreadable in the panel's default ~280px column: the layout spans far more
+// than that, so the fit alone reduced everything to roughly a quarter scale and an 11px
+// label landed near 3px. The fix is room (full screen) plus a zoom range that can recover
+// a bad fit, but the layout's own extent is what decides how bad the fit is — so that is
+// what gets pinned here.
+describe("layout extent, which decides how legible the fit is", () => {
+  it("keeps a small graph compact rather than spreading it over the whole canvas", () => {
+    const { bounds } = layoutGraph(
+      [entity("a"), entity("b"), entity("c")],
+      [relation("a", "b"), relation("b", "c")],
+      { width: 1200, height: 800 },
+    );
+    // Three connected nodes must not span the full 1200 canvas: at that extent, fitting
+    // into a sidebar column is what made the labels illegible.
+    expect(bounds.maxX - bounds.minX).toBeLessThan(600);
+  });
+
+  it("grows the extent with the node count instead of overlapping them", () => {
+    const many = Array.from({ length: 30 }, (_, i) => entity(`e${i}`));
+    const { bounds, nodes } = layoutGraph(many, [], { width: 1200, height: 800 });
+    const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+    // Collision keeps them apart, so 30 nodes genuinely need more room than 3 — which is
+    // exactly why the map needs the viewport rather than a column.
+    expect(span).toBeGreaterThan(200);
+    expect(nodes).toHaveLength(30);
+  });
+});

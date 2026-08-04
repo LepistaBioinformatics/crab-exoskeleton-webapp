@@ -200,6 +200,10 @@ const en = {
       search: "Search",
       recent: "Recent",
     },
+    // The panel is a narrow column by default and a graph needs room; without this the
+    // whole map fits at about a quarter scale and no zoom recovers the labels.
+    expandMap: "Expand the map to full screen",
+    collapseMap: "Leave full screen",
     searchPlaceholder: "Search the graph…",
     searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
     observations: "observations",
@@ -602,6 +606,8 @@ const pt: ChatDict = {
       search: "Busca",
       recent: "Recentes",
     },
+    expandMap: "Expandir o mapa para tela cheia",
+    collapseMap: "Sair da tela cheia",
     searchPlaceholder: "Buscar no grafo…",
     searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
     observations: "observações",

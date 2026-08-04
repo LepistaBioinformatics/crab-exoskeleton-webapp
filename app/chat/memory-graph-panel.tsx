@@ -391,6 +391,8 @@ export default function MemoryGraphPanel({
                   selected={selected}
                   onSelect={(name) => (name ? select(name) : setSelected(null))}
                   emptyLabel={t.memoryGraph.empty.body}
+                  expandLabel={t.memoryGraph.expandMap}
+                  collapseLabel={t.memoryGraph.collapseMap}
                 />
               </div>
             )}

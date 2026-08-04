@@ -33,15 +33,18 @@ const edgeLine = cva("transition-opacity", {
   defaultVariants: { faded: false },
 });
 
+// Labels are drawn only when they can be READ. Below the zoom threshold every label
+// overlaps its neighbours into noise, so they are hidden and the shape is what you see;
+// a selection always keeps its own neighbourhood labelled regardless of zoom.
 const nodeLabel = cva("pointer-events-none select-none transition-opacity", {
   variants: {
-    faded: { true: "opacity-10", false: "opacity-90" },
-    // Only the selected node and its neighbours keep a readable label; drawing every
-    // label at once is what turns a graph picture into noise.
-    near: { true: "", false: "" },
+    shown: { true: "opacity-90", false: "opacity-0" },
   },
-  defaultVariants: { faded: false, near: true },
+  defaultVariants: { shown: true },
 });
+
+/** Below this the labels are noise rather than information. */
+const LABEL_ZOOM = 1.1;
 
 export default function MemoryGraphView({
   entities,
@@ -49,6 +52,8 @@ export default function MemoryGraphView({
   selected,
   onSelect,
   emptyLabel,
+  expandLabel,
+  collapseLabel,
 }: {
   entities: SummaryEntity[];
   relations: Relation[];
@@ -56,7 +61,14 @@ export default function MemoryGraphView({
   selected: string | null;
   onSelect: (name: string | null) => void;
   emptyLabel: string;
+  expandLabel: string;
+  collapseLabel: string;
 }) {
+  // The panel is a ~280px column by default, and the layout spans far more than that, so
+  // the fit alone reduced everything to a quarter scale — labels landed at about 3px and
+  // no zoom ceiling could recover it. This lets the map take the viewport, which is the
+  // only real fix; the zoom range and the label threshold help once it has room.
+  const [expanded, setExpanded] = useState(false);
   // Recomputed only when the graph itself changes. The simulation runs to completion, so
   // this is one synchronous cost per load rather than an animation loop — a settling graph
   // moves labels while you read them and makes clicking a node a chase.
@@ -111,7 +123,13 @@ export default function MemoryGraphView({
   const isFaded = (id: string) => Boolean(near) && !near!.nodes.has(id);
 
   return (
-    <div className="relative h-full">
+    <div
+      className={
+        expanded
+          ? "fixed inset-0 z-50 bg-bg"
+          : "relative h-full"
+      }
+    >
       <svg
         viewBox={viewBox}
         className="h-full w-full touch-none"
@@ -146,6 +164,9 @@ export default function MemoryGraphView({
             node={node}
             faded={isFaded(node.id)}
             selected={node.id === selected}
+            // Readable when zoomed in, or when this node is in the selected
+            // neighbourhood — a selection is a question about specific names.
+            labelled={zoom >= LABEL_ZOOM || Boolean(near?.nodes.has(node.id))}
             onSelect={onSelect}
           />
         ))}
@@ -153,10 +174,16 @@ export default function MemoryGraphView({
 
       <div className="absolute bottom-2 right-2 flex gap-1">
         {[
-          { label: "−", to: () => setZoom((z) => Math.max(0.4, z / 1.3)) },
-          { label: "+", to: () => setZoom((z) => Math.min(4, z * 1.3)) },
+          {
+            label: expanded ? "⤡" : "⤢",
+            title: expanded ? collapseLabel : expandLabel,
+            to: () => setExpanded((v) => !v),
+          },
+          { label: "−", title: undefined, to: () => setZoom((z) => Math.max(0.3, z / 1.4)) },
+          { label: "+", title: undefined, to: () => setZoom((z) => Math.min(12, z * 1.4)) },
           {
             label: "⤾",
+            title: undefined,
             to: () => {
               setZoom(1);
               setPan({ x: 0, y: 0 });
@@ -166,6 +193,7 @@ export default function MemoryGraphView({
           <button
             key={b.label}
             type="button"
+            title={b.title}
             onClick={b.to}
             className="flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg"
           >
@@ -181,11 +209,13 @@ function GraphNodeMark({
   node,
   faded,
   selected,
+  labelled,
   onSelect,
 }: {
   node: GraphNode;
   faded: boolean;
   selected: boolean;
+  labelled: boolean;
   onSelect: (name: string) => void;
 }) {
   const r = radiusFor(node.observations);
@@ -211,7 +241,7 @@ function GraphNodeMark({
         textAnchor="middle"
         fontSize={11}
         fill="var(--color-fg)"
-        className={nodeLabel({ faded })}
+        className={nodeLabel({ shown: labelled && !faded })}
       >
         {node.id}
       </text>
