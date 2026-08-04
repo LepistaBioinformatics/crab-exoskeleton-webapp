@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildElements, typeColorIndex } from "./graph-elements";
+import { buildElements, MAX_NODES, typeColorIndex } from "./graph-elements";
 import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
 
 // Cytoscape owns the layout and the drawing now, so what is left to test is the mapping —
@@ -262,5 +262,62 @@ describe("buildElements — a query keeps its matches' neighbours", () => {
   it("marks everything as a match when there is no query to narrow by", () => {
     const { nodes } = buildElements(graph, rels);
     expect(nodes.every((n) => n.data.match)).toBe(true);
+  });
+});
+
+// cose computes all-pairs repulsion synchronously on the main thread, so cost grows with the
+// SQUARE of the node count — a big enough graph freezes the tab rather than rendering slowly.
+// The server only caps a workspace at 4 MiB of encoded JSON, which is thousands of entities,
+// so the ceiling has to be here and it has to be honest about what it dropped.
+describe("buildElements — the node ceiling", () => {
+  const many = (n: number, obs = (i: number) => i) =>
+    Array.from({ length: n }, (_, i) => entity(`e${String(i).padStart(4, "0")}`, {
+      observationCount: obs(i),
+    }));
+
+  it("draws everything when the graph is under the cap", () => {
+    const { nodes, truncated } = buildElements(many(10), []);
+    expect(nodes).toHaveLength(10);
+    expect(truncated).toBe(0);
+  });
+
+  it("caps the nodes and reports how many it dropped", () => {
+    const { nodes, truncated } = buildElements(many(40), [], { limit: 25 });
+    expect(nodes).toHaveLength(25);
+    expect(truncated).toBe(15);
+  });
+
+  it("keeps the most-observed when it has to choose", () => {
+    const { nodes } = buildElements(many(10), [], { limit: 3 });
+    // observationCount is the index here, so the highest indices must survive.
+    expect(nodes.map((n) => n.data.observations).sort((a, b) => a - b)).toEqual([7, 8, 9]);
+  });
+
+  // A cap that dropped the thing somebody just searched for would be indefensible.
+  it("never drops a match in favour of a better-observed non-match", () => {
+    const graph = [
+      entity("needle", { observationCount: 0 }),
+      ...many(20, (i) => 100 + i),
+    ];
+    const { nodes } = buildElements(graph, [], { limit: 3, query: "needle" });
+    expect(nodes.map((n) => n.data.id)).toContain("needle");
+  });
+
+  it("has a default ceiling, so a caller that forgets cannot freeze the tab", () => {
+    const { nodes, truncated } = buildElements(many(MAX_NODES + 50), []);
+    expect(nodes).toHaveLength(MAX_NODES);
+    expect(truncated).toBe(50);
+  });
+
+  it("drops the edges of nodes the cap removed", () => {
+    const graph = many(6, () => 1);
+    const rels = [rel("e0000", "e0005")];
+    const { nodes, edges } = buildElements(graph, rels, { limit: 2 });
+    expect(nodes).toHaveLength(2);
+    // Whichever two survived, an edge to a dropped node would make Cytoscape throw.
+    const ids = new Set(nodes.map((n) => n.data.id));
+    for (const e of edges) {
+      expect(ids.has(e.data.source) && ids.has(e.data.target)).toBe(true);
+    }
   });
 });

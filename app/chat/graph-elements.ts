@@ -12,6 +12,8 @@ import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
 // the mapping is where a wrong answer is invisible.
 
 export interface GraphElements {
+  /** How many nodes the limit dropped. Zero when the whole graph is drawn. */
+  truncated: number;
   nodes: {
     data: {
       id: string;
@@ -51,7 +53,22 @@ export interface GraphElements {
 export interface GraphFilter {
   type?: string | null;
   query?: string;
+  /** Hard ceiling on rendered nodes — see MAX_NODES. */
+  limit?: number;
 }
+
+/**
+ * The most nodes the map will draw.
+ *
+ * Not a style preference: `cose` computes all-pairs repulsion synchronously on the main
+ * thread, so cost grows with the SQUARE of the node count and a big enough graph freezes the
+ * tab rather than rendering slowly. The server only caps a workspace's graph at 4 MiB of
+ * encoded JSON, which is thousands of entities, so the ceiling has to be here.
+ *
+ * Truncation is REPORTED, never silent: a capped picture that looks complete is worse than
+ * one that says what it left out.
+ */
+export const MAX_NODES = 300;
 
 export function buildElements(
   entities: SummaryEntity[],
@@ -79,7 +96,22 @@ export function buildElements(
     }
   }
 
-  entities = pool.filter((e) => keep.has(e.name));
+  const kept = pool.filter((e) => keep.has(e.name));
+
+  // Capped by observation count, and MATCHES FIRST: a cap that dropped the entity somebody
+  // just searched for would be indefensible. Within each group the most-observed come first,
+  // as the closest available stand-in for "most substantial".
+  const limit = filter.limit ?? MAX_NODES;
+  const ranked = [...kept].sort((a, b) => {
+    const am = matched.has(a.name) ? 1 : 0;
+    const bm = matched.has(b.name) ? 1 : 0;
+    if (am !== bm) return bm - am;
+    return b.observationCount - a.observationCount;
+  });
+  const truncated = Math.max(0, ranked.length - limit);
+  const entitiesShown = ranked.slice(0, limit);
+
+  entities = entitiesShown;
   const present = new Set(entities.map((e) => e.name));
 
   // Sorted by name so the seed depends on the SET of entities, not on the order the API
@@ -119,7 +151,7 @@ export function buildElements(
 
   const types = [...new Set(nodes.map((n) => n.data.type))].sort();
 
-  return { nodes, edges, types };
+  return { nodes, edges, types, truncated };
 }
 
 /**

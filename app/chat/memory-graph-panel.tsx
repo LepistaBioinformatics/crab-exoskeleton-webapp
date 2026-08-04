@@ -115,6 +115,14 @@ export default function MemoryGraphPanel({
   // server-side BM25 request, and sharing it would fire searches while somebody narrows the
   // map. This filters what is already loaded.
   const [mapQuery, setMapQuery] = useState("");
+  // What the MAP is actually filtered by, trailing the input. The graph rebuilds when this
+  // changes and the layout is O(n^2) on the main thread, so feeding it every keystroke is how
+  // a large graph freezes the tab.
+  const [mapQueryApplied, setMapQueryApplied] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setMapQueryApplied(mapQuery), 250);
+    return () => clearTimeout(id);
+  }, [mapQuery]);
   // The detail pane's height, in pixels, owned here so it survives selecting another
   // entity — a member who dragged it tall wants it tall for the next one too.
   const [detailHeight, setDetailHeight] = useState(DEFAULT_DETAIL_HEIGHT);
@@ -411,8 +419,9 @@ export default function MemoryGraphPanel({
                   fitLabel={t.memoryGraph.fitMap}
                   spreadReadout={t.memoryGraph.spreadReadout}
                   typeFilter={typeFilter}
-                  query={mapQuery}
+                  query={mapQueryApplied}
                   noMatchLabel={t.memoryGraph.noResults}
+                  truncatedLabel={t.memoryGraph.mapTruncated}
                 />
               </div>
             )}

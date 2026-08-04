@@ -73,6 +73,7 @@ export default function MemoryGraphView({
   fitLabel,
   spreadReadout,
   noMatchLabel,
+  truncatedLabel,
 }: {
   entities: SummaryEntity[];
   relations: Relation[];
@@ -92,6 +93,8 @@ export default function MemoryGraphView({
   spreadReadout: string;
   /** Shown when a filter hid everything — distinct from an empty graph. */
   noMatchLabel: string;
+  /** "{count} more not shown" — the cap is reported, never silent. */
+  truncatedLabel: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
@@ -267,8 +270,8 @@ export default function MemoryGraphView({
     }
   }
 
-  const shown = buildElements(entities, relations, { type: typeFilter, query }).nodes.length;
-  if (shown === 0) {
+  const built = buildElements(entities, relations, { type: typeFilter, query });
+  if (built.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <p className="text-sm text-fg-muted">
@@ -360,6 +363,13 @@ export default function MemoryGraphView({
       className="relative h-full min-h-[320px] bg-bg"
     >
       {stage}
+      {built.truncated > 0 && (
+        // Never silent: a capped picture that looks complete is worse than one that says
+        // what it left out.
+        <p className="absolute left-2 top-2 rounded-md border border-brand/30 bg-surface/90 px-2 py-1 text-[10px] text-fg-muted">
+          {truncatedLabel.replace("{count}", String(built.truncated))}
+        </p>
+      )}
     </div>
   );
 }

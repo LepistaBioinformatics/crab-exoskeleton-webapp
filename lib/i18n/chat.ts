@@ -209,6 +209,9 @@ const en = {
     // A substring over entity names, not the Search tab's BM25 ranking — the placeholder
     // says "filter" rather than "search" so it does not promise the other behaviour.
     mapFilterPlaceholder: "Filter entities by name",
+    // The map caps how many nodes it draws, because the layout cost grows with the square of
+    // the node count and would freeze the tab. Filter to reach the rest.
+    mapTruncated: "{count} more not shown — filter to narrow",
     searchPlaceholder: "Search the graph…",
     searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
     observations: "observations",
@@ -616,6 +619,7 @@ const pt: ChatDict = {
     fitMap: "Enquadrar o grafo todo",
     spreadReadout: "espalhar {value}x",
     mapFilterPlaceholder: "Filtrar entidades por nome",
+    mapTruncated: "{count} não exibidos — filtre para reduzir",
     searchPlaceholder: "Buscar no grafo…",
     searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
     observations: "observações",
