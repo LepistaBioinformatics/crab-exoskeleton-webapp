@@ -111,6 +111,10 @@ export default function MemoryGraphPanel({
   // Owned here, not in BrowseList: the list re-fetches on every visit, and a filter
   // that reset itself each time would be useless on the graph it exists for.
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  // The map's own name filter. Deliberately NOT the search tab's `query`: that one issues a
+  // server-side BM25 request, and sharing it would fire searches while somebody narrows the
+  // map. This filters what is already loaded.
+  const [mapQuery, setMapQuery] = useState("");
   // The detail pane's height, in pixels, owned here so it survives selecting another
   // entity — a member who dragged it tall wants it tall for the next one too.
   const [detailHeight, setDetailHeight] = useState(DEFAULT_DETAIL_HEIGHT);
@@ -384,7 +388,16 @@ export default function MemoryGraphPanel({
             {mode === "map" && graph && (
               // Fills the pane: a graph in a narrow column is unreadable, and this panel
               // deliberately has no max width (see uploads-sidebar) precisely for this.
-              <div className="h-full min-h-[320px]">
+              <div className="flex h-full min-h-[320px] flex-col">
+                <div className="shrink-0 px-3 pb-2">
+                  <Input
+                    inputSize="sm"
+                    value={mapQuery}
+                    onChange={(e) => setMapQuery(e.target.value)}
+                    placeholder={t.memoryGraph.mapFilterPlaceholder}
+                    aria-label={t.memoryGraph.mapFilterPlaceholder}
+                  />
+                </div>
                 <MemoryGraphView
                   entities={graph.entities}
                   relations={graph.relations}
@@ -396,6 +409,10 @@ export default function MemoryGraphPanel({
                   spreadOutLabel={t.memoryGraph.spreadOut}
                   spreadInLabel={t.memoryGraph.spreadIn}
                   fitLabel={t.memoryGraph.fitMap}
+                  spreadReadout={t.memoryGraph.spreadReadout}
+                  typeFilter={typeFilter}
+                  query={mapQuery}
+                  noMatchLabel={t.memoryGraph.noResults}
                 />
               </div>
             )}

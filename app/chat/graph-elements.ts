@@ -22,10 +22,35 @@ export interface GraphElements {
   types: string[];
 }
 
+/**
+ * Narrows the graph before it is drawn.
+ *
+ * `type` reuses the panel's existing type filter, so switching between the list and the map
+ * keeps the same narrowing rather than each tab having its own idea of it.
+ *
+ * `query` is a case-insensitive SUBSTRING match over the entity name — deliberately not the
+ * Search tab's ranking, which is BM25 over names, types and observation text on the server.
+ * Calling this a search would promise that; it filters what is already loaded, which is why
+ * it is instant and why it cannot find an entity by something only its observations say.
+ */
+export interface GraphFilter {
+  type?: string | null;
+  query?: string;
+}
+
+function matches(e: SummaryEntity, filter: GraphFilter): boolean {
+  if (filter.type && (e.type || "unknown") !== filter.type) return false;
+  const q = filter.query?.trim().toLowerCase();
+  if (q && !e.name.toLowerCase().includes(q)) return false;
+  return true;
+}
+
 export function buildElements(
   entities: SummaryEntity[],
   relations: Relation[],
+  filter: GraphFilter = {},
 ): GraphElements {
+  entities = entities.filter((e) => matches(e, filter));
   const present = new Set(entities.map((e) => e.name));
 
   // Sorted by name so the seed depends on the SET of entities, not on the order the API

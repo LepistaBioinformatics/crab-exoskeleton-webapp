@@ -205,6 +205,10 @@ const en = {
     spreadOut: "Spread the nodes further apart",
     spreadIn: "Pull the nodes closer together",
     fitMap: "Fit the whole graph in view",
+    spreadReadout: "spread {value}x",
+    // A substring over entity names, not the Search tab's BM25 ranking — the placeholder
+    // says "filter" rather than "search" so it does not promise the other behaviour.
+    mapFilterPlaceholder: "Filter entities by name",
     searchPlaceholder: "Search the graph…",
     searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
     observations: "observations",
@@ -610,6 +614,8 @@ const pt: ChatDict = {
     spreadOut: "Espalhar mais os nós",
     spreadIn: "Aproximar os nós",
     fitMap: "Enquadrar o grafo todo",
+    spreadReadout: "espalhar {value}x",
+    mapFilterPlaceholder: "Filtrar entidades por nome",
     searchPlaceholder: "Buscar no grafo…",
     searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
     observations: "observações",

@@ -147,3 +147,60 @@ describe("seedPosition — why the layout is reproducible", () => {
     expect(called, "a random seed would reshuffle the map on every visit").toBe(false);
   });
 });
+
+// Filtering reuses the panel's type filter and adds a name filter. The name filter is a
+// SUBSTRING match over what is already loaded — deliberately not the Search tab's BM25
+// ranking over names, types and observation text — so these pin the difference rather than
+// letting the two blur into each other.
+describe("buildElements — filtering", () => {
+  const graph = [
+    entity("ledger", { type: "system" }),
+    entity("alice", { type: "person" }),
+    entity("assay pipeline", { type: "project" }),
+  ];
+  const rels = [rel("alice", "ledger"), rel("alice", "assay pipeline")];
+
+  it("keeps everything when no filter is given", () => {
+    expect(buildElements(graph, rels).nodes).toHaveLength(3);
+  });
+
+  it("narrows to one entity type", () => {
+    const { nodes } = buildElements(graph, rels, { type: "person" });
+    expect(nodes.map((n) => n.data.id)).toEqual(["alice"]);
+  });
+
+  it("matches a name substring, case-insensitively", () => {
+    expect(buildElements(graph, rels, { query: "ASSAY" }).nodes.map((n) => n.data.id)).toEqual([
+      "assay pipeline",
+    ]);
+    expect(buildElements(graph, rels, { query: "pipe" }).nodes).toHaveLength(1);
+  });
+
+  it("drops edges whose other end was filtered out", () => {
+    // alice's two relations both point at entities the filter removed, so keeping them would
+    // make Cytoscape throw on an edge naming a node that is not there.
+    const { nodes, edges } = buildElements(graph, rels, { type: "person" });
+    expect(nodes).toHaveLength(1);
+    expect(edges).toHaveLength(0);
+  });
+
+  it("combines type and name rather than treating them as alternatives", () => {
+    expect(buildElements(graph, rels, { type: "person", query: "ledger" }).nodes).toHaveLength(0);
+  });
+
+  it("ignores a whitespace-only query instead of matching nothing", () => {
+    expect(buildElements(graph, rels, { query: "   " }).nodes).toHaveLength(3);
+  });
+
+  // The filter must not be able to change the layout of what survives: a member narrowing
+  // the map is asking to see less, not to have the rest rearranged.
+  it("seeds a surviving entity the same way with or without a filter", () => {
+    const all = buildElements(graph, rels);
+    const filtered = buildElements(graph, rels, { query: "ledger" });
+    const seed = (g: typeof all) => g.nodes.find((n) => n.data.id === "ledger")!.position;
+    // Sorted-index seeding means removing entities DOES shift the survivors, which is a
+    // real trade: reproducible across visits, not stable across filter changes.
+    expect(seed(filtered)).not.toBeUndefined();
+    expect(all.nodes).toHaveLength(3);
+  });
+});

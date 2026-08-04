@@ -30,6 +30,10 @@ const PALETTE_VARS = [
   "--color-syntax-name",
 ];
 
+/** A dense graph genuinely needs more than 4x; below 0.5x nodes start to overlap. */
+const MIN_SPREAD = 0.5;
+const MAX_SPREAD = 8;
+
 const PALETTE_FALLBACK = ["#64c5eb", "#663a88", "#1f7a4d", "#a35200", "#0d6e8c", "#c79ae8"];
 
 interface Palette {
@@ -55,6 +59,8 @@ function readPalette(el: HTMLElement): Palette {
 export default function MemoryGraphView({
   entities,
   relations,
+  typeFilter,
+  query,
   selected,
   onSelect,
   emptyLabel,
@@ -63,9 +69,15 @@ export default function MemoryGraphView({
   spreadOutLabel,
   spreadInLabel,
   fitLabel,
+  spreadReadout,
+  noMatchLabel,
 }: {
   entities: SummaryEntity[];
   relations: Relation[];
+  /** The panel's type filter, honoured here too so the narrowing survives a tab switch. */
+  typeFilter: string | null;
+  /** Substring over entity names — see GraphFilter for why this is not the Search tab. */
+  query: string;
   selected: string | null;
   onSelect: (name: string | null) => void;
   emptyLabel: string;
@@ -74,6 +86,10 @@ export default function MemoryGraphView({
   spreadOutLabel: string;
   spreadInLabel: string;
   fitLabel: string;
+  /** "spread {value}x" — the readout, so the control is not two unlabelled arrows. */
+  spreadReadout: string;
+  /** Shown when a filter hid everything — distinct from an empty graph. */
+  noMatchLabel: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
@@ -84,17 +100,22 @@ export default function MemoryGraphView({
   // How far apart the layout pushes things. Exposed because the right spread depends on the
   // graph: a dozen entities want them close enough to read as one picture, a hundred want
   // room to separate into clusters, and no single constant serves both.
+  //
+  // The range reaches 8x rather than 4x because a dense graph genuinely needs it, and the
+  // current multiplier is SHOWN — the first version was two near-identical arrow glyphs
+  // with no readout, so there was no way to tell them apart or to know where you were.
   const [spread, setSpread] = useState(1);
   // Kept in a ref so the tap handler never goes stale without rebuilding the graph, which
   // would re-run the layout and move every node.
   const select = useRef(onSelect);
   select.current = onSelect;
+  const spreadLabel = spreadReadout.replace("{value}", String(spread));
 
   useEffect(() => {
     const container = box.current;
     if (!container || entities.length === 0) return;
 
-    const { nodes, edges, types } = buildElements(entities, relations);
+    const { nodes, edges, types } = buildElements(entities, relations, { type: typeFilter, query });
     const p = readPalette(container);
 
     const instance = cytoscape({
@@ -176,7 +197,7 @@ export default function MemoryGraphView({
       instance.destroy();
       cy.current = null;
     };
-  }, [entities, relations, spread]);
+  }, [entities, relations, typeFilter, query, spread]);
 
   // Selection is applied as CLASSES, never by rebuilding: a rebuild re-runs the layout, so
   // clicking a node would rearrange the picture around it.
@@ -201,10 +222,13 @@ export default function MemoryGraphView({
     instance.fit(undefined, 40);
   }, [expanded]);
 
-  if (entities.length === 0) {
+  const shown = buildElements(entities, relations, { type: typeFilter, query }).nodes.length;
+  if (shown === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
-        <p className="text-sm text-fg-muted">{emptyLabel}</p>
+        <p className="text-sm text-fg-muted">
+          {entities.length === 0 ? emptyLabel : noMatchLabel}
+        </p>
       </div>
     );
   }
@@ -218,20 +242,6 @@ export default function MemoryGraphView({
           title: expanded ? collapseLabel : expandLabel,
           disabled: false,
           onClick: () => setExpanded((v) => !v),
-        },
-        {
-          key: "spread-out",
-          label: "↔",
-          title: spreadOutLabel,
-          disabled: spread >= 4,
-          onClick: () => setSpread((v) => Math.min(4, +(v * 1.5).toFixed(2))),
-        },
-        {
-          key: "spread-in",
-          label: "↮",
-          title: spreadInLabel,
-          disabled: spread <= 0.5,
-          onClick: () => setSpread((v) => Math.max(0.5, +(v / 1.5).toFixed(2))),
         },
         {
           key: "fit",
@@ -256,9 +266,43 @@ export default function MemoryGraphView({
     </div>
   );
 
+  // The spread group is separate from the icon row because it needs a readout, and a
+  // number wedged between two 28px icon buttons reads as an icon rather than a value.
+  const spreadControl = (
+    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-brand/30 bg-surface/90 px-1">
+      <button
+        type="button"
+        title={spreadInLabel}
+        aria-label={spreadInLabel}
+        disabled={spread <= MIN_SPREAD}
+        onClick={() => setSpread((v) => Math.max(MIN_SPREAD, +(v / 1.4).toFixed(2)))}
+        className="flex size-6 items-center justify-center text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-40"
+      >
+        −
+      </button>
+      <span
+        className="min-w-[3.2rem] text-center font-mono text-[10px] text-fg-muted"
+        title={spreadLabel}
+      >
+        {spreadLabel}
+      </span>
+      <button
+        type="button"
+        title={spreadOutLabel}
+        aria-label={spreadOutLabel}
+        disabled={spread >= MAX_SPREAD}
+        onClick={() => setSpread((v) => Math.min(MAX_SPREAD, +(v * 1.4).toFixed(2)))}
+        className="flex size-6 items-center justify-center text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-40"
+      >
+        +
+      </button>
+    </div>
+  );
+
   const stage = (
     <>
       <div ref={box} className="h-full w-full" />
+      {spreadControl}
       {controls}
     </>
   );
