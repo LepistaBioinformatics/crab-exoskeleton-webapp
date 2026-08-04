@@ -1,5 +1,5 @@
 import type { Workspace } from "@/app/chat/fragment";
-import { errorCode } from "@/lib/i18n/errors";
+import { getJson, workspaceQuery } from "@/lib/workspaceApi";
 
 // Client wrapper for the agent's knowledge-graph memory — the entities,
 // relations and observations the bot accumulates through its native MCP server.
@@ -108,24 +108,6 @@ export interface RecentChanges {
   recentObservations: EntityObservations[];
 }
 
-function workspaceQuery(
-  workspace: Workspace,
-  extra: Record<string, string> = {},
-): string {
-  return new URLSearchParams({
-    tenant_id: workspace.t,
-    subs_acc_id: workspace.s,
-    role: workspace.r,
-    ...extra,
-  }).toString();
-}
-
-async function get<T>(path: string, query: string): Promise<T> {
-  const res = await fetch(`${path}?${query}`);
-  if (!res.ok) throw new Error(await errorCode(res));
-  return (await res.json()) as T;
-}
-
 /** The browse list: names, types, counts and each entity's first observation. */
 export function readGraph(
   workspace: Workspace,
@@ -134,7 +116,7 @@ export function readGraph(
   const extra: Record<string, string> = { detail_level: "summary" };
   if (opts.includeArchived) extra.include_archived = "true";
   if (opts.includeMerged) extra.include_merged = "true";
-  return get<SummaryGraph>(
+  return getJson<SummaryGraph>(
     "/api/memory-graph",
     workspaceQuery(workspace, extra),
   );
@@ -149,7 +131,7 @@ export function openNodes(
   workspace: Workspace,
   names: string[],
 ): Promise<FullGraph> {
-  return get<FullGraph>(
+  return getJson<FullGraph>(
     "/api/memory-graph/nodes",
     workspaceQuery(workspace, { names: names.join(",") }),
   );
@@ -160,7 +142,7 @@ export function searchGraph(
   query: string,
   k = 10,
 ): Promise<SearchResult> {
-  return get<SearchResult>(
+  return getJson<SearchResult>(
     "/api/memory-graph/search",
     workspaceQuery(workspace, { query, k: String(k) }),
   );
@@ -170,7 +152,7 @@ export function recentChanges(
   workspace: Workspace,
   hours = 24,
 ): Promise<RecentChanges> {
-  return get<RecentChanges>(
+  return getJson<RecentChanges>(
     "/api/memory-graph/recent",
     workspaceQuery(workspace, { hours: String(hours) }),
   );

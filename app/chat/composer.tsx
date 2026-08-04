@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cva } from "class-variance-authority";
 import {
   ArrowUp,
+  CalendarClock,
   FileArchive,
   FileText,
   Files,
+  GitBranch,
   Image as ImageIcon,
   Maximize2,
   Paperclip,
@@ -13,6 +16,7 @@ import {
   Reply,
   Table2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
@@ -20,9 +24,19 @@ import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
 import type { ReplyTo } from "@/app/chat/chat-view";
+import { referenceChip, type ChatReference } from "@/lib/chatReference";
 import MarkdownEditor from "@/app/chat/markdown-editor";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
+
+// A context chip's accent, the only thing that differs between the two kinds.
+const contextChip = cva(
+  "mb-2 flex items-center gap-2 rounded-lg border-l-2 bg-elevated px-3 py-1.5",
+  {
+    variants: { tone: { reply: "border-brand", task: "border-accent" } },
+    defaultVariants: { tone: "reply" },
+  },
+);
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
 const MIN_HEIGHT = 44; // a taller resting height so the box feels roomy
@@ -54,6 +68,9 @@ interface ComposerProps {
   onRemoveAttachment: (path: string) => void;
   replyTo: ReplyTo | null;
   onCancelReply: () => void;
+  /** What the next message will carry besides the prose — see lib/chatReference. */
+  chatRef: ChatReference | null;
+  onCancelChatRef: () => void;
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -73,6 +90,8 @@ export default function Composer({
   onRemoveAttachment,
   replyTo,
   onCancelReply,
+  chatRef,
+  onCancelChatRef,
 }: ComposerProps) {
   const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -149,9 +168,17 @@ export default function Composer({
     el.style.height = `${Math.max(MIN_HEIGHT, Math.min(el.scrollHeight, MAX_HEIGHT))}px`;
   }, [value]);
 
+  // Opening a conversation puts the cursor in the field, so the member can start
+  // typing without clicking.
+  //
+  // `locale` is a dependency because the field is KEYED on it (see the Textarea): the
+  // mount effect above resolves navigator.language a tick later, which changes the key
+  // and makes React replace the DOM node. This effect had already focused the node
+  // being discarded, and without `locale` here it never re-ran — so the composer lost
+  // focus on every mount, which is exactly what opening a chat does.
   useEffect(() => {
     if (!loadingHistory) ref.current?.focus();
-  }, [sessionId, loadingHistory]);
+  }, [sessionId, loadingHistory, locale]);
 
   // Picking a message to reply to drops the cursor straight into the field.
   useEffect(() => {
@@ -186,26 +213,26 @@ export default function Composer({
       )}
 
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-brand bg-elevated px-3 py-1.5">
-          <Reply size={14} className="shrink-0 text-fg-muted" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold text-fg">
-              {t.composer.replyingToBefore}
-              {replyTo.role === "user" ? t.composer.replyingToUser : t.composer.replyingToAgent}
-            </div>
-            <div className="truncate text-xs text-fg-muted">
-              {replyPreview || t.composer.replyNoText}
-            </div>
-          </div>
-          <button
-            type="button"
-            aria-label={t.composer.cancelReply}
-            onClick={onCancelReply}
-            className="shrink-0 text-fg-muted transition-colors hover:text-fg"
-          >
-            <X size={14} aria-hidden />
-          </button>
-        </div>
+        <ContextChip
+          Icon={Reply}
+          tone="reply"
+          title={`${t.composer.replyingToBefore}${
+            replyTo.role === "user" ? t.composer.replyingToUser : t.composer.replyingToAgent
+          }`}
+          preview={replyPreview || t.composer.replyNoText}
+          cancelLabel={t.composer.cancelReply}
+          onCancel={onCancelReply}
+        />
+      )}
+
+      {chatRef && (
+        <ContextChip
+          Icon={chatRef.kind === "span" ? GitBranch : CalendarClock}
+          tone="task"
+          {...referenceChip(chatRef, t)}
+          cancelLabel={t.scheduledTasks.cancelReference}
+          onCancel={onCancelChatRef}
+        />
       )}
 
       {(attachments.length > 0 || uploading) && (
@@ -425,6 +452,44 @@ export default function Composer({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// A context slot shown above the field: what the next message will carry besides the
+// prose the member types. One component for the reply quote and the scheduled-task
+// reference, which were written as separate clones of the same markup.
+function ContextChip({
+  Icon,
+  tone,
+  title,
+  preview,
+  cancelLabel,
+  onCancel,
+}: {
+  Icon: LucideIcon;
+  tone: "reply" | "task";
+  title: string;
+  preview: string;
+  cancelLabel: string;
+  onCancel: () => void;
+}) {
+  return (
+    <div className={contextChip({ tone })}>
+      <Icon size={14} className="shrink-0 text-fg-muted" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-fg">{title}</div>
+        <div className="truncate text-xs text-fg-muted">{preview}</div>
+      </div>
+      <button
+        type="button"
+        aria-label={cancelLabel}
+        title={cancelLabel}
+        onClick={onCancel}
+        className="shrink-0 text-fg-muted transition-colors hover:text-fg"
+      >
+        <X size={14} aria-hidden />
+      </button>
     </div>
   );
 }

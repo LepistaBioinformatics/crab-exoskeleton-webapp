@@ -11,6 +11,8 @@ const en = {
     openWorkspaces: "Open workspaces",
     closeMenu: "Close menu",
     workspaces: "Workspaces",
+    // The collapsed rail's label for the conversations panel.
+    conversations: "Conversations",
     // Rendered as "<agentPrefix> <role>" in the mobile top bar.
     agentPrefix: "agent",
   },
@@ -29,6 +31,13 @@ const en = {
   emptyState: {
     title: "Pick a workspace to start",
     body: "Choose a tenant, account, and agent on the left. Its conversations open in a second panel, ready for you to type.",
+  },
+  workspaceGrid: {
+    title: "Pick a workspace",
+    body: "Everything you can reach, grouped by tenant and subscription. Click an agent to open a fresh conversation with it.",
+    // Only read-only access is marked: write is the norm, and a pencil beside a name read as
+    // a control rather than a statement about permission.
+    readOnly: "read-only access",
   },
   connectivity: {
     title: "Can't reach the gateway",
@@ -103,6 +112,78 @@ const en = {
     saved: "Saved",
     placeholder: "e.g. Always answer in Portuguese. Our stack is Next.js + Go…",
   },
+  scheduledTasks: {
+    title: "Scheduled tasks",
+    hint: "What the agent runs on a schedule, and what each run produced. Read-only: ask the agent to create or change a task.",
+    // The store carries no per-run outcome, so the list never claims one. This
+    // sentence is why there are no success ticks next to the executions.
+    noOutcomeHint: "Only the most recent run of a live task records a status — earlier runs show how long they took and how much they logged.",
+    schedule: {
+      cron: "Cron {expr}",
+      every: "Every {interval}",
+      at: "Once at {instant}",
+      // An unfamiliar schedule kind from a newer picoclaw: named, not guessed at.
+      unknown: "Schedule: {kind}",
+    },
+    disabled: "Disabled",
+    nextRun: "Next run",
+    lastRun: "Last run",
+    neverRan: "Has not run yet",
+    lastStatus: "Status",
+    lastErrorLabel: "Error",
+    deliversTo: "Delivers to {target}",
+    oneShot: "Removes itself after running",
+    runs: "{count} run(s)",
+    noRuns: "No runs recorded.",
+    entries: "{count} entries",
+    // A run whose task is gone from the store — the normal end state of a
+    // one-shot task, so it is labelled rather than hidden.
+    removedTask: "Removed task",
+    removedTaskHint: "The task is no longer scheduled, but this run is still on record.",
+    transcriptMissing: "The transcript for this run is no longer available.",
+    backToTasks: "Back to tasks",
+    toolCall: "{name}",
+    toolResult: "Tool result",
+    expandTool: "Show details",
+    collapseTool: "Hide details",
+    reference: "Reference in chat",
+    referenceAria: "Reference this in the chat",
+    // What the composer banner calls the two things that can be referenced.
+    referencedTask: "Scheduled task",
+    referencedRun: "Task run",
+    cancelReference: "Remove reference",
+    // The marker words that travel INSIDE the sent message, so the agent reads a
+    // reference in the member's own language — same idea as the `[anexo: …]` refs.
+    markerTask: "scheduled task",
+    markerRun: "task run",
+    markerLastRun: "last run",
+    none: "No scheduled tasks yet.",
+    noneHint: "Ask the agent to schedule something and it will appear here.",
+    refresh: "Check for new tasks",
+    refreshAria: "Refresh scheduled tasks",
+    hideFinished: "Hide finished",
+    hideFinishedTitle: "Hide tasks that already ran and will not run again",
+    finishedHidden: "{count} hidden",
+    allFinished: "Everything here has finished.",
+    allFinishedHint: "Turn off “Hide finished” to see past tasks and their results.",
+    showMoreRuns: "Show {count} older run(s)",
+    showFewerRuns: "Show fewer runs",
+  },
+  canvasActivity: {
+    ran: "{name} ran",
+    learned: "learned: {entity}",
+    // The row for work no conversation claims. Its own lane rather than hidden: an agent
+    // that did something your history does not mention is the most useful thing this
+    // view can surface.
+    unattributed: "No conversation",
+    unattributedHint: "Scheduled runs and facts the agent could not tie to a chat.",
+    referencedSpan: "Conversation span",
+    // Travels inside the sent message, like the `[anexo: …]` refs.
+    markerSpan: "conversation span",
+    markerMessages: "messages",
+    reference: "Reference in chat",
+    referenceAria: "Reference this conversation in the chat",
+  },
   memoryGraph: {
     // Deliberately NOT "memory": the panel already has one, and t.memory.* is
     // MEMORY_CUSTOM.md. Two different memories need two different visible names.
@@ -111,9 +192,26 @@ const en = {
     hint: "What the agent has learned on its own — entities, how they relate, and the observations behind each one. Read-only: the agent writes this, you inspect it.",
     tabs: {
       browse: "Entities",
+      // The node-link view. "Map" rather than "Graph": the panel is already called the
+      // knowledge graph, so a tab with that name would say nothing about what differs.
+      map: "Map",
       search: "Search",
       recent: "Recent",
     },
+    // The panel is a narrow column by default and a graph needs room; without this the
+    // whole map fits at about a quarter scale and no zoom recovers the labels.
+    expandMap: "Expand the map to full screen",
+    collapseMap: "Leave full screen",
+    spreadOut: "Spread the nodes further apart",
+    spreadIn: "Pull the nodes closer together",
+    fitMap: "Fit the whole graph in view",
+    spreadReadout: "spread {value}x",
+    // A substring over entity names, not the Search tab's BM25 ranking — the placeholder
+    // says "filter" rather than "search" so it does not promise the other behaviour.
+    mapFilterPlaceholder: "Filter entities by name",
+    // The map caps how many nodes it draws, because the layout cost grows with the square of
+    // the node count and would freeze the tab. Filter to reach the rest.
+    mapTruncated: "{count} more not shown — filter to narrow",
     searchPlaceholder: "Search the graph…",
     searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
     observations: "observations",
@@ -310,11 +408,12 @@ const en = {
     organiseHint: "Drag files and folders to reorganise. The agent references these paths in its memory and skills — renaming or moving something it mentioned breaks that reference.",
     deleteFolderTitle: "Delete this folder?",
     deleteFolderMessage: "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
-    // One-line blurbs under each of the three workspace sections, so the menu says
-    // what each is for instead of making the member click to find out.
+    // One-line blurbs under each workspace section, so the menu says what each is
+    // for instead of making the member click to find out.
     sections: {
       memory: "Standing notes you write for the agent.",
       graph: "What the agent learned on its own.",
+      tasks: "What runs on a schedule, and its results.",
       files: "Uploads and files in this workspace.",
     },
     resize: "Resize Workspace files",
@@ -350,6 +449,7 @@ const pt: ChatDict = {
     openWorkspaces: "Abrir workspaces",
     closeMenu: "Fechar menu",
     workspaces: "Workspaces",
+    conversations: "Conversas",
     agentPrefix: "agente",
   },
   pane: {
@@ -364,6 +464,11 @@ const pt: ChatDict = {
   emptyState: {
     title: "Escolha um workspace para começar",
     body: "Escolha um tenant, uma conta e um agente à esquerda. As conversas dele abrem em um segundo painel, prontas para você escrever.",
+  },
+  workspaceGrid: {
+    title: "Escolha um workspace",
+    body: "Tudo o que você pode acessar, agrupado por tenant e assinatura. Clique num agente para abrir uma conversa nova com ele.",
+    readOnly: "acesso somente leitura",
   },
   connectivity: {
     title: "Não foi possível falar com o gateway",
@@ -436,15 +541,84 @@ const pt: ChatDict = {
     saved: "Salvo",
     placeholder: "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
   },
+  scheduledTasks: {
+    title: "Tarefas agendadas",
+    hint: "O que o agente executa em horários programados, e o que cada execução produziu. Somente leitura: peça ao agente para criar ou alterar uma tarefa.",
+    noOutcomeHint: "Só a execução mais recente de uma tarefa ativa registra status — as anteriores mostram quanto tempo levaram e quanto registraram.",
+    schedule: {
+      cron: "Cron {expr}",
+      every: "A cada {interval}",
+      at: "Uma vez em {instant}",
+      unknown: "Agendamento: {kind}",
+    },
+    disabled: "Desabilitada",
+    nextRun: "Próxima execução",
+    lastRun: "Última execução",
+    neverRan: "Ainda não executou",
+    lastStatus: "Status",
+    lastErrorLabel: "Erro",
+    deliversTo: "Entrega em {target}",
+    oneShot: "Se remove depois de executar",
+    runs: "{count} execução(ões)",
+    noRuns: "Nenhuma execução registrada.",
+    entries: "{count} entradas",
+    removedTask: "Tarefa removida",
+    removedTaskHint: "A tarefa não está mais agendada, mas esta execução continua registrada.",
+    transcriptMissing: "O transcript desta execução não está mais disponível.",
+    backToTasks: "Voltar às tarefas",
+    toolCall: "{name}",
+    toolResult: "Resultado da ferramenta",
+    expandTool: "Mostrar detalhes",
+    collapseTool: "Ocultar detalhes",
+    reference: "Referenciar no chat",
+    referenceAria: "Referenciar isto no chat",
+    referencedTask: "Tarefa agendada",
+    referencedRun: "Execução da tarefa",
+    cancelReference: "Remover referência",
+    markerTask: "tarefa agendada",
+    markerRun: "execução",
+    markerLastRun: "última execução",
+    none: "Nenhuma tarefa agendada ainda.",
+    noneHint: "Peça ao agente para agendar algo e aparecerá aqui.",
+    refresh: "Buscar novas tarefas",
+    refreshAria: "Atualizar tarefas agendadas",
+    hideFinished: "Ocultar concluídas",
+    hideFinishedTitle: "Ocultar tarefas que já executaram e não executarão de novo",
+    finishedHidden: "{count} oculta(s)",
+    allFinished: "Tudo aqui já foi concluído.",
+    allFinishedHint: "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
+    showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
+    showFewerRuns: "Mostrar menos execuções",
+  },
+  canvasActivity: {
+    ran: "{name} rodou",
+    learned: "aprendeu: {entity}",
+    unattributed: "Sem conversa",
+    unattributedHint: "Execuções agendadas e fatos que o agente não conseguiu ligar a um chat.",
+    referencedSpan: "Trecho de conversa",
+    markerSpan: "trecho de conversa",
+    markerMessages: "mensagens",
+    reference: "Referenciar no chat",
+    referenceAria: "Referenciar esta conversa no chat",
+  },
   memoryGraph: {
     title: "Grafo de conhecimento",
     open: "Abrir o grafo de conhecimento",
     hint: "O que o agente aprendeu por conta própria — entidades, como se relacionam e as observações por trás de cada uma. Somente leitura: o agente escreve, você confere.",
     tabs: {
       browse: "Entidades",
+      map: "Mapa",
       search: "Busca",
       recent: "Recentes",
     },
+    expandMap: "Expandir o mapa para tela cheia",
+    collapseMap: "Sair da tela cheia",
+    spreadOut: "Espalhar mais os nós",
+    spreadIn: "Aproximar os nós",
+    fitMap: "Enquadrar o grafo todo",
+    spreadReadout: "espalhar {value}x",
+    mapFilterPlaceholder: "Filtrar entidades por nome",
+    mapTruncated: "{count} não exibidos — filtre para reduzir",
     searchPlaceholder: "Buscar no grafo…",
     searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
     observations: "observações",
@@ -623,6 +797,7 @@ const pt: ChatDict = {
     sections: {
       memory: "Notas fixas que você escreve para o agente.",
       graph: "O que o agente aprendeu por conta própria.",
+      tasks: "O que roda em horário programado, e seus resultados.",
       files: "Uploads e arquivos deste workspace.",
     },
     resize: "Redimensionar Arquivos do workspace",

@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
-import { useFragment, toWorkspace } from "./fragment";
+import { Boxes, Menu, MessagesSquare, X } from "lucide-react";
+import { useFragment, setView, toWorkspace } from "./fragment";
+import { resolvePanel } from "./sidebar-panel-state";
+import { useWorkspaceGroups } from "./use-workspaces";
+import type { ChatReference } from "@/lib/chatReference";
+import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
 import ChatView from "./chat-view";
 import CanvasTimeline from "./canvas-timeline";
-import EmptyState from "./empty-state";
+import WorkspaceGrid from "./workspace-grid";
 import RestartBanner from "./restart-banner";
-import ResizablePane from "./resizable-pane";
+import ResizablePane, { type RailPanel } from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import BrandName from "@/app/brand-name";
@@ -95,6 +99,58 @@ export default function ChatShell({ email }: { email: string }) {
   // is how anyone closes one, and it did nothing.
   const toggleDrawer = () => setDrawerOpen((v) => !v);
 
+  // WHICH PANEL the sidebar shows, owned here rather than inside it because the
+  // COLLAPSED RAIL has to advertise the same answer. Two copies of `browsing` would be
+  // exactly the drift sidebar-panel-state.ts is shaped to prevent.
+  const [browsing, setBrowsing] = useState(false);
+  // The collapsed sidebar's hover preview, owned here because the PREVIEWED panel
+  // renders its own collapse control. Left inside the pane, that control called
+  // collapse on an already-collapsed pane — a no-op, so the button a member could
+  // plainly see did nothing. Here it can end the preview, which is what it means.
+  const [peeking, setPeeking] = useState(false);
+  // The composer's context slot, owned HERE rather than in ChatView: Canvas replaces the
+  // chat view entirely, so a reference picked on the timeline would unmount with the view
+  // it was picked from. Held above both, it survives the switch.
+  const [chatRef, setChatRef] = useState<ChatReference | null>(null);
+  // The tree, for the subscription NAME the chat header leads with. Same hook the
+  // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
+  const { groups } = useWorkspaceGroups();
+  const subscription = workspace
+    ? accountName(groups, workspace.t, workspace.s)
+    : null;
+  const panel = resolvePanel({
+    workspace: workspace ?? null,
+    browsing,
+    forceWorkspaces: canvas,
+  });
+
+  // The rail's content hints.
+  //
+  // Chats is OMITTED entirely until a workspace exists, rather than rendered inert.
+  // It was disabled at first, and a disabled button swallows the click — so the icon
+  // was visible, looked like a way in, and did not even open the pane. An icon that is
+  // there always works; one with nothing behind it is not there.
+  const railPanels: RailPanel[] = [
+    {
+      key: "workspaces",
+      Icon: Boxes,
+      label: t.shell.workspaces,
+      active: panel === "workspaces",
+      onSelect: () => setBrowsing(true),
+    },
+    ...(workspace
+      ? [
+          {
+            key: "chats",
+            Icon: MessagesSquare,
+            label: t.shell.conversations,
+            active: panel === "chats",
+            onSelect: () => setBrowsing(false),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Mobile top bar */}
@@ -125,15 +181,41 @@ export default function ChatShell({ email }: { email: string }) {
           collapsed={collapsed}
           width={width}
           minWidth={SIDEBAR_MIN}
-          onExpand={() => setCollapsed(false)}
+          // Clearing the preview on expand matters: left true, the NEXT collapse would
+          // render the preview with no hover behind it, which reads as collapse failing.
+          onExpand={() => {
+            setCollapsed(false);
+            setPeeking(false);
+          }}
           onResize={setWidth}
+          panels={railPanels}
+          peeking={peeking}
+          onPeekChange={setPeeking}
         >
           <UnifiedSidebar
             email={email}
             workspace={workspace}
             forceWorkspaces={canvas}
             onConversationSelect={closeDrawer}
-            onCollapse={() => setCollapsed(true)}
+            // UNDEFINED while collapsed, which OMITS the header's collapse button
+            // entirely (the sidebar guards on this prop).
+            //
+            // That is the fix for the button that did nothing: while collapsed — and the
+            // hover preview shows the panel in exactly that state — "collapse" is a state
+            // the pane is already in, so the control could only ever be a no-op. Two
+            // open/close controls were visible at once, and the one under the cursor was
+            // the dead one. Now there is one control per state: this button while open,
+            // the rail's mirrored one while closed.
+            onCollapse={
+              collapsed
+                ? undefined
+                : () => {
+                    setCollapsed(true);
+                    setPeeking(false);
+                  }
+            }
+            browsing={browsing}
+            setBrowsing={setBrowsing}
           />
         </ResizablePane>
 
@@ -156,15 +238,29 @@ export default function ChatShell({ email }: { email: string }) {
                 <Spinner size={28} />
               </div>
             ) : canvas && workspace ? (
-              <CanvasTimeline workspace={workspace} />
+              <CanvasTimeline
+                workspace={workspace}
+                onReference={(ref) => {
+                  setChatRef(ref);
+                  // Back to the chat, because that is where the composer is — picking a
+                  // reference is the member saying they want to say something about it.
+                  setView("chat");
+                }}
+              />
             ) : workspace ? (
               <ChatView
                 workspace={workspace}
+                subscription={subscription}
                 sessionId={sessionId}
+                chatRef={chatRef}
+                onChatRef={setChatRef}
                 onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
               />
             ) : (
-              <EmptyState />
+              // No workspace chosen yet: the content pane BECOMES the picker, rather
+              // than a welcome note pointing at a sidebar that is collapsed on narrow
+              // screens. Falls back to the welcome copy when there is nothing to pick.
+              <WorkspaceGrid />
             )}
           </div>
         </main>

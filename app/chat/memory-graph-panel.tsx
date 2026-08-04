@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Clock, Network, Search } from "lucide-react";
+import { Clock, Network, Search, Share2 } from "lucide-react";
 import {
   openNodes,
   readGraph,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/memoryGraph";
 import { setFragmentSid, type Workspace } from "./fragment";
 import { listConversations, type ConversationSummary } from "@/lib/chatSession";
+import MemoryGraphView from "./memory-graph-view";
 import {
   BrowseList,
   EntityDetail,
@@ -56,7 +57,11 @@ const tab = cva(
   },
 );
 
-type Mode = "browse" | "search" | "recent";
+// "map" is the node-link view. It reads the SAME browse projection the list does and
+// drives the SAME select(), so choosing a node opens the existing detail pane — which
+// already answers "where did this come from" with the conversations behind each fact.
+// That reuse is the point: the graph adds a way to SEE the shape, not a second data path.
+type Mode = "browse" | "map" | "search" | "recent";
 
 // The detail pane's size. It opens roughly half the column so both it and the list
 // above are usable at once; the ceiling leaves the list a visible sliver, because a
@@ -106,6 +111,18 @@ export default function MemoryGraphPanel({
   // Owned here, not in BrowseList: the list re-fetches on every visit, and a filter
   // that reset itself each time would be useless on the graph it exists for.
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  // The map's own name filter. Deliberately NOT the search tab's `query`: that one issues a
+  // server-side BM25 request, and sharing it would fire searches while somebody narrows the
+  // map. This filters what is already loaded.
+  const [mapQuery, setMapQuery] = useState("");
+  // What the MAP is actually filtered by, trailing the input. The graph rebuilds when this
+  // changes and the layout is O(n^2) on the main thread, so feeding it every keystroke is how
+  // a large graph freezes the tab.
+  const [mapQueryApplied, setMapQueryApplied] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setMapQueryApplied(mapQuery), 250);
+    return () => clearTimeout(id);
+  }, [mapQuery]);
   // The detail pane's height, in pixels, owned here so it survives selecting another
   // entity — a member who dragged it tall wants it tall for the next one too.
   const [detailHeight, setDetailHeight] = useState(DEFAULT_DETAIL_HEIGHT);
@@ -305,6 +322,15 @@ export default function MemoryGraphPanel({
           </button>
           <button
             type="button"
+            className={tab({ active: mode === "map" })}
+            aria-pressed={mode === "map"}
+            onClick={() => setMode("map")}
+          >
+            <Share2 size={12} aria-hidden />
+            {t.memoryGraph.tabs.map}
+          </button>
+          <button
+            type="button"
             className={tab({ active: mode === "search" })}
             aria-pressed={mode === "search"}
             onClick={() => setMode("search")}
@@ -365,6 +391,39 @@ export default function MemoryGraphPanel({
                 allLabel={t.memoryGraph.allTypes}
                 noneOfTypeLabel={t.memoryGraph.noneOfType}
               />
+            )}
+
+            {mode === "map" && graph && (
+              // Fills the pane: a graph in a narrow column is unreadable, and this panel
+              // deliberately has no max width (see uploads-sidebar) precisely for this.
+              <div className="flex h-full min-h-[320px] flex-col">
+                <div className="shrink-0 px-3 pb-2">
+                  <Input
+                    inputSize="sm"
+                    value={mapQuery}
+                    onChange={(e) => setMapQuery(e.target.value)}
+                    placeholder={t.memoryGraph.mapFilterPlaceholder}
+                    aria-label={t.memoryGraph.mapFilterPlaceholder}
+                  />
+                </div>
+                <MemoryGraphView
+                  entities={graph.entities}
+                  relations={graph.relations}
+                  selected={selected}
+                  onSelect={(name) => (name ? select(name) : setSelected(null))}
+                  emptyLabel={t.memoryGraph.empty.body}
+                  expandLabel={t.memoryGraph.expandMap}
+                  collapseLabel={t.memoryGraph.collapseMap}
+                  spreadOutLabel={t.memoryGraph.spreadOut}
+                  spreadInLabel={t.memoryGraph.spreadIn}
+                  fitLabel={t.memoryGraph.fitMap}
+                  spreadReadout={t.memoryGraph.spreadReadout}
+                  typeFilter={typeFilter}
+                  query={mapQueryApplied}
+                  noMatchLabel={t.memoryGraph.noResults}
+                  truncatedLabel={t.memoryGraph.mapTruncated}
+                />
+              </div>
             )}
 
             {mode === "search" && hits && (

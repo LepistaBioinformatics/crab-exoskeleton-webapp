@@ -42,6 +42,11 @@ const SHARED = new Set([
   "chat.enrichment.tagsOther",
   "chat.canvas.msgOne",
   "chat.canvas.msgOther",
+  // "cron" and "status" are loanwords Portuguese uses unchanged, and the third is
+  // a bare interpolation of a tool's own name — there is no word to translate.
+  "chat.scheduledTasks.schedule.cron",
+  "chat.scheduledTasks.lastStatus",
+  "chat.scheduledTasks.toolCall",
   "admin.shell.tabs.skills",
   // A dotted config.json path and a JSON literal. Both are what the admin types
   // verbatim into the field, so translating either would be wrong.
@@ -70,6 +75,10 @@ const SHARED = new Set([
   "landing.hierarchy.sample.agentA",
   "landing.hierarchy.sample.agentB",
   "landing.templates.index",
+  "landing.scheduled.index",
+  // The tool's actual name, as it appears in a run's transcript. Translating it would
+  // make the figure show something the agent never logged.
+  "landing.scheduled.sample.toolCall",
   "landing.files.index",
 ]);
 

@@ -8,6 +8,7 @@ import { accessLabel, type TenantGroup, type AgentLeaf } from "@/lib/subscriptio
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
 import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import SidebarPanel from "./sidebar-panel";
+import { useTenantBranding, type TenantBrand } from "./tenant-brand";
 import { planWorkspaceTree, planLeaves, type PlanNode } from "./sidebar-tree";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -18,8 +19,6 @@ import { TenantAvatar } from "@/components/ui/avatar";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
-
-type TenantBrand = { logo?: string; color?: string };
 
 // Selectable agent leaf: active = M3 tonal selected fill (no border). Depth
 // indentation comes from the hierarchy guide wrappers, not padding here.
@@ -95,8 +94,7 @@ export default function WorkspaceNav({
   const fragment = useFragment();
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
-  const [tenantBrands, setTenantBrands] = useState<Record<string, TenantBrand>>({});
+  const { names: tenantNames, brands: tenantBrands } = useTenantBranding(groups);
   const [tools, setTools] = useState<Map<string, Tool>>(new Map());
   const [filter, setFilter] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -115,29 +113,6 @@ export default function WorkspaceNav({
       cancelled = true;
     };
   }, []);
-
-  // Resolve tenant display names lazily, per tenant, once the tree is grouped.
-  // The tree renders immediately with uuids; names replace them as each fetch
-  // lands -- never blocking the sidebar.
-  useEffect(() => {
-    if (!groups) return;
-    let cancelled = false;
-    for (const tenant of groups) {
-      fetch(`/api/tenants/${encodeURIComponent(tenant.tenantId)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (cancelled || !data) return;
-          const name = tenantDisplayName(data.tenant);
-          if (name) setTenantNames((prev) => ({ ...prev, [tenant.tenantId]: name }));
-          const brand = tenantBrand(data.tenant);
-          if (brand) setTenantBrands((prev) => ({ ...prev, [tenant.tenantId]: brand }));
-        })
-        .catch(() => {});
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [groups]);
 
   const activeKey =
     fragment?.t && fragment?.s && fragment?.r
@@ -427,25 +402,3 @@ function filterGroups(
 
 // mycelium's public tenant object: { id, name, description, owners, ... }.
 // Use `name`; fall back to null (keep the uuid) if it's missing/blank.
-function tenantDisplayName(tenant: unknown): string | null {
-  if (tenant && typeof tenant === "object") {
-    const name = (tenant as { name?: unknown }).name;
-    if (typeof name === "string" && name.trim()) return name.trim();
-  }
-  return null;
-}
-
-// The tenant brand is stored in mycelium as a tag with value "brand"; its meta
-// carries the base64 logo (a data URL) and optional brand colors. Returns the
-// logo + primaryColor for the sidebar avatar, or null when there's no brand tag.
-function tenantBrand(tenant: unknown): TenantBrand | null {
-  if (!tenant || typeof tenant !== "object") return null;
-  const tags = (tenant as { tags?: unknown }).tags;
-  if (!Array.isArray(tags)) return null;
-  const brand = tags.find(
-    (tag) => tag && typeof tag === "object" && (tag as { value?: unknown }).value === "brand",
-  ) as { meta?: Record<string, string> | null } | undefined;
-  const meta = brand?.meta;
-  if (!meta) return null;
-  return { logo: meta.base64Logo, color: meta.primaryColor };
-}

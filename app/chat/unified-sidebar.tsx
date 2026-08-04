@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { cva } from "class-variance-authority";
-import { PanelLeftClose } from "lucide-react";
+import { CircleArrowLeft } from "lucide-react";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
 import { IconButton } from "@/components/ui/icon-button";
@@ -14,10 +13,9 @@ import HistorySidebar from "./history-sidebar";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
 import { resolvePanel, type SidebarPanel } from "./sidebar-panel-state";
+import { useWorkspaceGroups } from "./use-workspaces";
 import {
   accountName,
-  groupWorkspaces,
-  type Subscription,
   type TenantGroup,
 } from "@/lib/subscriptions";
 import { useT } from "@/lib/i18n/context";
@@ -63,6 +61,8 @@ export default function UnifiedSidebar({
   forceWorkspaces,
   onConversationSelect,
   onCollapse,
+  browsing,
+  setBrowsing,
 }: {
   email: string;
   /** Null until the fragment resolves a workspace. */
@@ -83,48 +83,24 @@ export default function UnifiedSidebar({
    */
   onConversationSelect?: () => void;
   onCollapse?: () => void;
+  /**
+   * "The back control was pressed" — owned by the shell, not here, because the
+   * COLLAPSED rail has to indicate which panel it would open, and a copy of this flag
+   * living in each place is exactly the drift sidebar-panel-state.ts exists to avoid.
+   */
+  browsing: boolean;
+  setBrowsing: (browsing: boolean) => void;
 }) {
   const t = useT(chatCopy);
-  const router = useRouter();
 
-  // WHO OWNS THE WORKSPACE LIST. It used to be the tree's own, but both panels need
-  // it now: the conversations panel names the subscription its chats belong to, and
-  // that name lives on the agent leaf. The tree is mounted in the other slot at all
-  // times (both panels stay mounted), so fetching it here rather than there costs
-  // nothing and saves the conversations panel a second request per agent switch.
-  const [groups, setGroups] = useState<TenantGroup[] | null>(null);
-  // An error CODE, not a sentence: resolving at render time means a locale switch
-  // while the banner is up re-renders it.
-  const [workspacesError, setWorkspacesError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/subscriptions");
-        if (res.status === 401) {
-          router.push("/signin");
-          return;
-        }
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          setWorkspacesError(
-            typeof data?.error === "string" ? data.error : "workspaces_load_failed",
-          );
-          return;
-        }
-        const data = await res.json();
-        const subs: Subscription[] = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-        setGroups(groupWorkspaces(subs));
-      } catch {
-        setWorkspacesError("connectivity");
-      }
-    })();
-  }, [router]);
+  // The workspace list, shared with the shell and the workspace grid via
+  // useWorkspaceGroups: both panels here need it (the conversations panel names the
+  // subscription its chats belong to), and so does the header outside.
+  const { groups, error: workspacesError } = useWorkspaceGroups();
 
   // The back control was pressed. Deliberately not persisted: a stored panel outlives
   // the fragment that justified it, so a reload or a shared link would open on the
   // wrong one. Everything else is derived.
-  const [browsing, setBrowsing] = useState(false);
   const panel = resolvePanel({ workspace, browsing, forceWorkspaces });
   const showingChats = panel === "chats";
 
@@ -186,7 +162,7 @@ export default function UnifiedSidebar({
             onClick={onCollapse}
             className="hidden md:inline-flex"
           >
-            <PanelLeftClose size={18} aria-hidden />
+            <CircleArrowLeft size={18} aria-hidden />
           </IconButton>
         )}
       </div>

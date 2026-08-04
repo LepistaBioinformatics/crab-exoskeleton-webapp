@@ -118,10 +118,33 @@ const en = {
       "Per-user model registry and assignment.",
       "Shared skills and files cascade read-only across a scope.",
     ],
+    next: "Next: work that runs itself",
+  },
+  scheduled: {
+    index: "08",
+    eyebrow: "Work that runs itself",
+    title: "Ask once. It keeps doing it.",
+    // Every claim here is bounded on purpose, and landing-accuracy.test.ts holds the
+    // bounds: tasks are created by ASKING THE AGENT (the panel is read-only), and no
+    // per-run outcome is recorded anywhere, so the panel cannot say a run succeeded.
+    body: "Tell your agent to compile a report every evening and it will — on its own, while you are not there. The Tasks panel lists what is scheduled, when it last ran and when it runs next, and opens any past run in full: the prompt it woke up with, every tool it reached for, and what it produced. Reference a task or one of its runs straight into the chat to ask about it.",
+    points: [
+      "You schedule it by asking; the panel is where you read it back.",
+      "Every past run kept in full, tool calls included.",
+      "Finished one-off tasks tucked away by default.",
+    ],
     next: "One last piece: your files",
+    sample: {
+      name: "Daily report",
+      schedule: "every day, 18:00",
+      lastRun: "last run 2h ago",
+      nextRun: "next 18:00",
+      runs: ["yesterday, 18:00", "2 days ago, 18:00"],
+      toolCall: "web_search",
+    },
   },
   files: {
-    index: "08",
+    index: "09",
     eyebrow: "Files, in reach",
     title: "Drop a file in. Find it by name.",
     body: "Attach files straight from the composer; they land in your agent's own workspace, and it reads them by path — the bytes never clutter the chat. Organise them the way you think: make folders, rename them, and drag files and folders between them. Filter by name to pull one back in seconds. Admins can share files that cascade read-only to a whole scope.",
@@ -263,10 +286,30 @@ const pt: LandingDict = {
       "Registro e atribuição de modelos por usuário.",
       "Skills e arquivos compartilhados cascateiam read-only por escopo.",
     ],
-    next: "Uma última peça: seus arquivos",
+    next: "Agora: trabalho que roda sozinho",
+  },
+  scheduled: {
+    index: "08",
+    eyebrow: "Trabalho que roda sozinho",
+    title: "Peça uma vez. Ele continua fazendo.",
+    body: "Peça ao seu agente para compilar um relatório toda noite e ele compila — por conta própria, enquanto você não está. O painel de Tarefas lista o que está agendado, quando rodou pela última vez e quando roda de novo, e abre qualquer execução passada por inteiro: o comando com que ele acordou, cada ferramenta que usou e o que produziu. Referencie uma tarefa ou uma execução direto no chat para perguntar sobre ela.",
+    points: [
+      "Você agenda pedindo; o painel é onde você confere.",
+      "Cada execução passada guardada por inteiro, com as chamadas de ferramenta.",
+      "Tarefas de uma vez já concluídas ficam recolhidas por padrão.",
+    ],
+    next: "Falta uma peça: seus arquivos",
+    sample: {
+      name: "Relatório diário",
+      schedule: "todo dia, 18:00",
+      lastRun: "última há 2h",
+      nextRun: "próxima 18:00",
+      runs: ["ontem, 18:00", "há 2 dias, 18:00"],
+      toolCall: "web_search",
+    },
   },
   files: {
-    index: "08",
+    index: "09",
     eyebrow: "Arquivos ao alcance",
     title: "Solte um arquivo. Ache pelo nome.",
     body: "Anexe arquivos direto do compositor; eles chegam ao workspace do seu próprio agente, que os lê por caminho — os bytes nunca poluem o chat. Organize do jeito que você pensa: crie pastas, renomeie e arraste arquivos e pastas entre elas. Filtre pelo nome para resgatar um em segundos. Admins podem compartilhar arquivos que cascateiam read-only para um escopo inteiro.",

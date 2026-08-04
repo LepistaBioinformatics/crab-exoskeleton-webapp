@@ -125,9 +125,91 @@ describe("landing accuracy — files", () => {
   }
 });
 
+describe("landing accuracy — scheduled tasks", () => {
+  for (const locale of LOCALES) {
+    function scheduledText(): string {
+      return JSON.stringify(landingCopy[locale].scheduled).toLowerCase();
+    }
+
+    // The panel is READ-ONLY. Creating, editing, enabling, disabling or deleting a task
+    // is done by asking the agent — writes were deliberately deferred because picoclaw
+    // holds the live schedule in memory and whether it reloads an externally edited
+    // store is unverified (.specs/features/scheduled-tasks/context.md, DEC-ST-02).
+    it(`[${locale}] never offers to create or manage tasks from the interface`, () => {
+      for (const banned of [
+        "create a task",
+        "schedule it here",
+        "manage your tasks",
+        "edit the schedule",
+        "crie uma tarefa",
+        "agende aqui",
+        "gerencie suas tarefas",
+        "edite o agendamento",
+      ]) {
+        expect(
+          scheduledText(),
+          `the copy offers "${banned}" — the panel reads the store, it never writes it`,
+        ).not.toContain(banned);
+      }
+    });
+
+    // Positively asserted, because it is the one thing a reader could get wrong in a way
+    // that wastes their time: they would go hunting for a button.
+    it(`[${locale}] says scheduling happens by asking the agent`, () => {
+      const body = JSON.stringify(landingCopy[locale].scheduled.points).toLowerCase();
+      const claims = ["by asking", "pedindo"];
+      expect(
+        claims.some((c) => body.includes(c)),
+        "nothing tells the reader HOW a task gets scheduled, so they will look for a control that is not there",
+      ).toBe(true);
+    });
+
+    // No per-run outcome is recorded ANYWHERE. picoclaw's store carries lastStatus for
+    // the most recent run of a live task and nothing else, which is why the panel shows
+    // duration and entry count per run and no tick (DEC-ST-03).
+    it(`[${locale}] never claims it reports whether each run succeeded`, () => {
+      for (const banned of [
+        "success or failure",
+        "whether it succeeded",
+        "failed runs",
+        "sucesso ou falha",
+        "se deu certo",
+        "execuções que falharam",
+      ]) {
+        expect(
+          scheduledText(),
+          `the copy claims "${banned}" — per-run outcomes are not recorded`,
+        ).not.toContain(banned);
+      }
+    });
+  }
+});
+
 describe("landing structure", () => {
   // The narrative chain is what makes the page readable: every section's index is
   // unique and the sequence has no gap. Inserting a section is exactly when this breaks.
+  // Each section's nudge names the NEXT one, so a duplicate label means at least one
+  // section is advertising a destination it does not lead to. Inserting a section is
+  // exactly when this breaks: the new one takes over an anchor, and the section above it
+  // keeps a sentence that now describes the wrong place. That shipped once — the
+  // templates nudge said "one last piece: your files" while pointing at scheduled tasks.
+  //
+  // Invisible to the parity test, which compares en against pt: two identical labels
+  // inside ONE locale are exactly what it is not looking at.
+  it("gives every section a distinct next-nudge, in each locale", () => {
+    for (const locale of LOCALES) {
+      const dict = landingCopy[locale] as unknown as Record<string, { next?: string }>;
+      const nudges = Object.values(dict)
+        .map((v) => v?.next)
+        .filter((v): v is string => typeof v === "string");
+      const seen = new Set(nudges);
+      expect(
+        seen.size,
+        `[${locale}] two sections share a next-nudge, so one of them points somewhere its label does not describe`,
+      ).toBe(nudges.length);
+    }
+  });
+
   it("numbers the sections consecutively with no repeats", () => {
     for (const locale of LOCALES) {
       const dict = landingCopy[locale] as unknown as Record<string, { index?: string }>;

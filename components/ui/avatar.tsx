@@ -12,6 +12,9 @@ const avatar = cva(
     variants: {
       size: {
         sm: "h-[18px] w-[18px] text-[9px]",
+        // For the workspace picker's tiles, where the avatar IS the identity rather than a
+        // marker beside a label.
+        lg: "h-10 w-10 rounded-lg text-sm",
       },
     },
     defaultVariants: { size: "sm" },
@@ -52,12 +55,30 @@ export function TenantAvatar({ name, logo, color, size, className, ...props }: T
   );
 }
 
-// First letter of the first two words, or first two letters of a single word.
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
+/**
+ * Two letters standing in for a name, best-effort.
+ *
+ * Splits on separators AND camelCase, not just whitespace, because the names this has to
+ * cover are mostly identifiers: "hermes-glm" reads as HG, "assay_pipeline" as AP,
+ * "assayPipeline" as AP. Splitting on spaces alone gave HE, AS and AS — the first two
+ * letters of one word, which is exactly the case where two letters carry the least.
+ *
+ * A single word keeps the first two letters. A "first letter plus next consonant" rule was
+ * tried and reverted: it turned Biotrop into BT and beta into BT, where BI and BE are what a
+ * reader recognises. The existing test for that rule is what caught it.
+ */
+export function initials(name: string): string {
+  const parts = name
+    .trim()
+    // A lowercase-to-uppercase boundary is a word break in an identifier.
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[\s\-_.:/]+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "?";
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+
+  return parts[0].slice(0, 2).toUpperCase();
 }
 
 // Deterministic saturated color from the name, used when the tenant has no

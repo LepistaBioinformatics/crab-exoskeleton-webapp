@@ -12,6 +12,15 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import { getHistory } from "./history-cache";
+import { listTasks, type CronTasks } from "@/lib/cronTasks";
+import type { SpanReference } from "@/lib/chatReference";
+import { recentChanges, type RecentChanges } from "@/lib/memoryGraph";
+import {
+  buildActivity,
+  marksForConversation,
+  unattributedMarks,
+  type ActivityMark,
+} from "./canvas-activity";
 import {
   buildEvents,
   aggregateBursts,
@@ -91,12 +100,32 @@ function ago(ms: number, t: ChatDict): string {
   return t.canvas.daysAgo.replace("{n}", String(days));
 }
 
-export default function CanvasTimeline({ workspace }: { workspace: Workspace }) {
+export default function CanvasTimeline({
+  workspace,
+  onReference,
+}: {
+  workspace: Workspace;
+  /**
+   * Hands a lane to the composer as a span reference. The shell owns that slot and
+   * switches back to the chat, because picking a reference is the member saying they want
+   * to say something about it — and the composer is not here.
+   */
+  onReference: (ref: SpanReference) => void;
+}) {
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
   const [bursts, setBursts] = useState<Burst[] | null>(null);
+  // What the agent DID: scheduled runs and facts it learned, both already timestamped
+  // and already carrying a conversation. Two bounded calls, not one per conversation —
+  // unlike the histories above, this does not scale with the workspace.
+  //
+  // Best-effort on purpose: the timeline is the conversations, and this is an overlay.
+  // A workspace with no tasks, or a graph the member never populated, renders exactly as
+  // before rather than erroring.
+  const [tasks, setTasks] = useState<CronTasks | null>(null);
+  const [graph, setGraph] = useState<RecentChanges | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [soloId, setSoloId] = useState<string | null>(null);
@@ -172,6 +201,39 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsKey, signature, listLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listTasks(workspace)
+      .then((r) => {
+        if (!cancelled) setTasks(r);
+      })
+      .catch(() => {});
+    // A wide window, because the timeline spans whatever the member has: the axis is
+    // built from conversations, and a fact older than this simply has no marker.
+    recentChanges(workspace, 24 * 30)
+      .then((r) => {
+        if (!cancelled) setGraph(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.t, workspace.s, workspace.r]);
+
+  const activity = useMemo(
+    () =>
+      buildActivity({
+        tasks,
+        graph,
+        conversations,
+        taskLabel: (name) => t.canvasActivity.ran.replace("{name}", name),
+        learnedLabel: (entity) => t.canvasActivity.learned.replace("{entity}", entity),
+      }),
+    [tasks, graph, conversations, t],
+  );
+  const orphanMarks = useMemo(() => unattributedMarks(activity), [activity]);
 
   // Derive stable lanes (one per conversation) + the time range.
   const model = useMemo(() => (bursts ? deriveLanes(bursts, MAX_LANES) : null), [bursts]);
@@ -311,12 +373,36 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
                       </circle>
                     );
                   })}
+                  {/* What the agent DID on this lane, drawn OFF the line so it never
+                      competes with the conversation's own dots: runs below, facts above. */}
+                  <ActivityMarks marks={marksForConversation(activity, lane.id)} y={y} xOf={xOf} />
                   <text x={x1} y={y - 12} fontSize={16} fontWeight={700} fill={FG}>{title}</text>
                 </g>
               );
             })}
               </svg>
             </div>
+
+            {/* Work no conversation claims, in its own strip under the lanes: a scheduled
+                run whose chat marker is missing, and facts the proxy could not attribute
+                (cron, the heartbeat, two chats in flight at once). Hidden, these would be
+                invisible everywhere — and unattended work with nothing in the history
+                pointing at it is exactly what a member does not already know about. */}
+            {orphanMarks.length > 0 && (
+              <div className="shrink-0 border-t border-brand/20 px-4 py-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-fg-muted">
+                    {t.canvasActivity.unattributed}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] text-fg-muted/70">
+                    {t.canvasActivity.unattributedHint}
+                  </span>
+                </div>
+                <svg viewBox={`0 0 ${W} 16`} width={W} height={16} style={{ display: "block" }}>
+                  <ActivityMarks marks={orphanMarks} y={5} xOf={xOf} />
+                </svg>
+              </div>
+            )}
 
             {/* Date axis, pinned to the bottom of the stage */}
             <div className="shrink-0 border-t border-brand/20 bg-bg/80 backdrop-blur">
@@ -343,6 +429,22 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
           onClose={() => setPreviewId(null)}
           onSolo={() => setSoloId((s) => (s === previewLane.id ? null : previewLane.id))}
           onOpen={() => openTraditional(previewLane.id)}
+          onReference={() => {
+            // The lane's own span, formatted here where the locale is. The oldest and
+            // newest visits bound it; bursts arrive newest-first.
+            const times = previewLane.bursts.map((b) => b.ts);
+            onReference({
+              kind: "span",
+              conversationId: previewLane.id,
+              title:
+                convById.get(previewLane.id)?.alias ||
+                convById.get(previewLane.id)?.title ||
+                previewLane.id,
+              from: fmtDate(Math.min(...times), tag),
+              to: fmtDate(Math.max(...times), tag),
+              messages: previewLane.bursts.reduce((n, b) => n + b.count, 0),
+            });
+          }}
         />
       )}
     </div>
@@ -350,6 +452,58 @@ export default function CanvasTimeline({ workspace }: { workspace: Workspace }) 
 }
 
 // Aggregate message volume bucketed over the time range -- the agent's "pulse".
+/**
+ * Scheduled runs and learned facts as marks around a lane's line.
+ *
+ * Two shapes rather than two colours: a square below for a run, a triangle above for a
+ * fact. The lane's colour already means "which conversation", so encoding a second
+ * meaning in colour would collide with the one the whole view is built on.
+ *
+ * Deliberately smaller than the conversation dots. These are annotations on the member's
+ * activity, not the activity itself.
+ */
+function ActivityMarks({
+  marks,
+  y,
+  xOf,
+}: {
+  marks: ActivityMark[];
+  y: number;
+  xOf: (ts: number) => number;
+}) {
+  return (
+    <>
+      {marks.map((m, i) => {
+        const x = xOf(m.ts);
+        const key = `${m.kind}-${m.ts}-${i}`;
+        return m.kind === "run" ? (
+          <rect
+            key={key}
+            x={x - 3}
+            y={y + 7}
+            width={6}
+            height={6}
+            rx={1}
+            fill={MUTED}
+            opacity={0.85}
+          >
+            <title>{m.label}</title>
+          </rect>
+        ) : (
+          <polygon
+            key={key}
+            points={`${x},${y - 13} ${x - 4},${y - 6} ${x + 4},${y - 6}`}
+            fill={MUTED}
+            opacity={0.7}
+          >
+            <title>{m.label}</title>
+          </polygon>
+        );
+      })}
+    </>
+  );
+}
+
 function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number; width: number }) {
   const t = useT(chatCopy);
   const { area, line, total } = useMemo(() => {
@@ -403,7 +557,7 @@ function AgentPulse({ bursts, innerW, width }: { bursts: Burst[]; innerW: number
 
 // Inline preview: last bursts + Solo / Full-transcript, without leaving Canvas.
 function Preview({
-  lane, conv, color, isSolo, onClose, onSolo, onOpen,
+  lane, conv, color, isSolo, onClose, onSolo, onOpen, onReference,
 }: {
   lane: ConversationLane;
   conv: ConversationSummary | undefined;
@@ -412,6 +566,8 @@ function Preview({
   onClose: () => void;
   onSolo: () => void;
   onOpen: () => void;
+  /** Sends this lane to the composer as a span, so the member can ask about it. */
+  onReference: () => void;
 }) {
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
@@ -529,9 +685,21 @@ function Preview({
           );
         })}
       </div>
-      <div className="flex gap-2 border-t border-brand/20 px-4 py-3">
+      <div className="flex flex-wrap gap-2 border-t border-brand/20 px-4 py-3">
         <Button variant="outlined" size="sm" className="flex-1" onClick={onSolo}>
           {isSolo ? t.canvas.showAll : t.canvas.soloLane}
+        </Button>
+        {/* The one action that LEAVES with something rather than just navigating. Canvas
+            was read-only: you could look at a thread and then had to go find it again in
+            the chat to say anything about it. */}
+        <Button
+          variant="outlined"
+          size="sm"
+          className="flex-1"
+          aria-label={t.canvasActivity.referenceAria}
+          onClick={onReference}
+        >
+          {t.canvasActivity.reference}
         </Button>
         <Button variant="filled" size="sm" className="flex-1" onClick={onOpen}>
           {t.canvas.fullTranscript}

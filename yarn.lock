@@ -897,6 +897,13 @@
     "@types/deep-eql" "*"
     assertion-error "^2.0.1"
 
+"@types/cytoscape@^3.31.0":
+  version "3.31.0"
+  resolved "https://registry.yarnpkg.com/@types/cytoscape/-/cytoscape-3.31.0.tgz#4cb3ec07c2f331c1ab8aff92a2e52716433dce4e"
+  integrity sha512-EXHOHxqQjGxLDEh5cP4te6J0bi7LbCzmZkzsR6f703igUac8UGMdEohMyU3GHAayCTZrLQOMnaE/lqB2Ekh8Ww==
+  dependencies:
+    cytoscape "*"
+
 "@types/debug@^4.0.0":
   version "4.1.13"
   resolved "https://registry.npmjs.org/@types/debug/-/debug-4.1.13.tgz"
@@ -1211,6 +1218,11 @@ csstype@^3.2.2:
   version "3.2.3"
   resolved "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz"
   integrity sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==
+
+cytoscape@*, cytoscape@^3.34.0:
+  version "3.34.0"
+  resolved "https://registry.yarnpkg.com/cytoscape/-/cytoscape-3.34.0.tgz#5fbe2eb1cf76b070a8ecd5647c35f65aa097c9c6"
+  integrity sha512-62rNSrioXw93uliKFBwjukeQyeWwH2PqDrTac31r2P6464u3AUvTk0xS4LVvT251g7IgkFunrI48ZEZGjywSOg==
 
 data-urls@^5.0.0:
   version "5.0.0"

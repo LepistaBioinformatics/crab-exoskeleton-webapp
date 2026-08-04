@@ -2,7 +2,7 @@
 
 import { MouseEvent, ReactNode } from "react";
 import { cva } from "class-variance-authority";
-import { ChevronRight } from "lucide-react";
+import { CircleArrowRight, type LucideIcon } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -24,15 +24,92 @@ const pane = cva(
   },
 );
 
-const content = cva("h-full", {
-  variants: { collapsed: { true: "md:hidden", false: "" } },
-  defaultVariants: { collapsed: false },
+// The content's three states, as ONE variant with mutually exclusive values rather
+// than two booleans plus a compound.
+//
+// That shape is load-bearing, not stylistic. The first version had
+// `collapsed: {true: "md:hidden"}` and a compound adding `md:block`, so the peeking
+// element carried BOTH — and Tailwind emits `.md\:hidden` after `.md\:block`, same
+// specificity, so `display: none` won and the hover preview never appeared at all.
+// Nothing in the type system or the build catches two display utilities fighting.
+// Keep these mutually exclusive so the situation cannot recur.
+//
+// The collapsed pane stays RENDERED and slides out of frame on a transform, rather
+// than being `display: none`: a display change cannot be animated, so the preview would
+// pop instead of sliding, and the pane is an overlay so moving it costs no layout.
+//
+// Hidden with `visibility`, NOT with pointer-events. An off-frame pane that is merely
+// unclickable is still TABBABLE — a keyboard user would land inside a sidebar they
+// cannot see, which is what `md:hidden` used to prevent. `visibility: hidden` takes it
+// out of the tab order and blocks pointer events, while still letting the transform
+// transition run. Note `invisible`/`visible` are one property, so they carry the same
+// ordering hazard as display did — another reason these stay mutually exclusive.
+//
+// The slide is on the way IN. Leaving hides immediately: visibility is discrete, and
+// animating a departure nobody is looking at buys nothing. Reduced motion is handled
+// globally in globals.css, which neutralises every transition — no per-class variant.
+//
+// Overlay rather than widening the column: widening would reflow the whole conversation
+// on a mouse-over, which is jarring for something this transient. The `<aside>` keeps
+// its 48px rail footprint, so nothing moves, and the root shell clips overflow so the
+// parked pane never produces a scrollbar. `left-12` starts it after the rail — see the
+// `rail` cva below for why that offset is load-bearing.
+const PEEK_BASE =
+  "md:absolute md:inset-y-0 md:left-12 md:z-10 md:w-[var(--pane-w)] md:border-r md:border-brand/30 md:bg-surface md:shadow-xl md:transition-transform md:duration-200 md:ease-out";
+
+export const content = cva("h-full", {
+  variants: {
+    mode: {
+      expanded: "",
+      // Parked off-frame and out of the tab order while it is out of sight.
+      collapsed: `${PEEK_BASE} md:invisible md:-translate-x-full`,
+      peeking: `${PEEK_BASE} md:visible md:translate-x-0`,
+    },
+  },
+  defaultVariants: { mode: "expanded" },
 });
 
-const rail = cva("hidden h-full items-start justify-center pt-3", {
-  variants: { collapsed: { true: "md:flex", false: "md:hidden" } },
-  defaultVariants: { collapsed: false },
-});
+// The collapsed rail, and the canonical statement of why it is never covered.
+//
+// The peeking overlay used to sit at `left-0` and paint over this column, which made
+// the very button that opens the pane unclickable the moment hovering revealed the
+// preview. Two independent guards now: the overlay starts at `left-12`, past this
+// column, and `relative md:z-20` keeps the rail above it (z-10) regardless.
+const rail = cva(
+  "relative hidden h-full flex-col items-center gap-1 pt-3 md:z-20",
+  {
+    variants: { collapsed: { true: "md:flex", false: "md:hidden" } },
+    defaultVariants: { collapsed: false },
+  },
+);
+
+// A rail icon: a hint at what the pane holds, and a way straight into that panel. The
+// active one is filled so the rail says which panel the pane would open on.
+const railIcon = cva(
+  "flex size-8 items-center justify-center rounded-lg transition-colors",
+  {
+    variants: {
+      active: {
+        true: "bg-accent/15 text-accent",
+        false: "text-fg-muted hover:bg-elevated hover:text-fg",
+      },
+    },
+    defaultVariants: { active: false },
+  },
+);
+
+/** One panel the collapsed rail advertises, and the way into it. */
+export interface RailPanel {
+  key: string;
+  Icon: LucideIcon;
+  label: string;
+  active: boolean;
+  /**
+   * Chooses this panel. Required: a panel with nothing behind it is left out of the
+   * list rather than rendered as a control that does nothing.
+   */
+  onSelect: () => void;
+}
 
 const MAX_WIDTH = 480;
 
@@ -44,6 +121,9 @@ export default function ResizablePane({
   minWidth,
   onExpand,
   onResize,
+  panels,
+  peeking,
+  onPeekChange,
   children,
 }: {
   ariaLabel: string;
@@ -53,6 +133,16 @@ export default function ResizablePane({
   minWidth: number;
   onExpand: () => void;
   onResize: (width: number) => void;
+  /** Panels the collapsed rail advertises. */
+  panels: RailPanel[];
+  /**
+   * Whether the collapsed pane is showing its hover preview. Owned by the caller, not
+   * here, because the PREVIEWED panel renders its own collapse control — and that
+   * control has to be able to end the preview instead of calling collapse on a pane
+   * that is already collapsed, which is a no-op and reads as a broken button.
+   */
+  peeking: boolean;
+  onPeekChange: (peeking: boolean) => void;
   children: ReactNode;
 }) {
   const t = useT(chatCopy);
@@ -86,13 +176,52 @@ export default function ResizablePane({
       aria-label={ariaLabel}
       style={{ "--pane-w": `${width}px` } as React.CSSProperties}
       className={pane({ open, collapsed })}
+      // Only while collapsed: an expanded pane has nothing to preview, and wiring
+      // these unconditionally would re-render it on every crossing of the sidebar.
+      onMouseEnter={collapsed ? () => onPeekChange(true) : undefined}
+      onMouseLeave={collapsed ? () => onPeekChange(false) : undefined}
     >
-      <div className={content({ collapsed })}>{children}</div>
+      <div
+        className={content({
+          mode: !collapsed ? "expanded" : peeking ? "peeking" : "collapsed",
+        })}
+      >
+        {children}
+      </div>
 
       <div className={rail({ collapsed })}>
+        {/* The ONLY control that opens the pane. Its mirror is the header's collapse
+            button, which the pane hides while collapsed, so the two never appear at
+            once — one circled arrow pointing right to open, one pointing left to close,
+            so the pair reads as one control in two states rather than two glyphs. */}
         <IconButton variant="ghost" size="sm" aria-label={`${t.pane.expand} ${ariaLabel}`} onClick={onExpand}>
-          <ChevronRight size={18} aria-hidden />
+          <CircleArrowRight size={18} aria-hidden />
         </IconButton>
+
+        {/* What the pane holds, so a collapsed rail is not an unlabelled sliver.
+            Clicking one opens the pane ON that panel, which is why they are buttons
+            and not decoration. */}
+        {/* These CHOOSE a panel; they deliberately do not open the pane. Opening on
+            click pinned the sidebar open on what was meant to be a glance, so the two
+            jobs are split: the icons say which panel the hover preview shows, the arrow
+            above decides whether the pane is open at all.
+
+            Never `disabled` either — a disabled button swallows the click, so an icon
+            that looked like a way in became a dead end. A panel with nothing to show is
+            left out of the list upstream instead of rendered inert. */}
+        {panels.map(({ key, Icon, label, active, onSelect }) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={active || undefined}
+            aria-label={label}
+            title={label}
+            onClick={onSelect}
+            className={railIcon({ active })}
+          >
+            <Icon size={17} aria-hidden />
+          </button>
+        ))}
       </div>
 
       {!collapsed && (
