@@ -11,6 +11,7 @@ import {
 } from "@/lib/media";
 import {
   Brain,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -31,6 +32,8 @@ import type { Workspace } from "./fragment";
 import AttachmentButton from "@/app/chat/attachment-button";
 import MemoryEditor from "@/app/chat/memory-editor";
 import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
+import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
+import type { TaskReference } from "@/lib/cronTasks";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -144,11 +147,12 @@ function formatSize(bytes?: number): string {
 // A permanent, resizable right-hand column (desktop) listing the current
 // workspace's uploads. Not an overlay -- part of the layout, toggled from the
 // chat header. Filter box + per-file delete. Refreshes on `refreshSignal`.
-// The three things a workspace holds. Ordered deliberately: memory and the graph are
-// what a member asks about ("what does it know about me"), files are what they manage.
-type Section = "memory" | "graph" | "files";
+// What a workspace holds. Ordered deliberately: memory and the graph are what a
+// member asks about ("what does it know about me"), scheduled tasks are what it does
+// on its own, files are what they manage.
+type Section = "memory" | "graph" | "tasks" | "files";
 
-const SECTION_ORDER: Section[] = ["memory", "graph", "files"];
+const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files"];
 
 const SECTIONS: Record<
   Section,
@@ -167,6 +171,11 @@ const SECTIONS: Record<
     Icon: Network,
     label: (t) => t.memoryGraph.title,
     blurb: (t) => t.uploads.sections.graph,
+  },
+  tasks: {
+    Icon: CalendarClock,
+    label: (t) => t.scheduledTasks.title,
+    blurb: (t) => t.uploads.sections.tasks,
   },
   files: {
     Icon: FileText,
@@ -223,11 +232,18 @@ export default function UploadsSidebar({
   workspace,
   refreshSignal,
   onClose,
+  onReference,
   initialSection = null,
 }: {
   workspace: Workspace;
   refreshSignal: number;
   onClose: () => void;
+  /**
+   * Carries a scheduled task or one of its executions up to the chat view, which
+   * holds it as a context slot for the next message. The panel's only outbound
+   * value — everything else here flows inward.
+   */
+  onReference?: (ref: TaskReference) => void;
   /**
    * Which detail to open on mount, or null for the menu.
    *
@@ -245,6 +261,10 @@ export default function UploadsSidebar({
   const [files, setFiles] = useState<Attachment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localRefresh, setLocalRefresh] = useState(0);
+  // The tasks panel's own refresh counter, deliberately separate from
+  // localRefresh: sharing one would re-list the files tree on every task refresh,
+  // and the two sections never need refreshing together.
+  const [taskRefresh, setTaskRefresh] = useState(0);
   const [query, setQuery] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -503,9 +523,6 @@ export default function UploadsSidebar({
                   aria-label={t.uploads.systemFolder}
                 />
               )}
-              <span className="ml-auto shrink-0 font-mono text-[10px] opacity-70">
-                {node.children.length}
-              </span>
             </button>
             {!reserved && (
               <IconButton
@@ -536,6 +553,13 @@ export default function UploadsSidebar({
                 <Trash2 size={13} aria-hidden />
               </IconButton>
             )}
+            {/* How many entries the folder holds, LAST in the row — after the rename and
+                delete controls rather than inside the folder button. Those controls only
+                fade in on hover but always occupy their space, so the count sits at a
+                fixed right edge and does not shift when the row is hovered. */}
+            <span className="shrink-0 pr-1 font-mono text-[10px] text-fg-muted opacity-70">
+              {node.children.length}
+            </span>
           </div>
           {isOpen && (
             <ul role="group" className="mt-1 flex flex-col gap-1">
@@ -593,7 +617,10 @@ export default function UploadsSidebar({
       />
       <aside
         style={{ width }}
-        className="relative flex shrink-0 flex-col border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:max-w-[90vw] max-md:shadow-xl"
+        // pane-open animates width from 0 on mount (see globals.css). It is an
+        // animation rather than a transition precisely because this width is
+        // drag-resizable: a transition would make the drag lag.
+        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:max-w-[90vw] max-md:shadow-xl"
       >
         <div
           role="separator"
@@ -631,6 +658,20 @@ export default function UploadsSidebar({
               aria-label={t.uploads.refreshAria}
               title={t.uploads.refresh}
               onClick={() => setLocalRefresh((n) => n + 1)}
+            >
+              <RefreshCw size={15} aria-hidden />
+            </IconButton>
+          )}
+          {/* Same affordance as the files tree, for the same reason: the agent
+              schedules tasks between visits, so the member needs a way to pick up a
+              task they just asked for without leaving the panel. */}
+          {section === "tasks" && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={t.scheduledTasks.refreshAria}
+              title={t.scheduledTasks.refresh}
+              onClick={() => setTaskRefresh((n) => n + 1)}
             >
               <RefreshCw size={15} aria-hidden />
             </IconButton>
@@ -702,6 +743,13 @@ export default function UploadsSidebar({
                 <MemoryGraphPanel
                   workspace={workspace}
                   active={section === "graph"}
+                />
+              )}
+              {section === "tasks" && (
+                <ScheduledTasksPanel
+                  workspace={workspace}
+                  refreshSignal={taskRefresh}
+                  onReference={onReference}
                 />
               )}
               {section === "files" && (

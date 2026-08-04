@@ -107,6 +107,81 @@
   --font-mono: var(--ff-mono), "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Scrollbars, in the app's own palette instead of the browser's default chrome.
+ *
+ * Two mechanisms, because no single one is universal:
+ *
+ *  - `scrollbar-color`/`scrollbar-width` is the standard property. Firefox has
+ *    supported it for years and Chromium 121+ / Safari 18.2+ now do too. It
+ *    accepts only a thumb and a track colour -- no hover state, no radius.
+ *  - `::-webkit-scrollbar-*` is the older WebKit/Blink pseudo-element set, which
+ *    is what buys the rounded thumb, the padding-box inset and a hover state.
+ *
+ * They are NOT redundant and the order matters: a browser that understands the
+ * standard property applies it, and where BOTH are understood the pseudo-elements
+ * win (a matched `::-webkit-scrollbar` rule overrides `scrollbar-color`). So
+ * modern Chromium/Safari get the richer treatment, Firefox gets the standard one,
+ * and anything older than both falls back to the default chrome rather than to
+ * something broken.
+ *
+ * Colours come from the runtime vars, so the scrollbar flips with
+ * prefers-color-scheme like everything else. `color-mix` on --fg-muted rather than
+ * a literal grey: a scrollbar is chrome, not content, so it should sit BELOW muted
+ * text in contrast and lift only on hover. Deliberately not the accent -- that
+ * means "interactive" in this design system, and a scrollbar is furniture.
+ */
+:root {
+  /* Track width. The thumb is this minus twice --scrollbar-inset, so the two move
+     together: 14 - 2x3 leaves an 8px pill, comfortably grabbable with a mouse. */
+  --scrollbar-size: 14px;
+  --scrollbar-inset: 3px;
+  --scrollbar-thumb: color-mix(in srgb, var(--fg-muted) 38%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--fg-muted) 62%, transparent);
+  --scrollbar-track: transparent;
+}
+
+* {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  /* `auto`, not `thin`: Firefox's thin is roughly half the standard width and read as
+     too skinny to grab. This is the only width knob the standard property offers --
+     it takes no length -- so Firefox gets its normal thickness and the exact 14px
+     above applies wherever the pseudo-elements do. */
+  scrollbar-width: auto;
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 999px;
+  /* A transparent border on the padding box insets the thumb without needing a
+     track colour, so it reads as a floating pill on whatever surface it is over. */
+  border: var(--scrollbar-inset) solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Where two scrollable axes meet. Left at the browser default it renders as a
+   pale grey square that ignores the theme entirely. */
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+/* The up/down stepper buttons some WebKit builds draw at the ends of the bar. */
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* highlight.js emits `hljs-*` classes; these map that class set onto the app's own
    `--syntax-*` roles, so there is ONE palette rather than a vendored highlight.js
    theme quietly drifting from the admin editor's colours.
@@ -267,6 +342,28 @@
   .spotlight-dim-strong {
     opacity: 0.3;
   }
+}
+
+/* The right-hand workspace panel sliding open.
+ *
+ * An ANIMATION, not a transition, and that is the whole point: the panel's width is
+ * drag-resizable, and a `transition: width` would make the edge lag behind the cursor
+ * on every drag. An animation runs once when the element mounts and can never
+ * interfere with the drag afterwards.
+ *
+ * Only `from` is declared: the implicit `to` is the element's own computed width, which
+ * is the inline px value the resize handle writes. That is what lets one rule animate
+ * open to whatever width the member last chose. Because the panel is anchored to the
+ * right edge, growing its width reads as sliding in from that edge.
+ *
+ * Auto-neutralized by the reduced-motion guard below. */
+@keyframes paneOpen {
+  from {
+    width: 0;
+  }
+}
+.pane-open {
+  animation: paneOpen 200ms ease-out;
 }
 
 /* Respect reduced-motion everywhere without policing each transition. */

@@ -22,6 +22,7 @@ import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { buildTaskRef, type TaskReference } from "@/lib/cronTasks";
 import { TagChip } from "@/app/chat/conversation-enrichment";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
@@ -107,10 +108,17 @@ function buildQuote(reply: ReplyTo, t: ChatDict): string {
 
 export default function ChatView({
   workspace,
+  subscription,
   sessionId,
   onRestartNeeded,
 }: {
   workspace: Workspace;
+  /**
+   * The subscription this workspace belongs to. Null while the tree is loading, and for
+   * a subscription with no name of its own — in which case the agent takes the line
+   * alone rather than being demoted under a uuid.
+   */
+  subscription: string | null;
   sessionId: string | undefined;
   // Forwarded to the secrets drawer: a saved secret now needs an explicit
   // restart (restart-control DEC-3), and the banner above lives in the shell.
@@ -130,6 +138,10 @@ export default function ChatView({
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
+  // A scheduled task or one of its executions, picked in the workspace panel. Same
+  // shape of slot as replyTo: held here, shown in the composer, serialized by
+  // compose() into the next message, consumed on send.
+  const [taskRef, setTaskRef] = useState<TaskReference | null>(null);
   // Everything about the turn in flight for THIS conversation, read from the
   // module-scope store -- so it is still here when you come back from another
   // chat, or another workspace (which remounts this component).
@@ -385,10 +397,11 @@ export default function ChatView({
   // there's nothing to send.
   function compose(text: string): string | null {
     const trimmed = text.trim();
-    if (!trimmed && attachments.length === 0) return null;
+    if (!trimmed && attachments.length === 0 && !taskRef) return null;
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
     const quote = replyTo ? buildQuote(replyTo, t) : "";
-    return [quote, trimmed, refs].filter(Boolean).join("\n\n");
+    const task = taskRef ? buildTaskRef(taskRef, t) : "";
+    return [quote, task, trimmed, refs].filter(Boolean).join("\n\n");
   }
 
   // Sending is delegated to turn-store: it owns the debounce, the sequential
@@ -411,6 +424,7 @@ export default function ChatView({
     if (composed === null) return false;
     setReplyTo(null);
     setAttachments([]);
+    setTaskRef(null);
     storeEnqueue(sessionId, composed, runContext());
     return true;
   }
@@ -541,6 +555,8 @@ export default function ChatView({
       onRemoveAttachment={removeAttachment}
       replyTo={replyTo}
       onCancelReply={() => setReplyTo(null)}
+      taskRef={taskRef}
+      onCancelTaskRef={() => setTaskRef(null)}
     />
   );
 
@@ -548,10 +564,34 @@ export default function ChatView({
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2">
-        <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
-          {t.view.agentPrefix} {workspace.r}
+        {/* The SUBSCRIPTION leads, the agent sits under it in lighter type — the same
+            treatment the conversations sidebar uses, and for the same reason: the
+            subscription is the membership boundary a member navigates by, and it is what
+            tells two otherwise identical agents apart. The agent is the qualifier. */}
+        {subscription ? (
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span
+              className="truncate font-display text-sm font-semibold text-fg"
+              title={subscription}
+            >
+              {subscription}
+            </span>
+            <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
+              <Bot size={11} className="shrink-0" aria-hidden />
+              <span className="truncate">{workspace.r}</span>
+            </span>
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
+            {t.view.agentPrefix} {workspace.r}
+          </span>
+        )}
+        {/* Desktop only. Canvas is already a desktop-only view (chat-shell ignores
+            view=canvas on mobile), so on a phone this control offered a destination the
+            shell would refuse — and it competed for a cramped header. */}
+        <span className="hidden md:inline-flex">
+          <ViewModeToggle view="chat" />
         </span>
-        <ViewModeToggle view="chat" />
         <div className="flex flex-1 items-center justify-end gap-1">
           <IconButton
             variant="ghost"
@@ -831,6 +871,7 @@ export default function ChatView({
           workspace={workspace}
           refreshSignal={mediaRefresh}
           onClose={() => setFilesOpen(false)}
+          onReference={setTaskRef}
         />
       )}
 

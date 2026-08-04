@@ -11,6 +11,8 @@ const en = {
     openWorkspaces: "Open workspaces",
     closeMenu: "Close menu",
     workspaces: "Workspaces",
+    // The collapsed rail's label for the conversations panel.
+    conversations: "Conversations",
     // Rendered as "<agentPrefix> <role>" in the mobile top bar.
     agentPrefix: "agent",
   },
@@ -29,6 +31,13 @@ const en = {
   emptyState: {
     title: "Pick a workspace to start",
     body: "Choose a tenant, account, and agent on the left. Its conversations open in a second panel, ready for you to type.",
+  },
+  workspaceGrid: {
+    title: "Pick a workspace",
+    body: "Everything you can reach, grouped by tenant and subscription. Click an agent to open a fresh conversation with it.",
+    // Labels behind the permission icons, so the glyphs are not the only signal.
+    permRead: "read",
+    permWrite: "write",
   },
   connectivity: {
     title: "Can't reach the gateway",
@@ -102,6 +111,63 @@ const en = {
     // parity test could not see because they never reached a locale dict.
     saved: "Saved",
     placeholder: "e.g. Always answer in Portuguese. Our stack is Next.js + Go…",
+  },
+  scheduledTasks: {
+    title: "Scheduled tasks",
+    hint: "What the agent runs on a schedule, and what each run produced. Read-only: ask the agent to create or change a task.",
+    // The store carries no per-run outcome, so the list never claims one. This
+    // sentence is why there are no success ticks next to the executions.
+    noOutcomeHint: "Only the most recent run of a live task records a status — earlier runs show how long they took and how much they logged.",
+    schedule: {
+      cron: "Cron {expr}",
+      every: "Every {interval}",
+      at: "Once at {instant}",
+      // An unfamiliar schedule kind from a newer picoclaw: named, not guessed at.
+      unknown: "Schedule: {kind}",
+    },
+    disabled: "Disabled",
+    nextRun: "Next run",
+    lastRun: "Last run",
+    neverRan: "Has not run yet",
+    lastStatus: "Status",
+    lastErrorLabel: "Error",
+    deliversTo: "Delivers to {target}",
+    oneShot: "Removes itself after running",
+    runs: "{count} run(s)",
+    noRuns: "No runs recorded.",
+    entries: "{count} entries",
+    // A run whose task is gone from the store — the normal end state of a
+    // one-shot task, so it is labelled rather than hidden.
+    removedTask: "Removed task",
+    removedTaskHint: "The task is no longer scheduled, but this run is still on record.",
+    transcriptMissing: "The transcript for this run is no longer available.",
+    backToTasks: "Back to tasks",
+    toolCall: "{name}",
+    toolResult: "Tool result",
+    expandTool: "Show details",
+    collapseTool: "Hide details",
+    reference: "Reference in chat",
+    referenceAria: "Reference this in the chat",
+    // What the composer banner calls the two things that can be referenced.
+    referencedTask: "Scheduled task",
+    referencedRun: "Task run",
+    cancelReference: "Remove reference",
+    // The marker words that travel INSIDE the sent message, so the agent reads a
+    // reference in the member's own language — same idea as the `[anexo: …]` refs.
+    markerTask: "scheduled task",
+    markerRun: "task run",
+    markerLastRun: "last run",
+    none: "No scheduled tasks yet.",
+    noneHint: "Ask the agent to schedule something and it will appear here.",
+    refresh: "Check for new tasks",
+    refreshAria: "Refresh scheduled tasks",
+    hideFinished: "Hide finished",
+    hideFinishedTitle: "Hide tasks that already ran and will not run again",
+    finishedHidden: "{count} hidden",
+    allFinished: "Everything here has finished.",
+    allFinishedHint: "Turn off “Hide finished” to see past tasks and their results.",
+    showMoreRuns: "Show {count} older run(s)",
+    showFewerRuns: "Show fewer runs",
   },
   memoryGraph: {
     // Deliberately NOT "memory": the panel already has one, and t.memory.* is
@@ -310,11 +376,12 @@ const en = {
     organiseHint: "Drag files and folders to reorganise. The agent references these paths in its memory and skills — renaming or moving something it mentioned breaks that reference.",
     deleteFolderTitle: "Delete this folder?",
     deleteFolderMessage: "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
-    // One-line blurbs under each of the three workspace sections, so the menu says
-    // what each is for instead of making the member click to find out.
+    // One-line blurbs under each workspace section, so the menu says what each is
+    // for instead of making the member click to find out.
     sections: {
       memory: "Standing notes you write for the agent.",
       graph: "What the agent learned on its own.",
+      tasks: "What runs on a schedule, and its results.",
       files: "Uploads and files in this workspace.",
     },
     resize: "Resize Workspace files",
@@ -350,6 +417,7 @@ const pt: ChatDict = {
     openWorkspaces: "Abrir workspaces",
     closeMenu: "Fechar menu",
     workspaces: "Workspaces",
+    conversations: "Conversas",
     agentPrefix: "agente",
   },
   pane: {
@@ -364,6 +432,12 @@ const pt: ChatDict = {
   emptyState: {
     title: "Escolha um workspace para começar",
     body: "Escolha um tenant, uma conta e um agente à esquerda. As conversas dele abrem em um segundo painel, prontas para você escrever.",
+  },
+  workspaceGrid: {
+    title: "Escolha um workspace",
+    body: "Tudo o que você pode acessar, agrupado por tenant e assinatura. Clique num agente para abrir uma conversa nova com ele.",
+    permRead: "leitura",
+    permWrite: "escrita",
   },
   connectivity: {
     title: "Não foi possível falar com o gateway",
@@ -435,6 +509,55 @@ const pt: ChatDict = {
     hint: "Salvo em MEMORY_CUSTOM.md — o agente lê a cada mensagem.",
     saved: "Salvo",
     placeholder: "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
+  },
+  scheduledTasks: {
+    title: "Tarefas agendadas",
+    hint: "O que o agente executa em horários programados, e o que cada execução produziu. Somente leitura: peça ao agente para criar ou alterar uma tarefa.",
+    noOutcomeHint: "Só a execução mais recente de uma tarefa ativa registra status — as anteriores mostram quanto tempo levaram e quanto registraram.",
+    schedule: {
+      cron: "Cron {expr}",
+      every: "A cada {interval}",
+      at: "Uma vez em {instant}",
+      unknown: "Agendamento: {kind}",
+    },
+    disabled: "Desabilitada",
+    nextRun: "Próxima execução",
+    lastRun: "Última execução",
+    neverRan: "Ainda não executou",
+    lastStatus: "Status",
+    lastErrorLabel: "Erro",
+    deliversTo: "Entrega em {target}",
+    oneShot: "Se remove depois de executar",
+    runs: "{count} execução(ões)",
+    noRuns: "Nenhuma execução registrada.",
+    entries: "{count} entradas",
+    removedTask: "Tarefa removida",
+    removedTaskHint: "A tarefa não está mais agendada, mas esta execução continua registrada.",
+    transcriptMissing: "O transcript desta execução não está mais disponível.",
+    backToTasks: "Voltar às tarefas",
+    toolCall: "{name}",
+    toolResult: "Resultado da ferramenta",
+    expandTool: "Mostrar detalhes",
+    collapseTool: "Ocultar detalhes",
+    reference: "Referenciar no chat",
+    referenceAria: "Referenciar isto no chat",
+    referencedTask: "Tarefa agendada",
+    referencedRun: "Execução da tarefa",
+    cancelReference: "Remover referência",
+    markerTask: "tarefa agendada",
+    markerRun: "execução",
+    markerLastRun: "última execução",
+    none: "Nenhuma tarefa agendada ainda.",
+    noneHint: "Peça ao agente para agendar algo e aparecerá aqui.",
+    refresh: "Buscar novas tarefas",
+    refreshAria: "Atualizar tarefas agendadas",
+    hideFinished: "Ocultar concluídas",
+    hideFinishedTitle: "Ocultar tarefas que já executaram e não executarão de novo",
+    finishedHidden: "{count} oculta(s)",
+    allFinished: "Tudo aqui já foi concluído.",
+    allFinishedHint: "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
+    showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
+    showFewerRuns: "Mostrar menos execuções",
   },
   memoryGraph: {
     title: "Grafo de conhecimento",
@@ -623,6 +746,7 @@ const pt: ChatDict = {
     sections: {
       memory: "Notas fixas que você escreve para o agente.",
       graph: "O que o agente aprendeu por conta própria.",
+      tasks: "O que roda em horário programado, e seus resultados.",
       files: "Uploads e arquivos deste workspace.",
     },
     resize: "Redimensionar Arquivos do workspace",
