@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Bot, Eye, FolderClosed, Pencil } from "lucide-react";
+import { Eye, FolderClosed } from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
 import { type AgentLeaf } from "@/lib/subscriptions";
 import { setWorkspace, type Workspace } from "./fragment";
@@ -137,7 +137,11 @@ export default function WorkspaceGrid() {
                             onClick={() => pick(leaf)}
                             className={agentTile()}
                           >
-                            <Bot size={22} className="text-accent" aria-hidden />
+                            {/* An initials avatar rather than a robot icon: every agent had
+                                the same glyph, so the picture carried nothing and the name
+                                did all the work. Two letters plus a colour derived from the
+                                name make the tiles distinguishable at a glance. */}
+                            <TenantAvatar name={leaf.role} size="lg" />
                             <span className="w-full truncate text-sm font-semibold capitalize text-fg">
                               {leaf.role}
                             </span>
@@ -158,12 +162,11 @@ export default function WorkspaceGrid() {
 }
 
 /**
- * The permission union as icons — an eye for read, a pencil for write.
+ * A marker for READ-ONLY access, and nothing otherwise.
  *
- * Icons rather than the "read·write" wording the sidebar uses: in a card this dense the
- * words outweighed the agent's own name. Each still carries its word as a label and a
- * tooltip, so the meaning is available to a screen reader and on hover rather than
- * being left to the reader to infer from a glyph.
+ * Write is the norm, so annotating it said nothing — and a pencil beside an agent's name
+ * read as a control: people took it for "rename this". Marking only the exception means the
+ * glyph carries information every time it appears, and the common case is quiet.
  */
 function AccessIcons({
   perms,
@@ -173,19 +176,16 @@ function AccessIcons({
   t: typeof chatCopy.en;
 }) {
   const set = new Set(perms.map((p) => p.toLowerCase()));
+  if (set.has("write")) return null;
   return (
-    <span className="flex shrink-0 items-center gap-1 text-fg-muted">
-      {/* The wrapper carries the label and the tooltip: lucide icons take neither. */}
-      {set.has("read") && (
-        <span role="img" aria-label={t.workspaceGrid.permRead} title={t.workspaceGrid.permRead}>
-          <Eye size={13} aria-hidden />
-        </span>
-      )}
-      {set.has("write") && (
-        <span role="img" aria-label={t.workspaceGrid.permWrite} title={t.workspaceGrid.permWrite}>
-          <Pencil size={13} aria-hidden />
-        </span>
-      )}
+    // The wrapper carries the label and the tooltip: lucide icons take neither.
+    <span
+      role="img"
+      aria-label={t.workspaceGrid.readOnly}
+      title={t.workspaceGrid.readOnly}
+      className="shrink-0 text-fg-muted"
+    >
+      <Eye size={13} aria-hidden />
     </span>
   );
 }

@@ -79,3 +79,31 @@ describe("subscription naming", () => {
     expect(accountName(null, "t1", "s1")).toBeNull();
   });
 });
+
+// Write is the norm, so the picker marks only the exception. The union comes from
+// groupWorkspaces, and getting this backwards would either annotate every agent (saying
+// nothing) or annotate none (hiding the one case that matters).
+describe("which agents are marked read-only", () => {
+  const permsOf = (rows: Subscription[]) =>
+    groupWorkspaces(rows)[0].accounts[0].agents[0].perms.map((p) => p.toLowerCase());
+
+  it("leaves a writer unmarked", () => {
+    expect(permsOf([sub({ perm: "write" })])).toContain("write");
+  });
+
+  it("leaves read+write unmarked, since write is present", () => {
+    expect(permsOf([sub({ perm: "read" }), sub({ perm: "write" })])).toContain("write");
+  });
+
+  it("marks a reader, which is the only case worth a glyph", () => {
+    const perms = permsOf([sub({ perm: "read" })]);
+    expect(perms).toContain("read");
+    expect(perms).not.toContain("write");
+  });
+
+  // normalizePerms maps anything containing "write" — the marker must not treat a spelling it
+  // does not recognise as read-only and annotate a writer.
+  it("recognises write however the feed spells it", () => {
+    expect(permsOf([sub({ perm: "OVERWRITE" })])).toContain("write");
+  });
+});

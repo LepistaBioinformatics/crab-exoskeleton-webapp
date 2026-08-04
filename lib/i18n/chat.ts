@@ -35,9 +35,9 @@ const en = {
   workspaceGrid: {
     title: "Pick a workspace",
     body: "Everything you can reach, grouped by tenant and subscription. Click an agent to open a fresh conversation with it.",
-    // Labels behind the permission icons, so the glyphs are not the only signal.
-    permRead: "read",
-    permWrite: "write",
+    // Only read-only access is marked: write is the norm, and a pencil beside a name read as
+    // a control rather than a statement about permission.
+    readOnly: "read-only access",
   },
   connectivity: {
     title: "Can't reach the gateway",
@@ -468,8 +468,7 @@ const pt: ChatDict = {
   workspaceGrid: {
     title: "Escolha um workspace",
     body: "Tudo o que você pode acessar, agrupado por tenant e assinatura. Clique num agente para abrir uma conversa nova com ele.",
-    permRead: "leitura",
-    permWrite: "escrita",
+    readOnly: "acesso somente leitura",
   },
   connectivity: {
     title: "Não foi possível falar com o gateway",
