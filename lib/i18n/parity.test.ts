@@ -75,6 +75,10 @@ const SHARED = new Set([
   "landing.hierarchy.sample.agentA",
   "landing.hierarchy.sample.agentB",
   "landing.templates.index",
+  "landing.scheduled.index",
+  // The tool's actual name, as it appears in a run's transcript. Translating it would
+  // make the figure show something the agent never logged.
+  "landing.scheduled.sample.toolCall",
   "landing.files.index",
 ]);
 

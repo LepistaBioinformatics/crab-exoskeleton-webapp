@@ -19,6 +19,7 @@ import {
   MemoryMock,
   GraphMock,
   FilesMock,
+  TasksMock,
   TemplatesMock,
   NextIcon,
 } from "./diagrams";
@@ -355,9 +356,34 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* 07 — files */}
+        {/* 08 — scheduled tasks */}
         <section className={styles.section} id="s8">
           <div className={styles.grid}>
+            <div className={styles.copyCol} data-reveal>
+              <span className={styles.eyebrow}>
+                <span className={styles.idx}>{t.scheduled.index}</span>{" "}
+                {t.scheduled.eyebrow}
+              </span>
+              <h2 className={styles.title}>{t.scheduled.title}</h2>
+              <p className={styles.body}>{t.scheduled.body}</p>
+              <ul className={styles.points}>
+                {t.scheduled.points.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+              <NextNudge href="#s9" label={t.scheduled.next} />
+            </div>
+            <div className={styles.artCol} data-reveal>
+              <div className={styles.panel}>
+                <TasksMock dict={t.scheduled} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 09 — files */}
+        <section className={styles.section} id="s9">
+          <div className={`${styles.grid} ${styles.flip}`}>
             <div className={styles.copyCol} data-reveal>
               <span className={styles.eyebrow}>
                 <span className={styles.idx}>{t.files.index}</span>{" "}

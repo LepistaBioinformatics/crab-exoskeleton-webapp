@@ -1,5 +1,7 @@
 import {
   Building2,
+  CalendarClock,
+  Clock,
   FolderClosed,
   Bot,
   User,
@@ -11,6 +13,7 @@ import {
   MessageSquare,
   Network,
   Tag,
+  Wrench,
 } from "lucide-react";
 import type { LandingDict } from "@/lib/i18n/landing";
 import styles from "./landing.module.css";
@@ -627,3 +630,46 @@ export function TemplatesMock({ dict }: { dict: LandingDict["hierarchy"] }) {
 }
 
 export const NextIcon = ArrowDown;
+
+/**
+ * A scheduled task with its past runs.
+ *
+ * Shows exactly what the panel shows and nothing it does not: a schedule, a last and a
+ * next run, older runs listed underneath, and one collapsed tool call. Notably absent —
+ * any tick or cross beside a run. No per-run outcome is recorded anywhere, so a figure
+ * with a green check would be inventing a capability.
+ */
+export function TasksMock({ dict }: { dict: LandingDict["scheduled"] }) {
+  const s = dict.sample;
+  return (
+    <div>
+      <div className={styles.fileRow} style={{ alignItems: "flex-start" }}>
+        <CalendarClock size={15} aria-hidden />
+        <span style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          <span style={{ color: "#e9f1f4" }}>{s.name}</span>
+          <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>{s.schedule}</span>
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: "0.7rem", opacity: 0.6 }}>
+          {s.nextRun}
+        </span>
+      </div>
+      <div className={styles.fileRow} style={{ opacity: 0.85 }}>
+        <Clock size={13} aria-hidden />
+        <span style={{ fontSize: "0.75rem" }}>{s.lastRun}</span>
+        <span
+          className={styles.filterBar}
+          style={{ marginLeft: "auto", padding: "0.1rem 0.4rem", fontSize: "0.65rem" }}
+        >
+          <Wrench size={11} aria-hidden />
+          {s.toolCall}
+        </span>
+      </div>
+      {s.runs.map((run) => (
+        <div key={run} className={styles.fileRow} style={{ opacity: 0.55 }}>
+          <Clock size={13} aria-hidden />
+          <span style={{ fontSize: "0.75rem" }}>{run}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
