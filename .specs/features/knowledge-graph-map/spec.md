@@ -40,12 +40,42 @@ this come from". The map is the way in; the answer was already built.
   quietly become a second data path with its own request per visit.
 - **NFR-2** The simulation is ticked to completion, not animated. A settling graph moves
   labels while they are being read and makes clicking a node a chase.
-- **NFR-3** Layout comes from a library; **drawing does not**. Only hand-rolled SVG
-  inherits this app: the CSS vars flip with the OS scheme, the brand colours are the
-  chrome's own, and the global reduced-motion guard applies. A canvas or WebGL renderer
-  would need its own palette and its own theme switch.
+- **NFR-3** ~~Layout comes from a library; drawing does not.~~ **Superseded:** the library
+  draws too. The theme is read from the app's tokens and passed into Cytoscape's
+  stylesheet. See "The library decision" — inheriting the vars for free was not worth an
+  unreadable graph.
+- **NFR-4** Selection is applied as classes on the live graph, never by rebuilding it: a
+  rebuild re-runs the layout, so clicking a node would rearrange the picture around it.
 
-## The library decision
+## The library decision — revised after the first attempt failed
+
+**Outcome: Cytoscape.js renders the map. The reasoning below is kept because the first
+decision was wrong and the way it was wrong is the useful part.**
+
+The first version used `d3-force` for the layout and hand-rolled the SVG, on the argument
+that only hand-rolled SVG inherits the app's CSS vars. That argument was real and it was
+not worth what it cost: the layout spanned far more than the panel's column so the fit
+reduced everything to roughly a quarter scale, labels drew unconditionally and overlapped,
+edges had no arrowheads, and pan/zoom was hand-written viewBox arithmetic that did not
+work. Two rounds of fixes did not make it usable, because every remaining defect was
+something a graph library already solves.
+
+**Neo4j's library is legally unusable here.** `@neo4j-nvl/*` ships under a Neo4j licence
+that permits use only with Neo4j Aura or Neo4j's proprietary commercial database products;
+this knowledge graph is a Go store on disk (`internal/memgraph`). `neovis.js` is the
+Apache-2.0 alternative in that ecosystem — last published 2023, 25 MB unpacked because it
+bundles vis-network.
+
+**Cytoscape.js**: MIT, published 2026-06, 5.5 MB unpacked. Its built-in `cose` layout is
+used rather than `cytoscape-fcose`, which has been stale since 2023. The trade, which
+reverses the original argument: Cytoscape styles through its own stylesheet, so the theme
+is READ from the app's tokens at graph-build time and passed in rather than inherited.
+
+What the library gives that the hand-rolled version did not: label collision handling
+(hidden rather than stacked), arrowheads for direction, working pan/zoom and hit-testing,
+and colour by entity type.
+
+## The library decision (original, superseded)
 
 `d3-force`, chosen against `cytoscape`, `sigma`, `react-force-graph-2d` and
 `@xyflow/react` (all verified live on the npm registry, August 2026).
