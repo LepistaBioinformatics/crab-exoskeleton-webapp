@@ -166,6 +166,18 @@ export default function MemoryGraphView({
             "text-opacity": 0,
           },
         },
+        // A node kept only because it neighbours a match is CONTEXT, not an answer. Drawn
+        // hollow and unlabelled so the eye lands on what was actually asked for, while the
+        // connection it provides is still visible.
+        {
+          selector: "node[!match]",
+          style: {
+            "background-opacity": 0.15,
+            "border-color": p.muted,
+            "border-width": 1.5,
+            "text-opacity": 0.45,
+          },
+        },
         // One hop from the selection stays lit; the rest recedes. Not the transitive
         // closure — on any real graph that is "most of it", which dims nothing.
         { selector: ".faded", style: { opacity: 0.1, "text-opacity": 0 } },

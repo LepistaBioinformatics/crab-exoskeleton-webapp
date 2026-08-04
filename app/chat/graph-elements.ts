@@ -13,7 +13,14 @@ import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
 
 export interface GraphElements {
   nodes: {
-    data: { id: string; label: string; type: string; observations: number };
+    data: {
+      id: string;
+      label: string;
+      type: string;
+      observations: number;
+      /** True when this node matched the filter itself, false when it is context. */
+      match: boolean;
+    };
     /** Deterministic seed position — see seedPosition. */
     position: { x: number; y: number };
   }[];
@@ -26,23 +33,24 @@ export interface GraphElements {
  * Narrows the graph before it is drawn.
  *
  * `type` reuses the panel's existing type filter, so switching between the list and the map
- * keeps the same narrowing rather than each tab having its own idea of it.
+ * keeps the same narrowing rather than each tab having its own idea of it. It is a HARD
+ * gate: "show me only the people" has to stay true, which is also what it means in the list.
  *
  * `query` is a case-insensitive SUBSTRING match over the entity name — deliberately not the
  * Search tab's ranking, which is BM25 over names, types and observation text on the server.
  * Calling this a search would promise that; it filters what is already loaded, which is why
  * it is instant and why it cannot find an entity by something only its observations say.
+ *
+ * A query KEEPS THE NEIGHBOURS of what it matched. Reducing a graph to the matching nodes
+ * alone strips exactly what a graph is for: an isolated node says nothing, and its
+ * neighbours are the context that answers "how does this connect". Matches are flagged so
+ * the drawing can tell them from the context it pulled in with them.
+ *
+ * One hop, not the closure — two hops out from a well-connected node is most of the graph.
  */
 export interface GraphFilter {
   type?: string | null;
   query?: string;
-}
-
-function matches(e: SummaryEntity, filter: GraphFilter): boolean {
-  if (filter.type && (e.type || "unknown") !== filter.type) return false;
-  const q = filter.query?.trim().toLowerCase();
-  if (q && !e.name.toLowerCase().includes(q)) return false;
-  return true;
 }
 
 export function buildElements(
@@ -50,7 +58,28 @@ export function buildElements(
   relations: Relation[],
   filter: GraphFilter = {},
 ): GraphElements {
-  entities = entities.filter((e) => matches(e, filter));
+  // The type gate first, so neighbours pulled in by a query still respect it.
+  const pool = filter.type
+    ? entities.filter((e) => (e.type || "unknown") === filter.type)
+    : entities;
+
+  const q = filter.query?.trim().toLowerCase();
+  const matched = new Set(
+    q ? pool.filter((e) => e.name.toLowerCase().includes(q)).map((e) => e.name) : pool.map((e) => e.name),
+  );
+
+  // Expand one hop, within the pool. Only when a query narrowed things: with no query every
+  // node is already a match and there is nothing to expand.
+  const keep = new Set(matched);
+  if (q) {
+    const inPool = new Set(pool.map((e) => e.name));
+    for (const r of relations) {
+      if (matched.has(r.from) && inPool.has(r.to)) keep.add(r.to);
+      if (matched.has(r.to) && inPool.has(r.from)) keep.add(r.from);
+    }
+  }
+
+  entities = pool.filter((e) => keep.has(e.name));
   const present = new Set(entities.map((e) => e.name));
 
   // Sorted by name so the seed depends on the SET of entities, not on the order the API
@@ -63,6 +92,9 @@ export function buildElements(
       label: e.name,
       type: e.type || "unknown",
       observations: e.observationCount,
+      // False for a node kept only as a matched node's neighbour, so the drawing can show
+      // which of these the member actually asked for.
+      match: matched.has(e.name),
     },
     position: seedPosition(i, ordered.length),
   }));

@@ -170,15 +170,13 @@ describe("buildElements — filtering", () => {
   });
 
   it("matches a name substring, case-insensitively", () => {
-    expect(buildElements(graph, rels, { query: "ASSAY" }).nodes.map((n) => n.data.id)).toEqual([
-      "assay pipeline",
-    ]);
-    expect(buildElements(graph, rels, { query: "pipe" }).nodes).toHaveLength(1);
+    const ids = buildElements(graph, rels, { query: "ASSAY" }).nodes.map((n) => n.data.id);
+    expect(ids).toContain("assay pipeline");
   });
 
-  it("drops edges whose other end was filtered out", () => {
-    // alice's two relations both point at entities the filter removed, so keeping them would
-    // make Cytoscape throw on an edge naming a node that is not there.
+  it("drops edges whose other end the TYPE gate removed", () => {
+    // The type gate is hard, so alice's relations point at entities that are gone — keeping
+    // those edges would make Cytoscape throw on an edge naming an absent node.
     const { nodes, edges } = buildElements(graph, rels, { type: "person" });
     expect(nodes).toHaveLength(1);
     expect(edges).toHaveLength(0);
@@ -202,5 +200,67 @@ describe("buildElements — filtering", () => {
     // real trade: reproducible across visits, not stable across filter changes.
     expect(seed(filtered)).not.toBeUndefined();
     expect(all.nodes).toHaveLength(3);
+  });
+});
+
+// Reducing the graph to just the matching nodes strips what a graph is for: an isolated node
+// says nothing, and its neighbours are the context that answers "how does this connect".
+describe("buildElements — a query keeps its matches' neighbours", () => {
+  const graph = [
+    entity("ledger", { type: "system" }),
+    entity("alice", { type: "person" }),
+    entity("bob", { type: "person" }),
+    entity("unrelated", { type: "system" }),
+  ];
+  // alice → ledger → bob, so bob is two hops from alice.
+  const rels = [rel("alice", "ledger"), rel("ledger", "bob")];
+
+  it("keeps the nodes connected to a match", () => {
+    const ids = buildElements(graph, rels, { query: "ledger" }).nodes.map((n) => n.data.id);
+    expect(ids.sort()).toEqual(["alice", "bob", "ledger"]);
+  });
+
+  it("flags which of them actually matched, so context is distinguishable", () => {
+    const { nodes } = buildElements(graph, rels, { query: "ledger" });
+    const byId = new Map(nodes.map((n) => [n.data.id, n.data.match]));
+    expect(byId.get("ledger")).toBe(true);
+    expect(byId.get("alice")).toBe(false);
+    expect(byId.get("bob")).toBe(false);
+  });
+
+  it("stops at one hop", () => {
+    // Matching alice keeps ledger; bob is two hops out and stays gone. Two hops from a
+    // well-connected node is most of the graph, which filters nothing.
+    const ids = buildElements(graph, rels, { query: "alice" }).nodes.map((n) => n.data.id);
+    expect(ids.sort()).toEqual(["alice", "ledger"]);
+  });
+
+  it("drops a match's untouched siblings", () => {
+    const ids = buildElements(graph, rels, { query: "ledger" }).nodes.map((n) => n.data.id);
+    expect(ids).not.toContain("unrelated");
+  });
+
+  it("keeps the edges among what survived", () => {
+    const { edges } = buildElements(graph, rels, { query: "ledger" });
+    expect(edges).toHaveLength(2);
+  });
+
+  it("shows an isolated match alone rather than nothing", () => {
+    const { nodes } = buildElements(graph, rels, { query: "unrelated" });
+    expect(nodes.map((n) => n.data.id)).toEqual(["unrelated"]);
+  });
+
+  // The type gate must survive the expansion, or "show me only the people" stops being true
+  // the moment somebody also types a name.
+  it("does not let a neighbour escape the type gate", () => {
+    const ids = buildElements(graph, rels, { type: "person", query: "alice" }).nodes.map(
+      (n) => n.data.id,
+    );
+    expect(ids, "ledger is a system and the gate said people").toEqual(["alice"]);
+  });
+
+  it("marks everything as a match when there is no query to narrow by", () => {
+    const { nodes } = buildElements(graph, rels);
+    expect(nodes.every((n) => n.data.match)).toBe(true);
   });
 });
