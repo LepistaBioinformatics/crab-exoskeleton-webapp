@@ -29,8 +29,11 @@ const PALETTE_VARS = [
   "--color-syntax-name",
 ];
 
-/** A dense graph genuinely needs more than 4x; below 0.5x nodes start to overlap. */
+// 0.5x is the DEFAULT, not the middle of the range: at 1x the graph opened wider than it
+// needed to and the first thing anyone did was pull it in. The range runs upward from here
+// because a dense graph is the case that needs the room, not a sparse one.
 const MIN_SPREAD = 0.5;
+const DEFAULT_SPREAD = 0.5;
 const MAX_SPREAD = 8;
 
 const PALETTE_FALLBACK = ["#64c5eb", "#663a88", "#1f7a4d", "#a35200", "#0d6e8c", "#c79ae8"];
@@ -110,7 +113,7 @@ export default function MemoryGraphView({
   // The range reaches 8x rather than 4x because a dense graph genuinely needs it, and the
   // current multiplier is SHOWN — the first version was two near-identical arrow glyphs
   // with no readout, so there was no way to tell them apart or to know where you were.
-  const [spread, setSpread] = useState(1);
+  const [spread, setSpread] = useState(DEFAULT_SPREAD);
   // Kept in a ref so the tap handler never goes stale without rebuilding the graph, which
   // would re-run the layout and move every node.
   const select = useRef(onSelect);
