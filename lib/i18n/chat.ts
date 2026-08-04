@@ -177,8 +177,6 @@ const en = {
     // view can surface.
     unattributed: "No conversation",
     unattributedHint: "Scheduled runs and facts the agent could not tie to a chat.",
-    legendRuns: "scheduled run",
-    legendLearned: "learned a fact",
     referencedSpan: "Conversation span",
     // Travels inside the sent message, like the `[anexo: …]` refs.
     markerSpan: "conversation span",
@@ -588,8 +586,6 @@ const pt: ChatDict = {
     learned: "aprendeu: {entity}",
     unattributed: "Sem conversa",
     unattributedHint: "Execuções agendadas e fatos que o agente não conseguiu ligar a um chat.",
-    legendRuns: "execução agendada",
-    legendLearned: "aprendeu um fato",
     referencedSpan: "Trecho de conversa",
     markerSpan: "trecho de conversa",
     markerMessages: "mensagens",

@@ -383,6 +383,27 @@ export default function CanvasTimeline({
               </svg>
             </div>
 
+            {/* Work no conversation claims, in its own strip under the lanes: a scheduled
+                run whose chat marker is missing, and facts the proxy could not attribute
+                (cron, the heartbeat, two chats in flight at once). Hidden, these would be
+                invisible everywhere — and unattended work with nothing in the history
+                pointing at it is exactly what a member does not already know about. */}
+            {orphanMarks.length > 0 && (
+              <div className="shrink-0 border-t border-brand/20 px-4 py-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-fg-muted">
+                    {t.canvasActivity.unattributed}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] text-fg-muted/70">
+                    {t.canvasActivity.unattributedHint}
+                  </span>
+                </div>
+                <svg viewBox={`0 0 ${W} 16`} width={W} height={16} style={{ display: "block" }}>
+                  <ActivityMarks marks={orphanMarks} y={5} xOf={xOf} />
+                </svg>
+              </div>
+            )}
+
             {/* Date axis, pinned to the bottom of the stage */}
             <div className="shrink-0 border-t border-brand/20 bg-bg/80 backdrop-blur">
               <svg viewBox={`0 0 ${W} ${AXIS_H}`} width={W} height={AXIS_H} style={{ display: "block" }}>

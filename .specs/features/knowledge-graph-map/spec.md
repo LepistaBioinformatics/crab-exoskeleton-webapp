@@ -36,10 +36,12 @@ this come from". The map is the way in; the answer was already built.
 ## Non-functional requirements
 
 - **NFR-1** The map derives from **exactly** the browse projection the list already
-  fetches — no field only the full projection carries. Asserted by a test, so it cannot
-  quietly become a second data path with its own request per visit.
-- **NFR-2** The simulation is ticked to completion, not animated. A settling graph moves
-  labels while they are being read and makes clicking a node a chase.
+  fetches — no field only the full projection carries — so it cannot quietly become a
+  second data path with its own request per visit. The test that asserted this lived in
+  `graph-layout.test.ts` and went with the rewrite; `graph-elements.test.ts` covers the
+  mapping that replaced it, but the "no extra field" property is now held by review only.
+- **NFR-2** The layout runs unanimated (`cose` with `animate: false`). A settling graph
+  moves labels while they are being read and makes clicking a node a chase.
 - **NFR-3** ~~Layout comes from a library; drawing does not.~~ **Superseded:** the library
   draws too. The theme is read from the app's tokens and passed into Cytoscape's
   stylesheet. See "The library decision" — inheriting the vars for free was not worth an
