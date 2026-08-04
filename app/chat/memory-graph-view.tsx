@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import cytoscape, { type Core } from "cytoscape";
 import { buildElements, typeColorIndex } from "./graph-elements";
 import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
@@ -94,8 +93,15 @@ export default function MemoryGraphView({
   const box = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
   // A graph in a ~280px column is cramped by construction, and that — not the zoom range —
-  // is what made the previous version unreadable. Full screen is the state this view is
+  // is what made the earlier version unreadable. Full screen is the state this view is
   // usable in.
+  //
+  // Done with the FULLSCREEN API, not by repositioning. Two earlier attempts failed for
+  // reasons worth keeping: `position: fixed` was contained by the sidebar's transformed
+  // sliding track, so it never covered the viewport; and portalling to <body> made React
+  // build a NEW container div, leaving Cytoscape attached to a detached node — the graph
+  // simply vanished. requestFullscreen moves nothing in the DOM, so the instance survives.
+  const shell = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   // How far apart the layout pushes things. Exposed because the right spread depends on the
   // graph: a dozen entities want them close enough to read as one picture, a hundred want
@@ -226,13 +232,37 @@ export default function MemoryGraphView({
     node.addClass("picked");
   }, [selected]);
 
-  // Cytoscape does not observe its container, so going full screen needs telling.
+  // Esc and the browser's own control leave fullscreen without going through our button, so
+  // the flag follows the document rather than the click.
+  useEffect(() => {
+    const sync = () => setExpanded(document.fullscreenElement === shell.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  // Cytoscape does not observe its container, so a size change needs telling. Deferred a
+  // frame: on entering fullscreen the new size is not laid out yet when the event fires, and
+  // fitting against the old one leaves the graph off-view.
   useEffect(() => {
     const instance = cy.current;
     if (!instance) return;
-    instance.resize();
-    instance.fit(undefined, 40);
+    const id = requestAnimationFrame(() => {
+      instance.resize();
+      instance.fit(undefined, 40);
+    });
+    return () => cancelAnimationFrame(id);
   }, [expanded]);
+
+  async function toggleFullscreen() {
+    const el = shell.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement === el) await document.exitFullscreen();
+      else await el.requestFullscreen();
+    } catch {
+      // Refused (no gesture, or unsupported): the pane simply stays as it is.
+    }
+  }
 
   const shown = buildElements(entities, relations, { type: typeFilter, query }).nodes.length;
   if (shown === 0) {
@@ -253,7 +283,7 @@ export default function MemoryGraphView({
           label: expanded ? "⤡" : "⤢",
           title: expanded ? collapseLabel : expandLabel,
           disabled: false,
-          onClick: () => setExpanded((v) => !v),
+          onClick: toggleFullscreen,
         },
         {
           key: "fit",
@@ -319,17 +349,14 @@ export default function MemoryGraphView({
     </>
   );
 
-  // PORTALLED when expanded, and that is not a style choice. The panel sits inside the
-  // sidebar's sliding track, which carries a `transform` — and a transformed ancestor
-  // becomes the containing block for `position: fixed`, so "full screen" was positioned
-  // against a 200%-wide translated element instead of the viewport. Escaping to <body> is
-  // the fix; nothing inside this subtree could have been.
-  if (expanded) {
-    return createPortal(
-      <div className="fixed inset-0 z-50 bg-bg">{stage}</div>,
-      document.body,
-    );
-  }
-
-  return <div className="relative h-full min-h-[320px]">{stage}</div>;
+  return (
+    // `bg-bg` matters in fullscreen: the fullscreen element is composited against black by
+    // default, and the graph's own background is transparent.
+    <div
+      ref={shell}
+      className="relative h-full min-h-[320px] bg-bg"
+    >
+      {stage}
+    </div>
+  );
 }
