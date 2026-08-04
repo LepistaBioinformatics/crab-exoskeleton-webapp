@@ -15,10 +15,10 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
-    "@types/d3-force": "^3.0.10",
+    "@types/cytoscape": "^3.31.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "d3-force": "^3.0.0",
+    "cytoscape": "^3.34.0",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.24.0",
     "next": "^15.5.21",
