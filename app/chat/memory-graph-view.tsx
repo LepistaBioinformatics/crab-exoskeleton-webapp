@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape, { type Core } from "cytoscape";
 import { buildElements, typeColorIndex } from "./graph-elements";
 import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
@@ -123,11 +123,20 @@ export default function MemoryGraphView({
   select.current = onSelect;
   const spreadLabel = spreadReadout.replace("{value}", String(spread));
 
+  // Built ONCE per graph-and-filter, and shared with the effect below. It was computed twice
+  // — once to feed Cytoscape, once in the render path — and the render copy re-ran on every
+  // re-render (hover, selection, spread, fullscreen). That is a filter plus a sort over the
+  // whole graph repeated for nothing, which undercuts the point of capping the node count.
+  const built = useMemo(
+    () => buildElements(entities, relations, { type: typeFilter, query }),
+    [entities, relations, typeFilter, query],
+  );
+
   useEffect(() => {
     const container = box.current;
     if (!container || entities.length === 0) return;
 
-    const { nodes, edges, types } = buildElements(entities, relations, { type: typeFilter, query });
+    const { nodes, edges, types } = built;
     const p = readPalette(container);
 
     const instance = cytoscape({
@@ -221,7 +230,7 @@ export default function MemoryGraphView({
       instance.destroy();
       cy.current = null;
     };
-  }, [entities, relations, typeFilter, query, spread]);
+  }, [built, spread]);
 
   // Selection is applied as CLASSES, never by rebuilding: a rebuild re-runs the layout, so
   // clicking a node would rearrange the picture around it.
@@ -270,7 +279,6 @@ export default function MemoryGraphView({
     }
   }
 
-  const built = buildElements(entities, relations, { type: typeFilter, query });
   if (built.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
