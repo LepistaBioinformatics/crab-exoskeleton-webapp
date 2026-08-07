@@ -267,9 +267,11 @@ const en = {
     queued: "Waiting to send",
   },
   commands: {
-    renameUsage: "Usage: /rename <new title>",
-    renamed: "Chat renamed to “{title}”.",
-    renameFailed: "Couldn't rename it.",
+    // /rename writes the ALIAS, not the title — hence the wording. "Alias" is
+    // the term the rest of the UI uses for it (enrichment.alias, aliasAndTags).
+    aliasSet: "Alias set to “{alias}”.",
+    aliasCleared: "Alias removed.",
+    aliasFailed: "Couldn't set the alias.",
     tagUsage: "Usage: /tag <name> [value] [#color]",
     tagApplied: "Tag “{name}” applied.",
     tagFailed: "Couldn't apply the tag.",
@@ -667,9 +669,9 @@ const pt: ChatDict = {
     queued: "Aguardando envio",
   },
   commands: {
-    renameUsage: "Uso: /rename <novo título>",
-    renamed: "Chat renomeado para “{title}”.",
-    renameFailed: "Não consegui renomear.",
+    aliasSet: "Apelido definido: “{alias}”.",
+    aliasCleared: "Apelido removido.",
+    aliasFailed: "Não consegui definir o apelido.",
     tagUsage: "Uso: /tag <nome> [valor] [#cor]",
     tagApplied: "Tag “{name}” aplicada.",
     tagFailed: "Não consegui aplicar a tag.",

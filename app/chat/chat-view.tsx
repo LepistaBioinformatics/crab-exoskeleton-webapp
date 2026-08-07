@@ -8,7 +8,7 @@ import {
   touchConversation,
   syncSessionRefs,
   notifyConversationsUpdated,
-  renameConversation,
+  setAlias,
   upsertTag,
   type ConversationSummary,
 } from "@/lib/chatSession";
@@ -464,16 +464,12 @@ export default function ChatView({
     if (!sessionId) return false;
 
     if (cmd === "/rename") {
-      if (!arg) {
-        flash("error", t.commands.renameUsage);
-        return true;
-      }
-      renameConversation(sessionId, arg)
-        .then((saved) => {
+      setAlias(sessionId, arg)
+        .then(() => {
           notifyConversationsUpdated();
-          flash("ok", t.commands.renamed.replace("{title}", saved));
+          flash("ok", arg ? t.commands.aliasSet.replace("{alias}", arg) : t.commands.aliasCleared);
         })
-        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.renameFailed));
+        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.aliasFailed));
       return true;
     }
 
@@ -534,6 +530,11 @@ export default function ChatView({
       </span>
       <IconButton
         variant="ghost"
+    // Sets the ALIAS, not the title. The title is derived from the conversation's
+    // first message and is the primary line the sidebar renders; the alias is the
+    // name the user chooses, shown beneath it. No argument clears the alias --
+    // the route treats an empty string as a clear, same as emptying the field in
+    // the alias/tags editor.
         size="sm"
         aria-label={t.view.replyAria}
         title={t.view.reply}
