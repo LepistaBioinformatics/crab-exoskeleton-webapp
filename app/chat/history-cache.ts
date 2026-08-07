@@ -5,6 +5,10 @@ export interface HistoryMessage {
   role: string;
   content: string;
   created_at?: string;
+  /** "step" when the agent was narrating its work rather than answering. */
+  kind?: string;
+  /** The model's own chain of thought, when it emitted one. */
+  reasoning?: string;
 }
 
 // Module-level cache keyed by conversation id, reused across List<->Tree toggles
@@ -33,7 +37,13 @@ export async function getHistory(
     );
     if (!res.ok) return cached?.messages ?? [];
     const data = await res.json();
-    const messages: HistoryMessage[] = Array.isArray(data.messages) ? data.messages : [];
+    const all: HistoryMessage[] = Array.isArray(data.messages) ? data.messages : [];
+    // The tree, Canvas and the content filter turn every message into a point in
+    // the conversation, so a step that carries only the model's reasoning (no
+    // text of its own) would show up as a blank node. Those reach the chat view,
+    // which has somewhere to put them; here they are dropped, which keeps these
+    // consumers seeing exactly what they saw before the split.
+    const messages = all.filter((m) => m.content.trim() !== "");
     historyCache.set(conversation.id, { updatedAt: conversation.updatedAt, messages });
     return messages;
   } catch {

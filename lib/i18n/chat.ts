@@ -265,6 +265,13 @@ const en = {
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
     queued: "Waiting to send",
+    // Header of a collapsed run of narration steps in the transcript. It states
+    // the count so the closed block already says whether it is worth opening.
+    stepOne: "1 step",
+    stepsOther: "{n} steps",
+    // The model's own chain of thought, collapsed. The length is there for the
+    // same reason: these run to a couple of thousand characters.
+    reasoning: "reasoning ({n} chars)",
   },
   commands: {
     // /rename writes the ALIAS, not the title — hence the wording. "Alias" is
@@ -667,6 +674,9 @@ const pt: ChatDict = {
     working: "Ainda trabalhando…",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
+    stepOne: "1 passo",
+    stepsOther: "{n} passos",
+    reasoning: "raciocínio ({n} chars)",
   },
   commands: {
     aliasSet: "Apelido definido: “{alias}”.",

@@ -4,6 +4,57 @@ Persistent memory across sessions. Last updated: 2026-07-20.
 
 ## Completed this session
 
+- **Thinking vs. answer in the transcript** — `features/thinking-vs-answer-messages`.
+  The live stream separates the agent's narration from its answer
+  (`pico/turn.go:172` → `x_crab_progress`); history did not, so on reload the
+  narration came back as ordinary messages. Measured on the real durable
+  transcripts: **200 of 304 assistant messages are narration**, and 82 entries
+  carry a `reasoning_content` the proxy was discarding (52 of them have empty
+  content and were dropped whole). Proxy now marks `kind:"step"` and forwards
+  `reasoning`; the webapp collapses consecutive steps into one "N passos" block
+  and puts reasoning behind its own disclosure.
+  **Safety floor found by measuring:** demoting every tool-call frame blanks
+  7 of 112 turns — a model can put its whole reply in the frame that also carried
+  a call. `keepAnswerlessTurns` only demotes while the turn still has a plain
+  answer.
+
+- **METHOD — the `data/` volume is readable after all.** It is root-owned, but the
+  picoclaw containers are running, so `docker exec crabshell-<agent>-<hash>` gets
+  at `/data/.picoclaw/workspace/sessions` (and `durable/`, which is what
+  `history.Read` prefers). Two rounds this session guessed at transcript shape
+  because this was assumed impossible. Pipe to an aggregate-only script rather
+  than reading conversation text.
+
+- **CORRECTION — the empty-message filter fixed nothing observed.** Round 1
+  attributed the transcript gaps to whitespace-only turns. Measured: zero
+  whitespace-only entries in 1,239, zero of 416 served messages would render
+  blank. The code is harmless and correct at the boundary, but the gaps are the
+  narration bands, not blank content. `features/chat-empty-message-filter` is
+  amended.
+
+- **`/rename` wrote to the wrong column** — `features/rename-command-sets-alias`.
+  It called `renameConversation` (`PUT /api/conversations/:id` `{title}`), which
+  overwrites the title DERIVED from the first message — the sidebar's primary
+  line. It now calls `setAlias`; no argument clears the alias. This also explains
+  a symptom that looked like missing UI: the two-line title+alias rendering has
+  been in `history-sidebar.tsx:421-431` and `conversation-tree.tsx:349-351` since
+  July, but never had an alias to show, because the obvious way to name a chat
+  wrote to `title`. The sidebar's pencil "Rename" was deliberately left editing
+  the title (user's call), so two affordances say "rename" and write to different
+  columns.
+
+- **Blank messages opened tall gaps in the transcript** —
+  `features/chat-empty-message-filter`. `history.go:341` meant to drop blank
+  turns but compared `Content != ""`, so a whitespace-only turn was served;
+  the client renders one PADDED band per message with only the content
+  conditional, so it became 3–5rem of nothing — and it also counted as a
+  neighbour, mis-sizing the padding of the real messages around it. Filtered at
+  the BFF (`app/api/chat/[instance]/history/route.ts`), which is the single
+  choke point for chat-view, history-cache, canvas-timeline and the content
+  filter; the proxy predicate is now `strings.TrimSpace(...) != ""` (needs a
+  redeploy, so the BFF filter stays). Attachment-only messages survive — the
+  `[anexo: …]` ref keeps the content non-blank.
+
 - **Subscription uninvite** — `features/subscription-uninvite`. The Members invite panel
   gained an Invite/Uninvite toggle over the same three fields, calling the DELETE route
   that already existed. Both verbs were already JSON-RPC; nothing moved off REST. The
