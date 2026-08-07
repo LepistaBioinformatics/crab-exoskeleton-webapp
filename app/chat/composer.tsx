@@ -107,7 +107,7 @@ export default function Composer({
 
   // Slash commands act on the current chat instead of sending a message.
   const SLASH = [
-    { cmd: "/rename", hint: "rename this chat — /rename <new title>" },
+    { cmd: "/rename", hint: "alias this chat — /rename <alias>, empty clears it" },
     { cmd: "/tag", hint: "tag this chat — /tag <name> [value] [#color]" },
   ];
 

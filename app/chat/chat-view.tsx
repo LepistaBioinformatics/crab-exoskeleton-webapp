@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   createConversation,
@@ -8,14 +8,15 @@ import {
   touchConversation,
   syncSessionRefs,
   notifyConversationsUpdated,
-  renameConversation,
+  setAlias,
   upsertTag,
   type ConversationSummary,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
+import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { Bot, KeyRound, PanelRight, Reply, User } from "lucide-react";
+import { Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
 import { setFragmentSid, historyQuery, useFragment, type Workspace } from "@/app/chat/fragment";
 import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
@@ -71,11 +72,6 @@ const bandGap = cva("", {
 // messages. (Applied to the agent's bands too, matching the user's.)
 const bandPad = (standalone: boolean) => (standalone ? "py-10" : "py-6");
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  created_at?: string;
-}
 
 // A message the composer is quoting (Telegram-style reply). Pico is text-only
 // and the transcript is reloaded from picoclaw, so a reply is carried as a
@@ -97,6 +93,78 @@ function buildQuote(reply: ReplyTo, t: ChatDict): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
   const snippet = oneLine.length > QUOTE_MAX ? `${oneLine.slice(0, QUOTE_MAX - 1)}…` : oneLine;
   return `> **${who}:** ${snippet}`;
+}
+
+// A disclosure built on <details>/<summary> rather than a state hook -- keyboard
+// operation and screen-reader semantics come for free and there is no state to
+// drift out of sync with the DOM (same reasoning as the admin Accordion, but
+// without its card shell, which would be far too heavy inline in a transcript).
+// `group` lets the chevron rotate off the element's own `open` state.
+function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="group">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 text-xs italic text-fg-muted/70 hover:text-fg-muted [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={12} className="transition-transform group-open:rotate-90" aria-hidden />
+        {label}
+      </summary>
+      {children}
+    </details>
+  );
+}
+
+// A run of narration steps, collapsed into one line. The header states how many
+// there are: a collapsed block that says only "steps" is worse than the flat list
+// it replaces, because you would have to open it to learn whether it is worth
+// opening.
+//
+// The band carries no padding of its own. That is the point -- each of these used
+// to be a full message band at py-6, so a run of them stacked several hundred
+// pixels of empty space between the question and its answer.
+function StepRun({
+  items,
+  changed,
+  registerRef,
+  t,
+}: {
+  items: { m: ChatMessage; i: number }[];
+  changed: boolean;
+  registerRef: (el: HTMLDivElement | null) => void;
+  t: ChatDict;
+}) {
+  const label = items.length === 1 ? t.view.stepOne : t.view.stepsOther.replace("{n}", String(items.length));
+  return (
+    <div ref={registerRef} className={bandGap({ changed })}>
+      <div className="mx-auto w-full max-w-[720px] px-4 py-1">
+        <Disclosure label={label}>
+          <div className="mt-1 flex flex-col gap-2 border-l border-current/15 pl-3 text-sm text-fg-muted">
+            {items.map(({ m, i }) => {
+              const { text } = parseAnexos(m.content);
+              return (
+                <div key={i}>
+                  {text && <MessageContent content={text} />}
+                  {m.reasoning && <Reasoning text={m.reasoning} t={t} />}
+                </div>
+              );
+            })}
+          </div>
+        </Disclosure>
+      </div>
+    </div>
+  );
+}
+
+// The model's own chain of thought. Never shown by default: it runs to a couple
+// of thousand characters and it is not what the user asked for.
+function Reasoning({ text, t }: { text: string; t: ChatDict }) {
+  return (
+    <div className="mt-2">
+      <Disclosure label={t.view.reasoning.replace("{n}", String(text.length))}>
+        <div className="mt-1 whitespace-pre-wrap border-l border-current/15 pl-3 text-xs italic text-fg-muted/80">
+          {text}
+        </div>
+      </Disclosure>
+    </div>
+  );
 }
 
 // Turn state -- the send queue, the in-flight status, the retry ladder and the
@@ -139,6 +207,7 @@ export default function ChatView({
   const fragment = useFragment();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const rows = useMemo(() => toRows(messages), [messages]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -295,7 +364,9 @@ export default function ChatView({
         // anchor effect below handles instead.
         const hasAnchor = new URLSearchParams(window.location.hash.slice(1)).get("msg");
         if (loaded.length > 0 && !hasAnchor) {
-          requestAnimationFrame(() => setScrollToIndex(loaded.length - 1));
+          // The last MESSAGE, not the last entry: a transcript ending on
+          // narration would otherwise open on a collapsed block.
+          requestAnimationFrame(() => setScrollToIndex(landingIndex(loaded)));
         }
       } catch {
         if (!cancelled) setMessages([]);
@@ -463,17 +534,18 @@ export default function ChatView({
     const arg = sp === -1 ? "" : text.slice(sp + 1).trim();
     if (!sessionId) return false;
 
+    // Sets the ALIAS, not the title. The title is derived from the conversation's
+    // first message and is the primary line the sidebar renders; the alias is the
+    // name the user chooses, shown beneath it. No argument clears the alias --
+    // the route treats an empty string as a clear, same as emptying the field in
+    // the alias/tags editor.
     if (cmd === "/rename") {
-      if (!arg) {
-        flash("error", t.commands.renameUsage);
-        return true;
-      }
-      renameConversation(sessionId, arg)
-        .then((saved) => {
+      setAlias(sessionId, arg)
+        .then(() => {
           notifyConversationsUpdated();
-          flash("ok", t.commands.renamed.replace("{title}", saved));
+          flash("ok", arg ? t.commands.aliasSet.replace("{alias}", arg) : t.commands.aliasCleared);
         })
-        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.renameFailed));
+        .catch((e) => flash("error", e instanceof Error ? errorText(err, e.message) : t.commands.aliasFailed));
       return true;
     }
 
@@ -534,6 +606,11 @@ export default function ChatView({
       </span>
       <IconButton
         variant="ghost"
+    // Sets the ALIAS, not the title. The title is derived from the conversation's
+    // first message and is the primary line the sidebar renders; the alias is the
+    // name the user chooses, shown beneath it. No argument clears the alias --
+    // the route treats an empty string as a clear, same as emptying the field in
+    // the alias/tags editor.
         size="sm"
         aria-label={t.view.replyAria}
         title={t.view.reply}
@@ -712,15 +789,36 @@ export default function ChatView({
               spacer would have vanished under the reader. */}
           <div className="absolute inset-0 overflow-auto pt-6 pb-[80vh]">
             <div className="w-full">
-              {messages.map((m, i) => {
-                const { text, refs } = parseAnexos(m.content);
-                const prev = messages[i - 1];
-                const next = messages[i + 1];
-                const changed = Boolean(prev && prev.role !== m.role);
+              {rows.map((r, ri) => {
+                const prev = rows[ri - 1];
+                const next = rows[ri + 1];
+                const role = rowRole(r);
+                const changed = Boolean(prev && rowRole(prev) !== role);
                 // A message with no same-role neighbor on either side stands alone
                 // (flanked by the other speaker, or at an edge), so it gets the
                 // roomier padding -- applied to both user and agent bands.
-                const standalone = prev?.role !== m.role && next?.role !== m.role;
+                const standalone =
+                  (!prev || rowRole(prev) !== role) && (!next || rowRole(next) !== role);
+
+                if (r.row === "steps") {
+                  return (
+                    <StepRun
+                      key={`steps-${r.items[0].i}`}
+                      items={r.items}
+                      changed={changed}
+                      // Every step in the run points its scroll ref at the block,
+                      // so a tree anchor on a step still lands somewhere real
+                      // instead of on nothing.
+                      registerRef={(el) => {
+                        for (const { i } of r.items) messageRefs.current[i] = el;
+                      }}
+                      t={t}
+                    />
+                  );
+                }
+
+                const { m, i } = r;
+                const { text, refs } = parseAnexos(m.content);
                 return (
                   <div
                     key={i}
@@ -741,33 +839,32 @@ export default function ChatView({
                       }}
                     >
                       <div className="relative mx-auto w-full max-w-[720px] px-4">
-                        {m.content.trim() !== "" && (
-                          // Desktop only: transparent toolbar at the message's
-                          // top-right, in the card's top padding (above the text). Mobile uses the tapped
-                          // row below the card instead (rendered after the band).
-                          <div className="absolute right-1.5 bottom-full mb-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                            {renderActions(m, i)}
-                          </div>
-                        )}
+                        {/* Desktop only: transparent toolbar at the message's
+                            top-right, in the card's top padding (above the text). Mobile uses the tapped
+                            row below the card instead (rendered after the band). */}
+                        <div className="absolute right-1.5 bottom-full mb-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                          {renderActions(m, i)}
+                        </div>
                         {text && <MessageContent content={text} />}
                         {refs.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {refs.map((r) => (
+                            {refs.map((ref) => (
                               <AttachmentButton
-                                key={r.path}
+                                key={ref.path}
                                 workspace={workspace}
-                                path={r.path}
-                                name={r.name}
+                                path={ref.path}
+                                name={ref.name}
                                 tone="chip"
                               />
                             ))}
                           </div>
                         )}
+                        {m.reasoning && <Reasoning text={m.reasoning} t={t} />}
                       </div>
                     </div>
                     {/* Mobile only: tapping the card opens this action row below
                         it (before the next message); no hover on touch. */}
-                    {m.content.trim() !== "" && openActions === i && (
+                    {openActions === i && (
                       <div className="flex items-center gap-0.5 px-2 py-1 md:hidden">
                         {renderActions(m, i)}
                       </div>

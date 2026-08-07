@@ -265,11 +265,20 @@ const en = {
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
     queued: "Waiting to send",
+    // Header of a collapsed run of narration steps in the transcript. It states
+    // the count so the closed block already says whether it is worth opening.
+    stepOne: "1 step",
+    stepsOther: "{n} steps",
+    // The model's own chain of thought, collapsed. The length is there for the
+    // same reason: these run to a couple of thousand characters.
+    reasoning: "reasoning ({n} chars)",
   },
   commands: {
-    renameUsage: "Usage: /rename <new title>",
-    renamed: "Chat renamed to “{title}”.",
-    renameFailed: "Couldn't rename it.",
+    // /rename writes the ALIAS, not the title — hence the wording. "Alias" is
+    // the term the rest of the UI uses for it (enrichment.alias, aliasAndTags).
+    aliasSet: "Alias set to “{alias}”.",
+    aliasCleared: "Alias removed.",
+    aliasFailed: "Couldn't set the alias.",
     tagUsage: "Usage: /tag <name> [value] [#color]",
     tagApplied: "Tag “{name}” applied.",
     tagFailed: "Couldn't apply the tag.",
@@ -665,11 +674,14 @@ const pt: ChatDict = {
     working: "Ainda trabalhando…",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
+    stepOne: "1 passo",
+    stepsOther: "{n} passos",
+    reasoning: "raciocínio ({n} chars)",
   },
   commands: {
-    renameUsage: "Uso: /rename <novo título>",
-    renamed: "Chat renomeado para “{title}”.",
-    renameFailed: "Não consegui renomear.",
+    aliasSet: "Apelido definido: “{alias}”.",
+    aliasCleared: "Apelido removido.",
+    aliasFailed: "Não consegui definir o apelido.",
     tagUsage: "Uso: /tag <nome> [valor] [#cor]",
     tagApplied: "Tag “{name}” aplicada.",
     tagFailed: "Não consegui aplicar a tag.",
