@@ -31,6 +31,24 @@ function fromApiRow(row: ProjectApiRow): Project {
   };
 }
 
+/**
+ * Two letters standing in for a project on the collapsed rail, where 48px leaves no
+ * room for a name and a column of identical folder glyphs would identify nothing.
+ *
+ * Two words give their initials ("Field Trial" -> FT); one word gives its first two
+ * letters ("Soja" -> SO), because a single letter collides far too readily across a
+ * handful of projects. Non-letters are skipped so "2026 — Soy" does not become "2S".
+ */
+export function projectInitials(name: string): string {
+  const words = name
+    .split(/[\s_/-]+/)
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(Boolean);
+  if (words.length === 0) return "";
+  if (words.length === 1) return words[0].slice(0, 2);
+  return words[0][0] + words[1][0];
+}
+
 function workspaceQuery(workspace: Workspace): string {
   return new URLSearchParams({
     tenant_id: workspace.t,

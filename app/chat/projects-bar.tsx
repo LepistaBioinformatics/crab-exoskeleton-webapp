@@ -5,10 +5,10 @@ import { ChevronLeft, FolderPlus, Folders, Pencil, Trash2 } from "lucide-react";
 import {
   createProject,
   deleteProject,
-  listProjects,
   updateProject,
   type Project,
 } from "@/lib/projects";
+import { useProjects } from "./use-projects";
 import type { Workspace } from "./fragment";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";

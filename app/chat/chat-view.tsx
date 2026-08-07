@@ -36,6 +36,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { PANEL_HEADER_H } from "./panel-header";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import {
   MAX_SEND_ATTEMPTS,
@@ -668,7 +669,9 @@ export default function ChatView({
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2">
+      <div
+        className={`flex items-center gap-2 border-b border-brand/30 px-4 py-2 ${PANEL_HEADER_H}`}
+      >
         {/* The SUBSCRIPTION leads, the agent sits under it in lighter type — the same
             treatment the conversations sidebar uses, and for the same reason: the
             subscription is the membership boundary a member navigates by, and it is what

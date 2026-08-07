@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -35,8 +34,7 @@ import {
   useFragment,
   setFragmentSid,
   setHistoryView,
-  projectPath,
-  crossProjectHash,
+  setFragmentProject,
   type Workspace,
 } from "./fragment";
 import ConversationTree from "./conversation-tree";
@@ -85,7 +83,7 @@ export default function HistorySidebar({
   onBack,
 }: {
   workspace: Workspace;
-  /** agent-projects: from the route (/chat/projects/<id>), null on /chat. */
+  /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
   /**
    * The subscription these conversations belong to. Null while the workspace tree is
@@ -100,7 +98,6 @@ export default function HistorySidebar({
    */
   onBack: () => void;
 }) {
-  const router = useRouter();
   const t = useT(chatCopy);
   const c = useT(commonCopy);
   const e = useT(errorCopy);
@@ -150,12 +147,16 @@ export default function HistorySidebar({
     setSearchResults((prev) => (prev ? map(prev) : prev));
   }
 
+  // `workspace.p` IS a dependency. It used not to be, because entering a project was a
+  // route change and the whole panel was remounted — the refetch came for free. Now
+  // that the project is a fragment write there is no remount, so without this the list
+  // would keep showing the previous project's conversations.
   useEffect(() => {
     const refresh = () => listConversations(workspace).then(setConversations);
     refresh();
     return onConversationsUpdated(refresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // Two-stage filter: a synchronous predicate (tag/alias/date) narrows the set
   // instantly, then an async content stage (text:) runs only over survivors,
@@ -397,7 +398,7 @@ export default function HistorySidebar({
       <ProjectsBar
         workspace={workspace}
         browsedProject={browsedProject}
-        onBrowse={(next) => router.push(projectPath(next) + crossProjectHash())}
+        onBrowse={setFragmentProject}
         open={projectsOpen}
         onToggle={() => setProjectsOpen((v) => !v)}
       />

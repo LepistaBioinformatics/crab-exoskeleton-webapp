@@ -44,6 +44,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { PANEL_HEADER_H } from "./panel-header";
 import { useT } from "@/lib/i18n/context";
 
 const MIN_WIDTH = 240;
@@ -631,7 +632,9 @@ export default function UploadsSidebar({
           className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
         />
 
-        <div className="flex shrink-0 items-center gap-1 border-b border-brand/30 px-3 py-2">
+        <div
+          className={`flex shrink-0 items-center gap-1 border-b border-brand/30 px-3 py-2 ${PANEL_HEADER_H}`}
+        >
           {section === null ? (
             <h2 className="flex-1 font-display text-sm font-semibold text-fg">
               {t.uploads.workspace}

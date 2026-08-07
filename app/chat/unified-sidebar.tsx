@@ -40,14 +40,28 @@ import type { Workspace } from "./fragment";
 // slides by half. Percent widths are safe here in a way the old percentage max-height
 // was not: this resolves against a definite inline size (the pane's `--pane-w` on
 // desktop, the drawer's fixed 300px on mobile), not against a flex-resolved height.
-const track = cva("flex h-full w-[200%] transition-transform duration-300 ease-out motion-reduce:transition-none", {
+export const track = cva("flex h-full w-[200%]", {
   variants: {
     panel: {
       workspaces: "translate-x-0",
       chats: "-translate-x-1/2",
     },
+    // THE FIRST POSITION IS NOT A MOVE. Until the fragment has been read the sidebar
+    // cannot know which panel it is on, so it renders the default — workspaces — and
+    // then jumps to chats the instant the hash resolves. With the transition always on,
+    // that jump animated: every page load, and every navigation that remounted this
+    // tree, replayed the whole workspaces→chats slide for a member who had chosen
+    // nothing. It read as the sidebar scrolling sideways on its own.
+    //
+    // So the transition is ARMED one frame after the panel is first known (see
+    // `armed`): the settling jump lands with transitions off, and every later panel
+    // change — the ones a member actually asked for — animates.
+    animate: {
+      true: "transition-transform duration-300 ease-out motion-reduce:transition-none",
+      false: "",
+    },
   },
-  defaultVariants: { panel: "workspaces" },
+  defaultVariants: { panel: "workspaces", animate: false },
 });
 
 // Half the track, i.e. exactly the sidebar's width. `outline-none` because the slot is
@@ -57,6 +71,7 @@ const slot = cva("flex w-1/2 min-h-0 shrink-0 flex-col outline-none");
 
 export default function UnifiedSidebar({
   email,
+  resolved,
   workspace,
   project,
   forceWorkspaces,
@@ -66,9 +81,15 @@ export default function UnifiedSidebar({
   setBrowsing,
 }: {
   email: string;
+  /**
+   * False until the URL fragment has been read. The sidebar mounts BEFORE that — only
+   * the content pane waits — so this is what tells the track that its first position
+   * is a starting point rather than somewhere a member navigated to.
+   */
+  resolved: boolean;
   /** Null until the fragment resolves a workspace. */
   workspace: Workspace | null;
-  /** agent-projects: from the route, null on /chat. */
+  /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
   /**
    * True in the canvas view, which pins the tree. The canvas already lanes every
@@ -105,6 +126,20 @@ export default function UnifiedSidebar({
   // the fragment that justified it, so a reload or a shared link would open on the
   // wrong one. Everything else is derived.
   const panel = resolvePanel({ workspace, browsing, forceWorkspaces });
+
+  // Whether the track may animate. See the `animate` variant for why it starts off.
+  //
+  // A FRAME after the fragment resolves, not the same commit: the commit that learns
+  // the panel is the one that jumps to it, and enabling the transition in that very
+  // render is what animated the jump. requestAnimationFrame puts the class change in a
+  // later frame, where the transform is already where it belongs and there is nothing
+  // left to interpolate.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!resolved || armed) return;
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+  }, [resolved, armed]);
   const showingChats = panel === "chats";
 
   // FOCUS HAS TO FOLLOW THE SLIDE. The control the member just activated — the back
@@ -175,7 +210,7 @@ export default function UnifiedSidebar({
             one is how a slide animates to a blank column — and back preserves the
             workspace precisely so the conversation list never loses its prop. Only the
             off-screen panel is taken out of the tab order. */}
-        <div className={track({ panel })}>
+        <div className={track({ panel, animate: armed })}>
           <div
             ref={workspacesSlot}
             // Focusable only programmatically (tabIndex -1) and named, so landing here
@@ -216,7 +251,14 @@ export default function UnifiedSidebar({
               <HistorySidebar
                 // Keyed by workspace so switching agents remounts the list instead
                 // of showing the previous agent's conversations for a beat.
-                key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
+                //
+                // The PROJECT is deliberately not in this key. It was, back when
+                // entering a project was a route change and the remount is what
+                // refetched the list; the fetch now depends on `workspace.p` directly.
+                // Keeping it here would throw away everything the panel holds on every
+                // project switch — the projects/chats split, both section folds, the
+                // scroll position — and none of that belongs to one project.
+                key={`${workspace.t}|${workspace.s}|${workspace.r}`}
                 workspace={workspace}
                 project={project}
                 // Null until the tree loads, or when the subscription carries no name.

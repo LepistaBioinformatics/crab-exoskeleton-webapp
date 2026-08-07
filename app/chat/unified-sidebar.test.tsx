@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 // first-paint assertion — the redirect itself lives in an effect that never fires
 // here.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
-import UnifiedSidebar from "./unified-sidebar";
+import UnifiedSidebar, { track } from "./unified-sidebar";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
 
@@ -19,7 +19,16 @@ const workspace: Workspace = { t: "acme", s: "growth", r: "alpha" };
 // exhaustively by sidebar-panel-state.test.ts, which needs no React at all.
 function render(over: Partial<Parameters<typeof UnifiedSidebar>[0]> = {}) {
   return renderToStaticMarkup(
-    <UnifiedSidebar email="member@example.com" workspace={workspace} forceWorkspaces={false} {...over} />,
+    <UnifiedSidebar
+      email="member@example.com"
+      resolved
+      workspace={workspace}
+      project={null}
+      forceWorkspaces={false}
+      browsing={false}
+      setBrowsing={() => {}}
+      {...over}
+    />,
   );
 }
 
@@ -81,8 +90,30 @@ describe("UnifiedSidebar", () => {
 
   // A slide is decoration; landing on the right panel is not. Under reduced motion the
   // transform must apply instantly rather than not at all.
-  it("lands instantly under reduced motion", () => {
-    expect(trackClasses(render())).toContain("motion-reduce:transition-none");
+  // The track's transition is ARMED a frame after the fragment resolves, and the suite
+  // runs `environment: "node"` where that effect never fires — so the armed markup is
+  // unreachable through render(). The variant is asserted directly instead, the same
+  // way resizable-pane.test.ts asserts its own.
+  describe("the track's transition", () => {
+    // The bug: the sidebar mounts before the URL fragment is read, so it starts on the
+    // workspaces panel and jumps to chats the moment the hash resolves. With the
+    // transition on from the first paint, that jump ANIMATED — every page load replayed
+    // the full workspaces→chats slide for a member who had navigated nowhere.
+    it("is off before the panel is known, so the first position cannot animate", () => {
+      const first = track({ panel: "chats", animate: false });
+      expect(first).not.toContain("transition-transform");
+      expect(first).toContain("-translate-x-1/2");
+    });
+
+    it("is on once armed, so a panel change a member asked for still slides", () => {
+      expect(track({ panel: "chats", animate: true })).toContain("transition-transform");
+    });
+
+    it("lands instantly under reduced motion", () => {
+      expect(track({ panel: "chats", animate: true })).toContain(
+        "motion-reduce:transition-none",
+      );
+    });
   });
 
   it("keeps the account footer, which is on every /chat and /admin view", () => {

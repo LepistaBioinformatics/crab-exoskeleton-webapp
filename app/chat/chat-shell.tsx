@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Boxes, Menu, MessagesSquare, X } from "lucide-react";
-import { useFragment, setView, toWorkspace } from "./fragment";
+import { useRouter } from "next/navigation";
+import { Boxes, Folders, Menu, MessageSquarePlus, MessagesSquare, X } from "lucide-react";
+import {
+  useFragment,
+  setView,
+  toWorkspace,
+  setFragmentProject,
+  setFragmentProjectSid,
+} from "./fragment";
 import { resolvePanel } from "./sidebar-panel-state";
 import { useWorkspaceGroups } from "./use-workspaces";
+import { useProjects } from "./use-projects";
+import { projectInitials } from "@/lib/projects";
+import { createConversation } from "@/lib/chatSession";
 import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
@@ -32,23 +42,16 @@ const LAYOUT_KEY = "chat-sidebar";
 // the history drawer + chat view mount only when the fragment carries a valid
 // workspace. On desktop each sidebar collapses/resizes independently (persisted
 // in localStorage); on mobile they are hamburger-toggled overlay drawers.
-export default function ChatShell({
-  email,
-  project = null,
-}: {
-  email: string;
-  /**
-   * agent-projects: from the ROUTE (/chat/projects/<id>), null on /chat. Not
-   * fragment state — see fragment.ts projectPath for why that distinction is
-   * load-bearing rather than cosmetic.
-   */
-  project?: string | null;
-}) {
+export default function ChatShell({ email }: { email: string }) {
   const t = useT(chatCopy);
   const fragment = useFragment();
   const resolved = fragment !== null;
-  // The route's project rides on the workspace, so every client that already
-  // takes a workspace addresses the right directory without a second argument.
+  // agent-projects: read from the FRAGMENT, like the rest of the selection. It was a
+  // route param for a while — see fragment.ts setFragmentProject for why that made
+  // every project click replay the sidebar's slide.
+  const project = fragment?.p ?? null;
+  // The project rides on the workspace, so every client that already takes a
+  // workspace addresses the right directory without a second argument.
   const base = fragment ? toWorkspace(fragment) : null;
   const workspace = base ? { ...base, p: project } : null;
   const sessionId = fragment?.sid;
@@ -128,7 +131,11 @@ export default function ChatShell({
   const [chatRef, setChatRef] = useState<ChatReference | null>(null);
   // The tree, for the subscription NAME the chat header leads with. Same hook the
   // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
+  const router = useRouter();
   const { groups } = useWorkspaceGroups();
+  // The same list the sidebar's projects section shows, so the rail cannot offer a
+  // shortcut into a project that was just deleted.
+  const { projects } = useProjects(workspace ?? null);
   const subscription = workspace
     ? accountName(groups, workspace.t, workspace.s)
     : null;
@@ -164,6 +171,51 @@ export default function ChatShell({
         ]
       : []),
   ];
+
+  // The projects, as shortcuts. A collapsed rail could not previously say WHICH
+  // project you were in — the one question a 48px column is actually well shaped to
+  // answer — and getting into one meant opening the pane first.
+  //
+  // Initials rather than a folder glyph each: a column of identical folders names
+  // nothing, and the name is the only thing that tells one project from the next.
+  //
+  // These NAVIGATE, unlike the panel entries above them, which is why they are their
+  // own group behind a hairline. Same fragment write the sidebar's list uses, so both
+  // entry points enter a project identically.
+  const railProjects: RailPanel[] = projects.map((p) => ({
+    key: `project-${p.id}`,
+    Icon: Folders,
+    label: p.name,
+    initials: projectInitials(p.name),
+    active: project === p.id,
+    onSelect: () => setFragmentProject(p.id),
+  }));
+
+  // Actions, not destinations: a third group because clicking one DOES something
+  // rather than changing what the pane would show.
+  const railActions: RailPanel[] = workspace
+    ? [
+        {
+          key: "new-chat",
+          Icon: MessageSquarePlus,
+          label: t.history.newChat,
+          active: false,
+          emphasis: true,
+          // Project AND session in one write: the new chat is born in whichever
+          // project the rail is showing, and two separate hash writes would put a
+          // half-state into the history stack.
+          onSelect: () => {
+            void createConversation(workspace, project).then((c) =>
+              setFragmentProjectSid(project, c.id),
+            );
+          },
+        },
+      ]
+    : [];
+
+  const railGroups = [railPanels, railProjects, railActions].filter(
+    (g) => g.length > 0,
+  );
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -202,12 +254,13 @@ export default function ChatShell({
             setPeeking(false);
           }}
           onResize={setWidth}
-          panels={railPanels}
+          groups={railGroups}
           peeking={peeking}
           onPeekChange={setPeeking}
         >
           <UnifiedSidebar
             email={email}
+            resolved={resolved}
             workspace={workspace}
             project={project}
             forceWorkspaces={canvas}
