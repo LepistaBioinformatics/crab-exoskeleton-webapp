@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
@@ -810,11 +811,24 @@ export default function UploadsSidebar({
                       </div>
                     )}
 
-                    {files !== null && visible.length === 0 && (
-                      <p className="py-3 text-center text-sm text-fg-muted">
-                        {q ? t.uploads.noMatches : t.uploads.noneYet}
-                      </p>
-                    )}
+                    {/* A live filter hiding every file is not an empty workspace, and
+                        the two states send the member somewhere different — so they
+                        stay distinct, sharing only their presentation. */}
+                    {files !== null &&
+                      visible.length === 0 &&
+                      (q ? (
+                        <PanelEmpty
+                          icon={Search}
+                          title={t.uploads.noMatches}
+                          body={t.uploads.noMatchesHint}
+                        />
+                      ) : (
+                        <PanelEmpty
+                          icon={FolderOpen}
+                          title={t.uploads.noneYet}
+                          body={t.uploads.noneYetHint}
+                        />
+                      ))}
 
                     {/* The tree root is a drop target too: dragging something OUT of a
                         folder needs somewhere to land, and without this the only way

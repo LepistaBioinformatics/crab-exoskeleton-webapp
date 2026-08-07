@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot, Search } from "lucide-react";
+import {
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  FolderClosed,
+  Bot,
+  LayoutGrid,
+  Search,
+} from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
 import { accessLabel, type TenantGroup, type AgentLeaf } from "@/lib/subscriptions";
 import { listTools, isToolHealthy, type Tool } from "@/lib/tools";
@@ -12,6 +20,7 @@ import { useTenantBranding, type TenantBrand } from "./tenant-brand";
 import { planWorkspaceTree, planLeaves, type PlanNode } from "./sidebar-tree";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/icon-button";
@@ -231,9 +240,19 @@ export default function WorkspaceNav({
             <Spinner size={20} />
           </div>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.none}</p>
+          <PanelEmpty
+            icon={LayoutGrid}
+            title={t.workspaceNav.none}
+            body={t.workspaceNav.noneHint}
+          />
         ) : nodes.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-fg-muted">{t.workspaceNav.noMatch}</p>
+          // A filter hiding every workspace, not an account with none — the fix is to
+          // clear the field, and telling this member to call an operator would be wrong.
+          <PanelEmpty
+            icon={Search}
+            title={t.workspaceNav.noMatch}
+            body={t.workspaceNav.noMatchHint}
+          />
         ) : (
           <PlanNodes
             nodes={nodes}

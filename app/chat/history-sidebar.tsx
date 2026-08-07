@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   GitBranch,
   List,
+  MessageSquare,
   MessageSquarePlus,
   Pencil,
   Search,
@@ -25,6 +26,7 @@ import {
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, setHistoryView, type Workspace } from "./fragment";
@@ -362,11 +364,21 @@ export default function HistorySidebar({
             <Spinner size={20} />
           </div>
         )}
-        {!searching && visible.length === 0 && (
-          <p className="py-4 text-center text-sm text-fg-muted">
-            {query.trim() ? t.history.noMatches : t.history.noneYet}
-          </p>
-        )}
+        {!searching &&
+          visible.length === 0 &&
+          (query.trim() ? (
+            <PanelEmpty
+              icon={Search}
+              title={t.history.noMatches}
+              body={t.history.noMatchesHint}
+            />
+          ) : (
+            <PanelEmpty
+              icon={MessageSquare}
+              title={t.history.noneYet}
+              body={t.history.noneYetHint}
+            />
+          ))}
         {!searching &&
           visible.map((conversation) => {
             const active = conversation.id === activeSessionId;

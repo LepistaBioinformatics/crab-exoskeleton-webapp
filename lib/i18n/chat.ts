@@ -60,8 +60,13 @@ const en = {
   },
   workspaceNav: {
     filterPlaceholder: "Filter workspaces",
+    // Every empty state in both sidebars is a TITLE plus a next step, rendered by
+    // components/ui/panel-empty.tsx. So the title says what happened and stays short;
+    // the hint says what to do about it. `none` used to carry both in one sentence.
     noMatch: "No workspaces match your filter.",
-    none: "You aren't in any workspaces yet — ask an operator to add you to one.",
+    noMatchHint: "Clear the filter to see everything you can reach.",
+    none: "You aren't in any workspaces yet.",
+    noneHint: "Ask an operator to add you to one.",
   },
   composer: {
     replyingToBefore: "Replying to ",
@@ -214,14 +219,28 @@ const en = {
     mapTruncated: "{count} more not shown — filter to narrow",
     searchPlaceholder: "Search the graph…",
     searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
+    // The Search tab before a query has been typed. It used to render NOTHING at all —
+    // a blank pane that read as a broken tab rather than as a tab waiting for input.
+    searchIdle: {
+      title: "Search the graph",
+      body: "Type a term and press Enter to look through every entity and observation the agent has stored.",
+    },
     observations: "observations",
     relations: "relations",
-    noResults: "Nothing matched that query.",
+    noResults: "Nothing matched that search.",
+    noResultsHint: "Ranking is by term relevance, not by meaning — try the wording the agent would have stored.",
+    // The MAP's own empty result. Deliberately not `noResults`: that tab runs a BM25
+    // search over everything, this one is a substring filter over names, and telling a
+    // member their search failed when their filter did sends them to the wrong fix.
+    mapNoMatch: "No entity matches that filter.",
+    mapNoMatchHint: "The map filter matches names only. Clear it to see the whole graph.",
     noObservations: "No observations recorded yet.",
     confidence: "confidence",
     archived: "Archived — hidden from the agent's own browsing.",
     allTypes: "All",
     noneOfType: "Nothing of that type.",
+    // Names the "All" chip, because that chip is the way back and it is directly above.
+    noneOfTypeHint: "Choose All above to see every entity again.",
     closeDetail: "Close details",
     resizeDetail: "Resize the details panel",
     sources: "Where this came from",
@@ -238,6 +257,7 @@ const en = {
       newEntities: "New entities",
       newRelations: "New relations",
       nothing: "Nothing new in the last 24 hours.",
+      nothingHint: "The agent adds to the graph as you talk to it — the Entities tab shows everything it already knows.",
     },
   },
   view: {
@@ -291,8 +311,10 @@ const en = {
     treeView: "Tree view",
     treeAria: "Conversation tree",
     tree: "Tree",
-    noMatches: "No matches.",
+    noMatches: "No conversation matches your filter.",
+    noMatchesHint: "Clear the filter, or narrow it with tag: alias: text: date:.",
     noneYet: "No conversations yet.",
+    noneYetHint: "Start one with New chat above and it will show up here.",
     newChat: "New chat",
     renameAria: "Rename conversation",
     rename: "Rename",
@@ -398,6 +420,7 @@ const en = {
     save: "Save secret",
     deletePrefix: "Delete",
     none: "No secrets set for this agent yet.",
+    noneHint: "Values saved here are write-only and take effect the next time the agent restarts.",
     nativeNote:
       "Picoclaw credentials are now set by your tenant or subscription administrator. You can still remove one you saved earlier; new ones have to come from them.",
     invalidName: "Name may only contain letters, numbers, and . _ -",
@@ -432,8 +455,10 @@ const en = {
     refreshAria: "Refresh files",
     refresh: "Refresh",
     filterPlaceholder: "Filter files",
-    noMatches: "No matches.",
-    noneYet: "No files uploaded yet.",
+    noMatches: "No files match your filter.",
+    noMatchesHint: "Clear the filter to see everything in this workspace.",
+    noneYet: "No files yet.",
+    noneYetHint: "Attach a file in the chat and it lands here, alongside anything the agent writes.",
     deletePrefix: "Delete",
     deleteTitle: "Delete file?",
     deleteMessage:
@@ -501,7 +526,9 @@ const pt: ChatDict = {
   workspaceNav: {
     filterPlaceholder: "Filtrar workspaces",
     noMatch: "Nenhum workspace corresponde ao filtro.",
-    none: "Você ainda não está em nenhum workspace — peça a um operador para adicionar você a um.",
+    noMatchHint: "Limpe o filtro para ver tudo o que você pode acessar.",
+    none: "Você ainda não está em nenhum workspace.",
+    noneHint: "Peça a um operador para adicionar você a um.",
   },
   composer: {
     replyingToBefore: "Respondendo a ",
@@ -630,14 +657,22 @@ const pt: ChatDict = {
     mapTruncated: "{count} não exibidos — filtre para reduzir",
     searchPlaceholder: "Buscar no grafo…",
     searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
+    searchIdle: {
+      title: "Busque no grafo",
+      body: "Digite um termo e aperte Enter para procurar em todas as entidades e observações que o agente guardou.",
+    },
     observations: "observações",
     relations: "relações",
     noResults: "Nada corresponde a essa busca.",
+    noResultsHint: "O ranqueamento é por relevância de termos, não por significado — tente as palavras que o agente teria guardado.",
+    mapNoMatch: "Nenhuma entidade corresponde ao filtro.",
+    mapNoMatchHint: "O filtro do mapa compara só nomes. Limpe o campo para ver o grafo inteiro.",
     noObservations: "Nenhuma observação registrada ainda.",
     confidence: "confiança",
     archived: "Arquivada — oculta da navegação do próprio agente.",
     allTypes: "Todos",
     noneOfType: "Nada desse tipo.",
+    noneOfTypeHint: "Escolha Todos acima para ver todas as entidades de novo.",
     closeDetail: "Fechar detalhes",
     resizeDetail: "Redimensionar o painel de detalhes",
     sources: "De onde isso veio",
@@ -654,6 +689,7 @@ const pt: ChatDict = {
       newEntities: "Novas entidades",
       newRelations: "Novas relações",
       nothing: "Nada novo nas últimas 24 horas.",
+      nothingHint: "O agente alimenta o grafo conforme vocês conversam — a aba Entidades mostra tudo o que ele já sabe.",
     },
   },
   view: {
@@ -694,8 +730,10 @@ const pt: ChatDict = {
     treeView: "Visão em árvore",
     treeAria: "Árvore de conversas",
     tree: "Árvore",
-    noMatches: "Nenhum resultado.",
+    noMatches: "Nenhuma conversa corresponde ao filtro.",
+    noMatchesHint: "Limpe o filtro, ou refine com tag: alias: text: date:.",
     noneYet: "Nenhuma conversa ainda.",
+    noneYetHint: "Comece uma em Nova conversa, acima, e ela aparece aqui.",
     newChat: "Nova conversa",
     renameAria: "Renomear conversa",
     rename: "Renomear",
@@ -789,6 +827,7 @@ const pt: ChatDict = {
     save: "Salvar segredo",
     deletePrefix: "Excluir",
     none: "Nenhum segredo definido para este agente ainda.",
+    noneHint: "Os valores salvos aqui são somente escrita e passam a valer no próximo reinício do agente.",
     nativeNote:
       "As credenciais do picoclaw agora são definidas pelo administrador do seu tenant ou da sua assinatura. Você ainda pode remover uma que salvou antes; novas precisam vir deles.",
     invalidName: "O nome só pode conter letras, números e . _ -",
@@ -819,8 +858,10 @@ const pt: ChatDict = {
     refreshAria: "Atualizar arquivos",
     refresh: "Atualizar",
     filterPlaceholder: "Filtrar arquivos",
-    noMatches: "Nenhum resultado.",
-    noneYet: "Nenhum arquivo enviado ainda.",
+    noMatches: "Nenhum arquivo corresponde ao filtro.",
+    noMatchesHint: "Limpe o filtro para ver tudo o que há neste workspace.",
+    noneYet: "Nenhum arquivo ainda.",
+    noneYetHint: "Anexe um arquivo no chat e ele aparece aqui, junto com o que o agente escrever.",
     deletePrefix: "Excluir",
     deleteTitle: "Excluir arquivo?",
     deleteMessage:

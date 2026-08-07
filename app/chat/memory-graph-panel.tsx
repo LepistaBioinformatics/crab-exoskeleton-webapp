@@ -25,6 +25,7 @@ import {
   SearchList,
 } from "./memory-graph-views";
 import { Input } from "@/components/ui/input";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -390,6 +391,7 @@ export default function MemoryGraphPanel({
                 onTypeFilter={setTypeFilter}
                 allLabel={t.memoryGraph.allTypes}
                 noneOfTypeLabel={t.memoryGraph.noneOfType}
+                noneOfTypeHint={t.memoryGraph.noneOfTypeHint}
               />
             )}
 
@@ -411,6 +413,7 @@ export default function MemoryGraphPanel({
                   relations={graph.relations}
                   selected={selected}
                   onSelect={(name) => (name ? select(name) : setSelected(null))}
+                  emptyTitle={t.memoryGraph.empty.title}
                   emptyLabel={t.memoryGraph.empty.body}
                   expandLabel={t.memoryGraph.expandMap}
                   collapseLabel={t.memoryGraph.collapseMap}
@@ -420,10 +423,26 @@ export default function MemoryGraphPanel({
                   spreadReadout={t.memoryGraph.spreadReadout}
                   typeFilter={typeFilter}
                   query={mapQueryApplied}
-                  noMatchLabel={t.memoryGraph.noResults}
+                  noMatchLabel={t.memoryGraph.mapNoMatch}
+                  noMatchHint={t.memoryGraph.mapNoMatchHint}
                   truncatedLabel={t.memoryGraph.mapTruncated}
                 />
               </div>
+            )}
+
+            {/* Before the first query this tab used to render NOTHING — a blank pane
+                that reads as a broken tab rather than as one waiting for input. It sits
+                in the same non-loading fragment as the other modes, so it can never
+                race the spinner. */}
+            {/* `!error` too: a failed search leaves `hits` null, and without this the
+                idle prompt would sit under the error Alert telling the member to type
+                a term — as if the search they just ran had never happened. */}
+            {mode === "search" && !hits && !error && (
+              <PanelEmpty
+                icon={Search}
+                title={t.memoryGraph.searchIdle.title}
+                body={t.memoryGraph.searchIdle.body}
+              />
             )}
 
             {mode === "search" && hits && (
@@ -432,6 +451,7 @@ export default function MemoryGraphPanel({
                 selected={selected}
                 onSelect={select}
                 noResults={t.memoryGraph.noResults}
+                noResultsHint={t.memoryGraph.noResultsHint}
               />
             )}
 
