@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape, { type Core } from "cytoscape";
+import { Search, Share2 } from "lucide-react";
 import { buildElements, typeColorIndex } from "./graph-elements";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import type { Relation, SummaryEntity } from "@/lib/memoryGraph";
 
 // The knowledge graph as a node-link diagram, rendered by Cytoscape.
@@ -65,6 +67,7 @@ export default function MemoryGraphView({
   query,
   selected,
   onSelect,
+  emptyTitle,
   emptyLabel,
   expandLabel,
   collapseLabel,
@@ -73,6 +76,7 @@ export default function MemoryGraphView({
   fitLabel,
   spreadReadout,
   noMatchLabel,
+  noMatchHint,
   truncatedLabel,
 }: {
   entities: SummaryEntity[];
@@ -83,6 +87,8 @@ export default function MemoryGraphView({
   query: string;
   selected: string | null;
   onSelect: (name: string | null) => void;
+  /** The empty-graph state's title; `emptyLabel` is its supporting sentence. */
+  emptyTitle: string;
   emptyLabel: string;
   expandLabel: string;
   collapseLabel: string;
@@ -93,6 +99,7 @@ export default function MemoryGraphView({
   spreadReadout: string;
   /** Shown when a filter hid everything — distinct from an empty graph. */
   noMatchLabel: string;
+  noMatchHint: string;
   /** "{count} more not shown" — the cap is reported, never silent. */
   truncatedLabel: string;
 }) {
@@ -279,13 +286,14 @@ export default function MemoryGraphView({
     }
   }
 
+  // An empty graph and a filter that hid everything are different facts about the
+  // workspace, and the fix for each is different — so they stay two states, sharing
+  // only their presentation.
   if (built.nodes.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <p className="text-sm text-fg-muted">
-          {entities.length === 0 ? emptyLabel : noMatchLabel}
-        </p>
-      </div>
+    return entities.length === 0 ? (
+      <PanelEmpty icon={Share2} title={emptyTitle} body={emptyLabel} />
+    ) : (
+      <PanelEmpty icon={Search} title={noMatchLabel} body={noMatchHint} />
     );
   }
 

@@ -40,6 +40,11 @@ export async function GET(
     tenant_id: tenantId,
     subs_acc_id: subsAccId,
   });
+  // agent-projects: forwarded so the proxy reads the project's own sessions dir.
+  // An unknown id 404s there rather than silently returning the main workspace's
+  // (empty) history.
+  const project = req.nextUrl.searchParams.get("project");
+  if (project) query.set("project", project);
 
   let res: Response;
   try {

@@ -2,8 +2,9 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Tags } from "lucide-react";
+import { MessageSquare, Tags } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { IconButton } from "@/components/ui/icon-button";
 import { setFragmentSid, type Workspace } from "./fragment";
 import { onConversationsUpdated, type ConversationSummary } from "@/lib/chatSession";
@@ -237,7 +238,15 @@ export default function ConversationTree({
     );
   }
   if (model.bursts.length === 0) {
-    return <p className="py-4 text-center text-sm text-fg-muted">{t.history.noneYet}</p>;
+    // Same copy as the list view: the two are two renderings of one conversation
+    // set, so an empty one is the same fact stated in the same words.
+    return (
+      <PanelEmpty
+        icon={MessageSquare}
+        title={t.history.noneYet}
+        body={t.history.noneYetHint}
+      />
+    );
   }
 
   const { bursts, dotLaneOf, laneCount, laneSegments } = model;

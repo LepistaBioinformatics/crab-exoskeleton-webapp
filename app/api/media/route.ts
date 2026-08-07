@@ -23,6 +23,10 @@ export async function GET(req: NextRequest) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  // agent-projects: names the project workspace to read; absent means the
+  // agent\'s own. The proxy 404s an unknown id rather than falling back.
+  const project = req.nextUrl.searchParams.get("project");
+  if (project) query.set("project", project);
   let res: Response;
   try {
     res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {

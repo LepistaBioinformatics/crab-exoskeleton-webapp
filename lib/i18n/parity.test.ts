@@ -33,6 +33,8 @@ const SHARED = new Set([
   "signin.titleSuffix",
   "offline.metaTitle",
   "chat.shell.workspaces",
+  // Same loanword, singular -- the eyebrow over the chats sidebar's first section.
+  "chat.sections.workspace",
   "chat.uploads.workspace",
   "chat.viewMode.chat",
   "chat.viewMode.canvas",

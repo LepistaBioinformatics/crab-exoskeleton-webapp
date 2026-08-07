@@ -20,6 +20,11 @@ const en = {
   unsupported_type: "That file type isn't supported.",
   too_large: "That file is too large.",
   note_too_long: "This note is too long.",
+  // agent-projects: two upstream outcomes that are ordinary answers, not
+  // failures — a generic message would leave someone retyping a name that can
+  // never be accepted, or waiting for a feature this agent will never have.
+  project_name_taken: "You already have a project with that name.",
+  projects_unsupported: "This agent does not support projects.",
   native_is_admin_only: "Only an administrator can change this.",
   invalid_email: "That email address doesn't look right.",
   invalid_code: "Invalid code. Try again.",
@@ -44,6 +49,8 @@ const pt: ErrorDict = {
   unsupported_type: "Esse tipo de arquivo não é suportado.",
   too_large: "Esse arquivo é grande demais.",
   note_too_long: "Esta nota é longa demais.",
+  project_name_taken: "Você já tem um projeto com esse nome.",
+  projects_unsupported: "Este agente não suporta projetos.",
   native_is_admin_only: "Apenas um administrador pode alterar isso.",
   invalid_email: "Esse e-mail não parece válido.",
   invalid_code: "Código inválido. Tente de novo.",

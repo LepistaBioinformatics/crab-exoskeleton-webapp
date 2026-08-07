@@ -86,30 +86,51 @@ const rail = cva(
 // A rail icon: a hint at what the pane holds, and a way straight into that panel. The
 // active one is filled so the rail says which panel the pane would open on.
 const railIcon = cva(
-  "flex size-8 items-center justify-center rounded-lg transition-colors",
+  "flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors",
   {
     variants: {
       active: {
         true: "bg-accent/15 text-accent",
         false: "text-fg-muted hover:bg-elevated hover:text-fg",
       },
+      emphasis: { true: "text-accent", false: "" },
     },
-    defaultVariants: { active: false },
+    // `active` wins: an emphasised entry that is also the current one should read as
+    // current, and the two tints applied together would just be the accent twice.
+    compoundVariants: [{ active: true, emphasis: true, class: "text-accent" }],
+    defaultVariants: { active: false, emphasis: false },
   },
 );
 
-/** One panel the collapsed rail advertises, and the way into it. */
+// Project initials. Uppercase and tabular so a column of them lines up.
+const railInitials = cva("text-[10px] font-semibold uppercase tracking-tight");
+
+/** One entry the collapsed rail advertises, and the way into it. */
 export interface RailPanel {
   key: string;
   Icon: LucideIcon;
   label: string;
   active: boolean;
   /**
-   * Chooses this panel. Required: a panel with nothing behind it is left out of the
+   * Chooses this entry. Required: an entry with nothing behind it is left out of the
    * list rather than rendered as a control that does nothing.
    */
   onSelect: () => void;
+  /**
+   * Two or three letters drawn instead of the icon — used for projects, where the
+   * name is what tells one apart from the next and a row of identical folder glyphs
+   * would say nothing. The icon stays as the fallback for a nameless entry.
+   */
+  initials?: string;
+  /** Tints the entry the accent even when inactive — the new-chat action. */
+  emphasis?: boolean;
 }
+
+// The rail is GROUPS, not one list, because it now mixes two kinds of entry that must
+// not read as one another: the panels (which choose what the pane would show), the
+// projects (which NAVIGATE), and the actions (which do something immediately). A
+// hairline between them is what keeps a click from meaning the wrong verb.
+export type RailGroup = RailPanel[];
 
 const MAX_WIDTH = 480;
 
@@ -121,7 +142,7 @@ export default function ResizablePane({
   minWidth,
   onExpand,
   onResize,
-  panels,
+  groups,
   peeking,
   onPeekChange,
   children,
@@ -133,8 +154,8 @@ export default function ResizablePane({
   minWidth: number;
   onExpand: () => void;
   onResize: (width: number) => void;
-  /** Panels the collapsed rail advertises. */
-  panels: RailPanel[];
+  /** What the collapsed rail advertises, in groups separated by a hairline. */
+  groups: RailGroup[];
   /**
    * Whether the collapsed pane is showing its hover preview. Owned by the caller, not
    * here, because the PREVIEWED panel renders its own collapse control — and that
@@ -209,19 +230,40 @@ export default function ResizablePane({
             Never `disabled` either — a disabled button swallows the click, so an icon
             that looked like a way in became a dead end. A panel with nothing to show is
             left out of the list upstream instead of rendered inert. */}
-        {panels.map(({ key, Icon, label, active, onSelect }) => (
-          <button
-            key={key}
-            type="button"
-            aria-current={active || undefined}
-            aria-label={label}
-            title={label}
-            onClick={onSelect}
-            className={railIcon({ active })}
-          >
-            <Icon size={17} aria-hidden />
-          </button>
-        ))}
+        {/* Scrolls, and only this part of the rail does: a workspace with a dozen
+            projects must not push the expand control off the bottom of the column.
+            `scrollbar-none` because a visible bar inside a 48px rail is most of it. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {groups.map((group, gi) => (
+            <div key={gi} className="flex w-full flex-col items-center gap-1">
+              {/* Hairline between groups, never before the first: the rule is a
+                  separator, and one at the top would read as a border under the
+                  expand control instead. */}
+              {gi > 0 && group.length > 0 && (
+                <span className="my-1 h-px w-6 shrink-0 bg-brand/30" aria-hidden />
+              )}
+              {group.map(({ key, Icon, label, active, onSelect, initials, emphasis }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-current={active || undefined}
+                  aria-label={label}
+                  title={label}
+                  onClick={onSelect}
+                  className={railIcon({ active, emphasis })}
+                >
+                  {initials ? (
+                    <span className={railInitials()} aria-hidden>
+                      {initials}
+                    </span>
+                  ) : (
+                    <Icon size={17} aria-hidden />
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {!collapsed && (

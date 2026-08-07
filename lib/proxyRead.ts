@@ -42,6 +42,13 @@ export async function proxyRead(
   // is this layer's routing input), and an allowlist means a future parameter is
   // a deliberate addition rather than something a caller can smuggle through.
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  // agent-projects: forwarded for every route on this helper (scheduled tasks,
+  // knowledge graph), not per-route via passThrough. It is not a feature
+  // parameter one route happens to want — it names WHICH workspace the read
+  // addresses, exactly like tenant_id and subs_acc_id beside it, and a route that
+  // forgot it would quietly answer from the main workspace.
+  const project = p.get("project");
+  if (project) query.set("project", project);
   for (const name of passThrough) {
     const value = p.get(name);
     if (value !== null && value !== "") query.set(name, value);

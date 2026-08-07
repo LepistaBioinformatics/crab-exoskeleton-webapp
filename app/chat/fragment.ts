@@ -14,6 +14,18 @@ export interface Workspace {
   t: string; // tenantId
   s: string; // subsAccId
   r: Instance; // role
+  /**
+   * agent-projects: the project the view is in. Carried on the workspace rather
+   * than threaded as a separate argument through every client because it
+   * qualifies exactly the same thing the other three fields do —
+   * WHICH workspace directory a request addresses. Every surface that reads user
+   * content (files, folders, scheduled tasks, memory, the knowledge graph) has to
+   * agree on it, and a parameter each of them could forget to pass is a parameter
+   * some of them would.
+   *
+   * Undefined/null means the agent's own workspace.
+   */
+  p?: string | null;
 }
 
 export interface FragmentState {
@@ -21,6 +33,9 @@ export interface FragmentState {
   s?: string;
   r?: string;
   sid?: string;
+  // agent-projects: the project being browsed. Absent means the agent's own
+  // workspace. See setFragmentProject for why this is here and not in the path.
+  p?: string;
   // Optional scroll anchor: the `created_at` of a specific message to scroll to
   // when opening a conversation (e.g. clicking a past point in the tree view).
   // Transient -- consumed and stripped once the target is scrolled into view.
@@ -40,6 +55,58 @@ export function fragmentHash(workspace: Workspace, sid: string): string {
   return `#${params.toString()}`;
 }
 
+// Enters a project (or leaves it, with null). Same assign-`location.hash`
+// mechanism as every other setter here.
+//
+// IT LIVED IN THE PATH FOR A WHILE (/chat/projects/<id>, a catch-all route), and
+// that is worth recording because the reason it moved there was real and the
+// reason it came back is bigger.
+//
+// It moved to the path because fragment state is edited IN PLACE: entering a
+// project kept whatever `sid` was open — a global conversation — and the chat
+// pane went on showing it while the sidebar claimed to be inside a project. A
+// route change is a navigation, so the view was rebuilt and the stale session
+// did not come along.
+//
+// But the path bought that with a page navigation, and `router.push` is a
+// pushState: it does NOT fire `hashchange`, which is the only thing useFragment
+// listens to. So either the route remounted the tree — and then `useFragment`
+// restarted at null, the workspace was momentarily unknown, and the sidebar
+// track replayed its whole workspaces→chats slide on every project click — or it
+// did not remount, and the fragment kept serving the stale `sid` the path was
+// introduced to prevent. Both were true at different times; the slide is what
+// was visible.
+//
+// Dropping `sid` and `msg` in the same write is what the route change was
+// actually providing, and it is one line. A conversation belongs to exactly one
+// project — its transcripts live in that project's workspace — so carrying one
+// across would ask for history from a workspace that never held it.
+//
+// Staying in the fragment also puts the project back under the rule stated at
+// the top of this file: it is never sent to a server, so a project id cannot
+// turn up in a request log. In the path, it did.
+export function setFragmentProject(project: string | null): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (project) params.set("p", project);
+  else params.delete("p");
+  params.delete("sid");
+  params.delete("msg");
+  window.location.hash = params.toString();
+}
+
+// Enters a project AND opens a specific conversation in it, in ONE write. Two
+// writes would leave a frame with the project set and no session — and, worse,
+// each `location.hash =` is its own history entry, so Back would step through a
+// state the member never chose.
+export function setFragmentProjectSid(project: string | null, sid: string): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (project) params.set("p", project);
+  else params.delete("p");
+  params.set("sid", sid);
+  params.delete("msg");
+  window.location.hash = params.toString();
+}
+
 function readFragment(): FragmentState {
   const params = new URLSearchParams(window.location.hash.slice(1));
   return {
@@ -47,6 +114,7 @@ function readFragment(): FragmentState {
     s: params.get("s") ?? undefined,
     r: params.get("r") ?? undefined,
     sid: params.get("sid") ?? undefined,
+    p: params.get("p") ?? undefined,
     msg: params.get("msg") ?? undefined,
     hv: params.get("hv") ?? undefined,
     view: params.get("view") ?? undefined,
@@ -104,6 +172,11 @@ export function setWorkspace(workspace: Workspace, sid: string): void {
   params.set("r", workspace.r);
   params.set("sid", sid);
   params.delete("msg");
+  // A project belongs to ONE agent — it is a picoclaw agent of its own, under that
+  // agent's workspace. Carrying `p` into a different workspace would name a project
+  // that does not exist there, and every per-project fetch would address a directory
+  // nobody created.
+  params.delete("p");
   window.location.hash = params.toString();
 }
 
@@ -130,10 +203,19 @@ export function toWorkspace(fragment: FragmentState): Workspace | null {
 
 // History is fetched via the BFF, which forwards tenant_id/subs_acc_id (read
 // here from the fragment) to the proxy's session-history route.
-export function historyQuery(workspace: Workspace, sessionId: string): string {
-  return new URLSearchParams({
+export function historyQuery(
+  workspace: Workspace,
+  sessionId: string,
+  project?: string | null,
+): string {
+  const params = new URLSearchParams({
     session_id: sessionId,
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
-  }).toString();
+  });
+  // agent-projects: a project's transcripts live under its own workspace, so
+  // omitting this for a project conversation reads the main workspace and
+  // returns an empty history — which looks like data loss, not a bug.
+  if (project) params.set("project", project);
+  return params.toString();
 }

@@ -21,6 +21,11 @@ export async function POST(
   const sessionId = typeof body?.session_id === "string" ? body.session_id : null;
   const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : null;
   const subsAccId = typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
+  // agent-projects: selects the picoclaw agent (and therefore the workspace) for
+  // this turn. Absent/empty means the main agent — today's behavior. The proxy
+  // 404s an unknown id rather than falling back, so a stale project in the
+  // client surfaces as an error instead of a turn written to the wrong place.
+  const project = typeof body?.project === "string" && body.project ? body.project : null;
   if (!message || !sessionId || !tenantId || !subsAccId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
@@ -38,6 +43,7 @@ export async function POST(
         session_id: sessionId,
         tenant_id: tenantId,
         subs_acc_id: subsAccId,
+        ...(project ? { project } : {}),
         stream: true,
         messages: [{ role: "user", content: message }],
       }),

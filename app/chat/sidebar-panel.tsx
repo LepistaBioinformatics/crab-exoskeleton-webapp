@@ -19,12 +19,19 @@ const headerSlot = cva("flex min-w-0 flex-1 shrink items-center");
 export default function SidebarPanel({
   header,
   actions,
+  scrollBody = true,
   children,
 }: {
   /** The panel's title row content — a label, or the chats panel's back control. */
   header: ReactNode;
   /** Panel-scoped controls (the filter magnifier, the list/tree switch). */
   actions?: ReactNode;
+  /**
+   * False when the body owns its own scrolling. The chats panel splits into two
+   * independently scrolling boxes with a draggable seam between them; one scroller
+   * wrapped around both would scroll them as a unit and make the seam meaningless.
+   */
+  scrollBody?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -35,7 +42,15 @@ export default function SidebarPanel({
         <div className={headerSlot()}>{header}</div>
         {actions}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+      <div
+        className={
+          scrollBody
+            ? "min-h-0 flex-1 overflow-auto"
+            : "flex min-h-0 flex-1 flex-col overflow-hidden"
+        }
+      >
+        {children}
+      </div>
     </div>
   );
 }

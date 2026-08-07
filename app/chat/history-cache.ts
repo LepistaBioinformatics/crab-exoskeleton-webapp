@@ -33,7 +33,7 @@ export async function getHistory(
   }
   try {
     const res = await fetch(
-      `/api/chat/${conversation.role}/history?${historyQuery(workspace, conversation.id)}`,
+      `/api/chat/${conversation.role}/history?${historyQuery(workspace, conversation.id, conversation.project)}`,
     );
     if (!res.ok) return cached?.messages ?? [];
     const data = await res.json();

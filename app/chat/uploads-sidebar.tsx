@@ -39,10 +39,12 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { PANEL_HEADER_H } from "./panel-header";
 import { useT } from "@/lib/i18n/context";
 
 const MIN_WIDTH = 240;
@@ -630,7 +632,9 @@ export default function UploadsSidebar({
           className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
         />
 
-        <div className="flex shrink-0 items-center gap-1 border-b border-brand/30 px-3 py-2">
+        <div
+          className={`flex shrink-0 items-center gap-1 border-b border-brand/30 px-3 py-2 ${PANEL_HEADER_H}`}
+        >
           {section === null ? (
             <h2 className="flex-1 font-display text-sm font-semibold text-fg">
               {t.uploads.workspace}
@@ -810,11 +814,24 @@ export default function UploadsSidebar({
                       </div>
                     )}
 
-                    {files !== null && visible.length === 0 && (
-                      <p className="py-3 text-center text-sm text-fg-muted">
-                        {q ? t.uploads.noMatches : t.uploads.noneYet}
-                      </p>
-                    )}
+                    {/* A live filter hiding every file is not an empty workspace, and
+                        the two states send the member somewhere different — so they
+                        stay distinct, sharing only their presentation. */}
+                    {files !== null &&
+                      visible.length === 0 &&
+                      (q ? (
+                        <PanelEmpty
+                          icon={Search}
+                          title={t.uploads.noMatches}
+                          body={t.uploads.noMatchesHint}
+                        />
+                      ) : (
+                        <PanelEmpty
+                          icon={FolderOpen}
+                          title={t.uploads.noneYet}
+                          body={t.uploads.noneYetHint}
+                        />
+                      ))}
 
                     {/* The tree root is a drop target too: dragging something OUT of a
                         folder needs somewhere to land, and without this the only way

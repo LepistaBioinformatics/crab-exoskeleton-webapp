@@ -17,7 +17,12 @@ import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/mess
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
 import { Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
-import { setFragmentSid, historyQuery, useFragment, type Workspace } from "@/app/chat/fragment";
+import {
+  setFragmentSid,
+  historyQuery,
+  useFragment,
+  type Workspace,
+} from "@/app/chat/fragment";
 import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
@@ -31,6 +36,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { PANEL_HEADER_H } from "./panel-header";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import {
   MAX_SEND_ATTEMPTS,
@@ -180,9 +186,17 @@ export default function ChatView({
   chatRef,
   onChatRef,
   sessionId,
+  project,
   onRestartNeeded,
 }: {
   workspace: Workspace;
+  /**
+   * agent-projects: the project this conversation runs in, null for the agent's
+   * own workspace. Comes from the fragment (`p`), which the sidebar sets from
+   * the conversation record when an existing chat is opened — so it is the same
+   * project the transcripts were written under.
+   */
+  project: string | null;
   /**
    * The subscription this workspace belongs to. Null while the tree is loading, and for
    * a subscription with no name of its own — in which case the agent takes the line
@@ -247,8 +261,18 @@ export default function ChatView({
   // Find the most-recent conversation other than the current one, skipping
   // freshly-minted empty chats, so an empty conversation can offer to resume a
   // real previous one. Re-runs when the workspace or selected session changes.
+  //
+  // NOT inside a project. "Continue where you left off" is an invitation to go back
+  // to whatever you were last doing, which is the right offer on the agent's own
+  // landing but the wrong one the moment you have deliberately stepped into a
+  // project: the point of entering one is to work on THAT subject, and the most
+  // recent chat there is not what you came for — you came to start something.
   useEffect(() => {
     let alive = true;
+    if (workspace.p) {
+      setResumeCandidate(null);
+      return;
+    }
     listConversations(workspace)
       .then((list) => {
         if (!alive) return;
@@ -268,7 +292,7 @@ export default function ChatView({
     return () => {
       alive = false;
     };
-  }, [workspace.t, workspace.s, workspace.r, sessionId]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, sessionId]);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a long
   // reply can be read from the start while it's still streaming), while the
@@ -304,16 +328,21 @@ export default function ChatView({
   // A valid workspace with no `sid` (direct nav) gets a fresh conversation (id
   // minted server-side, so it also lands in the sidebar) instead of losing the
   // chosen workspace.
+  //
+  // It is born in THIS page's project. Entering a project drops `sid` precisely
+  // so this runs, and a conversation minted here without the project would be
+  // global — it would answer from the main agent while the user is looking at a
+  // project, which is the exact symptom the route change exists to remove.
   useEffect(() => {
     if (!sessionId && !creatingSid.current) {
       creatingSid.current = true;
-      createConversation(workspace)
+      createConversation(workspace, project)
         .then((conversation) => setFragmentSid(conversation.id))
         .finally(() => {
           creatingSid.current = false;
         });
     }
-  }, [workspace, sessionId]);
+  }, [workspace, project, sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -338,7 +367,7 @@ export default function ChatView({
     let cancelled = false;
     (async () => {
       try {
-        const query = historyQuery(workspace, sessionId);
+        const query = historyQuery(workspace, sessionId, project);
         const res = await fetch(`/api/chat/${workspace.r}/history?${query}`);
         if (cancelled) return;
         if (res.status === 401) {
@@ -432,7 +461,7 @@ export default function ChatView({
   // reply that finished after the user had navigated away and back.
   async function reloadHistory(sid: string) {
     try {
-      const res = await fetch(`/api/chat/${workspace.r}/history?${historyQuery(workspace, sid)}`);
+      const res = await fetch(`/api/chat/${workspace.r}/history?${historyQuery(workspace, sid, project)}`);
       if (!res.ok) return;
       const data = await res.json();
       const loaded = Array.isArray(data.messages) ? data.messages : [];
@@ -484,8 +513,8 @@ export default function ChatView({
   // per-conversation queue, the retry ladder and the reveal buffer -- all keyed
   // by sid at module scope, so none of it dies when this component remounts.
   const runContext = useCallback(
-    () => ({ workspace, onUnauthorized: () => router.push("/signin") }),
-    [workspace, router],
+    () => ({ workspace, project, onUnauthorized: () => router.push("/signin") }),
+    [workspace, project, router],
   );
 
   // Enqueue a composed message as PENDING (pulsing), not sent yet. Consumes the
@@ -593,9 +622,9 @@ export default function ChatView({
     return true;
   }
 
-  // The message index + reply + copy, reused by the desktop (hover, bottom-right)
-  // and mobile (tap-to-open, below the card) placements. The index rides in the
-  // same cluster as the buttons.
+  // The message index + reply + copy, reused by the desktop (hover) and mobile
+  // (tap-to-open) placements — both below the message. The index rides in the same
+  // cluster as the buttons.
   const renderActions = (m: ChatMessage, index: number) => (
     <>
       <span className="select-none self-center pl-1 text-fg-muted" aria-hidden>
@@ -606,11 +635,6 @@ export default function ChatView({
       </span>
       <IconButton
         variant="ghost"
-    // Sets the ALIAS, not the title. The title is derived from the conversation's
-    // first message and is the primary line the sidebar renders; the alias is the
-    // name the user chooses, shown beneath it. No argument clears the alias --
-    // the route treats an empty string as a clear, same as emptying the field in
-    // the alias/tags editor.
         size="sm"
         aria-label={t.view.replyAria}
         title={t.view.reply}
@@ -645,7 +669,9 @@ export default function ChatView({
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2">
+      <div
+        className={`flex items-center gap-2 border-b border-brand/30 px-4 py-2 ${PANEL_HEADER_H}`}
+      >
         {/* The SUBSCRIPTION leads, the agent sits under it in lighter type — the same
             treatment the conversations sidebar uses, and for the same reason: the
             subscription is the membership boundary a member navigates by, and it is what
@@ -743,7 +769,7 @@ export default function ChatView({
                   {t.view.resumeHeading}
                 </h2>
                 <p className="mt-2 text-sm text-fg-muted">
-                  Jump back into your most recent conversation with agent {workspace.r}.
+                  {t.view.resumeBody.replace("{agent}", workspace.r)}
                 </p>
               </div>
               <button
@@ -840,9 +866,12 @@ export default function ChatView({
                     >
                       <div className="relative mx-auto w-full max-w-[720px] px-4">
                         {/* Desktop only: transparent toolbar at the message's
-                            top-right, in the card's top padding (above the text). Mobile uses the tapped
-                            row below the card instead (rendered after the band). */}
-                        <div className="absolute right-1.5 bottom-full mb-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                            bottom-right, in the card's bottom padding (below the text) — the
+                            same side of the message the mobile row already uses, so the two
+                            placements no longer disagree about where a message's actions live.
+                            `bandPad` is symmetric (py-6 / py-10), so this sits exactly as far
+                            from the text as it did above it. */}
+                        <div className="absolute right-1.5 top-full mt-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           {renderActions(m, i)}
                         </div>
                         {text && <MessageContent content={text} />}

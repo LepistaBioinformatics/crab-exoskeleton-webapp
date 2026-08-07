@@ -27,11 +27,15 @@ export async function PATCH(
   const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : null;
   const subsAccId = typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
   const role = typeof body?.role === "string" ? body.role : null;
+  // agent-projects: recorded on the FIRST message, alongside the title, because
+  // that is when the row is created. A conversation's project never changes
+  // afterwards — the id is part of the session id its transcripts live under.
+  const project = typeof body?.project === "string" && body.project ? body.project : null;
   if (!tenantId || !subsAccId || !role || !isInstance(role)) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  await upsertConversationRow(id, session.email, tenantId, subsAccId, role, message);
+  await upsertConversationRow(id, session.email, tenantId, subsAccId, role, message, project);
   return NextResponse.json({ ok: true });
 }
 
