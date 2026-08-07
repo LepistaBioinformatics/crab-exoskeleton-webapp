@@ -32,11 +32,25 @@ const LAYOUT_KEY = "chat-sidebar";
 // the history drawer + chat view mount only when the fragment carries a valid
 // workspace. On desktop each sidebar collapses/resizes independently (persisted
 // in localStorage); on mobile they are hamburger-toggled overlay drawers.
-export default function ChatShell({ email }: { email: string }) {
+export default function ChatShell({
+  email,
+  project = null,
+}: {
+  email: string;
+  /**
+   * agent-projects: from the ROUTE (/chat/projects/<id>), null on /chat. Not
+   * fragment state — see fragment.ts projectPath for why that distinction is
+   * load-bearing rather than cosmetic.
+   */
+  project?: string | null;
+}) {
   const t = useT(chatCopy);
   const fragment = useFragment();
   const resolved = fragment !== null;
-  const workspace = fragment ? toWorkspace(fragment) : null;
+  // The route's project rides on the workspace, so every client that already
+  // takes a workspace addresses the right directory without a second argument.
+  const base = fragment ? toWorkspace(fragment) : null;
+  const workspace = base ? { ...base, p: project } : null;
   const sessionId = fragment?.sid;
 
   // Canvas is a desktop-only top-level view; on mobile a shared `view=canvas`
@@ -195,6 +209,7 @@ export default function ChatShell({ email }: { email: string }) {
           <UnifiedSidebar
             email={email}
             workspace={workspace}
+            project={project}
             forceWorkspaces={canvas}
             onConversationSelect={closeDrawer}
             // UNDEFINED while collapsed, which OMITS the header's collapse button
@@ -252,6 +267,7 @@ export default function ChatShell({ email }: { email: string }) {
                 workspace={workspace}
                 subscription={subscription}
                 sessionId={sessionId}
+                project={project}
                 chatRef={chatRef}
                 onChatRef={setChatRef}
                 onRestartNeeded={() => setRestartRefresh((n) => n + 1)}

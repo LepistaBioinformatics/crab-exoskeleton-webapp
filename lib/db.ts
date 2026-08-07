@@ -54,6 +54,12 @@ function ensureSchema(): Promise<void> {
       ALTER TABLE conversations ADD COLUMN IF NOT EXISTS alias TEXT;
       ALTER TABLE conversations ADD COLUMN IF NOT EXISTS session_key TEXT;
       ALTER TABLE conversations ADD COLUMN IF NOT EXISTS session_file TEXT;
+      -- agent-projects: which project a conversation belongs to, NULL for the
+      -- main agent. Stored here rather than only in the URL fragment because the
+      -- binding is permanent: a conversation opened from the sidebar without the
+      -- fragment parameter would otherwise be sent with no project, answered by
+      -- the main agent, and have its history read from the wrong workspace.
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project TEXT;
       CREATE TABLE IF NOT EXISTS conversation_tags (
         conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -98,6 +104,8 @@ export interface ConversationRow {
   tags: Tag[];
   sessionKey: string | null;
   sessionFile: string | null;
+  /** agent-projects: the project this conversation belongs to; null = main agent. */
+  project: string | null;
 }
 
 function rowFromDb(row: {
@@ -111,12 +119,14 @@ function rowFromDb(row: {
   alias: string | null;
   session_key: string | null;
   session_file: string | null;
+  project: string | null;
   tags: Tag[];
 }): ConversationRow {
   return {
     id: row.id,
     email: row.email,
     instance: row.instance,
+    project: row.project,
     tenantId: row.tenant_id,
     subsAccId: row.subs_acc_id,
     title: row.title,
@@ -143,7 +153,7 @@ export async function listConversationsForWorkspace(
   // divergence, chat-ui-material-refactor).
   const { rows } = await getPool().query(
     `SELECT c.id, c.email, c.instance, c.tenant_id, c.subs_acc_id, c.title,
-            c.updated_at, c.alias, c.session_key, c.session_file,
+            c.updated_at, c.alias, c.session_key, c.session_file, c.project,
             COALESCE(
               json_agg(
                 json_build_object('name', t.name, 'value', t.value, 'metadata', t.metadata)
@@ -175,15 +185,16 @@ export async function upsertConversationRow(
   subsAccId: string,
   role: string,
   firstUserMessage: string,
+  project: string | null,
 ): Promise<void> {
   await ensureSchema();
   await getPool().query(
-    `INSERT INTO conversations (id, email, instance, tenant_id, subs_acc_id, title, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, now())
+    `INSERT INTO conversations (id, email, instance, tenant_id, subs_acc_id, title, updated_at, project)
+     VALUES ($1, $2, $3, $4, $5, $6, now(), $7)
      ON CONFLICT (id) DO UPDATE
        SET updated_at = now()
        WHERE conversations.email = $2`,
-    [id, email, role, tenantId, subsAccId, deriveTitle(firstUserMessage)],
+    [id, email, role, tenantId, subsAccId, deriveTitle(firstUserMessage), project],
   );
 }
 

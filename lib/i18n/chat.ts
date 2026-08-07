@@ -58,6 +58,18 @@ const en = {
     canvas: "Canvas",
     canvasTitle: "Canvas timeline",
   },
+  // The chats sidebar's three parts. Shared rather than per-panel: the whole point
+  // of the section headers is that they are the same control in three places.
+  sections: {
+    // "Collapse Projects" / "Expand Chats" -- {name} is the section's own label.
+    collapse: "Collapse {name}",
+    expand: "Expand {name}",
+    // The eyebrow over the back control. Singular, unlike shell.workspaces: this
+    // names the ONE workspace you are in, not the list of them.
+    workspace: "Workspace",
+    // The draggable seam between the projects box and the chats box.
+    resize: "Resize the projects and chats boxes",
+  },
   workspaceNav: {
     filterPlaceholder: "Filter workspaces",
     // Every empty state in both sidebars is a TITLE plus a next step, rendered by
@@ -273,6 +285,9 @@ const en = {
     retrying: "Couldn't reach the gateway — retrying… (attempt {n} of {total})",
     settling: "We're storing your file…",
     resumeHeading: "Continue where you left off",
+    // Was hardcoded English in the JSX, so it stayed English in pt and the parity
+    // test could not see it -- that check only compares strings that reach a dict.
+    resumeBody: "Jump back into your most recent conversation with agent {agent}.",
     startHeading: "Start a new chat",
     startBody: "Ask agent {agent} anything to get going.",
     agentPulse: "Agent pulse",
@@ -316,6 +331,10 @@ const en = {
     noneYet: "No conversations yet.",
     noneYetHint: "Start one with New chat above and it will show up here.",
     newChat: "New chat",
+    // Heading over the conversations that belong to no project — named for what
+    // they are, so it reads as a peer of the projects group above it rather than
+    // as "everything".
+    globalChats: "General chats",
     renameAria: "Rename conversation",
     rename: "Rename",
     deleteAria: "Delete conversation",
@@ -474,6 +493,45 @@ const en = {
     iosAddToHome: "Add to Home Screen",
     iosHelpAfter: ". Safari has no install button of its own — that flow is the install.",
   },
+  projects: {
+    title: "Projects",
+    hint: "A project keeps its own files, memory and instructions, and inherits this agent's model, skills and credentials.",
+    none: "No projects yet.",
+    noneHint: "Create one to keep a subject's chats, files and instructions apart from the rest.",
+    mainAgent: "No project",
+    mainAgentHint: "Chats in the agent's own workspace.",
+    create: "New project",
+    createTitle: "Create project",
+    editTitle: "Edit project",
+    nameLabel: "Name",
+    namePlaceholder: "e.g. Seed trial 2026",
+    instructionsLabel: "Instructions",
+    instructionsHint: "Added to what the agent already knows about itself. Say what this project is and how it should behave here.",
+    instructionsPlaceholder: "e.g. Always cite the trial protocol and answer with the plot number first.",
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    edit: "Edit project",
+    delete: "Delete project",
+    // Deleting takes the workspace with it, so the confirmation names what goes.
+    deleteConfirmTitle: "Delete this project?",
+    deleteConfirmBody: "Its files, memory and every conversation in it are removed. This cannot be undone.",
+    deleteConfirm: "Delete",
+    // Creating or deleting a project changes the container's mounts, so the
+    // agent is rebuilt on the next message. Said plainly rather than letting a
+    // first reply just take longer for no visible reason.
+    restartNotice: "The agent restarts on your next message.",
+    backToProjects: "Back to projects",
+    // The heading over a project's own conversation list.
+    projectChats: "Chats in this project",
+    selectorLabel: "Project",
+    selectorAria: "Choose the project for this conversation",
+    // Shown on an existing conversation: its project is fixed at creation,
+    // because the transcripts live in that project's workspace.
+    lockedHint: "A conversation stays in the project it started in.",
+    unsupported: "This agent does not support projects.",
+    refreshAria: "Refresh projects",
+  },
 };
 
 export type ChatDict = typeof en;
@@ -522,6 +580,12 @@ const pt: ChatDict = {
     chatTitle: "Chat tradicional",
     canvas: "Canvas",
     canvasTitle: "Linha do tempo do Canvas",
+  },
+  sections: {
+    collapse: "Recolher {name}",
+    expand: "Expandir {name}",
+    workspace: "Workspace",
+    resize: "Redimensionar as caixas de projetos e conversas",
   },
   workspaceNav: {
     filterPlaceholder: "Filtrar workspaces",
@@ -703,6 +767,7 @@ const pt: ChatDict = {
     retrying: "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
     settling: "Estamos guardando o arquivo para você…",
     resumeHeading: "Continue de onde parou",
+    resumeBody: "Volte para sua conversa mais recente com o agente {agent}.",
     startHeading: "Comece uma nova conversa",
     startBody: "Pergunte qualquer coisa ao agente {agent} para começar.",
     agentPulse: "Pulso do agente",
@@ -735,6 +800,7 @@ const pt: ChatDict = {
     noneYet: "Nenhuma conversa ainda.",
     noneYetHint: "Comece uma em Nova conversa, acima, e ela aparece aqui.",
     newChat: "Nova conversa",
+    globalChats: "Conversas gerais",
     renameAria: "Renomear conversa",
     rename: "Renomear",
     deleteAria: "Excluir conversa",
@@ -875,6 +941,38 @@ const pt: ChatDict = {
     iosHelpMiddle: " no Safari e depois em ",
     iosAddToHome: "Adicionar à Tela de Início",
     iosHelpAfter: ". O Safari não tem um botão de instalar próprio — esse é o fluxo de instalação.",
+  },
+  projects: {
+    title: "Projetos",
+    hint: "Um projeto guarda arquivos, memória e instruções próprios, e herda o modelo, as skills e as credenciais deste agente.",
+    none: "Nenhum projeto ainda.",
+    noneHint: "Crie um para manter as conversas, os arquivos e as instruções de um assunto separados do resto.",
+    mainAgent: "Sem projeto",
+    mainAgentHint: "Conversas no workspace do próprio agente.",
+    create: "Novo projeto",
+    createTitle: "Criar projeto",
+    editTitle: "Editar projeto",
+    nameLabel: "Nome",
+    namePlaceholder: "ex.: Ensaio de sementes 2026",
+    instructionsLabel: "Instruções",
+    instructionsHint: "Somadas ao que o agente já sabe sobre si. Diga o que é este projeto e como ele deve se comportar aqui.",
+    instructionsPlaceholder: "ex.: Sempre cite o protocolo do ensaio e responda começando pelo número da parcela.",
+    save: "Salvar",
+    saving: "Salvando…",
+    cancel: "Cancelar",
+    edit: "Editar projeto",
+    delete: "Excluir projeto",
+    deleteConfirmTitle: "Excluir este projeto?",
+    deleteConfirmBody: "Os arquivos, a memória e todas as conversas dele são removidos. Não dá para desfazer.",
+    deleteConfirm: "Excluir",
+    restartNotice: "O agente reinicia na sua próxima mensagem.",
+    backToProjects: "Voltar aos projetos",
+    projectChats: "Conversas deste projeto",
+    selectorLabel: "Projeto",
+    selectorAria: "Escolher o projeto desta conversa",
+    lockedHint: "Uma conversa permanece no projeto em que começou.",
+    unsupported: "Este agente não suporta projetos.",
+    refreshAria: "Atualizar projetos",
   },
 };
 

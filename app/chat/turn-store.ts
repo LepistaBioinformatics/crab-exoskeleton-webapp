@@ -127,6 +127,14 @@ export interface TurnState {
 /** Everything a queued turn needs to actually run, captured at submit time. */
 export interface RunContext {
   workspace: Workspace;
+  /**
+   * agent-projects: the project this conversation belongs to, null for the main
+   * agent. It comes from the conversation record rather than from whatever the
+   * UI currently has selected — a conversation's project is fixed at creation,
+   * and sending a different one would route the turn to another agent and write
+   * it into another workspace.
+   */
+  project?: string | null;
   /** Called on a 401 so the caller can route to signin. */
   onUnauthorized: () => void;
 }
@@ -366,6 +374,7 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
       session_id: sid,
       tenant_id: workspace.t,
       subs_acc_id: workspace.s,
+      ...(ctx.project ? { project: ctx.project } : {}),
     });
 
     let stream: ReadableStream<Uint8Array> | null = null;
@@ -410,7 +419,7 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     // The turn was accepted -- picoclaw is running it and will persist the
     // session. Only now create/bump the postgres row, so a rejected send never
     // leaves a conversation row with no transcript behind it.
-    touchConversation(workspace, sid, composed).catch(() => {});
+    touchConversation(workspace, sid, composed, ctx.project ?? null).catch(() => {});
 
     await consumeStream(
       stream,

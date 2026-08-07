@@ -58,6 +58,7 @@ const slot = cva("flex w-1/2 min-h-0 shrink-0 flex-col outline-none");
 export default function UnifiedSidebar({
   email,
   workspace,
+  project,
   forceWorkspaces,
   onConversationSelect,
   onCollapse,
@@ -67,6 +68,8 @@ export default function UnifiedSidebar({
   email: string;
   /** Null until the fragment resolves a workspace. */
   workspace: Workspace | null;
+  /** agent-projects: from the route, null on /chat. */
+  project: string | null;
   /**
    * True in the canvas view, which pins the tree. The canvas already lanes every
    * conversation, so listing them beside it is the same information twice — and
@@ -213,8 +216,9 @@ export default function UnifiedSidebar({
               <HistorySidebar
                 // Keyed by workspace so switching agents remounts the list instead
                 // of showing the previous agent's conversations for a beat.
-                key={`${workspace.t}|${workspace.s}|${workspace.r}`}
+                key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
                 workspace={workspace}
+                project={project}
                 // Null until the tree loads, or when the subscription carries no name.
                 // The header falls back to the agent alone rather than showing a uuid
                 // where a name belongs.

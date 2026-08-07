@@ -23,6 +23,10 @@ export async function GET(req: NextRequest) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  // agent-projects: names the project workspace to read; absent means the
+  // agent\'s own. The proxy 404s an unknown id rather than falling back.
+  const project = req.nextUrl.searchParams.get("project");
+  if (project) query.set("project", project);
   let res: Response;
   try {
     res = await fetchMycelium(`/${role}/v1/memory?${query.toString()}`, {
@@ -54,7 +58,13 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
 
-  let body: { role?: unknown; tenant_id?: unknown; subs_acc_id?: unknown; content?: unknown };
+  let body: {
+    role?: unknown;
+    tenant_id?: unknown;
+    subs_acc_id?: unknown;
+    content?: unknown;
+    project?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -77,7 +87,15 @@ export async function PUT(req: NextRequest) {
     res = await fetchMycelium(`/${role}/v1/memory`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${session.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ tenant_id: tenantId, subs_acc_id: subsAccId, content }),
+      // agent-projects: the note belongs to the workspace the member is looking
+      // at. Rebuilt field by field like the rest of this body, so an unexpected
+      // key cannot be smuggled upstream.
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        subs_acc_id: subsAccId,
+        ...(typeof body.project === "string" && body.project ? { project: body.project } : {}),
+        content,
+      }),
     });
   } catch (err) {
     if (err instanceof MyceliumConnectivityError) {

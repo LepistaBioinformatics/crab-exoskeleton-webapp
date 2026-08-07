@@ -14,6 +14,18 @@ export interface Workspace {
   t: string; // tenantId
   s: string; // subsAccId
   r: Instance; // role
+  /**
+   * agent-projects: the project the view is in, from the ROUTE. Carried on the
+   * workspace rather than threaded as a separate argument through every client
+   * because it qualifies exactly the same thing the other three fields do —
+   * WHICH workspace directory a request addresses. Every surface that reads user
+   * content (files, folders, scheduled tasks, memory, the knowledge graph) has to
+   * agree on it, and a parameter each of them could forget to pass is a parameter
+   * some of them would.
+   *
+   * Undefined/null means the agent's own workspace.
+   */
+  p?: string | null;
 }
 
 export interface FragmentState {
@@ -38,6 +50,35 @@ export interface FragmentState {
 export function fragmentHash(workspace: Workspace, sid: string): string {
   const params = new URLSearchParams({ t: workspace.t, s: workspace.s, r: workspace.r, sid });
   return `#${params.toString()}`;
+}
+
+// agent-projects lives in the PATH, not here: /chat for the agent's own
+// workspace, /chat/projects/<id> for a project.
+//
+// It was a fragment key first, and that was wrong in a way worth recording.
+// Fragment state is edited in place, so entering a project kept whatever `sid`
+// was open — a global conversation — and the chat pane went on showing it while
+// the sidebar claimed to be inside a project. A route change is a navigation:
+// the view is rebuilt, and what does not belong to the destination does not
+// come along.
+export function projectPath(project: string | null): string {
+  return project ? `/chat/projects/${encodeURIComponent(project)}` : "/chat";
+}
+
+// The hash to carry ACROSS such a navigation: the workspace and the view mode
+// travel, the open conversation does not.
+//
+// Dropping `sid` is the fix, not a detail. A conversation belongs to exactly one
+// project — its transcripts live in that project's workspace — so carrying one
+// into a different project would ask for history from a workspace that never
+// held it, and the reply would come from the wrong agent.
+export function crossProjectHash(): string {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  params.delete("sid");
+  params.delete("msg");
+  const q = params.toString();
+  return q ? `#${q}` : "";
 }
 
 function readFragment(): FragmentState {
@@ -130,10 +171,19 @@ export function toWorkspace(fragment: FragmentState): Workspace | null {
 
 // History is fetched via the BFF, which forwards tenant_id/subs_acc_id (read
 // here from the fragment) to the proxy's session-history route.
-export function historyQuery(workspace: Workspace, sessionId: string): string {
-  return new URLSearchParams({
+export function historyQuery(
+  workspace: Workspace,
+  sessionId: string,
+  project?: string | null,
+): string {
+  const params = new URLSearchParams({
     session_id: sessionId,
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
-  }).toString();
+  });
+  // agent-projects: a project's transcripts live under its own workspace, so
+  // omitting this for a project conversation reads the main workspace and
+  // returns an empty history — which looks like data loss, not a bug.
+  if (project) params.set("project", project);
+  return params.toString();
 }

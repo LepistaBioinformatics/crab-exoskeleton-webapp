@@ -25,6 +25,14 @@ export interface ConversationSummary {
   tags: Tag[];
   sessionKey: string | null;
   sessionFile: string | null;
+  /**
+   * agent-projects: which project this conversation belongs to, null for the
+   * main agent. Persisted server-side because the binding outlives the URL —
+   * reopening from the sidebar must send the same project the conversation was
+   * created under, or the turn is answered by the main agent and its history is
+   * read from the wrong workspace.
+   */
+  project: string | null;
 }
 
 // The sidebar (a separate component from wherever a conversation is
@@ -59,6 +67,7 @@ interface ConversationApiRow {
   tags: Tag[];
   sessionKey: string | null;
   sessionFile: string | null;
+  project: string | null;
 }
 
 function fromApiRow(row: ConversationApiRow): ConversationSummary {
@@ -69,6 +78,7 @@ function fromApiRow(row: ConversationApiRow): ConversationSummary {
     subsAccId: row.subsAccId,
     title: row.title,
     updatedAt: new Date(row.updatedAt).getTime(),
+    project: row.project ?? null,
     alias: row.alias ?? null,
     tags: Array.isArray(row.tags) ? row.tags : [],
     sessionKey: row.sessionKey ?? null,
@@ -96,7 +106,10 @@ export async function listConversations(workspace: Workspace): Promise<Conversat
 // postgres row is created lazily on the first sent message (touchConversation),
 // so opening/selecting a conversation that never receives a message leaves no
 // ghost row without a picoclaw transcript behind it.
-export async function createConversation(workspace: Workspace): Promise<ConversationSummary> {
+export async function createConversation(
+  workspace: Workspace,
+  project: string | null = null,
+): Promise<ConversationSummary> {
   return {
     id: crypto.randomUUID(),
     role: workspace.r,
@@ -104,6 +117,7 @@ export async function createConversation(workspace: Workspace): Promise<Conversa
     subsAccId: workspace.s,
     title: "New chat",
     updatedAt: Date.now(),
+    project,
     alias: null,
     tags: [],
     sessionKey: null,
@@ -119,11 +133,13 @@ export async function touchConversation(
   workspace: Workspace,
   id: string,
   firstUserMessage: string,
+  project: string | null = null,
 ): Promise<void> {
   await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      project,
       message: firstUserMessage,
       tenant_id: workspace.t,
       subs_acc_id: workspace.s,

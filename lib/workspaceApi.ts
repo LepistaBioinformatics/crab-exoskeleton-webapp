@@ -14,6 +14,10 @@ export function workspaceQuery(
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    // agent-projects: names the workspace directory the proxy should read. This
+    // one helper is what makes the scheduled tasks and the knowledge graph agree
+    // with the chat about which project they are showing.
+    ...(workspace.p ? { project: workspace.p } : {}),
     ...extra,
   }).toString();
 }
