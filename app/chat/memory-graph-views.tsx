@@ -1,10 +1,21 @@
 "use client";
 
 import React from "react";
-import { ArrowRight, Archive, GitMerge, MessageSquare, X } from "lucide-react";
+import {
+  ArrowRight,
+  Archive,
+  Clock,
+  Filter,
+  GitMerge,
+  MessageSquare,
+  Network,
+  SearchX,
+  X,
+} from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { cva } from "class-variance-authority";
 import { Badge } from "@/components/ui/badge";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import {
   entitySources,
   entityTypeCounts,
@@ -62,6 +73,7 @@ export function BrowseList({
   onTypeFilter,
   allLabel,
   noneOfTypeLabel,
+  noneOfTypeHint,
 }: {
   graph: SummaryGraph;
   selected: string | null;
@@ -75,6 +87,7 @@ export function BrowseList({
   onTypeFilter?: (type: string | null) => void;
   allLabel?: string;
   noneOfTypeLabel?: string;
+  noneOfTypeHint?: string;
 }) {
   const types = entityTypeCounts(graph.entities);
   const shown = typeFilter
@@ -82,16 +95,7 @@ export function BrowseList({
     : graph.entities;
 
   if (graph.entities.length === 0) {
-    return (
-      <div className="px-4 py-8 text-center">
-        <p className="font-display text-sm font-semibold text-fg">
-          {emptyTitle}
-        </p>
-        <p className="mt-1 text-xs leading-relaxed text-fg-muted">
-          {emptyBody}
-        </p>
-      </div>
-    );
+    return <PanelEmpty icon={Network} title={emptyTitle} body={emptyBody} />;
   }
   return (
     <>
@@ -99,7 +103,13 @@ export function BrowseList({
           one value per entity, so it partitions the list cleanly. Overlapping themes
           are modelled as entities with relations instead — which is what makes the
           navigable relation endpoints above matter. */}
-      {onTypeFilter && types.length > 1 && (
+      {/* `|| typeFilter` is the escape hatch, not a nicety. The filter is owned by the
+          panel so it survives a re-fetch, and the agent can archive or merge entities
+          between visits — so a member who filtered to a type that no longer has two
+          siblings would come back to a hidden chip row, an empty list, and no way to
+          clear the filter. The empty state below names the All chip; this is what makes
+          that instruction true in every reachable state. */}
+      {onTypeFilter && (types.length > 1 || typeFilter) && (
         <div className="flex flex-wrap gap-1 border-b border-brand/20 px-3 py-2">
           <button
             type="button"
@@ -126,9 +136,15 @@ export function BrowseList({
       )}
 
       {shown.length === 0 ? (
-        <p className="px-4 py-6 text-center text-xs text-fg-muted">
-          {noneOfTypeLabel}
-        </p>
+        // A LIVE FILTER hiding everything, not an empty graph. The chips above are
+        // still on screen saying the entities exist, so this has to read as a statement
+        // about the filter — see the same distinction in the map, the files pane and
+        // the scheduled-tasks list.
+        <PanelEmpty
+          icon={Filter}
+          title={noneOfTypeLabel ?? ""}
+          body={noneOfTypeHint}
+        />
       ) : (
         <ul>
           {shown.map((e) => (
@@ -173,16 +189,16 @@ export function SearchList({
   selected,
   onSelect,
   noResults,
+  noResultsHint,
 }: {
   hits: FullGraph;
   selected: string | null;
   onSelect: (name: string) => void;
   noResults: string;
+  noResultsHint?: string;
 }) {
   if (hits.entities.length === 0) {
-    return (
-      <p className="px-4 py-8 text-center text-xs text-fg-muted">{noResults}</p>
-    );
+    return <PanelEmpty icon={SearchX} title={noResults} body={noResultsHint} />;
   }
   return (
     <ul>
@@ -227,6 +243,7 @@ export function RecentList({
     newEntities: string;
     newRelations: string;
     nothing: string;
+    nothingHint: string;
   };
 }) {
   const nothing =
@@ -235,9 +252,7 @@ export function RecentList({
     recent.recentObservations.length === 0;
   if (nothing) {
     return (
-      <p className="px-4 py-8 text-center text-xs text-fg-muted">
-        {copy.nothing}
-      </p>
+      <PanelEmpty icon={Clock} title={copy.nothing} body={copy.nothingHint} />
     );
   }
   return (
@@ -469,7 +484,12 @@ export function EntityDetail({
           {copy.observations}
         </h4>
         {entity.observations.length === 0 ? (
-          <p className="mt-1 text-xs text-fg-muted">{copy.noObservations}</p>
+          // An inline note under a heading inside a populated pane, NOT a pane-level
+          // empty state — so it stays a <p> rather than becoming a PanelEmpty, and only
+          // its typography is aligned with `noSources` below.
+          <p className="mt-1 text-[11px] leading-snug text-fg-muted">
+            {copy.noObservations}
+          </p>
         ) : (
           <ul className="mt-1 space-y-1.5">
             {entity.observations.map((o, i) => (

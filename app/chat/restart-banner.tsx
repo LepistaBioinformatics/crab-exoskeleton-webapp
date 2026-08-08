@@ -99,11 +99,14 @@ export default function RestartBanner({
   const mayRestart = status.canRestart !== false;
 
   return (
-    <div className="flex items-start gap-3 border-b border-brand/40 bg-accent/10 px-4 py-2.5 text-sm">
+    // Amber, not the accent. On `bg-accent/10` this strip was the same colour as
+    // everything interactive in the app and got read as chrome -- which is a problem
+    // for the one surface whose whole job is to interrupt.
+    <div className="flex items-start gap-3 border-b border-notice/40 bg-notice-weak px-4 py-2.5 text-sm">
       {scheduled ? (
-        <CalendarClock size={18} className="mt-0.5 shrink-0" aria-hidden />
+        <CalendarClock size={18} className="mt-0.5 shrink-0 text-notice" aria-hidden />
       ) : (
-        <RotateCw size={18} className="mt-0.5 shrink-0" aria-hidden />
+        <RotateCw size={18} className="mt-0.5 shrink-0 text-notice" aria-hidden />
       )}
 
       <div className="min-w-0 flex-1">
@@ -116,7 +119,10 @@ export default function RestartBanner({
             follows it, ahead of the admin's optional note. */}
         {scheduled && <p className="mt-0.5 text-fg-muted">{reasonText(t, status.reason)}</p>}
         {status.note && <p className="mt-0.5 text-fg-muted">{status.note}</p>}
-        {error && <p className="mt-1 text-red-500">{error}</p>}
+        {/* `text-blocked`, not a raw Tailwind red: this was the one colour in the
+            banner that never flipped with the scheme, and it now has to read on an
+            amber ground in both. */}
+        {error && <p className="mt-1 text-blocked">{error}</p>}
       </div>
 
       {!scheduled && mayRestart && (

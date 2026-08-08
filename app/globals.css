@@ -29,6 +29,14 @@
   --blocked-weak: #fbeceb;
   --retiring: #7a6a1f;   /* deprecated: still serving, no longer offered */
   --retiring-weak: #f7f2df;
+  /* Something the member should act on, that is neither an error nor forbidden --
+     currently the pending-restart banner. Amber rather than the accent: the accent
+     means "interactive", so a notice painted in it reads as ordinary chrome, which is
+     exactly how the restart strip was being missed. Distinct from --retiring despite
+     both being yellow-ish; that one is a statement about a RESOURCE's lifecycle, this
+     one asks for an action. */
+  --notice: #9a6400;
+  --notice-weak: #fdf1dc;
   /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
      A plain dark shadow vanishes on a dark background, so dark mode adds a
      faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
@@ -64,6 +72,8 @@
     --blocked-weak: #35211f;
     --retiring: #c9b45f;
     --retiring-weak: #2c2718;
+    --notice: #f0b45c;
+    --notice-weak: #33260f;
     --shadow-e: 0 2px 8px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.07);
     /* Lifted for contrast on #14171a; the light values are far too dark to read. */
     --syntax-name: #c79ae8;
@@ -89,6 +99,8 @@
   --color-blocked-weak: var(--blocked-weak);
   --color-retiring: var(--retiring);
   --color-retiring-weak: var(--retiring-weak);
+  --color-notice: var(--notice);
+  --color-notice-weak: var(--notice-weak);
   --color-syntax-name: var(--syntax-name);
   --color-syntax-string: var(--syntax-string);
   --color-syntax-number: var(--syntax-number);

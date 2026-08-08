@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { cva } from "class-variance-authority";
 import {
   AlertTriangle,
+  CalendarClock,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -25,6 +27,7 @@ import MessageContent from "./message-content";
 import CodeBlock from "./code-block";
 import { formatToolBody } from "./tool-output";
 import { Alert } from "@/components/ui/alert";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -372,20 +375,18 @@ export default function ScheduledTasksPanel({
           </div>
         )}
         {nothing && (
-          <div className="px-3 py-4">
-            <p className="text-sm text-fg">{t.scheduledTasks.none}</p>
-            <p className="mt-1 text-[11px] text-fg-muted">
-              {t.scheduledTasks.noneHint}
-            </p>
-          </div>
+          <PanelEmpty
+            icon={CalendarClock}
+            title={t.scheduledTasks.none}
+            body={t.scheduledTasks.noneHint}
+          />
         )}
         {allFiltered && (
-          <div className="px-3 py-4">
-            <p className="text-sm text-fg">{t.scheduledTasks.allFinished}</p>
-            <p className="mt-1 text-[11px] text-fg-muted">
-              {t.scheduledTasks.allFinishedHint}
-            </p>
-          </div>
+          <PanelEmpty
+            icon={CheckCheck}
+            title={t.scheduledTasks.allFinished}
+            body={t.scheduledTasks.allFinishedHint}
+          />
         )}
 
         {shownTasks?.map((task) => {

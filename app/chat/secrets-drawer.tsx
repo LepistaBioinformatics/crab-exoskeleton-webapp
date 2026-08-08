@@ -19,6 +19,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
@@ -256,7 +257,11 @@ export default function SecretsDrawer({
           )}
 
           {isEmpty && (
-            <p className="py-3 text-sm text-fg-muted">{t.secrets.none}</p>
+            <PanelEmpty
+              icon={KeyRound}
+              title={t.secrets.none}
+              body={t.secrets.noneHint}
+            />
           )}
 
           {groups.map((group) => (

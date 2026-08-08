@@ -266,6 +266,57 @@ the landing dark. Onboarding needed no change — it was already token-based.
   cannot break it again. See `.specs/quick/003-persona-urlencoded-upstream/` and
   `crab-shell-proxy/.specs/features/persona-injection/multipart-parse-fix-report.md`.
 
+## DONE (visually unverified) — consistent sidebar empty states (2026-08-07)
+
+`features/sidebar-empty-states`. The knowledge graph's four sub-tabs each rendered
+a different "nothing here" treatment; counting across both sidebars found **13
+hand-rolled branches in three alignments, three type scales and two structures** —
+plus one that painted a blank pane (Search before a query). All now go through
+`components/ui/panel-empty.tsx`: icon + title + next-step sentence, anchored at the
+top of its container.
+
+**The one design call that did not survive being looked at:** the map pane owns its
+whole height, so it shipped with an `align="fill"` variant that centred its message
+vertically. Against the other three sub-tabs that read as a fourth inconsistency,
+not as fitting a taller pane. User called it; the variant is gone entirely and the
+component has no variants at all now. Worth remembering the shape of the mistake —
+"this container is different, so its content should be too" is what produced the
+divergence this feature existed to undo.
+
+Load-bearing detail: **"empty" and "a filter hid everything" stayed separate states
+everywhere** (map, files, tasks, conversations, workspaces). Collapsing them would
+have been a regression dressed as a cleanup — the scheduled-tasks code already
+carried a comment saying that claiming "no scheduled tasks" while a filter hides
+them "would be a lie about the workspace rather than a statement about the filter".
+
+15 new en/pt copy pairs; `parity.test.ts` is the gate that made each pt string a
+real translation. `app/chat/empty-states.test.tsx` asserts every effect-free branch
+emits `data-empty-state`, and *names in a comment* the branches it cannot reach
+under `environment: "node"` — a test that silently skipped them would read as
+coverage.
+
+**Two bugs the copy change created, both fixed.** Naming a control in an empty
+state makes that control's visibility load-bearing:
+
+- The type-filter hint says "Choose All above". The chip row rendered only when
+  `types.length > 1`, and the filter survives re-fetches — so an agent archiving or
+  merging entities between visits could leave a member filtered, chipless, and
+  instructed to click something not on screen. Guard widened to
+  `types.length > 1 || typeFilter`.
+- The new Search idle prompt co-rendered with a failed search's error Alert (a
+  failure leaves `hits` null), telling the member to type a term as if nothing had
+  been attempted. Now `&& !error`.
+
+**Not verified visually.** No browser tooling was available in the implementing
+session, and "these look inconsistent" is the entire premise. See T09 in
+`features/sidebar-empty-states/tasks.md` for the eight states to walk and the dev
+server command.
+
+**Method note:** `yarn lint` (`next lint`) is deprecated and unconfigured here — it
+opens an interactive setup prompt and gates nothing. `npx tsc --noEmit` has a
+baseline of 4 errors in untouched test files. Any future gate has to be
+"still 4", not "zero".
+
 ## Deferred ideas
 
 _The two original entries here (JWT `exp` validation, clearing the stale cookie)
@@ -276,6 +327,11 @@ were implemented in quick task 002._
   (`jwtExpiresIn = 43200`), after which an active user is bounced to `/signin`.
   Extending it needs a mycelium refresh endpoint plus a re-auth path in the BFF;
   deliberately not built, since the ask was "until the token expires", not longer.
+
+- **Admin screens still hand-roll their empty states.** `sidebar-empty-states`
+  covered both chat sidebars and stopped at `app/admin/**`, which was out of its
+  scope. `components/ui/panel-empty.tsx` is there to be reused when someone works
+  in admin next.
 
 ## Known limitations / latent issues
 

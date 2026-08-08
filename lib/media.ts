@@ -60,11 +60,12 @@ export async function uploadMedia(workspace: Workspace, file: File): Promise<Att
 // Lists the files already stored in the workspace uploads dir (for the uploads
 // sidebar).
 export async function listWorkspaceMedia(workspace: Workspace): Promise<Attachment[]> {
-  const query = new URLSearchParams({
+  const query = withProject(new URLSearchParams({
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
-  });
+    ...(workspace.p ? { project: workspace.p } : {}),
+  }), workspace);
   const res = await fetch(`/api/media?${query.toString()}`);
   if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
@@ -100,12 +101,13 @@ export function parseAnexos(content: string): { text: string; refs: Attachment[]
 // Downloads one file: fetches the bytes and triggers a browser save with the
 // display name (no direct navigation, so it stays out of history).
 export async function downloadMedia(workspace: Workspace, path: string, name: string): Promise<void> {
-  const query = new URLSearchParams({
+  const query = withProject(new URLSearchParams({
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    ...(workspace.p ? { project: workspace.p } : {}),
     path,
-  });
+  }), workspace);
   const res = await fetch(`/api/media/download?${query.toString()}`);
   if (!res.ok) throw new Error(await errorCode(res));
   const blob = await res.blob();
@@ -120,12 +122,13 @@ export async function downloadMedia(workspace: Workspace, path: string, name: st
 }
 
 export async function deleteMedia(workspace: Workspace, path: string): Promise<void> {
-  const query = new URLSearchParams({
+  const query = withProject(new URLSearchParams({
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    ...(workspace.p ? { project: workspace.p } : {}),
     path,
-  });
+  }), workspace);
   const res = await fetch(`/api/media?${query.toString()}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorCode(res));
 }
@@ -155,6 +158,7 @@ export function createFolder(workspace: Workspace, path: string): Promise<unknow
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    ...(workspace.p ? { project: workspace.p } : {}),
     path,
   });
 }
@@ -164,6 +168,7 @@ export function moveMedia(workspace: Workspace, from: string, to: string): Promi
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    ...(workspace.p ? { project: workspace.p } : {}),
     path: from,
     to,
   });
@@ -175,6 +180,7 @@ export async function deleteFolder(workspace: Workspace, path: string): Promise<
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
+    ...(workspace.p ? { project: workspace.p } : {}),
     path,
   })) as { removedFiles?: number };
   return typeof out.removedFiles === "number" ? out.removedFiles : 0;
@@ -231,4 +237,12 @@ export function isReservedFolder(path: string): boolean {
 /** True for anything living inside the system folder. */
 export function isInsideReserved(path: string): boolean {
   return path.startsWith(RESERVED_FOLDER + "/");
+}
+
+// agent-projects: appends the project so the proxy resolves the project's own
+// workspace directory instead of the agent's. Absent for a project-less view,
+// which keeps every existing request byte-identical.
+function withProject(query: URLSearchParams, workspace: Workspace): URLSearchParams {
+  if (workspace.p) query.set("project", workspace.p);
+  return query;
 }
