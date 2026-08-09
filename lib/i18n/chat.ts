@@ -415,6 +415,77 @@ const en = {
     sessionExpired: "Your session expired. Sign in again.",
     unreachable: "Could not reach the agent service.",
   },
+  // user-owned-models: the member's own model, and which one is answering.
+  ownModels: {
+    heading: "Model",
+    // The collapsed header answers the section's own question: which model is
+    // answering. Opening it is then a choice, not a way to find out where you are.
+    summaryOrg: "{name}, from your organisation",
+    summaryOwn: "{name} — yours",
+    summaryBlocked: "Your selection is not being applied",
+    summaryLoading: "Checking…",
+    summaryUnknown: "Could not be read",
+    // The one line the section exists for: what is answering, right now.
+    inEffectOrg: "Answering with your organisation's model",
+    inEffectOwn: "Answering with your own model",
+    // "…, with {name} as an automatic fallback" — the guarantee the test cannot give.
+    fallbackNote: "If it fails mid-answer, {name} takes over automatically.",
+    noOrgModel: "Your organisation has not set a model for this agent.",
+    unnamedOrgModel: "your organisation's model",
+    useOrg: "Use my organisation's model",
+    useThis: "Use this one",
+    inUse: "In use",
+    add: "Register a model",
+    cancel: "Cancel",
+    empty: "You have not registered a model of your own.",
+    emptyHint:
+      "Register one to use your own provider account. It is yours alone — nobody else can select it.",
+    // The switch is inert here, and saying why is the whole point of the state.
+    lockedScope: "Your administrator does not allow personal models on this agent.",
+    lockedSelected:
+      "You selected your own model, but your administrator has blocked personal models — {name} is answering instead.",
+    disabledSelected:
+      "Your administrator disabled this model, so {name} is answering instead.",
+    disabledBadge: "Disabled by an administrator",
+    labelLabel: "Name it",
+    labelPlaceholder: "e.g. My OpenAI key",
+    providerLabel: "Provider",
+    providerPlaceholder: "Choose a provider",
+    modelLabel: "Model",
+    modelPlaceholder: "e.g. gpt-5.4",
+    apiBaseLabel: "Endpoint URL",
+    apiBasePlaceholder: "https://api.openai.com/v1",
+    // The mistake this prevents: a base without its version path reaches a real
+    // host and answers 404, which reads as "wrong provider".
+    apiBaseHint: "Filled in when you pick a provider. Keep the version path (e.g. /v1) if you change it.",
+    apiKeyLabel: "API key",
+    apiKeyPlaceholder: "Write-only — never shown again",
+    apiKeyKept: "Leave blank to keep the stored key",
+    advanced: "Advanced",
+    extraBodyLabel: "extra_body (JSON)",
+    extraBodyHint: "Merged into every request. Leave empty unless your provider requires it.",
+    test: "Test",
+    testing: "Testing…",
+    retest: "Test again",
+    save: "Save",
+    saveAnyway: "Save anyway",
+    saving: "Saving…",
+    edit: "Edit",
+    delete: "Delete",
+    deleteConfirm: 'Delete "{name}"? If it is in use, this agent goes back to your organisation\'s model.',
+    // Why Save is disabled. Not a warning — an instruction.
+    testFirst: "Test the model before saving it.",
+    testOk: "It answered in {ms} ms.",
+    // Deliberately not a promise: the container sends tools, streaming and a much
+    // larger context than this one short message.
+    testOkHint: "That proves the endpoint and the key work — not that every answer will.",
+    testFailed: "It did not answer.",
+    testFailedHint: "You can still save it: your organisation's model keeps answering until it works.",
+    lastTestOk: "Answered in {ms} ms",
+    lastTestFailed: "Last test failed",
+    neverTested: "Never tested",
+    restartNote: "Changes here apply when you restart the agent — the banner at the top of the chat has the button.",
+  },
   secrets: {
     title: "Agent secrets",
     // "Saved for <you> on <agent x> — kept across…"
@@ -429,21 +500,45 @@ const en = {
       "Saved. It takes effect after a restart — use the banner at the top of the chat when you are ready.",
     // "Delete \"X\"? It applies once you restart the agent."
     deleteConfirm: 'Delete "{name}"? It applies once you restart the agent.',
-    setSecrets: "Set secrets",
-    applying: "Saving…",
-    formatLabel: "Format",
     nameLabel: "Name",
     namePlaceholder: "e.g. OPENAI_API_KEY",
+    valueLabel: "Value",
     valuePlaceholder: "Secret value (write-only)",
     saving: "Saving…",
     save: "Save secret",
     deletePrefix: "Delete",
-    none: "No secrets set for this agent yet.",
-    noneHint: "Values saved here are write-only and take effect the next time the agent restarts.",
-    nativeNote:
-      "Picoclaw credentials are now set by your tenant or subscription administrator. You can still remove one you saved earlier; new ones have to come from them.",
     invalidName: "Name may only contain letters, numbers, and . _ -",
     valueRequired: "Enter a value.",
+    // Each group's header states its own contents, so nobody opens four to find
+    // out which one holds anything.
+    groupEmpty: "nothing saved",
+    groupOne: "1 saved",
+    groupMany: "{n} saved",
+    // One group per sink. The hint says what the agent actually receives —
+    // picking a storage format was the one decision a member had least context
+    // for, and naming the file is what makes it a choice rather than a guess.
+    formats: {
+      dotenv: {
+        title: "Environment variables",
+        hint: "Written to .env in the agent's read-only .secrets folder — the usual place a tool looks for a credential.",
+      },
+      json: {
+        title: "JSON values",
+        hint: "Written to secrets.json in the same folder, for tools that read a JSON object rather than environment variables.",
+      },
+      file: {
+        title: "Files",
+        hint: "One file per secret. Kept so you can remove what you saved before.",
+        notice:
+          "This format is not delivered to the agent right now, so new ones are not offered. Anything here is still yours to delete.",
+      },
+      native: {
+        title: "Picoclaw credentials",
+        hint: "Picoclaw's own credential slots, such as the web-search provider.",
+        notice:
+          "These are set by your tenant or subscription administrator. You can still remove one you saved earlier; new ones have to come from them.",
+      },
+    },
   },
   uploads: {
     newFolder: "New folder",
@@ -871,6 +966,66 @@ const pt: ChatDict = {
     sessionExpired: "Sua sessão expirou. Entre novamente.",
     unreachable: "Não foi possível alcançar o serviço do agente.",
   },
+  ownModels: {
+    heading: "Modelo",
+    summaryOrg: "{name}, da sua organização",
+    summaryOwn: "{name} — seu",
+    summaryBlocked: "Sua seleção não está sendo aplicada",
+    summaryLoading: "Verificando…",
+    summaryUnknown: "Não foi possível ler",
+    inEffectOrg: "Respondendo com o modelo da sua organização",
+    inEffectOwn: "Respondendo com o seu próprio modelo",
+    fallbackNote: "Se ele falhar no meio de uma resposta, {name} assume automaticamente.",
+    noOrgModel: "Sua organização não definiu um modelo para este agente.",
+    unnamedOrgModel: "o modelo da sua organização",
+    useOrg: "Usar o modelo da minha organização",
+    useThis: "Usar este",
+    inUse: "Em uso",
+    add: "Registrar um modelo",
+    cancel: "Cancelar",
+    empty: "Você ainda não registrou um modelo próprio.",
+    emptyHint:
+      "Registre um para usar a sua própria conta no provedor. Ele é só seu — ninguém mais pode selecioná-lo.",
+    lockedScope: "Seu administrador não permite modelos próprios neste agente.",
+    lockedSelected:
+      "Você selecionou o seu modelo, mas seu administrador bloqueou modelos próprios — quem está respondendo é {name}.",
+    disabledSelected:
+      "Seu administrador desativou este modelo, então quem está respondendo é {name}.",
+    disabledBadge: "Desativado por um administrador",
+    labelLabel: "Dê um nome",
+    labelPlaceholder: "ex.: Minha chave da OpenAI",
+    providerLabel: "Provedor",
+    providerPlaceholder: "Escolha um provedor",
+    modelLabel: "Modelo",
+    modelPlaceholder: "ex.: gpt-5.4",
+    apiBaseLabel: "URL do endpoint",
+    apiBasePlaceholder: "https://api.openai.com/v1",
+    apiBaseHint: "Preenchida ao escolher o provedor. Se você trocar, mantenha o caminho da versão (ex.: /v1).",
+    apiKeyLabel: "Chave de API",
+    apiKeyPlaceholder: "Somente escrita — nunca mais exibida",
+    apiKeyKept: "Deixe em branco para manter a chave já salva",
+    advanced: "Avançado",
+    extraBodyLabel: "extra_body (JSON)",
+    extraBodyHint: "Mesclado em toda requisição. Deixe vazio, a não ser que seu provedor exija.",
+    test: "Testar",
+    testing: "Testando…",
+    retest: "Testar de novo",
+    save: "Salvar",
+    saveAnyway: "Salvar mesmo assim",
+    saving: "Salvando…",
+    edit: "Editar",
+    delete: "Excluir",
+    deleteConfirm: 'Excluir "{name}"? Se estiver em uso, este agente volta para o modelo da sua organização.',
+    testFirst: "Teste o modelo antes de salvar.",
+    testOk: "Respondeu em {ms} ms.",
+    testOkHint: "Isso prova que o endpoint e a chave funcionam — não que toda resposta vai funcionar.",
+    testFailed: "Não respondeu.",
+    testFailedHint: "Você ainda pode salvar: o modelo da sua organização continua respondendo até funcionar.",
+    lastTestOk: "Respondeu em {ms} ms",
+    lastTestFailed: "Último teste falhou",
+    neverTested: "Nunca testado",
+    restartNote: "As mudanças aqui passam a valer quando você reiniciar o agente — o botão está no aviso do topo do chat.",
+  },
   secrets: {
     title: "Segredos do agente",
     savedForBefore: "Salvo para ",
@@ -883,21 +1038,40 @@ const pt: ChatDict = {
     savedNeedsRestart:
       "Salvo. Passa a valer após um reinício — use o aviso no topo do chat quando quiser.",
     deleteConfirm: 'Excluir "{name}"? Passa a valer quando você reiniciar o agente.',
-    setSecrets: "Segredos definidos",
-    applying: "Salvando…",
-    formatLabel: "Formato",
     nameLabel: "Nome",
     namePlaceholder: "ex.: OPENAI_API_KEY",
+    valueLabel: "Valor",
     valuePlaceholder: "Valor do segredo (somente escrita)",
     saving: "Salvando…",
     save: "Salvar segredo",
     deletePrefix: "Excluir",
-    none: "Nenhum segredo definido para este agente ainda.",
-    noneHint: "Os valores salvos aqui são somente escrita e passam a valer no próximo reinício do agente.",
-    nativeNote:
-      "As credenciais do picoclaw agora são definidas pelo administrador do seu tenant ou da sua assinatura. Você ainda pode remover uma que salvou antes; novas precisam vir deles.",
     invalidName: "O nome só pode conter letras, números e . _ -",
     valueRequired: "Informe um valor.",
+    groupEmpty: "nada salvo",
+    groupOne: "1 salvo",
+    groupMany: "{n} salvos",
+    formats: {
+      dotenv: {
+        title: "Variáveis de ambiente",
+        hint: "Gravado no .env da pasta .secrets do agente (somente leitura) — o lugar onde uma ferramenta costuma procurar uma credencial.",
+      },
+      json: {
+        title: "Valores JSON",
+        hint: "Gravado no secrets.json da mesma pasta, para ferramentas que leem um objeto JSON em vez de variáveis de ambiente.",
+      },
+      file: {
+        title: "Arquivos",
+        hint: "Um arquivo por segredo. Mantido aqui para você remover o que salvou antes.",
+        notice:
+          "Este formato não está sendo entregue ao agente no momento, então não oferecemos novos. O que está aqui continua sendo seu para excluir.",
+      },
+      native: {
+        title: "Credenciais do picoclaw",
+        hint: "Os slots de credencial do próprio picoclaw, como o provedor de busca na web.",
+        notice:
+          "São definidas pelo administrador do seu tenant ou da sua assinatura. Você ainda pode remover uma que salvou antes; novas precisam vir deles.",
+      },
+    },
   },
   uploads: {
     newFolder: "Nova pasta",

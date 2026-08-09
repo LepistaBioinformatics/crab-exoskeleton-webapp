@@ -74,4 +74,27 @@ describe("Accordion", () => {
     expect(html.startsWith("<details")).toBe(true);
     expect(html).toContain("<summary");
   });
+
+  // The drawer wears the chat sidebar's grammar, not the admin panel's card. The
+  // two must stay one component: a second look-alike header written separately
+  // is exactly the drift the sidebar's own comment warns about.
+  it("renders the sidebar's flat section instead of a card when asked", () => {
+    const card = renderToStaticMarkup(
+      <Accordion title="Files" summary="2 saved">
+        <p>rows</p>
+      </Accordion>,
+    );
+    const section = renderToStaticMarkup(
+      <Accordion title="Files" summary="2 saved" variant="section">
+        <p>rows</p>
+      </Accordion>,
+    );
+
+    expect(card).toContain("rounded-xl");
+    expect(section).not.toContain("rounded-xl");
+    // The uppercase eyebrow is what makes it read as the sidebar's section.
+    expect(section).toContain("uppercase");
+    // Both keep the summary — the rule that makes an accordion worth having.
+    expect(section).toContain("2 saved");
+  });
 });

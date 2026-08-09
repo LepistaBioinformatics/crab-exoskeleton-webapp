@@ -48,7 +48,7 @@ import { useT } from "@/lib/i18n/context";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import RestartPolicySelect from "./restart-policy-select";
 import RestartNoticeBlock from "./restart-notice";
-import { Accordion } from "./accordion";
+import { Accordion } from "@/components/ui/accordion";
 import { DEFAULT_POLICY, policyIsValid, type RestartPolicy } from "@/lib/restartPolicy";
 
 

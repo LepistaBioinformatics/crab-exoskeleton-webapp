@@ -103,6 +103,30 @@ const en = {
     tenantPrefix: "Tenant",
     subscriptionPrefix: "Subscription",
   },
+  // user-owned-models, admin half. Read plus two switches — never an edit of
+  // somebody else's model, and never their key.
+  userModels: {
+    title: "Members' own models",
+    hint: "Models members registered with their own provider account. You can see what they point at and switch one off, but not edit it — and never their key.",
+    summaryBlocked: "Blocked at this level",
+    summaryCount: "{n} registered",
+    policyLabel: "Personal models at this level",
+    policyInherit: "Inherit from a wider level",
+    policyAllow: "Allowed",
+    policyBlock: "Blocked",
+    policyHint:
+      "The most specific level that is set decides; unset everywhere means allowed. Blocking does not delete anything — selections stay, and stop applying.",
+    selectSubscription: "Select a subscription to see who registered what.",
+    empty: "Nobody here registered a model of their own.",
+    emptyHint: "Members register one from the secrets panel in their own chat.",
+    owner: "account {id}",
+    disabled: "Disabled",
+    disable: "Disable",
+    enable: "Enable",
+    lastTestOk: "last test answered in {ms} ms",
+    lastTestFailed: "last test failed",
+    neverTested: "never tested",
+  },
   models: {
     // The accordion shell around the inventory. Separate from active/inactive:
     // those label a model's state, these label the sections that hold them.
@@ -713,6 +737,28 @@ const pt: AdminDict = {
     expandTenant: "Expandir tenant",
     tenantPrefix: "Tenant",
     subscriptionPrefix: "Assinatura",
+  },
+  userModels: {
+    title: "Modelos próprios dos membros",
+    hint: "Modelos que os membros registraram com a conta deles no provedor. Você vê para onde apontam e pode desativar um, mas não editá-lo — e nunca a chave.",
+    summaryBlocked: "Bloqueado neste nível",
+    summaryCount: "{n} registrados",
+    policyLabel: "Modelos próprios neste nível",
+    policyInherit: "Herdar de um nível mais amplo",
+    policyAllow: "Permitidos",
+    policyBlock: "Bloqueados",
+    policyHint:
+      "Vale o nível mais específico que estiver definido; se nenhum estiver, são permitidos. Bloquear não exclui nada — as seleções continuam guardadas e deixam de valer.",
+    selectSubscription: "Selecione uma assinatura para ver quem registrou o quê.",
+    empty: "Ninguém aqui registrou um modelo próprio.",
+    emptyHint: "Os membros registram pelo painel de segredos do próprio chat.",
+    owner: "conta {id}",
+    disabled: "Desativado",
+    disable: "Desativar",
+    enable: "Ativar",
+    lastTestOk: "último teste respondeu em {ms} ms",
+    lastTestFailed: "último teste falhou",
+    neverTested: "nunca testado",
   },
   models: {
     readingInventory: "Lendo o inventário…",
