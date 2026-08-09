@@ -13,12 +13,14 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
+import { pickResumeCandidate } from "@/app/chat/conversation-filter";
 import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
 import { Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
 import {
   setFragmentSid,
+  setFragmentProjectSid,
   historyQuery,
   useFragment,
   type Workspace,
@@ -262,29 +264,25 @@ export default function ChatView({
   // freshly-minted empty chats, so an empty conversation can offer to resume a
   // real previous one. Re-runs when the workspace or selected session changes.
   //
-  // NOT inside a project. "Continue where you left off" is an invitation to go back
-  // to whatever you were last doing, which is the right offer on the agent's own
-  // landing but the wrong one the moment you have deliberately stepped into a
-  // project: the point of entering one is to work on THAT subject, and the most
-  // recent chat there is not what you came for — you came to start something.
+  // SCOPED TO THE CURRENT PROJECT, which is the same rule the sidebar's list
+  // follows (history-sidebar.tsx: a project's conversations are a separate list,
+  // and the unscoped list shows only the chats that belong to no project).
+  //
+  // This card used to be suppressed inside a project and unscoped outside it, and
+  // both halves were wrong. Unscoped, the most-recent chat in the whole workspace
+  // is often a project one, so the agent's own landing offered a conversation that
+  // lives in a different workspace directory — and `sid`-only navigation cannot
+  // reach it, because the transcript is read from wherever `p` currently points.
+  // Suppressed inside a project, the offer was missing exactly where the member
+  // has already declared the subject they are working on, which is where "continue
+  // where you left off" is least ambiguous.
   useEffect(() => {
     let alive = true;
-    if (workspace.p) {
-      setResumeCandidate(null);
-      return;
-    }
+    const browsedProject = workspace.p ?? null;
     listConversations(workspace)
       .then((list) => {
         if (!alive) return;
-        const candidate = list
-          .filter((c) => c.id !== sessionId)
-          // "New chat" is the API's default title, matched as data -- never translated.
-          .filter((c) => !(c.title === "New chat" && !c.alias && c.tags.length === 0))
-          .reduce<ConversationSummary | null>(
-            (best, c) => (!best || c.updatedAt > best.updatedAt ? c : best),
-            null,
-          );
-        setResumeCandidate(candidate);
+        setResumeCandidate(pickResumeCandidate(list, sessionId, browsedProject));
       })
       .catch(() => {
         if (alive) setResumeCandidate(null);
@@ -774,7 +772,15 @@ export default function ChatView({
               </div>
               <button
                 type="button"
-                onClick={() => setFragmentSid(resumeCandidate.id)}
+                // Project AND session in one write, even though the filter above
+                // guarantees the candidate is already in the browsed project. The
+                // filter is ~500 lines away; writing both makes this call site
+                // correct on its own terms rather than by a distant invariant, and
+                // a `sid`-only write is precisely how this card used to strand a
+                // member on a conversation whose history lives elsewhere.
+                onClick={() =>
+                  setFragmentProjectSid(resumeCandidate.project, resumeCandidate.id)
+                }
                 className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-accent/40 bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-accent hover:bg-elevated"
               >
                 <span className="w-full truncate text-sm font-medium text-fg">

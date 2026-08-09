@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFilterQuery, isEmptyQuery, applySyncFilters, applyContentFilter, matchesTextMeta } from "./conversation-filter";
+import { parseFilterQuery, isEmptyQuery, applySyncFilters, applyContentFilter, matchesTextMeta, pickResumeCandidate } from "./conversation-filter";
 import type { ConversationSummary } from "@/lib/chatSession";
 import type { HistoryMessage } from "./history-cache";
 
@@ -82,7 +82,7 @@ function makeConv(over: Partial<ConversationSummary>): ConversationSummary {
   return {
     id: "id", role: "picoclaw" as never, tenantId: "t", subsAccId: "s",
     title: "Title", updatedAt: NOW, alias: null, tags: [],
-    sessionKey: null, sessionFile: null, ...over,
+    sessionKey: null, sessionFile: null, project: null, ...over,
   };
 }
 
@@ -161,5 +161,56 @@ describe("matchesTextMeta", () => {
     expect(matchesTextMeta(c, ["deploy"])).toBe(true);
     expect(matchesTextMeta(c, ["CLI"])).toBe(true);
     expect(matchesTextMeta(c, ["missing"])).toBe(false);
+  });
+});
+
+describe("pickResumeCandidate", () => {
+  // The bug this pins: the card offered the most recent conversation in the whole
+  // workspace, so on the agent's own landing it could name a PROJECT conversation.
+  // Opening it changed only `sid`, leaving `p` unset, so the transcript was read
+  // from the main workspace and the member could not reach the chat at all.
+  const globalOld = makeConv({ id: "g-old", title: "Global old", updatedAt: NOW - 3000 });
+  const globalNew = makeConv({ id: "g-new", title: "Global new", updatedAt: NOW - 2000 });
+  const projOld = makeConv({ id: "p-old", title: "Proj old", updatedAt: NOW - 1000, project: "alpha-proj" });
+  const projNew = makeConv({ id: "p-new", title: "Proj new", updatedAt: NOW, project: "alpha-proj" });
+  const otherProj = makeConv({ id: "x", title: "Other", updatedAt: NOW, project: "other-proj" });
+  const all = [globalOld, globalNew, projOld, projNew, otherProj];
+
+  it("on the agent's landing, picks the newest chat that belongs to NO project", () => {
+    // projNew is newer than globalNew, and must still lose: it lives elsewhere.
+    expect(pickResumeCandidate(all, undefined, null)?.id).toBe("g-new");
+  });
+
+  it("inside a project, picks the newest chat of THAT project", () => {
+    expect(pickResumeCandidate(all, undefined, "alpha-proj")?.id).toBe("p-new");
+  });
+
+  it("does not leak one project's chat into another", () => {
+    expect(pickResumeCandidate(all, undefined, "other-proj")?.id).toBe("x");
+  });
+
+  it("returns null when the scope has nothing to resume", () => {
+    expect(pickResumeCandidate(all, undefined, "empty-proj")).toBeNull();
+    expect(pickResumeCandidate([], undefined, null)).toBeNull();
+  });
+
+  it("excludes the conversation already open, and falls back to the next one", () => {
+    expect(pickResumeCandidate(all, "g-new", null)?.id).toBe("g-old");
+    expect(pickResumeCandidate(all, "p-new", "alpha-proj")?.id).toBe("p-old");
+  });
+
+  it("skips a freshly-minted empty chat, but keeps one that was labelled", () => {
+    const fresh = makeConv({ id: "fresh", title: "New chat", updatedAt: NOW + 5000 });
+    const aliased = makeConv({ id: "aliased", title: "New chat", alias: "wip", updatedAt: NOW + 6000 });
+    expect(pickResumeCandidate([...all, fresh], undefined, null)?.id).toBe("g-new");
+    expect(pickResumeCandidate([...all, fresh, aliased], undefined, null)?.id).toBe("aliased");
+  });
+
+  it("treats an absent project the same as an explicit null", () => {
+    // The API omits the field for a main-agent conversation on older rows.
+    const legacy = { ...makeConv({ id: "legacy", updatedAt: NOW + 1000 }) } as ConversationSummary;
+    delete (legacy as { project?: unknown }).project;
+    expect(pickResumeCandidate([legacy], undefined, null)?.id).toBe("legacy");
+    expect(pickResumeCandidate([legacy], undefined, "alpha-proj")).toBeNull();
   });
 });
