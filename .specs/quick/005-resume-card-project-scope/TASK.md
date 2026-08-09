@@ -58,13 +58,23 @@ unscoped list shows only the chats belonging to no project).
 - `makeConv` gained `project: null`, which also **removed one of the 6 pre-existing
   `tsc` errors** (its `Partial` spread left `project` possibly-undefined).
 
-## Deliberately unchanged
+`lib/i18n/chat.ts` (both locales)
 
-- **The card's copy.** `resumeBody` still reads "your most recent conversation with
-  agent {agent}". Inside a project it now offers a project chat while naming the
-  agent — imprecise, but not false: a project belongs to exactly one agent. Making
-  it project-aware means new i18n keys in both locales, which is past the edge of
-  this fix. **Flagged for the user rather than decided here.**
+- `resumeBodyProject` and `startBodyProject`: the empty state's two bodies both
+  named the parent agent (`with agent {agent}` / `Ask agent {agent}`), which
+  describes the wrong scope once the card offers a project conversation. Inside a
+  project the chat is answered by the project's own picoclaw agent, so both bodies
+  now switch on `project`.
+- **The project's name is deliberately NOT interpolated.** It would need the
+  projects list to have loaded, so there would be a frame showing the agent copy —
+  or a third key as a loading fallback — and the name is already the sidebar's
+  project header and the collapsed rail's initials. Two keys, no prop threading, no
+  extra fetch, no flash, and no truncation of a long name in a sentence.
+- `startBodyProject` was included even though only the resume body was reported:
+  the two paragraphs render ~40 lines apart in the same empty state, and fixing the
+  scope wording in one while leaving it wrong in the other reads as an oversight.
+
+## Deliberately unchanged
 - **`chat-view.tsx:347`'s `setFragmentSid`** on auto-created conversations. That one
   is correct: the conversation is minted with the *current* `project`, which came
   from the fragment, so `p` is already right and only `sid` needs writing.
@@ -74,7 +84,9 @@ unscoped list shows only the chats belonging to no project).
 
 ## Verification
 
-- `npx vitest run` — 56 files, **783** tests pass (was 776; +7 new).
+- `npx vitest run` — 56 files, **783** tests pass (was 776; +7 new). This includes
+  `lib/i18n/parity.test.ts`, which is what would catch adding a key to one locale
+  only or leaving an English value in the pt block.
 - `npx tsc --noEmit` — **5** errors, all pre-existing test-file `project`/`sessionKey`
   optionality issues. Was 6 before this change; the fixture fix closed one.
 - `npx next build` passes.
@@ -89,3 +101,6 @@ behaviours a human should confirm:
    a **global** chat.
 2. Inside a project, the card appears and names that **project's** newest chat.
 3. Clicking it in both cases lands on the conversation with its history loaded.
+4. Both empty-state paragraphs say "in this project" inside a project and name the
+   agent outside one — in **en and pt-BR**. The parity test proves the two locales
+   differ; it cannot prove either sentence reads well in place.

@@ -288,8 +288,17 @@ const en = {
     // Was hardcoded English in the JSX, so it stayed English in pt and the parity
     // test could not see it -- that check only compares strings that reach a dict.
     resumeBody: "Jump back into your most recent conversation with agent {agent}.",
+    // Inside a project the card offers a conversation from THAT project, so naming
+    // the parent agent would describe the wrong scope. The project's own name is
+    // deliberately absent: it is already the sidebar's header and the collapsed
+    // rail's initials, and interpolating it here would need the projects list to
+    // have loaded -- which means a frame of the wrong copy while it has not.
+    resumeBodyProject: "Jump back into your most recent conversation in this project.",
     startHeading: "Start a new chat",
     startBody: "Ask agent {agent} anything to get going.",
+    // Same scope correction as resumeBodyProject: a chat started here is answered
+    // by the project, not by the agent's own workspace.
+    startBodyProject: "Ask anything in this project to get going.",
     agentPulse: "Agent pulse",
     // Shown in the assistant band before the first word of the reply arrives.
     // `working` is the honest fallback when the agent has gone quiet: it claims
@@ -865,8 +874,10 @@ const pt: ChatDict = {
     settling: "Estamos guardando o arquivo para você…",
     resumeHeading: "Continue de onde parou",
     resumeBody: "Volte para sua conversa mais recente com o agente {agent}.",
+    resumeBodyProject: "Volte para sua conversa mais recente neste projeto.",
     startHeading: "Comece uma nova conversa",
     startBody: "Pergunte qualquer coisa ao agente {agent} para começar.",
+    startBodyProject: "Pergunte qualquer coisa neste projeto para começar.",
     agentPulse: "Pulso do agente",
     thinking: "Pensando…",
     working: "Ainda trabalhando…",

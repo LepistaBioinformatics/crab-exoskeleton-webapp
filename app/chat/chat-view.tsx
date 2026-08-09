@@ -767,7 +767,9 @@ export default function ChatView({
                   {t.view.resumeHeading}
                 </h2>
                 <p className="mt-2 text-sm text-fg-muted">
-                  {t.view.resumeBody.replace("{agent}", workspace.r)}
+                  {project
+                    ? t.view.resumeBodyProject
+                    : t.view.resumeBody.replace("{agent}", workspace.r)}
                 </p>
               </div>
               <button
@@ -804,7 +806,9 @@ export default function ChatView({
           <div className="text-center">
             <h2 className="font-display text-2xl font-bold text-fg">{t.view.startHeading}</h2>
             <p className="mt-2 text-sm text-fg-muted">
-              {t.view.startBody.replace("{agent}", workspace.r)}
+              {project
+                ? t.view.startBodyProject
+                : t.view.startBody.replace("{agent}", workspace.r)}
             </p>
           </div>
           {composer}
