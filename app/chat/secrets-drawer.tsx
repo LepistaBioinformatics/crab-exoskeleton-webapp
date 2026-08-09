@@ -1,25 +1,22 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
-import { KeyRound, Trash2, X } from "lucide-react";
+import { KeyRound, X } from "lucide-react";
 import {
   listSecrets,
   setSecret,
   deleteSecret,
   SECRET_FORMATS,
   USER_SECRET_FORMATS,
-  SECRET_NAME_RE,
   type SecretNames,
   type SecretFormat,
 } from "@/lib/secrets";
 import type { Workspace } from "./fragment";
-import { Button } from "@/components/ui/button";
+import OwnModelsSection from "./own-models-section";
+import SecretFormatGroup from "./secret-format-group";
 import { IconButton } from "@/components/ui/icon-button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
@@ -35,15 +32,20 @@ const panel = cva(
   { variants: { open: { true: "translate-x-0", false: "translate-x-full" } } },
 );
 
-const selectClass =
-  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
-
-const FORMAT_LABEL: Record<SecretFormat, string> = {
-  dotenv: "dotenv (.env)",
-  json: "json",
-  file: "file",
-  native: "native (picoclaw slot)",
-};
+// The drawer is a stack of collapsible groups: the model first, then one group
+// per secret sink.
+//
+// FILE is deliberately not writable. Its sink stopped reaching the container
+// when the `.secrets` mount moved from the member's own store to the merged
+// effective view (crab-shell-proxy c52e19a): that view is built from the dotenv,
+// json and native sinks only, so a `file` secret is still stored, listed and
+// deletable — and never delivered. Offering a form for it would store something
+// nothing can read. Existing entries stay listed so they can be removed.
+//
+// NATIVE is not writable either, for a different reason: picoclaw's own slots
+// are published by administrators (native-secrets-admin-only). Entries predating
+// that rule stay listed and deletable, because they are the member's own data.
+const WRITABLE: SecretFormat[] = USER_SECRET_FORMATS.filter((f) => f !== "file");
 
 export default function SecretsDrawer({
   workspace,
@@ -65,13 +67,6 @@ export default function SecretsDrawer({
   const errs = useT(errorCopy);
   const [secrets, setSecrets] = useState<SecretNames | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [format, setFormat] = useState<SecretFormat>("dotenv");
-  const [name, setName] = useState("");
-  const [value, setValue] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // Set after a successful write/delete so the drawer says, in place, that the
   // change is stored but not yet live. The restart banner behind the drawer says
@@ -100,39 +95,23 @@ export default function SecretsDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, workspace.t, workspace.s, workspace.r]);
 
-  // The name actually submitted. Native slots are no longer writable here — they
-  // are published by scope administrators — so every writable format is name-based.
-  function targetName(): string {
-    return name.trim();
-  }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitError(null);
-    const finalName = targetName();
-
-    if (!SECRET_NAME_RE.test(finalName)) {
-      setSubmitError(t.secrets.invalidName);
-      return;
-    }
-    if (!value) {
-      setSubmitError(t.secrets.valueRequired);
-      return;
-    }
-
-    setSubmitting(true);
+  // Returns whether the write landed, so the group can decide to clear its form.
+  async function onSave(format: SecretFormat, name: string, value: string): Promise<boolean> {
+    setBusy(name);
+    setLoadError(null);
     try {
-      await setSecret(workspace, { format, name: finalName, value });
-      setValue(""); // never keep the value around after submit
+      await setSecret(workspace, { format, name, value });
       // Publish BEFORE refreshing: the secret is already stored, so a failed
       // list refresh must not swallow the fact that a restart is now needed.
       setSavedNeedsRestart(true);
       onRestartNeeded?.();
       await refresh();
+      return true;
     } catch (err) {
-      setSubmitError(errorText(errs, err instanceof Error ? err.message : null));
+      setLoadError(errorText(errs, err instanceof Error ? err.message : null));
+      return false;
     } finally {
-      setSubmitting(false);
+      setBusy(null);
     }
   }
 
@@ -152,11 +131,12 @@ export default function SecretsDrawer({
     }
   }
 
-  const applying = submitting || busy !== null;
-  const groups = SECRET_FORMATS.map((fmt) => ({ fmt, names: secrets?.[fmt] ?? [] })).filter(
-    (g) => g.names.length > 0,
+  // Every writable sink is always offered — an empty group is where a member
+  // goes to add the first one. A read-only sink appears only when it HOLDS
+  // something: an empty group with no form and nothing in it is pure noise.
+  const groups = SECRET_FORMATS.filter(
+    (f) => WRITABLE.includes(f) || (secrets?.[f]?.length ?? 0) > 0,
   );
-  const isEmpty = secrets !== null && groups.length === 0;
 
   return (
     <>
@@ -184,117 +164,58 @@ export default function SecretsDrawer({
             {t.secrets.restartsAfter}
           </p>
 
-          {applying && (
-            <div className="mb-3">
-              <Alert severity="info">{t.secrets.applying}</Alert>
-            </div>
-          )}
-
-          {savedNeedsRestart && !applying && (
+          {savedNeedsRestart && busy === null && (
             <div className="mb-3">
               <Alert severity="info">{t.secrets.savedNeedsRestart}</Alert>
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="mb-6 flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">{t.secrets.formatLabel}</span>
-              <select
-                className={selectClass}
-                value={format}
-                onChange={(e) => setFormat(e.target.value as SecretFormat)}
-              >
-                {USER_SECRET_FORMATS.map((f) => (
-                  <option key={f} value={f}>
-                    {FORMAT_LABEL[f]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">{t.secrets.nameLabel}</span>
-              <Input
-                inputSize="md"
-                placeholder={t.secrets.namePlaceholder}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">Value</span>
-              <Input
-                inputSize="md"
-                type="password"
-                autoComplete="off"
-                placeholder={t.secrets.valuePlaceholder}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-              />
-            </label>
-
-            {submitError && <Alert severity="error">{submitError}</Alert>}
-
-            <Button type="submit" variant="filled" disabled={submitting}>
-              {submitting ? t.secrets.saving : t.secrets.save}
-            </Button>
-          </form>
-
-          <div className="mb-2 flex items-center gap-2">
-            <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-            <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              {t.secrets.setSecrets}
-            </span>
-          </div>
-
-          {loadError && <Alert severity="error">{loadError}</Alert>}
-
-          {!loadError && secrets === null && (
-            <div className="flex justify-center py-4">
-              <Spinner size={20} />
+          {loadError && (
+            <div className="mb-3">
+              <Alert severity="error">{loadError}</Alert>
             </div>
           )}
 
-          {isEmpty && (
-            <PanelEmpty
-              icon={KeyRound}
-              title={t.secrets.none}
-              body={t.secrets.noneHint}
-            />
-          )}
+          <div className="flex flex-col">
+            {/* Which model is answering comes FIRST: it is the more urgent of the
+                two questions this drawer answers, and a member who came here to
+                fix a broken model should not scroll past four secret sinks.
+                Mounted only while the drawer is open, so closing it does not
+                leave a poll or a half-filled key field alive behind the
+                backdrop. */}
+            {open && (
+              <OwnModelsSection
+                workspace={workspace}
+                onChanged={onRestartNeeded ?? (() => {})}
+              />
+            )}
 
-          {groups.map((group) => (
-            <div key={group.fmt} className="mb-4">
-              <div className="mb-1">
-                <Badge tone="neutral">{group.fmt}</Badge>
+            {secrets === null && !loadError ? (
+              <div className="flex justify-center py-4">
+                <Spinner size={20} />
               </div>
-              {group.fmt === "native" && (
-                <p className="mb-1 text-[11px] leading-relaxed text-fg-muted">{t.secrets.nativeNote}</p>
-              )}
-              <ul className="flex flex-col gap-1">
-                {group.names.map((secretName) => (
-                  <li
-                    key={secretName}
-                    className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
-                      {secretName}
-                    </span>
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`${t.secrets.deletePrefix} ${secretName}`}
-                      disabled={busy === secretName}
-                      onClick={() => onDelete(group.fmt, secretName)}
-                    >
-                      <Trash2 size={15} aria-hidden />
-                    </IconButton>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            ) : (
+              groups.map((fmt) => {
+                const copy = t.secrets.formats[fmt];
+                return (
+                  <SecretFormatGroup
+                    key={fmt}
+                    format={fmt}
+                    title={copy.title}
+                    hint={copy.hint}
+                    // Only the sinks that need a caveat carry one, so the type is
+                    // a union and the check has to be structural.
+                    notice={"notice" in copy ? copy.notice : undefined}
+                    names={secrets?.[fmt] ?? []}
+                    writable={WRITABLE.includes(fmt)}
+                    busy={busy}
+                    onSave={onSave}
+                    onDelete={onDelete}
+                  />
+                );
+              })
+            )}
+          </div>
         </div>
       </aside>
     </>

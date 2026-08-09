@@ -33,6 +33,50 @@ const en = {
   models_incomplete: "Fill model name, provider and model.",
   gateway_retries_exhausted:
     "Still can't reach the gateway after several attempts. Try again shortly.",
+  // user-owned-models. The probe answers with an error CLASS, never the
+  // provider's response body, so each of these has to name the fix rather than
+  // quote an upstream message the member cannot act on.
+  probe_bad_key: "The endpoint refused that API key.",
+  probe_bad_endpoint:
+    "That host answered, but there is no chat endpoint at that path — check the URL still has its version path, e.g. /v1.",
+  probe_rate_limited: "Your provider is rate-limiting this key right now.",
+  probe_provider_error: "The provider answered with an error of its own. Try again later.",
+  probe_timeout: "The endpoint did not answer in time.",
+  probe_dns: "That host name could not be resolved.",
+  probe_tls: "The endpoint's certificate could not be verified.",
+  probe_redirected_elsewhere:
+    "That address redirected to a different host, which has no chat API — it looks like the provider's website rather than its API endpoint.",
+  // The URL was right and the model was not — the endpoint's own model list says
+  // so. Providers answer 404 for both, which is why this needed its own message.
+  probe_bad_model:
+    "The endpoint works, but it does not have that model. Check the exact model id — many providers namespace them, like nvidia/llama-3.3-nemotron-super-49b-v1.",
+  probe_redirect_loop: "That URL redirects in a loop, or through too many hops.",
+  probe_redirect_insecure:
+    "That URL redirects to a plain http:// address, which would put your key on the wire unencrypted.",
+  probe_blocked_target: "That address is inside this deployment, so it cannot be used.",
+  probe_not_a_completion: "Something answered, but not with a completion — check the URL.",
+  probe_unreachable: "The endpoint could not be reached.",
+  extra_body_invalid: "extra_body is not valid JSON.",
+  extra_body_not_object: "extra_body has to be a JSON object.",
+  // The proxy's member-facing rejections. It answers these with codes rather than
+  // prose precisely so they land here: "Something went wrong" for a plain-http
+  // endpoint leaves someone with no idea what to change.
+  provider_not_allowed:
+    "That provider can't be registered here — only providers the connection test can actually verify.",
+  model_required: "Name the model to use.",
+  api_key_required: "An API key is required.",
+  api_key_not_clearable: "Leave the key blank to keep the stored one — it can't be cleared.",
+  api_key_required_new_endpoint: "Enter the API key again when you change the provider or the URL.",
+  api_base_required: "The endpoint URL is required.",
+  api_base_invalid: "That endpoint URL isn't valid.",
+  api_base_not_https: "The endpoint URL has to start with https://.",
+  api_base_has_query: "Use the plain endpoint URL, with no query string or #fragment.",
+  user_models_cap: "You've reached the limit of models you can register. Delete one first.",
+  user_model_duplicate: "You already have a model with that name.",
+  user_model_invalid: "Something in that model definition isn't right.",
+  user_model_disabled: "Your administrator disabled that model.",
+  user_models_blocked: "Your administrator doesn't allow personal models here.",
+  probe_too_soon: "Wait a moment before testing again.",
   unknown: "Something went wrong.",
 };
 
@@ -59,6 +103,42 @@ const pt: ErrorDict = {
   models_incomplete: "Preencha o nome do modelo, o provedor e o modelo.",
   gateway_retries_exhausted:
     "Ainda não foi possível falar com o gateway após várias tentativas. Tente daqui a pouco.",
+  probe_bad_key: "O endpoint recusou essa chave de API.",
+  probe_bad_endpoint:
+    "Esse host respondeu, mas não há endpoint de chat nesse caminho — confira se a URL ainda tem o caminho da versão, ex.: /v1.",
+  probe_rate_limited: "Seu provedor está limitando essa chave neste momento.",
+  probe_provider_error: "O provedor respondeu com um erro dele. Tente mais tarde.",
+  probe_timeout: "O endpoint não respondeu a tempo.",
+  probe_dns: "Não foi possível resolver esse nome de host.",
+  probe_tls: "Não foi possível verificar o certificado do endpoint.",
+  probe_redirected_elsewhere:
+    "Esse endereço redirecionou para outro host, que não tem API de chat — parece ser o site do provedor, não o endpoint da API.",
+  probe_bad_model:
+    "O endpoint funciona, mas não tem esse modelo. Confira o identificador exato — muitos provedores usam prefixo, como nvidia/llama-3.3-nemotron-super-49b-v1.",
+  probe_redirect_loop: "Essa URL redireciona em loop, ou por saltos demais.",
+  probe_redirect_insecure:
+    "Essa URL redireciona para um endereço http:// puro, o que colocaria sua chave na rede sem criptografia.",
+  probe_blocked_target: "Esse endereço está dentro desta instalação, então não pode ser usado.",
+  probe_not_a_completion: "Algo respondeu, mas não foi uma completion — confira a URL.",
+  probe_unreachable: "Não foi possível alcançar o endpoint.",
+  extra_body_invalid: "extra_body não é um JSON válido.",
+  extra_body_not_object: "extra_body precisa ser um objeto JSON.",
+  provider_not_allowed:
+    "Esse provedor não pode ser registrado aqui — só provedores que o teste de conexão consegue verificar de verdade.",
+  model_required: "Informe qual modelo usar.",
+  api_key_required: "É preciso informar uma chave de API.",
+  api_key_not_clearable: "Deixe a chave em branco para manter a que já está salva — ela não pode ser apagada.",
+  api_key_required_new_endpoint: "Informe a chave de API de novo ao trocar o provedor ou a URL.",
+  api_base_required: "A URL do endpoint é obrigatória.",
+  api_base_invalid: "Essa URL de endpoint não é válida.",
+  api_base_not_https: "A URL do endpoint precisa começar com https://.",
+  api_base_has_query: "Use a URL do endpoint sem query string nem #fragmento.",
+  user_models_cap: "Você chegou ao limite de modelos que pode registrar. Exclua um antes.",
+  user_model_duplicate: "Você já tem um modelo com esse nome.",
+  user_model_invalid: "Algo na definição desse modelo não está certo.",
+  user_model_disabled: "Seu administrador desativou esse modelo.",
+  user_models_blocked: "Seu administrador não permite modelos próprios aqui.",
+  probe_too_soon: "Espere um instante antes de testar de novo.",
   unknown: "Algo deu errado.",
 };
 

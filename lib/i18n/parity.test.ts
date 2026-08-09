@@ -29,6 +29,10 @@ const NAMESPACES: Record<string, Record<Locale, unknown>> = {
 // Identical on purpose: loanwords Portuguese uses as-is, product names,
 // identifiers, query syntax, numerals and punctuation.
 const SHARED = new Set([
+  // A sample endpoint and a field name from the provider's own API. Translating
+  // either would make it stop matching what the member has to type.
+  "chat.ownModels.apiBasePlaceholder",
+  "chat.ownModels.extraBodyLabel",
   "common.metadata.titleSuffix",
   "signin.titleSuffix",
   "offline.metaTitle",

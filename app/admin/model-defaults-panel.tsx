@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Ident } from "./field";
-import { Accordion } from "./accordion";
+import { Accordion } from "@/components/ui/accordion";
 import { ResolutionLadder } from "./resolution-ladder";
 
 const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";

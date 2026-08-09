@@ -30,7 +30,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Field, fieldControlClass, Ident } from "./field";
 import { ModelRow } from "./model-row";
 import ModelDefaultsPanel from "./model-defaults-panel";
-import { Accordion } from "./accordion";
+import UserModelsPanel from "./user-models-panel";
+import { Accordion } from "@/components/ui/accordion";
 import { FallbackEditor } from "./fallback-editor";
 import { adminCopy } from "@/lib/i18n/admin";
 import { commonCopy } from "@/lib/i18n/common";
@@ -562,6 +563,11 @@ export default function ModelRegistryPanel({
           restartPolicy={restartPolicy}
         />
       )}
+
+      {/* Below the cascade, because it is a rung ABOVE it: a member's own model
+          outranks every default the ladder shows, and an administrator looking at
+          "why isn't my default reaching this person" needs both on one screen. */}
+      <UserModelsPanel scope={scope} target={target} />
     </div>
   );
 }
