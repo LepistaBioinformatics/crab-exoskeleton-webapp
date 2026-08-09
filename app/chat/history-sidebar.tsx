@@ -42,6 +42,7 @@ import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
 import SidebarPanel from "./sidebar-panel";
 import { SectionHeader, SectionLabel, SectionSplitter } from "./sidebar-section";
+import { splitBoxStyles } from "./split-boxes";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -318,15 +319,17 @@ export default function HistorySidebar({
     document.body.style.userSelect = "none";
   }
 
-  // `flexGrow` rather than a height: the panel is itself resizable and the shares stay
-  // proportional as it changes, with no resize listener. A collapsed or non-splittable
-  // box takes only its content (`flex-none`) and the other takes the rest.
-  const projectsStyle = splittable
-    ? { flexGrow: projectsShare, flexShrink: 1, flexBasis: 0 }
-    : undefined;
-  const chatsStyle = splittable
-    ? { flexGrow: 1 - projectsShare, flexShrink: 1, flexBasis: 0 }
-    : undefined;
+  // See split-boxes.ts for the rule. It is a module rather than two ternaries here
+  // because the version that WAS two ternaries left the non-splittable case
+  // undefined — which reads as "no style needed" and is actually `flex: 0 1 auto`,
+  // so a collapsed box still shrank and its header ended up underneath the box
+  // below it.
+  const { projects: projectsStyle, chats: chatsStyle } = splitBoxStyles({
+    splittable,
+    projectsShare,
+    projectsOpen,
+    chatsOpen,
+  });
 
   return (
     <SidebarPanel
