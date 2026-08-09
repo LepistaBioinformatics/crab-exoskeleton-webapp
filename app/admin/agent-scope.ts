@@ -19,20 +19,19 @@ import { SECTION_TABS, type Tab } from "./tabs";
 // wire format are untouched.
 export const LEGACY_AGENT = ALL_AGENTS;
 
-// Sections only a PICOCLAW agent offers.
+// Sections only a PICOCLAW agent offers. Picoclaw is currently the only harness, so
+// every agent gets all of them today; the split is kept because each of these three
+// is defined by picoclaw's own file layout, not by the admin UI.
 //
-// `model`: the registry governs picoclaw agents; hermes reads its model from the
-// proxy's own config.yaml.
+// `model`: the registry governs picoclaw agents — the proxy rejects an assignment
+// for an agent it does not govern.
 //
 // `persona`: the read-only identity files (AGENT.md, SOUL.md, HEARTBEAT.md and the
-// USER.md seed) are picoclaw's workspace layout. Hermes provisions from a different
-// template — config.yaml plus a SOUL.md — and the proxy delivers persona only on
-// the picoclaw create path, so offering the section for one would be a form whose
-// writes reach nothing.
+// USER.md seed) are picoclaw's workspace layout, delivered on the picoclaw create
+// path.
 //
-// `config`: `config.json` is picoclaw's file. Hermes agents provision from a
-// `config.yaml` instead, so a key edited in bulk here would land in a document those
-// agents never read.
+// `config`: `config.json` is picoclaw's file, so a key edited in bulk here only
+// means anything to an agent that reads it.
 const PICOCLAW_ONLY: Tab[] = ["persona", "model", "config"];
 
 // The sections every agent has: the shared content stores. Derived from the full
@@ -63,8 +62,8 @@ export function agentTabs(agent: string, agents: AgentRef[]): Tab[] {
 }
 
 // The tab to render for an agent, given what the URL asked for. A URL can name a
-// section the selected agent does not offer (`?tab=model` with a hermes agent), which
-// resolves the way parseTab resolves garbage: the first section the agent does offer.
+// section the selected agent does not offer, which resolves the way parseTab resolves
+// garbage: the first section the agent does offer.
 export function resolveAgentTab(tab: Tab, agent: string, agents: AgentRef[]): Tab {
   const offered = agentTabs(agent, agents);
   return offered.includes(tab) ? tab : offered[0];

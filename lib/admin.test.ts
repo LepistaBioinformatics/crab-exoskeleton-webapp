@@ -65,17 +65,19 @@ describe("USER_SECRET_FORMATS", () => {
 });
 
 describe("picoclawAgentKeys", () => {
+  // Picoclaw is the only harness the proxy accepts, so the synthetic value stands in
+  // for one it does not govern. This is the only test of the filter's false branch.
   it("drops agents running another harness", () => {
     expect(
       picoclawAgentKeys([
         { key: "alpha", harness: "picoclaw" },
-        { key: "nous", harness: "hermes" },
+        { key: "nous", harness: "some-other-harness" },
       ]),
     ).toEqual(["alpha"]);
   });
 
-  // An older proxy reports no harness at all, and picoclaw was the only harness
-  // then — treating that as "not picoclaw" would empty the model picker entirely.
+  // An older proxy reports no harness at all — version back-compat, not a second
+  // runtime. Treating it as "not picoclaw" would empty the model picker entirely.
   it("treats an absent harness as picoclaw", () => {
     expect(picoclawAgentKeys([{ key: "alpha" }])).toEqual(["alpha"]);
   });

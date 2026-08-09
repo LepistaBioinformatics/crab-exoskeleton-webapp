@@ -35,16 +35,17 @@ export const ALL_AGENTS = "all";
 
 // One agent key this deployment runs (GET /api/admin/agents). Sourced from the
 // proxy config, so a new agent in config.yaml shows up without a webapp change.
-// harness says which runtime it orchestrates; the model inventory governs
-// picoclaw agents only (hermes reads its model from the proxy's config.yaml).
+// harness says which runtime it orchestrates. Picoclaw is currently the only one,
+// so every agent reports it; the field is read rather than assumed so a proxy that
+// grew a second runtime would narrow the picoclaw-only surfaces on its own.
 export interface AgentRef {
   key: string;
   harness?: string;
 }
 
-// Agents the model inventory actually governs. An older proxy reports no harness
-// at all, and picoclaw was the only harness then, so an absent value counts as
-// picoclaw rather than hiding every agent from the picker.
+// Agents the model inventory actually governs. An older proxy reports no harness at
+// all, so an absent value counts as picoclaw rather than hiding every agent from the
+// picker — version back-compat, not harness variety.
 export function picoclawAgentKeys(agents: AgentRef[]): string[] {
   return agents.filter((a) => !a.harness || a.harness === "picoclaw").map((a) => a.key);
 }

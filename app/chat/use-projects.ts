@@ -55,10 +55,10 @@ export function useProjects(workspace: Workspace | null): {
           setError(null);
         }
       } catch (e) {
-        // An agent whose harness has no projects answers `projects_unsupported`. That
-        // is not a failure to report — the feature simply does not exist there — but
-        // the code is still surfaced so callers can render nothing at all rather than
-        // an empty section with a create button that cannot work.
+        // An agent that has no projects at all answers `projects_unsupported` — only
+        // an older proxy does, but the case is kept because it costs one branch. It is
+        // not a failure to report, yet the code is still surfaced so callers can render
+        // nothing rather than an empty section with a create button that cannot work.
         if (!cancelled) {
           setProjects([]);
           setError(e instanceof Error ? e.message : "unknown");

@@ -4,7 +4,6 @@ import { Bot, Archive, ChevronRight } from "lucide-react";
 import { cva } from "class-variance-authority";
 import type { AgentRef } from "@/lib/admin";
 import { LEGACY_AGENT } from "./agent-scope";
-import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
@@ -66,7 +65,6 @@ export function AgentGate({
             >
               <Bot size={18} className="shrink-0 text-fg-muted" aria-hidden />
               <span className="min-w-0 flex-1 truncate font-medium text-fg">{agent.key}</span>
-              {agent.harness && <Badge tone="accent">{agent.harness}</Badge>}
               <ChevronRight size={16} className="shrink-0 text-fg-muted" aria-hidden />
             </button>
           ))}

@@ -7,9 +7,10 @@ import { clearSession, getSession } from "@/lib/session";
 // NOT forwarded) plus tenant_id/subs_acc_id from the fragment; the session JWT
 // is attached here.
 //
-// The proxy answers 501 for a non-picoclaw harness, 409 on a duplicate name and
-// 404 on an unknown id — all real 4xx that upstreamError passes through, so the
-// UI can tell "that name is taken" from "that agent cannot have projects".
+// The proxy answers 409 on a duplicate name and 404 on an unknown id — real 4xx that
+// upstreamError passes through, so the UI can tell "that name is taken" from "no such
+// project". An older proxy could also answer 501 for an agent that has no projects at
+// all; that is passed through the same way.
 
 // Shared preamble: session + the three parameters every call needs.
 async function resolve(req: NextRequest) {

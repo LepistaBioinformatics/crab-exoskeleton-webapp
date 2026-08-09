@@ -1,5 +1,5 @@
 // The gateway `/tools` entry (surfaced via the BFF at /api/tools). `name`
-// equals the guest-role (e.g. "alpha", "hermes-glm"), so it joins to an agent
+// equals the guest-role (e.g. "alpha", "beta"), so it joins to an agent
 // leaf's `role`. Used only to enrich the sidebar (tooltip + health), never to
 // gate it. `healthStatus` shape isn't fixed, so it's typed `unknown` and probed
 // defensively.
