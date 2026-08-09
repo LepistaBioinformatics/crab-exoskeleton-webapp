@@ -46,5 +46,5 @@
     "postcss": "^8.5.19",
     "sharp": "^0.35.3"
   },
-  "license": "MIT"
+  "license": "MIT OR Apache-2.0"
 }
