@@ -340,54 +340,57 @@ export default function HistorySidebar({
       //
       // It does not fold. It is the panel's own header row, and folding away the only
       // exit from the panel would be a trap.
+      //
+      // OMITTED ENTIRELY INSIDE A PROJECT (user-directed). It used to stay as static
+      // text, on the reasoning that without it you could not tell whose project you
+      // were in. Two things undercut that: inside a project the row was already
+      // DISABLED, so it was pure identity taking the panel's top row and looking like
+      // a control that had stopped working; and the level above is one click away
+      // through the project's own back arrow, which then brings this row back. What
+      // is left is a project header at the top of the panel, which is what the panel
+      // is showing.
       scrollBody={false}
       header={
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-2">
-          <SectionLabel>{t.sections.workspace}</SectionLabel>
-          {/* Inside a project this is STATIC TEXT, not a control: leaving happens one
-              level at a time, and the way out is the project's own back arrow. Jumping
-              straight to the workspace list from inside a project skipped a level and
-              put two "back"s on screen competing. The identity stays visible either
-              way — without it you cannot tell whose project you are in. */}
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={insideProject}
-            aria-label={insideProject ? undefined : t.nav.backToWorkspaces}
-            title={insideProject ? undefined : t.nav.backToWorkspaces}
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1 text-left transition-colors enabled:hover:bg-elevated/60 disabled:cursor-default"
-          >
-          {!insideProject && (
-            <ChevronLeft size={16} className="shrink-0 text-fg-muted" aria-hidden />
-          )}
-          {/* The SUBSCRIPTION leads and the agent sits under it in lighter type. Which
-              subscription a workspace belongs to is what a member navigates by — it is
-              the billing and membership boundary, and it is what distinguishes two
-              otherwise identical agents. The agent name is the qualifier within it, not
-              the heading.
+        insideProject ? null : (
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-2">
+            <SectionLabel>{t.sections.workspace}</SectionLabel>
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={t.nav.backToWorkspaces}
+              title={t.nav.backToWorkspaces}
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1 text-left transition-colors hover:bg-elevated/60"
+            >
+              <ChevronLeft size={16} className="shrink-0 text-fg-muted" aria-hidden />
+              {/* The SUBSCRIPTION leads and the agent sits under it in lighter type.
+                  Which subscription a workspace belongs to is what a member navigates
+                  by — it is the billing and membership boundary, and it is what
+                  distinguishes two otherwise identical agents. The agent name is the
+                  qualifier within it, not the heading.
 
-              With no subscription name to show, the agent takes the line alone rather
-              than being demoted under a uuid. */}
-          {subscription ? (
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-fg" title={subscription}>
-                {subscription}
-              </span>
-              <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
-                <Bot size={11} className="shrink-0" aria-hidden />
-                <span className="truncate">{workspace.r}</span>
-              </span>
-            </span>
-          ) : (
-            <span className="flex min-w-0 flex-1 items-center gap-1.5">
-              <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
-                {workspace.r}
-              </span>
-            </span>
-          )}
-          </button>
-        </span>
+                  With no subscription name to show, the agent takes the line alone
+                  rather than being demoted under a uuid. */}
+              {subscription ? (
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium text-fg" title={subscription}>
+                    {subscription}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
+                    <Bot size={11} className="shrink-0" aria-hidden />
+                    <span className="truncate">{workspace.r}</span>
+                  </span>
+                </span>
+              ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
+                    {workspace.r}
+                  </span>
+                </span>
+              )}
+            </button>
+          </span>
+        )
       }
     >
       {/* SECTION 2: projects. Everything about PROJECTS first, then the conversations.
