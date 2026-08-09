@@ -73,9 +73,9 @@ export default function ProjectsBar({
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
   const [restartPending, setRestartPending] = useState(false);
 
-  // An agent whose harness has no projects renders NOTHING — not an error and
-  // not an empty section. The feature simply does not exist there, and a
-  // permanent explanatory box above every chat list would be noise.
+  // An agent that has no projects at all renders NOTHING — not an error and not an
+  // empty section. Only an older proxy reports this, and a permanent explanatory box
+  // above every chat list would be noise.
   if (loadError === "projects_unsupported") return null;
 
   const current = projects.find((p) => p.id === browsedProject) ?? null;

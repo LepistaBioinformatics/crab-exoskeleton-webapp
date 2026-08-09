@@ -57,10 +57,11 @@ function workspaceQuery(workspace: Workspace): string {
   }).toString();
 }
 
-// 409 is a name already in use and 501 is an agent whose harness has no
-// projects. Both are ordinary outcomes the UI phrases for the user, not
-// failures — mapping them to a generic error would leave someone retyping a
-// name that can never be accepted.
+// 409 is a name already in use. 501 is an agent that cannot have projects at all —
+// no current proxy answers it, since picoclaw is the only harness and it supports
+// them, but an older one still can, so the mapping stays. Both are ordinary outcomes
+// the UI phrases for the user, not failures — mapping them to a generic error would
+// leave someone retyping a name that can never be accepted.
 async function projectErrorCode(res: Response): Promise<string> {
   if (res.status === 409) return "project_name_taken";
   if (res.status === 501) return "projects_unsupported";

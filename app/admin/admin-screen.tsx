@@ -267,9 +267,9 @@ export default function AdminScreen() {
   const [restartPolicy, setRestartPolicy] = useState<RestartPolicy>(DEFAULT_POLICY);
   const [restartOpen, setRestartOpen] = useState(false);
 
-  // The sections THIS agent offers, and which of them is showing. `?tab=model` with a
-  // hermes agent selected names a section that agent has not got; it resolves to the
-  // agent's first section, the way parseTab resolves garbage.
+  // The sections THIS agent offers, and which of them is showing. A URL can name a
+  // section the selected agent has not got; it resolves to the agent's first section,
+  // the way parseTab resolves garbage.
   const sections = agent ? agentTabs(agent, agents ?? []) : [];
   const sectionTab = agent ? resolveAgentTab(tab, agent, agents ?? []) : DEFAULT_TAB;
   const modelTab = sectionTab === "model";
