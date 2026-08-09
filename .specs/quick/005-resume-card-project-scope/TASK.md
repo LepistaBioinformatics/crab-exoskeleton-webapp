@@ -75,6 +75,7 @@ unscoped list shows only the chats belonging to no project).
   scope wording in one while leaving it wrong in the other reads as an oversight.
 
 ## Deliberately unchanged
+
 - **`chat-view.tsx:347`'s `setFragmentSid`** on auto-created conversations. That one
   is correct: the conversation is minted with the *current* `project`, which came
   from the fragment, so `p` is already right and only `sid` needs writing.
@@ -94,8 +95,8 @@ unscoped list shows only the chats belonging to no project).
 ## Still not verified
 
 **Not exercised in a browser.** The card renders inside `ChatView`, which has no
-component test — the new coverage is on the pure selection function only. The three
-behaviours a human should confirm:
+component test — the new coverage is on the pure selection function only. What a
+human should confirm:
 
 1. On the agent's landing with a project chat as the newest overall, the card names
    a **global** chat.
