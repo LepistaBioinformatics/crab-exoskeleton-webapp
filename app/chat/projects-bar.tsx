@@ -200,9 +200,10 @@ export default function ProjectsBar({
                   the workspace row's, the graph detail's. A "back" on the right reads
                   as an action performed ON the thing named, not as leaving it.
 
-                  It is also the only way out while you are inside a project: the
-                  workspace control up in section 1 is hidden here, so leaving happens
-                  one level at a time. */}
+                  It is also the only way out while you are inside a project: section 1
+                  is not rendered at all here, so leaving happens one level at a time.
+                  This used to say "hidden" while that row was in fact only DISABLED —
+                  now it is literally true, and this control carries the whole exit. */}
               <IconButton
                 variant="ghost"
                 size="sm"

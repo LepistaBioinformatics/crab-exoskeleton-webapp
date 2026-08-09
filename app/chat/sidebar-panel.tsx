@@ -22,8 +22,15 @@ export default function SidebarPanel({
   scrollBody = true,
   children,
 }: {
-  /** The panel's title row content — a label, or the chats panel's back control. */
-  header: ReactNode;
+  /**
+   * The panel's title row content — a label, or the chats panel's back control.
+   *
+   * Omit it for a panel whose first section IS its identity: inside a project the
+   * chats panel drops the workspace row, and the project's own header becomes the
+   * top of the panel. The row is then not rendered at all rather than rendered
+   * empty, which would leave its `pt-2` as a dead strip above the first section.
+   */
+  header?: ReactNode;
   /** Panel-scoped controls (the filter magnifier, the list/tree switch). */
   actions?: ReactNode;
   /**
@@ -37,11 +44,16 @@ export default function SidebarPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* pt-2 on the ROW, not on the header element: the actions sit here too, and
-          they were flush against the brand header above. */}
-      <div className="flex shrink-0 items-center gap-1 pr-1 pt-2">
-        <div className={headerSlot()}>{header}</div>
-        {actions}
-      </div>
+          they were flush against the brand header above.
+
+          Skipped entirely when there is neither a header nor actions — an empty row
+          still occupies its own padding, which reads as a gap nobody put there. */}
+      {(header || actions) && (
+        <div className="flex shrink-0 items-center gap-1 pr-1 pt-2">
+          <div className={headerSlot()}>{header}</div>
+          {actions}
+        </div>
+      )}
       <div
         className={
           scrollBody

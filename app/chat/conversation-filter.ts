@@ -143,6 +143,32 @@ function matchesTextContent(messages: HistoryMessage[], texts: string[]): boolea
   );
 }
 
+// The conversation the "continue where you left off" card offers: the most
+// recently updated one in the CURRENT scope, excluding the open session and any
+// freshly-minted empty chat.
+//
+// `project` is the scope — the fragment's `p`, null on the agent's own landing.
+// It is the same rule the sidebar's list follows: a project's conversations are a
+// separate list, and the unscoped list shows only chats that belong to no project.
+// Getting this wrong is not a cosmetic bug: offering a project conversation from
+// the agent's own landing produces a card that cannot be opened, because the
+// transcript is read from whichever workspace directory `p` points at.
+export function pickResumeCandidate(
+  conversations: ConversationSummary[],
+  openSessionId: string | undefined,
+  project: string | null,
+): ConversationSummary | null {
+  return conversations
+    .filter((c) => c.id !== openSessionId)
+    .filter((c) => (c.project ?? null) === project)
+    // "New chat" is the API's default title, matched as data -- never translated.
+    .filter((c) => !(c.title === "New chat" && !c.alias && c.tags.length === 0))
+    .reduce<ConversationSummary | null>(
+      (best, c) => (!best || c.updatedAt > best.updatedAt ? c : best),
+      null,
+    );
+}
+
 export async function applyContentFilter(
   candidates: ConversationSummary[],
   texts: string[],
