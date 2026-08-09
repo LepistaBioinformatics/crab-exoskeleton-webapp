@@ -116,6 +116,14 @@ const en = {
     policyBlock: "Blocked",
     policyHint:
       "The most specific level that is set decides; unset everywhere means allowed. Blocking does not delete anything — selections stay, and stop applying.",
+    endpointLabel: "Endpoints of their own",
+    // This switch inherits to BLOCKED, unlike the one above, so the option says
+    // where inheriting lands rather than leaving it to be discovered.
+    endpointInherit: "Inherit (blocked unless a wider level allows it)",
+    endpointAllow: "Allowed — members may type any endpoint",
+    endpointBlock: "Blocked — only the providers listed in the app",
+    endpointHint:
+      "With this off, a member picks a provider and the endpoint comes with it. Turn it on for a self-hosted gateway or a provider the app does not list — it lets members point the instance's outbound request at an address of their choosing.",
     selectSubscription: "Select a subscription to see who registered what.",
     empty: "Nobody here registered a model of their own.",
     emptyHint: "Members register one from the secrets panel in their own chat.",
@@ -749,6 +757,12 @@ const pt: AdminDict = {
     policyBlock: "Bloqueados",
     policyHint:
       "Vale o nível mais específico que estiver definido; se nenhum estiver, são permitidos. Bloquear não exclui nada — as seleções continuam guardadas e deixam de valer.",
+    endpointLabel: "Endpoints próprios",
+    endpointInherit: "Herdar (bloqueado, a menos que um nível mais amplo libere)",
+    endpointAllow: "Liberado — o membro pode digitar qualquer endpoint",
+    endpointBlock: "Bloqueado — só os provedores listados no app",
+    endpointHint:
+      "Com isso desligado, o membro escolhe um provedor e o endpoint vem junto. Ligue para um gateway self-hosted ou um provedor que o app não lista — isso deixa o membro apontar a requisição de saída da instância para um endereço à escolha dele.",
     selectSubscription: "Selecione uma assinatura para ver quem registrou o quê.",
     empty: "Ninguém aqui registrou um modelo próprio.",
     emptyHint: "Os membros registram pelo painel de segredos do próprio chat.",

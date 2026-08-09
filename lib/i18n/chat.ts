@@ -458,6 +458,8 @@ const en = {
     // The mistake this prevents: a base without its version path reaches a real
     // host and answers 404, which reads as "wrong provider".
     apiBaseHint: "Filled in when you pick a provider. Keep the version path (e.g. /v1) if you change it.",
+    apiBaseFixed:
+      "Set by the provider you picked. Your administrator decides whether members may point at an endpoint of their own.",
     apiKeyLabel: "API key",
     apiKeyPlaceholder: "Write-only — never shown again",
     apiKeyKept: "Leave blank to keep the stored key",
@@ -1001,6 +1003,8 @@ const pt: ChatDict = {
     apiBaseLabel: "URL do endpoint",
     apiBasePlaceholder: "https://api.openai.com/v1",
     apiBaseHint: "Preenchida ao escolher o provedor. Se você trocar, mantenha o caminho da versão (ex.: /v1).",
+    apiBaseFixed:
+      "Definida pelo provedor escolhido. Seu administrador decide se membros podem apontar para um endpoint próprio.",
     apiKeyLabel: "Chave de API",
     apiKeyPlaceholder: "Somente escrita — nunca mais exibida",
     apiKeyKept: "Deixe em branco para manter a chave já salva",

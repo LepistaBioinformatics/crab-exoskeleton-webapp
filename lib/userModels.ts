@@ -48,6 +48,13 @@ export interface UserModelsState {
   blockedBy: string;
   /** The model the administrator's cascade resolves — the fallback, named. */
   organisationModel: string;
+  /**
+   * Whether this member may name an endpoint the catalog does not carry. Unset
+   * everywhere means NO — picking a provider chooses among endpoints the
+   * instance ships; typing one aims the proxy wherever the member likes, and an
+   * administrator opens that per scope.
+   */
+  customEndpointAllowed: boolean;
   /** The providers a member may register, with the endpoint each answers on. */
   providers: ProviderOption[];
 }
@@ -131,9 +138,6 @@ export function saveGate(
   return tested.ok ? "tested-ok" : "tested-failed";
 }
 
-// Whether a draft is complete enough to be worth probing. Deliberately NOT the
-// full validation — the proxy owns that — just enough to keep the button from
-// firing a request that cannot succeed.
 // applyProvider switches the draft's provider and carries the endpoint with it.
 //
 // It overwrites api_base only when the field is empty or still holds the PREVIOUS
@@ -152,12 +156,29 @@ export function applyProvider(
   return { ...draft, provider: next, api_base: keep ? draft.api_base : suggestion };
 }
 
+// registerableProviders is what the picker offers.
+//
+// With custom endpoints refused, a provider the catalog carries no endpoint for
+// is unusable: there is nothing to fill the field with and the member may not
+// type one. Offering it anyway would be a choice that can only end in a refusal
+// on submit.
+export function registerableProviders(
+  providers: ProviderOption[],
+  customEndpointAllowed: boolean,
+): ProviderOption[] {
+  if (customEndpointAllowed) return providers;
+  return providers.filter((p) => !!p.api_base);
+}
+
 // The models the catalog knows for a provider, offered as suggestions rather than
 // a closed list: a provider's real model set changes faster than this catalog.
 export function providerModels(providers: ProviderOption[], provider: string): string[] {
   return providers.find((p) => p.provider === provider)?.models ?? [];
 }
 
+// Whether a draft is complete enough to be worth probing. Deliberately NOT the
+// full validation — the proxy owns that — just enough to keep the button from
+// firing a request that cannot succeed.
 export function canTest(draft: UserModelDraft, editingExisting: boolean): boolean {
   const filled = draft.provider.trim() && draft.model.trim() && draft.api_base.trim();
   if (!filled) return false;
@@ -240,6 +261,7 @@ export async function listUserModels(workspace: Workspace): Promise<UserModelsSt
     selected?: string;
     allowed?: boolean;
     blocked_by?: string;
+    custom_endpoint_allowed?: boolean;
     organisation_model?: string;
     providers?: ProviderOption[];
   }>(res);
@@ -250,6 +272,9 @@ export async function listUserModels(workspace: Workspace): Promise<UserModelsSt
     // the safe reading of an answer we could not understand.
     allowed: data.allowed === true,
     blockedBy: typeof data.blocked_by === "string" ? data.blocked_by : "",
+    // Defaulting to false: an answer we could not read must not put a free-text
+    // endpoint field on screen that the proxy will refuse on submit.
+    customEndpointAllowed: data.custom_endpoint_allowed === true,
     organisationModel: typeof data.organisation_model === "string" ? data.organisation_model : "",
     providers: Array.isArray(data.providers) ? data.providers : [],
   };
