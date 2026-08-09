@@ -76,6 +76,8 @@ const en = {
   user_model_invalid: "Something in that model definition isn't right.",
   user_model_disabled: "Your administrator disabled that model.",
   user_models_blocked: "Your administrator doesn't allow personal models here.",
+  custom_endpoint_not_allowed:
+    "Your administrator only allows the endpoints that come with the providers listed here. Ask them to enable custom endpoints if you need your own.",
   probe_too_soon: "Wait a moment before testing again.",
   unknown: "Something went wrong.",
 };
@@ -138,6 +140,8 @@ const pt: ErrorDict = {
   user_model_invalid: "Algo na definição desse modelo não está certo.",
   user_model_disabled: "Seu administrador desativou esse modelo.",
   user_models_blocked: "Seu administrador não permite modelos próprios aqui.",
+  custom_endpoint_not_allowed:
+    "Seu administrador só permite os endpoints que vêm com os provedores listados aqui. Peça a ele para liberar endpoints próprios se precisar do seu.",
   probe_too_soon: "Espere um instante antes de testar de novo.",
   unknown: "Algo deu errado.",
 };

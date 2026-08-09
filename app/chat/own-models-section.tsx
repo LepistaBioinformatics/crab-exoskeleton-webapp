@@ -15,6 +15,7 @@ import {
   listUserModels,
   parseExtraBody,
   providerModels,
+  registerableProviders,
   saveGate,
   selectUserModel,
   slugFromLabel,
@@ -374,7 +375,7 @@ export default function OwnModelsSection({
               onChange={(e) => setDraft(applyProvider(draft, state.providers, e.target.value))}
             >
               <option value="">{t.providerPlaceholder}</option>
-              {state.providers.map((p) => (
+              {registerableProviders(state.providers, state.customEndpointAllowed).map((p) => (
                 <option key={p.provider} value={p.provider}>
                   {p.provider}
                 </option>
@@ -407,9 +408,15 @@ export default function OwnModelsSection({
               inputMode="url"
               placeholder={t.apiBasePlaceholder}
               value={draft.api_base}
+              // Read-only unless an administrator opened this scope. Shown rather
+              // than hidden: the endpoint is where the member's key is going, and
+              // that is worth seeing even when it is not theirs to change.
+              readOnly={!state.customEndpointAllowed}
               onChange={(e) => setDraft({ ...draft, api_base: e.target.value })}
             />
-            <span className="text-[11px] text-fg-muted">{t.apiBaseHint}</span>
+            <span className="text-[11px] text-fg-muted">
+              {state.customEndpointAllowed ? t.apiBaseHint : t.apiBaseFixed}
+            </span>
           </label>
 
           <label className="flex flex-col gap-1">

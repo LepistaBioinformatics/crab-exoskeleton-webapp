@@ -8,6 +8,7 @@ import {
   emptyUserDraft,
   parseExtraBody,
   providerModels,
+  registerableProviders,
   saveGate,
   slugFromLabel,
   type ProviderOption,
@@ -119,6 +120,7 @@ describe("effectiveSource", () => {
     allowed: true,
     blockedBy: "",
     organisationModel: "org-gpt",
+    customEndpointAllowed: false,
     providers: [{ provider: "openai", api_base: "https://api.openai.com/v1" }],
   };
 
@@ -198,6 +200,23 @@ describe("providerModels", () => {
     const providers: ProviderOption[] = [{ provider: "nvidia", models: ["nemotron"] }];
     expect(providerModels(providers, "nvidia")).toEqual(["nemotron"]);
     expect(providerModels(providers, "groq")).toEqual([]);
+  });
+});
+
+describe("registerableProviders", () => {
+  const providers: ProviderOption[] = [
+    { provider: "openai", api_base: "https://api.openai.com/v1" },
+    // No endpoint in the catalog: usable only by someone allowed to type one.
+    { provider: "litellm" },
+  ];
+
+  it("hides a provider it cannot fill an endpoint for, when typing one is refused", () => {
+    // Offering it would be a choice that can only end in a refusal on submit.
+    expect(registerableProviders(providers, false).map((p) => p.provider)).toEqual(["openai"]);
+  });
+
+  it("offers everything once an administrator allows custom endpoints", () => {
+    expect(registerableProviders(providers, true)).toHaveLength(2);
   });
 });
 

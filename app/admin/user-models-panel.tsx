@@ -10,6 +10,7 @@ import {
   setAdminUserModelEnabled,
   setModelPolicy,
   type AdminUserModel,
+  UNSET_POLICY,
   type ModelPolicy,
   type PolicyChoice,
 } from "@/lib/adminUserModels";
@@ -46,7 +47,7 @@ export default function UserModelsPanel({
   const errs = useT(errorCopy);
 
   const [models, setModels] = useState<AdminUserModel[] | null>(null);
-  const [policy, setPolicy] = useState<ModelPolicy>(null);
+  const [policy, setPolicy] = useState<ModelPolicy>(UNSET_POLICY);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -91,15 +92,24 @@ export default function UserModelsPanel({
     }
   }
 
-  function onPolicy(choice: PolicyChoice) {
+  // One handler for both switches: each names its own field, so releasing one to
+  // inheritance never touches the other.
+  function onPolicy(field: "user_models" | "custom_endpoint", choice: PolicyChoice) {
     void mutate(() =>
       choice === "inherit"
-        ? clearModelPolicy(target, scope)
-        : setModelPolicy(target, scope, choice === "allow"),
+        ? clearModelPolicy(target, scope, field)
+        : setModelPolicy(
+            target,
+            scope,
+            field === "user_models"
+              ? { userModels: choice === "allow" }
+              : { customEndpoint: choice === "allow" },
+          ),
     );
   }
 
-  const current = policyChoice(policy);
+  const current = policyChoice(policy.userModels);
+  const currentEndpoint = policyChoice(policy.customEndpoint);
 
   // The closed section already answers the question an administrator opens it
   // for: are personal models allowed here, and how many exist.
@@ -119,7 +129,7 @@ export default function UserModelsPanel({
             className={selectClass}
             value={current}
             disabled={busy}
-            onChange={(e) => onPolicy(e.target.value as PolicyChoice)}
+            onChange={(e) => onPolicy("user_models", e.target.value as PolicyChoice)}
           >
             {/* "Inherit" is its own option, not the absence of one: unset here and
                 deliberately allowed here are different facts, and only the first
@@ -129,6 +139,25 @@ export default function UserModelsPanel({
             <option value="block">{t.policyBlock}</option>
           </select>
           <span className="text-[11px] leading-relaxed text-fg-muted">{t.policyHint}</span>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-fg-muted">{t.endpointLabel}</span>
+          <select
+            className={selectClass}
+            value={currentEndpoint}
+            disabled={busy}
+            onChange={(e) => onPolicy("custom_endpoint", e.target.value as PolicyChoice)}
+          >
+            {/* This one INHERITS to "blocked", the opposite of the switch above:
+                picking a provider chooses among endpoints the instance ships,
+                while typing one aims the proxy's outbound request wherever the
+                member likes. So the option says where inheriting lands. */}
+            <option value="inherit">{t.endpointInherit}</option>
+            <option value="allow">{t.endpointAllow}</option>
+            <option value="block">{t.endpointBlock}</option>
+          </select>
+          <span className="text-[11px] leading-relaxed text-fg-muted">{t.endpointHint}</span>
         </div>
 
         {error && <Alert severity="error">{error}</Alert>}
