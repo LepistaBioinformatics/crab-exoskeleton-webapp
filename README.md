@@ -95,3 +95,20 @@ A production image is provided via the [`Dockerfile`](./Dockerfile) (Next.js `st
 - **`.specs/`** — spec-driven development docs. Start with `.specs/project/PROJECT.md` (vision), `ROADMAP.md` (milestones), and `STATE.md` (current state & decisions); per-feature specs live under `.specs/features/`.
 - **`app/chat/`** — the chat experience. **`app/admin/`** — the operator console. **`app/api/`** — the BFF.
 - **[`crab-shell-proxy`](../crab-shell-proxy)** — the backend this app is the face of.
+
+---
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](./LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([`LICENSE-MIT`](./LICENSE-MIT) or
+  <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
