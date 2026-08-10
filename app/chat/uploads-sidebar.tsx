@@ -1,6 +1,6 @@
 "use client";
 
-import React, { MouseEvent, useEffect, useState } from "react";
+import React, { MouseEvent, useEffect, useRef, useState } from "react";
 import {
   canDrop,
   createFolder,
@@ -19,6 +19,7 @@ import {
   FolderOpen,
   FolderPlus,
   Lock,
+  Upload,
   Network,
   Pencil,
   RefreshCw,
@@ -27,7 +28,13 @@ import {
   X,
 } from "lucide-react";
 import { cva } from "class-variance-authority";
-import { listWorkspaceMedia, deleteMedia, type Attachment } from "@/lib/media";
+import {
+  listWorkspaceMedia,
+  deleteMedia,
+  uploadMedia,
+  MEDIA_ACCEPT,
+  type Attachment,
+} from "@/lib/media";
 import type { Workspace } from "./fragment";
 import AttachmentButton from "@/app/chat/attachment-button";
 import MemoryEditor from "@/app/chat/memory-editor";
@@ -293,6 +300,37 @@ export default function UploadsSidebar({
   // its shape first rather than dumping every file at once.
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
 
+  // Upload straight into the workspace, without going through a message.
+  //
+  // Deliberately does NOT touch the composer: this is file management, not
+  // composing. The counterpart in the chat box attaches what it uploads because the
+  // point there is to talk about it; here the point is that the file simply exists
+  // for the agent to find later.
+  //
+  // It always lands at the ROOT of uploads/. Not a UI choice — StoreMedia reduces the
+  // name to a safe basename, so the API cannot express a subfolder. Dragging it into
+  // one afterwards already works.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function onUpload(files: FileList) {
+    setFolderError(null);
+    setUploading(true);
+    try {
+      // Sequential rather than Promise.all: each upload chowns the uploads tree on
+      // the proxy side, and a burst of parallel writes into one directory buys
+      // nothing on a panel where two or three files is the realistic case.
+      for (const file of Array.from(files)) {
+        await uploadMedia(workspace, file);
+      }
+      setLocalRefresh((n) => n + 1);
+    } catch (e) {
+      setFolderError(e instanceof Error ? e.message : "unknown");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   function toggleFolder(path: string) {
     setOpenFolders((prev) => {
       const next = new Set(prev);
@@ -326,7 +364,10 @@ export default function UploadsSidebar({
     return () => {
       cancelled = true;
     };
-  }, [workspace.t, workspace.s, workspace.r, refreshSignal, localRefresh]);
+    // `workspace.p` belongs here as much as t/s/r do: it selects WHICH workspace
+    // directory is listed. Omitted, entering a project kept the agent's own files on
+    // screen and leaving it kept showing whatever was loaded last.
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, refreshSignal, localRefresh]);
 
   function startResize(e: MouseEvent) {
     e.preventDefault();
@@ -759,6 +800,27 @@ export default function UploadsSidebar({
               {section === "files" && (
                 <>
                   <div className="flex items-center gap-1 px-2 pt-2">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept={MEDIA_ACCEPT}
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        if (e.target.files?.length) void onUpload(e.target.files);
+                        // Reset so re-picking the SAME file fires onChange again.
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outlined"
+                      disabled={uploading}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Upload size={14} aria-hidden />
+                      {t.uploads.upload}
+                    </Button>
                     <Button
                       size="sm"
                       variant="outlined"
@@ -768,7 +830,7 @@ export default function UploadsSidebar({
                       <FolderPlus size={14} aria-hidden />
                       {t.uploads.newFolder}
                     </Button>
-                    {folderBusy && <Spinner size={14} />}
+                    {(folderBusy || uploading) && <Spinner size={14} />}
                   </div>
 
                   {/* Said once, permanently, rather than as a dialog per action: the

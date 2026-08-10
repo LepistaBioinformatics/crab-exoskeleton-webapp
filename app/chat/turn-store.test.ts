@@ -193,4 +193,82 @@ describe("consumeStream", () => {
     await consumeStream(sse(["data: {not json\n\n", chunk("ok")]), (d) => deltas.push(d));
     expect(deltas).toEqual(["ok"]);
   });
+
+  // turn-failure-visible. The proxy reports a failed turn as x_crab_error, on the
+  // same shape progress uses. It matters because picoclaw does NOT persist its error
+  // text: whatever showed it as a reply loses it to the next reconcile against the
+  // durable transcript, so this signal is the only durable trace within the session.
+  const errorFrame = (message: string) =>
+    `data: ${JSON.stringify({
+      choices: [{ index: 0, delta: {} }],
+      x_crab_error: { message },
+    })}\n\n`;
+
+  const visionErr =
+    'Error processing message: selected vision model "glm-4.7-flash" does not support ' +
+    "image input; update agents.defaults.image_model to a multimodal model";
+
+  it("routes x_crab_error to the error handler", async () => {
+    const failures: string[] = [];
+    await consumeStream(sse([errorFrame(visionErr)]), () => {}, undefined, (m) => failures.push(m));
+    expect(failures).toEqual([visionErr]);
+  });
+
+  // The failure text arrives on BOTH channels: as content, because a generic OpenAI
+  // client reads nothing else, and as the signal. Neither may swallow the other.
+  it("reports the failure and still yields its content delta", async () => {
+    const deltas: string[] = [];
+    const failures: string[] = [];
+    await consumeStream(
+      sse([chunk(visionErr), errorFrame(visionErr)]),
+      (d) => deltas.push(d),
+      undefined,
+      (m) => failures.push(m),
+    );
+    expect(deltas).toEqual([visionErr]);
+    expect(failures).toEqual([visionErr]);
+  });
+
+  it("ignores an error frame when no handler is passed (old clients)", async () => {
+    const deltas: string[] = [];
+    await consumeStream(sse([errorFrame("boom"), chunk("hi")]), (d) => deltas.push(d));
+    expect(deltas).toEqual(["hi"]);
+  });
+
+  it("leaves an ordinary chunk alone", async () => {
+    const failures: string[] = [];
+    await consumeStream(sse([chunk("all good")]), () => {}, undefined, (m) => failures.push(m));
+    expect(failures).toEqual([]);
+  });
 });
+
+// The banner has to outlive the in-flight bands, and for a harness failure it is the
+// ONLY surviving trace — the transcript the completion painter reloads does not
+// contain the error and never will.
+describe("harness error detail lifecycle", () => {
+  it("survives clearCompleted", () => {
+    __seed("s1", {
+      running: false,
+      activeUserMessage: "aqui",
+      revealed: "Error processing message: …",
+      error: "harness_error",
+      errorDetail: "does not support image input",
+    });
+    clearCompleted("s1");
+    const turn = getTurn("s1");
+    expect(turn.revealed).toBe("");
+    expect(turn.error).toBe("harness_error");
+    expect(turn.errorDetail).toBe("does not support image input");
+  });
+
+  it("is cleared with the code when a new turn starts", () => {
+    __seed("s1", { error: "harness_error", errorDetail: "stale sentence" });
+    enqueue("s1", "next question", ctx);
+    // enqueue resets the error alongside the pending burst; the detail must not
+    // linger to render underneath a later, unrelated code.
+    const turn = getTurn("s1");
+    expect(turn.error).toBeNull();
+    expect(turn.errorDetail).toBeNull();
+  });
+});
+

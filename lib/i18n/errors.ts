@@ -31,6 +31,10 @@ const en = {
   workspaces_load_failed: "Couldn't load your workspaces.",
   version_conflict: "Another admin changed this model — reload before saving.",
   models_incomplete: "Fill model name, provider and model.",
+  // turn-failure-visible: the agent ran and could not finish. The harness's own
+  // sentence is shown beneath this, untranslated, because it is the only part that
+  // says what to change.
+  harness_error: "The agent couldn't complete this message.",
   gateway_retries_exhausted:
     "Still can't reach the gateway after several attempts. Try again shortly.",
   // user-owned-models. The probe answers with an error CLASS, never the
@@ -103,6 +107,7 @@ const pt: ErrorDict = {
   workspaces_load_failed: "Não foi possível carregar seus workspaces.",
   version_conflict: "Outro admin alterou este modelo — recarregue antes de salvar.",
   models_incomplete: "Preencha o nome do modelo, o provedor e o modelo.",
+  harness_error: "O agente não conseguiu concluir esta mensagem.",
   gateway_retries_exhausted:
     "Ainda não foi possível falar com o gateway após várias tentativas. Tente daqui a pouco.",
   probe_bad_key: "O endpoint recusou essa chave de API.",

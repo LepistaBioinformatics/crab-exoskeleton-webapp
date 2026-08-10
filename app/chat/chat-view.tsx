@@ -29,7 +29,8 @@ import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
-import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { resolveMentions, type MentionCandidate } from "@/lib/fileMentions";
 import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { TagChip } from "@/app/chat/conversation-enrichment";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -231,12 +232,19 @@ export default function ChatView({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
+  // What `@` can reference. Held HERE rather than in the composer because both need
+  // it and they must not disagree: the composer offers the menu, and compose() below
+  // resolves what was actually typed against the same list. Refreshed by the same
+  // signal the files panel uses, so a file uploaded from either place is mentionable
+  // at once.
+  const [mentionFiles, setMentionFiles] = useState<MentionCandidate[]>([]);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   // Everything about the turn in flight for THIS conversation, read from the
   // module-scope store -- so it is still here when you come back from another
   // chat, or another workspace (which remounts this component).
   const turn = useTurn(sessionId);
-  const { pending, queue, running: sending, retrying, error, revealed, progress, settling } = turn;
+  const { pending, queue, running: sending, retrying, error, errorDetail, revealed, progress, settling } =
+    turn;
   // Transient feedback for slash commands (/rename, /tag).
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -405,8 +413,30 @@ export default function ChatView({
     return () => {
       cancelled = true;
     };
+    // `project` is listed because the fetch READS it. It has been rescued so far by
+    // accident: entering or leaving a project drops `sid`, so the effect re-ran anyway.
+    // That is a property of setFragmentProject, not of this effect, and the same
+    // omission in the painter below is what blanked conversations on send.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r, sessionId, router]);
+  }, [workspace.t, workspace.s, workspace.r, project, sessionId, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listWorkspaceMedia(workspace)
+      .then((list) => {
+        if (cancelled) return;
+        // Folders are branches, not things to reference.
+        setMentionFiles(list.filter((f) => !f.isDir).map((f) => ({ name: f.name, path: f.path })));
+      })
+      .catch(() => {
+        // A failed listing means `@` offers nothing; it must never break composing.
+        if (!cancelled) setMentionFiles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, mediaRefresh]);
 
   useEffect(() => {
     if (scrollToIndex === null) return;
@@ -501,7 +531,16 @@ export default function ChatView({
   function compose(text: string): string | null {
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0 && !chatRef) return null;
-    const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
+    // A mention is resolved from the TEXT at send time, which is what lets the quote
+    // rule work: wrapping `@file` in quotes after choosing it from the menu turns it
+    // back into prose. The token stays in the sentence; the marker is what the agent
+    // acts on — the same one the attach button has always produced.
+    const mentioned = resolveMentions(trimmed, mentionFiles).filter(
+      (m) => !attachments.some((a) => a.path === m.path),
+    );
+    const refs = [...attachments.map((a) => a.path), ...mentioned.map((m) => m.path)]
+      .map((path) => `[anexo: ${path}]`)
+      .join("\n");
     const quote = replyTo ? buildQuote(replyTo, t) : "";
     const ref = chatRef ? buildReferenceMarker(chatRef, t) : "";
     return [quote, ref, trimmed, refs].filter(Boolean).join("\n\n");
@@ -542,6 +581,19 @@ export default function ChatView({
   // store drop its in-flight bands -- otherwise the reply would blink out and
   // back in. If the user is elsewhere the reload is skipped; the store keeps the
   // finished text until they return, and this effect's next run picks it up.
+  //
+  // `project` IS a dependency, and leaving it out was a real defect. The callback
+  // closes over `reloadHistory`, which closes over `project` — and entering a project
+  // changes neither t, s nor r, so the painter was never re-registered and went on
+  // reading the workspace the user was in when the view mounted. It then asked for a
+  // PROJECT conversation's transcript from the MAIN workspace (see historyQuery: the
+  // wrong scope returns an empty history, not an error), set `messages` to that empty
+  // array, and `clearCompleted` discarded the bands still holding the real reply. The
+  // conversation blanked on send and looked like a brand-new chat.
+  //
+  // `sid` deliberately still travels through `activeSidRef` rather than the deps: the
+  // painter must survive a conversation switch mid-turn, which is the reason this is
+  // one global hook and not one per sid.
   useEffect(() => {
     setPainter((sid) => {
       if (activeSidRef.current !== sid) return;
@@ -549,7 +601,7 @@ export default function ChatView({
     });
     return () => setPainter(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r]);
+  }, [workspace.t, workspace.s, workspace.r, project]);
 
   // Slash commands operate on the CURRENT chat instead of sending a message.
   // Returns true when the text was consumed as a command (so the composer
@@ -660,6 +712,7 @@ export default function ChatView({
       replyTo={replyTo}
       onCancelReply={() => setReplyTo(null)}
       chatRef={chatRef}
+      mentionFiles={mentionFiles}
       onCancelChatRef={() => onChatRef(null)}
     />
   );
@@ -731,11 +784,7 @@ export default function ChatView({
         </div>
       )}
 
-      {error && (
-        <div className="px-4 pt-4">
-          <Alert severity="error">{errorText(err, error)}</Alert>
-        </div>
-      )}
+
 
       {notice && (
         <div className="px-4 pt-4">
@@ -996,6 +1045,42 @@ export default function ChatView({
                   </div>
                 );
               })}
+
+              {/* The failure, attached to the message that caused it.
+                  It used to sit at the top of the chat, where it named a problem
+                  without naming what had provoked it — in a scrolled conversation the
+                  banner and the message were not even on screen together. A failed
+                  turn produces no reply, so the END of the column IS directly beneath
+                  the message that failed: while the banner is up, that message is
+                  necessarily the last one, because sending anything else clears the
+                  error (see enqueue).
+
+                  Same 720px column as the message content rather than the full band
+                  width, so it reads as belonging to that message and not to the view. */}
+              {error && (
+                <div className={bandGap({ changed: true })}>
+                  <div className="mx-auto w-full max-w-[720px] px-4 py-4">
+                    <Alert severity="error">
+                      {errorText(err, error)}
+                      {/* The harness's own sentence, verbatim and untranslated. It is
+                          the only part that says what to change ("update
+                          agents.defaults.image_model to a multimodal model"), and
+                          errorText would have flattened it to "Something went wrong"
+                          had it been passed as the code.
+
+                          Monospaced and pre-wrapped because it is machine text that
+                          carries its own newlines: picoclaw appends an "Original
+                          error:" block for auth failures, and reflowing that makes it
+                          unreadable. */}
+                      {errorDetail && (
+                        <span className="mt-1.5 block whitespace-pre-wrap break-words font-mono text-[11px] leading-snug opacity-80">
+                          {errorDetail}
+                        </span>
+                      )}
+                    </Alert>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           {/* The composer floats, suspended over the chat; the scroll area's
