@@ -21,6 +21,12 @@ export async function GET(req: NextRequest) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId, path });
+  // agent-projects: forwarded by hand here. This route streams a binary body, so it
+  // cannot go through `proxyRead` — and without this line every download from a
+  // project's files panel, and every `[anexo: ...]` chip in a project conversation,
+  // read the MAIN workspace and 404'd.
+  const project = p.get("project");
+  if (project) query.set("project", project);
   let res: Response;
   try {
     res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {

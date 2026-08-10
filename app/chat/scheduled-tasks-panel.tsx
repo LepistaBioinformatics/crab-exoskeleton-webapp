@@ -156,10 +156,15 @@ export default function ScheduledTasksPanel({
   // A workspace switch invalidates the navigation too: tasks are per (member, agent),
   // so an open run from the previous workspace is meaningless. Kept OUT of the load
   // effect below so an explicit refresh does not collapse what the member expanded.
+  //
+  // ENTERING OR LEAVING A PROJECT COUNTS. It also drops `data`, so the incoming scope
+  // shows a spinner rather than the outgoing scope's schedule presented as its own —
+  // the load effect below cannot do that itself without clearing on every refresh.
   useEffect(() => {
     setOpen(null);
     setExpanded(new Set());
-  }, [workspace.t, workspace.s, workspace.r]);
+    setData(null);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // Re-read on every visit rather than cached: the agent schedules and runs things
   // between visits, and a stale list would make the panel lie about what is running.
@@ -186,7 +191,7 @@ export default function ScheduledTasksPanel({
     // Primitives, NOT `workspace`: ChatShell rebuilds that object on every one of its
     // own renders, so depending on its identity re-fetches on any unrelated re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r, refreshSignal]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, refreshSignal]);
 
   useEffect(() => {
     if (!open) return;
@@ -204,7 +209,10 @@ export default function ScheduledTasksPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open?.run.basename, workspace.t, workspace.s, workspace.r]);
+    // `workspace.p` matters even though the effect is keyed on a basename: a run
+    // basename only identifies a file WITHIN the sessions dir it was listed from, so
+    // the same name under another scope is a different transcript.
+  }, [open?.run.basename, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   const fmtInstant = (value: string | number | undefined): string => {
     if (value === undefined || value === "" || value === 0) return "";

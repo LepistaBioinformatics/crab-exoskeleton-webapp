@@ -49,6 +49,14 @@ export async function uploadMedia(workspace: Workspace, file: File): Promise<Att
   form.set("role", workspace.r);
   form.set("tenant_id", workspace.t);
   form.set("subs_acc_id", workspace.s);
+  // agent-projects: the only writer here that cannot use `withProject` — this is a
+  // multipart body, not a query. Omitted entirely (never sent empty) when there is
+  // no project: the proxy 404s an unknown id, and "" would be one.
+  //
+  // It was missing, and the file landed in the agent's own workspace while the turn
+  // told the PROJECT's agent to open it. The agent then searched for a path that did
+  // not exist and gave up.
+  if (workspace.p) form.set("project", workspace.p);
   form.set("file", file, file.name);
 
   const res = await fetch("/api/media", { method: "POST", body: form });

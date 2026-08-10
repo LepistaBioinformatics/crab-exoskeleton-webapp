@@ -34,12 +34,15 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
   const [error, setError] = useState<string | null>(null);
 
   // A real workspace switch drops the loaded doc so it reloads on next open.
+  // ENTERING OR LEAVING A PROJECT IS ONE: each project agent keeps its own
+  // MEMORY_CUSTOM.md, so without `p` here the editor kept showing — and would have
+  // saved over — the previous scope's document.
   useEffect(() => {
     setLoaded(false);
     setValue("");
     setError(null);
     setSaved(false);
-  }, [workspace.t, workspace.s, workspace.r]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // `loading` is deliberately NOT a dependency: including it would make
   // setLoading(true) re-run this effect and its cleanup would cancel the in-flight
@@ -65,7 +68,7 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, workspace.t, workspace.s, workspace.r]);
+  }, [loaded, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   async function onSave() {
     setSaving(true);

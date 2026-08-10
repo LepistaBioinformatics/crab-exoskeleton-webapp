@@ -1,11 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   canDrop,
   dropTarget,
   isInsideReserved,
   isReservedFolder,
   RESERVED_FOLDER,
+  uploadMedia,
 } from "./media";
+import type { Workspace } from "@/app/chat/fragment";
 
 // The drag rules, decided client-side so an illegal drop is refused with no round trip
 // and no flicker. The proxy enforces the same rules independently — this is about not
@@ -89,5 +91,52 @@ describe("the reserved folder", () => {
   it("does not capture a folder with a similar name", () => {
     expect(canDrop("top.txt", "attachments-old")).toBe(true);
     expect(isReservedFolder("attachments-old")).toBe(false);
+  });
+});
+
+// agent-projects: the upload is the ONE media request that carries the project in a
+// multipart body rather than a query, and it was the one that did not carry it at all —
+// so a file attached inside a project was written into the agent's own workspace and the
+// project's agent could not open the path the turn handed it.
+describe("uploadMedia carries the project", () => {
+  const base: Workspace = { t: "t1", s: "s1", r: "alpha" as Workspace["r"] };
+
+  function captureForm() {
+    const seen: { form?: FormData } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seen.form = init.body as FormData;
+        return {
+          ok: true,
+          json: async () => ({ path: "uploads/x.zip", name: "x.zip", size: 3 }),
+        } as unknown as Response;
+      }),
+    );
+    return seen;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the project when the view is inside one", async () => {
+    const seen = captureForm();
+    await uploadMedia({ ...base, p: "seedtrial" }, new File(["abc"], "x.zip"));
+    expect(seen.form?.get("project")).toBe("seedtrial");
+  });
+
+  // The negative case is the one that matters: an EMPTY project field reaches the proxy
+  // as an unknown id, which 404s — so every upload outside a project would break.
+  it("omits the field entirely outside a project", async () => {
+    const seen = captureForm();
+    await uploadMedia(base, new File(["abc"], "x.zip"));
+    expect(seen.form?.has("project")).toBe(false);
+  });
+
+  it("omits the field when the project is explicitly null", async () => {
+    const seen = captureForm();
+    await uploadMedia({ ...base, p: null }, new File(["abc"], "x.zip"));
+    expect(seen.form?.has("project")).toBe(false);
   });
 });
