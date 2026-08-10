@@ -139,11 +139,14 @@ export default function MemoryGraphPanel({
     setTypeFilter(null);
   }, []);
 
-  // A workspace switch invalidates everything: graphs are per (member, agent).
+  // A workspace switch invalidates everything: graphs are per (member, agent) —
+  // and per PROJECT, since each project agent has its own memory-graph MCP server
+  // and its own graph. Without `p` the panel went on showing the previous scope's
+  // entities, which is the one failure that makes it lie about what the bot knows.
   useEffect(() => {
     reset();
     setMode("browse");
-  }, [workspace.t, workspace.s, workspace.r, reset]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, reset]);
 
   // Re-fetched every time the member arrives, never cached: the agent writes to this
   // graph between visits, and a stale list is the one failure that would make the
@@ -169,7 +172,7 @@ export default function MemoryGraphPanel({
     // Primitives, NOT `workspace`: ChatShell rebuilds that object on every one of its
     // own renders, so depending on its identity re-fetches on any unrelated re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, mode, workspace.t, workspace.s, workspace.r]);
+  }, [active, mode, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   useEffect(() => {
     if (!active || mode !== "recent") return;
@@ -190,7 +193,7 @@ export default function MemoryGraphPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, mode, workspace.t, workspace.s, workspace.r]);
+  }, [active, mode, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // Fetched once per workspace when the pane is live, not per selected entity: the
   // list is small and every entity's sources resolve against the same map.
@@ -208,7 +211,7 @@ export default function MemoryGraphPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, workspace.t, workspace.s, workspace.r]);
+  }, [active, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // Null means "no such conversation" — either it was deleted, or the list has not
   // arrived. Both render as unavailable rather than as a link that goes nowhere.

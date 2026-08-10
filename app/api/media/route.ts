@@ -69,6 +69,12 @@ export async function DELETE(req: NextRequest) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId, path });
+  // agent-projects: forwarded by hand here. This route does not go through
+  // `proxyRead` (which forwards it for every route it serves), so without this a
+  // delete inside a project addressed the MAIN workspace — removing a same-named
+  // file there, or reporting success having removed nothing.
+  const project = p.get("project");
+  if (project) query.set("project", project);
   let res: Response;
   try {
     res = await fetchMycelium(`/${role}/v1/media?${query.toString()}`, {
@@ -124,6 +130,11 @@ export async function POST(req: NextRequest) {
   const upstream = new FormData();
   upstream.set("tenant_id", tenantId);
   upstream.set("subs_acc_id", subsAccId);
+  // agent-projects: the body is REBUILT rather than forwarded, so every field the
+  // proxy needs has to be named here. `project` was not, which stripped it even from
+  // a client that sent it — the second of three layers that dropped it.
+  const project = form.get("project");
+  if (typeof project === "string" && project) upstream.set("project", project);
   upstream.set("file", file, file.name);
 
   let res: Response;

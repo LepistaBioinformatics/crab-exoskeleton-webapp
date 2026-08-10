@@ -23,6 +23,12 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
+import {
+  applyMention,
+  filterCandidates,
+  mentionQueryAt,
+  type MentionCandidate,
+} from "@/lib/fileMentions";
 import type { ReplyTo } from "@/app/chat/chat-view";
 import { referenceChip, type ChatReference } from "@/lib/chatReference";
 import MarkdownEditor from "@/app/chat/markdown-editor";
@@ -37,6 +43,11 @@ const contextChip = cva(
     defaultVariants: { tone: "reply" },
   },
 );
+
+// How many files the `@` menu shows at once. A workspace can hold hundreds, and a
+// list longer than this is not scanned, it is scrolled past — narrowing the query is
+// faster than reading it.
+const MENTION_LIMIT = 8;
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
 const MIN_HEIGHT = 44; // a taller resting height so the box feels roomy
@@ -71,6 +82,12 @@ interface ComposerProps {
   /** What the next message will carry besides the prose — see lib/chatReference. */
   chatRef: ChatReference | null;
   onCancelChatRef: () => void;
+  /**
+   * Workspace files `@` can reference. Owned by ChatView because it also resolves
+   * what was typed against the same list at send time — the menu and the resolution
+   * must not disagree about what exists.
+   */
+  mentionFiles: MentionCandidate[];
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -92,6 +109,7 @@ export default function Composer({
   onCancelReply,
   chatRef,
   onCancelChatRef,
+  mentionFiles,
 }: ComposerProps) {
   const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -150,6 +168,39 @@ export default function Composer({
     setValue(`${cmd} `);
     ref.current?.focus();
   }
+  // The `@` menu. Same shape as the slash menu above — a derived match list, a
+  // highlight index, and a dismissed flag — because it is the same interaction and a
+  // second idiom for it would be a second set of keyboard bugs.
+  //
+  // Driven off the CARET, not the whole value: `@` earlier in a finished sentence must
+  // not reopen the menu when the member goes back to edit somewhere else.
+  const [caret, setCaret] = useState(0);
+  const mentionQuery = mentionQueryAt(value, caret);
+  const [mentionHidden, setMentionHidden] = useState(false);
+  const mentionMatches =
+    mentionQuery === null ? [] : filterCandidates(mentionFiles, mentionQuery).slice(0, MENTION_LIMIT);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionOpen = mentionMatches.length > 0 && !mentionHidden;
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionQuery]);
+
+  function pickMention(name: string) {
+    const next = applyMention(value, caret, name);
+    setValue(next.text);
+    setMentionHidden(false);
+    // The caret has to be restored explicitly: React re-renders the textarea with new
+    // text and the browser would otherwise park the cursor at the end, which is wrong
+    // when the mention was inserted mid-sentence.
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+      setCaret(next.caret);
+    });
+  }
+
   // Touch devices have no Shift key, so Enter must stay a newline there (send is
   // the button); only fine-pointer (desktop) gets Enter-to-send + the hint.
   const [coarsePointer, setCoarsePointer] = useState(false);
@@ -262,6 +313,36 @@ export default function Composer({
         </div>
       )}
 
+      {/* Anchored above the box like the slash menu, and never at the same time as it:
+          a slash command is the first character of the message and a mention never is,
+          so the two queries cannot both be active. */}
+      {mentionOpen && (
+        <div
+          className="mb-2 max-h-64 overflow-y-auto rounded-xl border border-accent/40 bg-surface shadow-lg"
+          role="listbox"
+          aria-label={t.composer.mentionFiles}
+        >
+          {mentionMatches.map((f, i) => (
+            <button
+              key={f.path}
+              type="button"
+              role="option"
+              aria-selected={i === mentionIndex}
+              // Keep pointer focus in the textarea so keyboard nav still works.
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setMentionIndex(i)}
+              onClick={() => pickMention(f.name)}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
+                i === mentionIndex ? "bg-accent/15" : "hover:bg-elevated"
+              }`}
+            >
+              <Paperclip size={13} className="shrink-0 text-fg-muted" aria-hidden />
+              <span className="truncate font-mono text-xs text-fg">{f.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {slashOpen && (
         <div
           className="mb-2 overflow-hidden rounded-xl border border-accent/40 bg-surface shadow-lg"
@@ -317,10 +398,39 @@ export default function Composer({
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
+            setCaret(e.target.selectionStart ?? e.target.value.length);
             setSlashHidden(false);
+            setMentionHidden(false);
             markTyping();
           }}
+          // Clicking or arrowing to a different spot changes which mention (if any)
+          // the caret is in, and neither fires onChange.
+          onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
           onKeyDown={(e) => {
+            // The `@` menu takes the keyboard first, on the same contract as the slash
+            // menu below: arrows move, Enter picks, Escape dismisses without sending.
+            if (mentionOpen) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setMentionIndex((i) => (i + 1) % mentionMatches.length);
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setMentionHidden(true);
+                return;
+              }
+              if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+                e.preventDefault();
+                pickMention(mentionMatches[mentionIndex].name);
+                return;
+              }
+            }
             // When the slash menu is open, the keyboard drives it: arrows move
             // the highlight, Enter picks, Escape dismisses.
             if (slashOpen) {

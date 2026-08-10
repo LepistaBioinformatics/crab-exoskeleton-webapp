@@ -120,6 +120,16 @@ export interface TurnState {
   arrivalDone: boolean;
   /** Terminal error key for this conversation, or null. */
   error: string | null;
+  /**
+   * The harness's OWN sentence about the failure, or null.
+   *
+   * Separate from `error` because that one is a stable CODE which `errorText` maps
+   * to localized copy, falling back to "unknown" for anything else — so putting
+   * picoclaw's sentence there would render "unknown error" and discard exactly the
+   * part worth reading ("update agents.defaults.image_model to a multimodal
+   * model"). Free text, never translated: it is the harness talking, not us.
+   */
+  errorDetail: string | null;
   /** Waiting for picoclaw to reload after an attachment upload. */
   settling: boolean;
 }
@@ -151,6 +161,7 @@ const EMPTY: TurnState = {
   buffered: "",
   arrivalDone: true,
   error: null,
+  errorDetail: null,
   settling: false,
 };
 
@@ -216,7 +227,11 @@ function clearFlushTimer(sid: string) {
 export function enqueue(sid: string, composed: string, ctx: RunContext) {
   contexts.set(sid, ctx);
   const cur = getTurn(sid);
-  patch(sid, { pending: [...cur.pending, composed], error: null });
+  // The error clears HERE, on the send, not when the turn actually starts: a queued
+  // burst can sit for seconds and a banner about the previous failure should not
+  // outlive the member's decision to try again. `errorDetail` goes with its code —
+  // separated, a stale harness sentence renders under a later, unrelated one.
+  patch(sid, { pending: [...cur.pending, composed], error: null, errorDetail: null });
   armFlush(sid);
 }
 
@@ -339,8 +354,11 @@ export function clearCompleted(sid: string) {
   const cur = getTurn(sid);
   if (cur.running) return;
   if (cur.activeUserMessage === null && cur.revealed === "") return;
-  // `error` is deliberately preserved: the banner must outlive the bands, or a
-  // turn that failed while the user was elsewhere would clear itself silently.
+  // `error` AND `errorDetail` are deliberately preserved: the banner must outlive
+  // the bands, or a turn that failed while the user was elsewhere would clear itself
+  // silently. For a harness failure that is the ONLY surviving trace — picoclaw does
+  // not persist the error, so the transcript this reload just pulled does not
+  // contain it and never will.
   patch(sid, { activeUserMessage: null, revealed: "", buffered: "", progress: null });
 }
 
@@ -349,6 +367,9 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
   patch(sid, {
     running: true,
     error: null,
+    // Cleared with the code it belongs to, or a stale harness sentence would render
+    // underneath a later, unrelated failure.
+    errorDetail: null,
     activeUserMessage: composed,
     revealed: "",
     buffered: "",
@@ -429,6 +450,9 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
         startReveal(sid);
       },
       (progress) => patch(sid, { progress, lastEventAt: Date.now() }),
+      // The turn FAILED. One code for the copy, the harness's own words for the
+      // detail — see TurnState.errorDetail.
+      (message) => patch(sid, { error: "harness_error", errorDetail: message }),
     );
 
     syncSessionRefs(workspace, sid).catch(() => {});
@@ -578,6 +602,7 @@ export async function consumeStream(
   body: ReadableStream<Uint8Array>,
   onDelta: (delta: string) => void,
   onProgress?: (progress: Progress) => void,
+  onError?: (message: string) => void,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -607,6 +632,15 @@ export async function consumeStream(
             tool: typeof progress.tool === "string" ? progress.tool : undefined,
             state: typeof progress.state === "string" ? progress.state : undefined,
           });
+        }
+        // agent-projects/turn-failure-visible: x_crab_error rides the same shape as
+        // x_crab_progress — an ordinary chunk with an empty delta plus one extra
+        // top-level field. The failure text ALSO arrives as content, so this is
+        // additional: it is what tells the view to render an error rather than a
+        // reply that will be reconciled away.
+        const failure = parsed?.x_crab_error;
+        if (failure && typeof failure.message === "string" && onError) {
+          onError(failure.message);
         }
         const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
         if (delta) onDelta(delta);

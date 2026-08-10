@@ -88,6 +88,7 @@ const en = {
     cancelReply: "Cancel reply",
     removeAttachment: "Remove",
     slashCommands: "Slash commands",
+    mentionFiles: "Workspace files",
     placeholder: "Message your agent…",
     placeholderHint: "Message your agent…  (Shift+Enter for a new line)",
     attach: "Attach file",
@@ -553,6 +554,7 @@ const en = {
   },
   uploads: {
     newFolder: "New folder",
+    upload: "Upload",
     // The system folder's DISPLAYED name. The path on disk stays `attachments` —
     // the proxy owns it — so this is a label, never a rename.
     attachmentsFolder: "Agent deliveries",
@@ -708,6 +710,7 @@ const pt: ChatDict = {
     cancelReply: "Cancelar resposta",
     removeAttachment: "Remover",
     slashCommands: "Comandos de barra",
+    mentionFiles: "Arquivos do workspace",
     placeholder: "Escreva para o seu agente…",
     placeholderHint: "Escreva para o seu agente…  (Shift+Enter para nova linha)",
     attach: "Anexar arquivo",
@@ -1090,6 +1093,7 @@ const pt: ChatDict = {
   },
   uploads: {
     newFolder: "Nova pasta",
+    upload: "Enviar",
     attachmentsFolder: "Entregas do agente",
     systemFolder: "Gerenciada pelo sistema",
     newFolderPrompt: "Nome da pasta",
