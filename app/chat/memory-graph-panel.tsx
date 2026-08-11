@@ -16,8 +16,11 @@ import {
   type SummaryGraph,
 } from "@/lib/memoryGraph";
 import { setFragmentSid, type Workspace } from "./fragment";
+import type { EntityReference } from "@/lib/chatReference";
 import { listConversations, type ConversationSummary } from "@/lib/chatSession";
 import MemoryGraphView from "./memory-graph-view";
+import { MAX_NODES } from "./graph-elements";
+import { useMapTools } from "./use-map-tools";
 import {
   BrowseList,
   EntityDetail,
@@ -58,6 +61,7 @@ const tab = cva(
   },
 );
 
+
 // "map" is the node-link view. It reads the SAME browse projection the list does and
 // drives the SAME select(), so choosing a node opens the existing detail pane — which
 // already answers "where did this come from" with the conversations behind each fact.
@@ -78,8 +82,14 @@ function maxDetailHeight(): number {
 export default function MemoryGraphPanel({
   workspace,
   active,
+  onReference,
 }: {
   workspace: Workspace;
+  /**
+   * Puts the open entity in the composer's reference slot — the same slot scheduled tasks and
+   * Canvas spans use. Absent when there is no chat to reference into.
+   */
+  onReference?: (ref: EntityReference) => void;
   /**
    * True when this is the pane the member is looking at. Both panes of the track
    * stay mounted through the slide, so without this the graph would fetch on every
@@ -112,6 +122,26 @@ export default function MemoryGraphPanel({
   // Owned here, not in BrowseList: the list re-fetches on every visit, and a filter
   // that reset itself each time would be useless on the graph it exists for.
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  // The map's discovery tools, owned here for exactly the same reason: MemoryGraphView
+  // unmounts on a tab switch, so state living in it would reset every time the member
+  // looked at the entity list and came back.
+  const { tools, set: setTool, reset: resetTools } = useMapTools();
+  // The map's content-search result: ONLY the hit NAMES. The elements still come wholly from the
+  // browse projection, so the map gains a second source of SELECTION, not of structure — which
+  // is what keeps NFR-1 intact.
+  //
+  // Held as STATE, never derived in the render body. A `Set` rebuilt per render is a new identity
+  // every time, which would make the view's `built` memo miss, re-run the create effect and
+  // re-run the LAYOUT on every render. That presents as "the graph jitters", not as a dependency
+  // bug.
+  const [matchNames, setMatchNames] = useState<Set<string> | null>(null);
+  const [contentSearching, setContentSearching] = useState(false);
+  const [contentFailed, setContentFailed] = useState(false);
+  const [contentCapped, setContentCapped] = useState(false);
+  // Monotonic, like `selectStamp`: an async fetch behind a debounced input will otherwise apply
+  // a stale hit set, and the member would be looking at the results of a query they finished
+  // typing over.
+  const contentStamp = useRef(0);
   // The map's own name filter. Deliberately NOT the search tab's `query`: that one issues a
   // server-side BM25 request, and sharing it would fire searches while somebody narrows the
   // map. This filters what is already loaded.
@@ -128,6 +158,16 @@ export default function MemoryGraphPanel({
   // entity — a member who dragged it tall wants it tall for the next one too.
   const [detailHeight, setDetailHeight] = useState(DEFAULT_DETAIL_HEIGHT);
 
+  // What the map's reset control clears, as opposed to `reset` below, which throws away the fetched
+  // data too. Kept separate because a member asking to clear their filters is not asking to re-read
+  // the graph — and the type filter is SHARED with the Entities tab, so this changes that list too,
+  // which is why the control's tooltip says so.
+  const resetMapFilters = useCallback(() => {
+    resetTools();
+    setTypeFilter(null);
+    setMapQuery("");
+  }, [resetTools]);
+
   const reset = useCallback(() => {
     setGraph(null);
     setHits(null);
@@ -137,7 +177,10 @@ export default function MemoryGraphPanel({
     setQuery("");
     setError(null);
     setTypeFilter(null);
-  }, []);
+    // The tools go too. A relation-type filter naming a type the NEXT workspace's graph does
+    // not have would silently hide every edge, and read as "this agent has no relations".
+    resetTools();
+  }, [resetTools]);
 
   // A workspace switch invalidates everything: graphs are per (member, agent) —
   // and per PROJECT, since each project agent has its own memory-graph MCP server
@@ -194,6 +237,56 @@ export default function MemoryGraphPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, mode, workspace.t, workspace.s, workspace.r, workspace.p]);
+
+  // The map's content search. Only the NAMES of the hits are kept — see `matchNames`.
+  //
+  // `k` is passed EXPLICITLY and tied to the node ceiling. The default is 10, and ten hits
+  // seeding a map reads as the map hiding entities rather than as a cap (GD-D3).
+  useEffect(() => {
+    if (!active || mode !== "map") return;
+    const q = mapQueryApplied.trim();
+    if (tools.searchScope !== "contents" || !q) {
+      // Bumped so an in-flight response from before the switch cannot land after it.
+      contentStamp.current++;
+      setMatchNames(null);
+      setContentSearching(false);
+      setContentFailed(false);
+      setContentCapped(false);
+      return;
+    }
+    const stamp = ++contentStamp.current;
+    setContentSearching(true);
+    setContentFailed(false);
+    searchGraph(workspace, q, MAX_NODES)
+      .then((r) => {
+        if (stamp !== contentStamp.current) return;
+        setMatchNames(new Set(r.searchResults.map((h) => h.entity_name)));
+        // k and the node ceiling are the same number, so a full page of hits is the one case
+        // where the server may have had more and buildElements would report nothing.
+        setContentCapped(r.searchResults.length >= MAX_NODES);
+      })
+      .catch(() => {
+        if (stamp !== contentStamp.current) return;
+        // An EMPTY set, not null: a failed search must not silently fall back to showing the
+        // whole graph as though no filter had been asked for.
+        setMatchNames(new Set());
+        setContentFailed(true);
+        setContentCapped(false);
+      })
+      .finally(() => {
+        if (stamp === contentStamp.current) setContentSearching(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    active,
+    mode,
+    mapQueryApplied,
+    tools.searchScope,
+    workspace.t,
+    workspace.s,
+    workspace.r,
+    workspace.p,
+  ]);
 
   // Fetched once per workspace when the pane is live, not per selected entity: the
   // list is small and every entity's sources resolve against the same map.
@@ -307,6 +400,30 @@ export default function MemoryGraphPanel({
     ? relationsFor(contextRelations, selected)
     : [];
 
+  // Built once and placed differently per tab: inside the map's graph column, below the list
+  // everywhere else. Same element, same state, two homes — which is why it is a variable rather
+  // than duplicated JSX.
+  const detailPane = entity ? (
+    <EntityDetail
+      entity={entity}
+      relations={entityRelations}
+      formatWhen={formatWhen}
+      copy={t.memoryGraph}
+      conversationTitle={conversationTitle}
+      // Walking the graph: a theme entity's relations are how a member reaches what
+      // it contains, so an endpoint has to open that entity. `select` already
+      // handles a name that is NOT in the current list — it calls open_nodes.
+      onOpenEntity={select}
+      height={detailHeight}
+      onResizeStart={startDetailResize}
+      onClose={closeDetail}
+      // Navigating by fragment is how the whole app switches conversation; the
+      // chat view is already listening for it, so no extra plumbing.
+      onOpenConversation={setFragmentSid}
+      onReference={onReference}
+    />
+  ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <p className="shrink-0 px-3 pt-2 text-[11px] leading-snug text-fg-muted">
@@ -402,33 +519,31 @@ export default function MemoryGraphPanel({
               // Fills the pane: a graph in a narrow column is unreadable, and this panel
               // deliberately has no max width (see uploads-sidebar) precisely for this.
               <div className="flex h-full min-h-[320px] flex-col">
-                <div className="shrink-0 px-3 pb-2">
-                  <Input
-                    inputSize="sm"
-                    value={mapQuery}
-                    onChange={(e) => setMapQuery(e.target.value)}
-                    placeholder={t.memoryGraph.mapFilterPlaceholder}
-                    aria-label={t.memoryGraph.mapFilterPlaceholder}
-                  />
-                </div>
+                {/* The filter input is NOT rendered here. It lives inside MemoryGraphView, which
+                    is the element fullscreen is requested on — rendered out here it disappeared
+                    the moment the member expanded the map. */}
                 <MemoryGraphView
                   entities={graph.entities}
                   relations={graph.relations}
                   selected={selected}
                   onSelect={(name) => (name ? select(name) : setSelected(null))}
-                  emptyTitle={t.memoryGraph.empty.title}
-                  emptyLabel={t.memoryGraph.empty.body}
-                  expandLabel={t.memoryGraph.expandMap}
-                  collapseLabel={t.memoryGraph.collapseMap}
-                  spreadOutLabel={t.memoryGraph.spreadOut}
-                  spreadInLabel={t.memoryGraph.spreadIn}
-                  fitLabel={t.memoryGraph.fitMap}
-                  spreadReadout={t.memoryGraph.spreadReadout}
                   typeFilter={typeFilter}
+                  onTypeFilter={setTypeFilter}
+                  onResetFilters={resetMapFilters}
+                  detail={detailPane}
                   query={mapQueryApplied}
-                  noMatchLabel={t.memoryGraph.mapNoMatch}
-                  noMatchHint={t.memoryGraph.mapNoMatchHint}
-                  truncatedLabel={t.memoryGraph.mapTruncated}
+                  matchNames={matchNames}
+                  filter={{
+                    value: mapQuery,
+                    onChange: setMapQuery,
+                    searching: contentSearching,
+                    failed: contentFailed,
+                    capped: contentCapped,
+                    cap: MAX_NODES,
+                  }}
+                  tools={tools}
+                  setTool={setTool}
+                  copy={t.memoryGraph}
                 />
               </div>
             )}
@@ -470,25 +585,12 @@ export default function MemoryGraphPanel({
         )}
       </div>
 
-      {entity && (
-        <EntityDetail
-          entity={entity}
-          relations={entityRelations}
-          formatWhen={formatWhen}
-          copy={t.memoryGraph}
-          conversationTitle={conversationTitle}
-          // Walking the graph: a theme entity's relations are how a member reaches what
-          // it contains, so an endpoint has to open that entity. `select` already
-          // handles a name that is NOT in the current list — it calls open_nodes.
-          onOpenEntity={select}
-          height={detailHeight}
-          onResizeStart={startDetailResize}
-          onClose={closeDetail}
-          // Navigating by fragment is how the whole app switches conversation; the
-          // chat view is already listening for it, so no extra plumbing.
-          onOpenConversation={setFragmentSid}
-        />
-      )}
+      {/* On the MAP the detail pane is handed to MemoryGraphView instead, which renders it inside
+          the graph column — see `detail` there. Out here it was a sibling of the whole map, so
+          opening it shrank the map area and visibly resized the tools sidebar, pulling the eye off
+          the entity the member had just clicked. Every other tab still stacks it below the list,
+          which is right for a list. */}
+      {mode !== "map" && detailPane}
     </div>
   );
 }

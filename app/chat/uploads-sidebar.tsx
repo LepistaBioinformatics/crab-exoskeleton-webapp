@@ -40,7 +40,7 @@ import AttachmentButton from "@/app/chat/attachment-button";
 import MemoryEditor from "@/app/chat/memory-editor";
 import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
 import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
-import type { TaskReference } from "@/lib/cronTasks";
+import type { ChatReference } from "@/lib/chatReference";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -252,7 +252,7 @@ export default function UploadsSidebar({
    * holds it as a context slot for the next message. The panel's only outbound
    * value — everything else here flows inward.
    */
-  onReference?: (ref: TaskReference) => void;
+  onReference?: (ref: ChatReference) => void;
   /**
    * Which detail to open on mount, or null for the menu.
    *
@@ -663,7 +663,12 @@ export default function UploadsSidebar({
         // pane-open animates width from 0 on mount (see globals.css). It is an
         // animation rather than a transition precisely because this width is
         // drag-resizable: a transition would make the drag lag.
-        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:max-w-[90vw] max-md:shadow-xl"
+        // `max-md:w-[92vw]!` — the `!` is load-bearing. `width` above is an inline style (it is
+        // drag-resizable on desktop), and an inline style beats an ordinary class, so the mobile
+        // drawer was stuck at the desktop DEFAULT_WIDTH of 280px. On a phone that is a thin column
+        // that squeezes the panel's content, and `max-w-[92vw]` could not help: a max only caps a
+        // width, it never widens one. Tailwind v4 puts the important modifier at the END.
+        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl"
       >
         <div
           role="separator"
@@ -788,6 +793,7 @@ export default function UploadsSidebar({
                 <MemoryGraphPanel
                   workspace={workspace}
                   active={section === "graph"}
+                  onReference={onReference}
                 />
               )}
               {section === "tasks" && (

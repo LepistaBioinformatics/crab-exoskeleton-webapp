@@ -226,3 +226,44 @@ export function entityTypeCounts(
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
 }
+
+/**
+ * The same counts as `entityTypeCounts`, but with an untyped entity counted under `"unknown"`.
+ *
+ * This is the MAP LEGEND's domain, and it differs from the Browse chip row's on purpose.
+ * `entityTypeCounts` drops a blank type, which is right for a chip row — there is no useful chip
+ * for "no type". A legend cannot do that: the map DRAWS untyped entities, under `"unknown"` and in
+ * a real colour, so a legend that skipped them would leave a colour on screen that nothing named
+ * and nothing could filter. `buildElements` already gates on `(e.type || "unknown")`, so the
+ * resulting filter value works.
+ */
+export function legendTypeCounts(
+  entities: { type: string }[],
+): { type: string; count: number }[] {
+  return entityTypeCounts(entities.map((e) => ({ type: e.type || "unknown" })));
+}
+
+/**
+ * The relation types present in a graph, with how many relations carry each — the domain of
+ * the map's relation-type facet.
+ *
+ * Shaped exactly like `entityTypeCounts`: same field names, same "most common first, ties
+ * alphabetical" ordering. The two feed the same kind of chip row, and a member should not have
+ * to learn two conventions for one control.
+ *
+ * The caller must pass the **unfiltered** relations. Computing this from the already-filtered
+ * list would collapse the facet's options down to whatever is currently selected, leaving no
+ * way back — the classic self-erasing filter.
+ */
+export function relationTypeCounts(
+  relations: Relation[],
+): { type: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of relations) {
+    if (!r.relationType) continue;
+    counts.set(r.relationType, (counts.get(r.relationType) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+}

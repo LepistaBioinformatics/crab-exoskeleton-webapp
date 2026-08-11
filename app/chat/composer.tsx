@@ -11,6 +11,7 @@ import {
   GitBranch,
   Image as ImageIcon,
   Maximize2,
+  Network,
   Paperclip,
   Presentation,
   Reply,
@@ -34,6 +35,20 @@ import { referenceChip, type ChatReference } from "@/lib/chatReference";
 import MarkdownEditor from "@/app/chat/markdown-editor";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
+
+/**
+ * One icon per reference kind, keyed by the kind rather than chosen with a ternary.
+ *
+ * A ternary defaulted every unknown kind to the scheduled-task calendar, so a graph entity arrived
+ * in the composer wearing a clock. A record over the union means a new kind fails to typecheck
+ * until it has an icon, instead of silently borrowing the wrong one.
+ */
+const REFERENCE_ICON: Record<ChatReference["kind"], typeof CalendarClock> = {
+  task: CalendarClock,
+  run: CalendarClock,
+  span: GitBranch,
+  entity: Network,
+};
 
 // A context chip's accent, the only thing that differs between the two kinds.
 const contextChip = cva(
@@ -278,7 +293,7 @@ export default function Composer({
 
       {chatRef && (
         <ContextChip
-          Icon={chatRef.kind === "span" ? GitBranch : CalendarClock}
+          Icon={REFERENCE_ICON[chatRef.kind]}
           tone="task"
           {...referenceChip(chatRef, t)}
           cancelLabel={t.scheduledTasks.cancelReference}

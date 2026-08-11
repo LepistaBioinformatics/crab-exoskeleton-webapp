@@ -173,6 +173,30 @@ describe("EntityDetail", () => {
     expect(html).toContain("at:1700000000000");
   });
 
+  // The reference control is gated on `onReference` being supplied, and that prop travels four
+  // components — ChatView → UploadsSidebar → MemoryGraphPanel → here. Any link dropping it makes
+  // the feature silently not exist, with nothing failing. These two assertions are what notice.
+  it("offers no reference control when there is no chat to reference into", () => {
+    expect(detail()).not.toContain(g.referenceEntity);
+  });
+
+  it("offers the reference control when the chat supplied a slot", () => {
+    const html = renderToStaticMarkup(
+      <EntityDetail
+        entity={base}
+        relations={relations}
+        formatWhen={() => ""}
+        copy={g}
+        height={320}
+        onResizeStart={() => {}}
+        onClose={() => {}}
+        onReference={() => {}}
+      />,
+    );
+    expect(html).toContain(g.referenceEntity);
+  });
+
+
   it("shows a confidence only when the record carries one", () => {
     const html = detail();
     expect(html).toContain("90%");

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
 import { BrowseList, RecentList, SearchList } from "./memory-graph-views";
 import MemoryGraphView from "./memory-graph-view";
+import { MAP_TOOLS_DEFAULTS } from "./use-map-tools";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { RecentChanges, SummaryGraph } from "@/lib/memoryGraph";
 
@@ -81,17 +82,20 @@ function map(graph: SummaryGraph, query = "") {
       query={query}
       selected={null}
       onSelect={() => {}}
-      emptyTitle={g.empty.title}
-      emptyLabel={g.empty.body}
-      expandLabel={g.expandMap}
-      collapseLabel={g.collapseMap}
-      spreadOutLabel={g.spreadOut}
-      spreadInLabel={g.spreadIn}
-      fitLabel={g.fitMap}
-      spreadReadout={g.spreadReadout}
-      noMatchLabel={g.mapNoMatch}
-      noMatchHint={g.mapNoMatchHint}
-      truncatedLabel={g.mapTruncated}
+      matchNames={null}
+      filter={{
+        value: "",
+        onChange: () => {},
+        searching: false,
+        failed: false,
+        capped: false,
+        cap: 300,
+      }}
+      onTypeFilter={() => {}}
+      onResetFilters={() => {}}
+      tools={MAP_TOOLS_DEFAULTS}
+      setTool={() => {}}
+      copy={g}
     />,
   );
 }

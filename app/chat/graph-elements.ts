@@ -20,6 +20,14 @@ export interface GraphElements {
       label: string;
       type: string;
       observations: number;
+      /**
+       * The entity's DEGREE, straight off `SummaryEntity.relationCount`.
+       *
+       * Carried rather than computed: the projection already counts it, and it is the degree
+       * in the WHOLE graph — which is the honest number — whereas counting the drawn edges
+       * would silently change with every filter.
+       */
+      relations: number;
       /** True when this node matched the filter itself, false when it is context. */
       match: boolean;
     };
@@ -53,6 +61,33 @@ export interface GraphElements {
 export interface GraphFilter {
   type?: string | null;
   query?: string;
+  /**
+   * Which relation types to draw. `null` or absent means EVERY type; `[]` means none.
+   *
+   * This is the one facet that does not remove entities. Hiding relations must not delete the
+   * things they connect — a member asking to see fewer kinds of edge is not asking for the
+   * layout to move, and an edge-only control that dropped nodes would move all of it.
+   *
+   * It gates the relations BEFORE the one-hop expansion, so with a query active, context nodes
+   * are reached through visible relations only. Otherwise the map would draw a context node
+   * with no visible edge to explain why it is there. Entities the member MATCHED are never
+   * removed by this, and with no query every entity is a match — which is where the promise
+   * above has to hold.
+   */
+  relationTypes?: string[] | null;
+  /** Floor on observationCount, inclusive. Zero or absent draws everything. */
+  minObservations?: number;
+  /**
+   * The match set, supplied instead of computing one from `query`.
+   *
+   * This is how the server's BM25 ranking reaches the map (GD-D2). Only NAMES cross that
+   * boundary: the elements still come wholly from the browse projection, so the map does not
+   * gain a second source of structure — only a second source of selection.
+   *
+   * An EMPTY set means "the server matched nothing", which is a real answer and draws nothing.
+   * Treating it as "no filter" would silently answer a question nobody asked.
+   */
+  matchNames?: Set<string> | null;
   /** Hard ceiling on rendered nodes — see MAX_NODES. */
   limit?: number;
 }
@@ -75,22 +110,42 @@ export function buildElements(
   relations: Relation[],
   filter: GraphFilter = {},
 ): GraphElements {
-  // The type gate first, so neighbours pulled in by a query still respect it.
-  const pool = filter.type
+  // The relation gate FIRST: this list is what both the expansion and the edges are built
+  // from, so hiding a relation type hides it consistently in one place. `[]` is truthy, which
+  // is what lets "no types" mean no edges rather than falling through to "all types".
+  const visibleRelations = filter.relationTypes
+    ? relations.filter((r) => filter.relationTypes!.includes(r.relationType))
+    : relations;
+
+  // Then the entity gates, so neighbours pulled in by a query still respect them.
+  let pool = filter.type
     ? entities.filter((e) => (e.type || "unknown") === filter.type)
     : entities;
+  const floor = filter.minObservations ?? 0;
+  if (floor > 0) pool = pool.filter((e) => e.observationCount >= floor);
 
+  // The match set. `matchNames` wins over `query` when both are present rather than
+  // intersecting them — they are two implementations of the SAME predicate (which entities did
+  // the member ask for), and combining them would apply a client-side name filter on top of a
+  // server ranking that already read the observation text.
   const q = filter.query?.trim().toLowerCase();
+  const names = filter.matchNames;
   const matched = new Set(
-    q ? pool.filter((e) => e.name.toLowerCase().includes(q)).map((e) => e.name) : pool.map((e) => e.name),
+    names
+      ? pool.filter((e) => names.has(e.name)).map((e) => e.name)
+      : q
+        ? pool.filter((e) => e.name.toLowerCase().includes(q)).map((e) => e.name)
+        : pool.map((e) => e.name),
   );
 
-  // Expand one hop, within the pool. Only when a query narrowed things: with no query every
-  // node is already a match and there is nothing to expand.
+  // Expand one hop, within the pool and over VISIBLE relations only. Only when something
+  // narrowed: with no query and no supplied names every node is already a match and there is
+  // nothing to expand.
+  const narrowing = !!names || !!q;
   const keep = new Set(matched);
-  if (q) {
+  if (narrowing) {
     const inPool = new Set(pool.map((e) => e.name));
-    for (const r of relations) {
+    for (const r of visibleRelations) {
       if (matched.has(r.from) && inPool.has(r.to)) keep.add(r.to);
       if (matched.has(r.to) && inPool.has(r.from)) keep.add(r.from);
     }
@@ -124,6 +179,7 @@ export function buildElements(
       label: e.name,
       type: e.type || "unknown",
       observations: e.observationCount,
+      relations: e.relationCount,
       // False for a node kept only as a matched node's neighbour, so the drawing can show
       // which of these the member actually asked for.
       match: matched.has(e.name),
@@ -135,7 +191,7 @@ export function buildElements(
   // carry an edge to an entity outside the page, and Cytoscape throws on an edge naming a
   // node that does not exist — so this is not cosmetic, it is what keeps the graph from
   // failing to build at all.
-  const edges = relations
+  const edges = visibleRelations
     .filter((r) => present.has(r.from) && present.has(r.to))
     .map((r, i) => ({
       data: {

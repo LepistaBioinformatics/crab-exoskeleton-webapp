@@ -4,6 +4,7 @@ import React from "react";
 import {
   ArrowRight,
   Archive,
+  AtSign,
   Clock,
   Filter,
   GitMerge,
@@ -25,6 +26,7 @@ import {
   type Relation,
   type SummaryGraph,
 } from "@/lib/memoryGraph";
+import type { EntityReference } from "@/lib/chatReference";
 
 // The knowledge graph's presentational pieces: a browse list, a search list, a
 // recent-changes list and an entity detail pane. Pure functions of props, with no
@@ -90,8 +92,12 @@ export function BrowseList({
   noneOfTypeHint?: string;
 }) {
   const types = entityTypeCounts(graph.entities);
+  // `|| "unknown"` because `typeFilter` is SHARED with the Map tab, whose legend does offer an
+  // "unknown" row for entities the agent stored without a type — and whose `buildElements`
+  // already compares the same normalised way. Without it, picking that row narrowed the map
+  // correctly and left this list empty, which reads as "the filter is broken here".
   const shown = typeFilter
-    ? graph.entities.filter((e) => e.type === typeFilter)
+    ? graph.entities.filter((e) => (e.type || "unknown") === typeFilter)
     : graph.entities;
 
   if (graph.entities.length === 0) {
@@ -395,6 +401,7 @@ export function EntityDetail({
   conversationTitle,
   onOpenConversation,
   onOpenEntity,
+  onReference,
   height,
   onResizeStart,
   onClose,
@@ -415,7 +422,13 @@ export function EntityDetail({
     goneConversation: string;
     closeDetail: string;
     resizeDetail: string;
+    referenceEntity: string;
   };
+  /**
+   * Puts this entity in the composer's reference slot. Optional: the panel only supplies it when a
+   * chat is actually there to reference into.
+   */
+  onReference?: (ref: EntityReference) => void;
   /** Pixel height, owned by the panel so it survives re-selecting an entity. */
   height: number;
   onResizeStart: (e: React.MouseEvent) => void;
@@ -454,6 +467,33 @@ export function EntityDetail({
             {entity.name}
           </h3>
           <Badge tone="accent">{entity.entityType}</Badge>
+          {/* Referencing the entity the member already opened, from where they are already looking
+              at it. It reuses the composer's existing reference slot — the same one scheduled tasks
+              and Canvas spans use — rather than typing into the message for them. */}
+          {onReference && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={copy.referenceEntity}
+              title={copy.referenceEntity}
+              onClick={() =>
+                onReference({
+                  kind: "entity",
+                  name: entity.name,
+                  // Normalised the way the map normalises, so a reference never says "".
+                  entityType: entity.entityType || "unknown",
+                  observations: entity.observations.length,
+                  // `relations` is the pane's own prop, which the panel filled from the BROWSE
+                  // projection via relationsFor — deliberately not from open_nodes, which returns
+                  // an empty relation list when asked for a single entity (see lib/memoryGraph.ts).
+                  // So this count is real; a future reader should not "fix" it into that trap.
+                  relations: relations.length,
+                })
+              }
+            >
+              <AtSign size={14} aria-hidden />
+            </IconButton>
+          )}
           <IconButton
             variant="ghost"
             size="sm"

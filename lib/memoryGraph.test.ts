@@ -5,6 +5,8 @@ import {
   recentChanges,
   entitySources,
   entityTypeCounts,
+  legendTypeCounts,
+  relationTypeCounts,
   relationsFor,
   searchGraph,
   type Relation,
@@ -131,6 +133,17 @@ describe("searchGraph", () => {
     expect(url.pathname).toBe("/api/memory-graph/search");
     expect(url.searchParams.get("query")).toBe("rust");
     expect(url.searchParams.get("k")).toBe("10");
+  });
+
+  // The map's content search MUST override that default. Ten hits seeding a map reads as "the
+  // map is hiding entities" — the exact failure the monorepo's own rule warns about, where a
+  // truncated list looks like missing data rather than like a cap. `k` crosses three layers
+  // (client → route passThrough → proxy), which is where this project has lost a parameter
+  // before, so the wire value is asserted rather than assumed.
+  it("sends a caller's k instead of the default", async () => {
+    const mock = mockJSON({ entities: [], relations: [], searchResults: [], searchType: "lexical" });
+    await searchGraph(workspace, "rust", 300);
+    expect(calledURL(mock).searchParams.get("k")).toBe("300");
   });
 
   // snake_case inside a camelCase envelope — deliberate upstream fidelity, and the
@@ -263,5 +276,78 @@ describe("entityTypeCounts", () => {
 
   it("returns nothing for an empty graph", () => {
     expect(entityTypeCounts([])).toEqual([]);
+  });
+});
+
+// The map legend's domain. It deliberately differs from entityTypeCounts, and the difference is
+// the whole reason it exists: the map draws untyped entities in a real colour, so a legend built
+// on entityTypeCounts left a colour on screen that nothing named and nothing could filter.
+describe("legendTypeCounts", () => {
+  it("counts an untyped entity under 'unknown' instead of dropping it", () => {
+    expect(legendTypeCounts([{ type: "" }, { type: "pessoa" }])).toEqual([
+      { type: "pessoa", count: 1 },
+      { type: "unknown", count: 1 },
+    ]);
+  });
+
+  it("agrees with entityTypeCounts on a graph where every entity has a type", () => {
+    const typed = [{ type: "pessoa" }, { type: "projeto" }, { type: "pessoa" }];
+    expect(legendTypeCounts(typed)).toEqual(entityTypeCounts(typed));
+  });
+
+  it("merges several untyped entities into one row", () => {
+    expect(legendTypeCounts([{ type: "" }, { type: "" }, { type: "" }])).toEqual([
+      { type: "unknown", count: 3 },
+    ]);
+  });
+
+  it("produces a value buildElements can actually filter by", () => {
+    // buildElements gates on `(e.type || "unknown") === filter.type`, so "unknown" is a working
+    // filter value. If this row said anything else, clicking it would narrow to nothing.
+    expect(legendTypeCounts([{ type: "" }])[0].type).toBe("unknown");
+  });
+});
+
+// The relation-type facet's domain. Deliberately shaped like entityTypeCounts — same field
+// names, same ordering rule — because the two feed the same kind of chip row and a member
+// should not have to learn two conventions for the same control.
+describe("relationTypeCounts", () => {
+  const rel = (from: string, to: string, relationType: string): Relation => ({
+    from,
+    to,
+    relationType,
+  });
+
+  it("counts each relation type and orders by frequency", () => {
+    expect(
+      relationTypeCounts([
+        rel("a", "b", "mantém"),
+        rel("b", "c", "revisa"),
+        rel("c", "d", "mantém"),
+        rel("d", "e", "mantém"),
+        rel("e", "f", "revisa"),
+        rel("f", "g", "cita"),
+      ]),
+    ).toEqual([
+      { type: "mantém", count: 3 },
+      { type: "revisa", count: 2 },
+      { type: "cita", count: 1 },
+    ]);
+  });
+
+  it("breaks ties alphabetically, so the chips are stable between reads", () => {
+    expect(
+      relationTypeCounts([rel("a", "b", "zeta"), rel("c", "d", "alpha")]).map((t) => t.type),
+    ).toEqual(["alpha", "zeta"]);
+  });
+
+  it("ignores a relation with no type rather than inventing a blank chip", () => {
+    expect(relationTypeCounts([rel("a", "b", ""), rel("c", "d", "cita")])).toEqual([
+      { type: "cita", count: 1 },
+    ]);
+  });
+
+  it("returns nothing when the graph has no relations", () => {
+    expect(relationTypeCounts([])).toEqual([]);
   });
 });
