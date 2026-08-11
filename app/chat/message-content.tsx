@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cva } from "class-variance-authority";
 import CodeBlock from "@/app/chat/code-block";
@@ -69,13 +78,125 @@ const codeText = cva("font-mono text-[0.85em]", {
   defaultVariants: { block: false },
 });
 
-// Renders assistant/user message content as markdown. GitHub-flavored
-// (remark-gfm) so tables, strikethrough, task lists and autolinks work. Colors
-// inherit from the bubble; borders/fills use currentColor so they adapt to it.
-// Code blocks scroll horizontally inside the message column. Tables narrower than
-// the column stay aligned with the text; wider ones break out across the full
+/**
+ * Whether the band being rendered is still streaming, for the ONE renderer that cares.
+ *
+ * It is context rather than a prop because `COMPONENTS` below must be a module constant — see the
+ * comment there. A renderer that closed over `streaming` would have to be rebuilt per render,
+ * which is the exact defect this arrangement exists to prevent.
+ */
+const StreamingContext = createContext(false);
+
+// Hoisted OUT of the component, and this is a correctness fix, not a micro-optimisation.
+//
+// These were defined inline in the `components` prop, so every render produced a fresh function
+// per element type. React reconciles by comparing `element.type` BY IDENTITY: a new function is a
+// different type, so React unmounted the whole markdown subtree and mounted a new one on every
+// single re-render.
+//
+// Everything the browser keeps on the DOM node rather than in React state died with it — most
+// visibly a wide table's horizontal scroll position. Clicking a message calls setOpenActions in
+// chat-view, so simply CLICKING the chat scrolled every table back to the start.
+//
+// Module scope makes every identity permanent, so a re-render now updates the existing nodes.
+const REMARK_PLUGINS = [remarkGfm];
+
+const COMPONENTS: Components = {
+    p: ({ children }) => <p className="mb-2">{children}</p>,
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline underline-offset-2"
+    >
+      {children}
+    </a>
+  ),
+  ul: ({ children }) => (
+    <ul className="mb-2 list-disc pl-6 marker:text-current/60 [&_ol]:mb-0 [&_ul]:mb-0">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="mb-2 list-decimal pl-6 marker:text-current/60 [&_ol]:mb-0 [&_ul]:mb-0">
+      {children}
+    </ol>
+  ),
+  li: ({ children }) => <li className="mb-0.5 [&>ol]:mt-0.5 [&>ul]:mt-0.5">{children}</li>,
+  h1: ({ children }) => <h1 className="mb-2 mt-1 font-display text-lg font-bold">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-2 mt-1 font-display text-base font-bold">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-1 mt-1 font-display text-sm font-bold">{children}</h3>,
+  h4: ({ children }) => <h4 className="mb-1 font-display text-sm font-semibold">{children}</h4>,
+  h5: ({ children }) => (
+    <h5 className="mb-1 font-display text-xs font-semibold uppercase tracking-wide">{children}</h5>
+  ),
+  h6: ({ children }) => (
+    <h6 className="mb-1 font-display text-xs font-semibold uppercase tracking-wide text-current/70">
+      {children}
+    </h6>
+  ),
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  del: ({ children }) => <del className="line-through opacity-70">{children}</del>,
+  hr: () => <hr className="my-3 border-current/20" />,
+  blockquote: ({ children }) => (
+    <blockquote className="mb-2 border-l-2 border-current/30 pl-3 italic opacity-90">
+      {children}
+    </blockquote>
+  ),
+  // A module-scope function component, so it may use hooks — which is how it reads `streaming`
+  // without the renderer having to be rebuilt per render. It is the only entry here that needs
+  // anything from the surrounding component at all.
+  code: ({ children, className }) => {
+    const streaming = useContext(StreamingContext);
+    // react-markdown v9 gives block-level code a `language-*` className
+    // (from the fenced ```lang block); inline code has none.
+    const isBlock = Boolean(className);
+    if (!isBlock) {
+      return <code className={codeText({ block: false })}>{children}</code>;
+    }
+    // A fenced block: the className carries the language, and the children
+    // are the code text.
+    return (
+      <CodeBlock
+        code={String(children ?? "")}
+        className={`${codeText({ block: true })} ${className}`}
+        streaming={streaming}
+      />
+    );
+  },
+  pre: ({ children }) => (
+    <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
+  ),
+  table: ({ children }) => (
+    <MarkdownTable>{children}</MarkdownTable>
+  ),
+  th: ({ children }) => (
+    <th className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top font-semibold [overflow-wrap:break-word]">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top [overflow-wrap:break-word]">
+      {children}
+    </td>
+  ),
+  input: (props) => (
+    <input {...props} disabled className="mr-1 align-middle accent-accent" />
+  ),
+};
+
+// Renders assistant/user message content as markdown. GitHub-flavored (remark-gfm) so tables,
+// strikethrough, task lists and autolinks work. Colors inherit from the bubble; borders/fills use
+// currentColor so they adapt to it. Code blocks scroll horizontally inside the message column.
+// Tables narrower than the column stay aligned with the text; wider ones break out across the full
 // content section and scroll there (Notion-style) -- see MarkdownTable.
-export default function MessageContent({
+//
+// MEMOISED. Both props are primitives, so the shallow compare is exact. Without it, every message
+// in the conversation re-parsed its markdown whenever anything in chat-view changed — and clicking
+// a message changes `openActions`, so a click re-parsed the entire transcript.
+function MessageContent({
   content,
   streaming = false,
 }: {
@@ -91,92 +212,13 @@ export default function MessageContent({
     // Slightly larger than the rest of the UI (which is text-sm/xs) so the chat
     // body reads as the primary content.
     <div className="text-base leading-relaxed [&>*:last-child]:mb-0">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          p: ({ children }) => <p className="mb-2">{children}</p>,
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2"
-            >
-              {children}
-            </a>
-          ),
-          ul: ({ children }) => (
-            <ul className="mb-2 list-disc pl-6 marker:text-current/60 [&_ol]:mb-0 [&_ul]:mb-0">
-              {children}
-            </ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="mb-2 list-decimal pl-6 marker:text-current/60 [&_ol]:mb-0 [&_ul]:mb-0">
-              {children}
-            </ol>
-          ),
-          li: ({ children }) => <li className="mb-0.5 [&>ol]:mt-0.5 [&>ul]:mt-0.5">{children}</li>,
-          h1: ({ children }) => <h1 className="mb-2 mt-1 font-display text-lg font-bold">{children}</h1>,
-          h2: ({ children }) => <h2 className="mb-2 mt-1 font-display text-base font-bold">{children}</h2>,
-          h3: ({ children }) => <h3 className="mb-1 mt-1 font-display text-sm font-bold">{children}</h3>,
-          h4: ({ children }) => <h4 className="mb-1 font-display text-sm font-semibold">{children}</h4>,
-          h5: ({ children }) => (
-            <h5 className="mb-1 font-display text-xs font-semibold uppercase tracking-wide">{children}</h5>
-          ),
-          h6: ({ children }) => (
-            <h6 className="mb-1 font-display text-xs font-semibold uppercase tracking-wide text-current/70">
-              {children}
-            </h6>
-          ),
-          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-          em: ({ children }) => <em className="italic">{children}</em>,
-          del: ({ children }) => <del className="line-through opacity-70">{children}</del>,
-          hr: () => <hr className="my-3 border-current/20" />,
-          blockquote: ({ children }) => (
-            <blockquote className="mb-2 border-l-2 border-current/30 pl-3 italic opacity-90">
-              {children}
-            </blockquote>
-          ),
-          code: ({ children, className }) => {
-            // react-markdown v9 gives block-level code a `language-*` className
-            // (from the fenced ```lang block); inline code has none.
-            const isBlock = Boolean(className);
-            if (!isBlock) {
-              return <code className={codeText({ block: false })}>{children}</code>;
-            }
-            // A fenced block: the className carries the language, and the children
-            // are the code text.
-            return (
-              <CodeBlock
-                code={String(children ?? "")}
-                className={`${codeText({ block: true })} ${className}`}
-                streaming={streaming}
-              />
-            );
-          },
-          pre: ({ children }) => (
-            <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
-          ),
-          table: ({ children }) => (
-            <MarkdownTable>{children}</MarkdownTable>
-          ),
-          th: ({ children }) => (
-            <th className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top font-semibold [overflow-wrap:break-word]">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="min-w-[7rem] max-w-[32rem] border-l border-t border-current/15 px-3 py-2 align-top [overflow-wrap:break-word]">
-              {children}
-            </td>
-          ),
-          input: (props) => (
-            <input {...props} disabled className="mr-1 align-middle accent-accent" />
-          ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+      <StreamingContext.Provider value={streaming}>
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+          {content}
+        </ReactMarkdown>
+      </StreamingContext.Provider>
     </div>
   );
 }
+
+export default memo(MessageContent);
