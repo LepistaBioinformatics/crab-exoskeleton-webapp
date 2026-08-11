@@ -663,7 +663,12 @@ export default function UploadsSidebar({
         // pane-open animates width from 0 on mount (see globals.css). It is an
         // animation rather than a transition precisely because this width is
         // drag-resizable: a transition would make the drag lag.
-        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:max-w-[90vw] max-md:shadow-xl"
+        // `max-md:w-[92vw]!` — the `!` is load-bearing. `width` above is an inline style (it is
+        // drag-resizable on desktop), and an inline style beats an ordinary class, so the mobile
+        // drawer was stuck at the desktop DEFAULT_WIDTH of 280px. On a phone that is a thin column
+        // that squeezes the panel's content, and `max-w-[92vw]` could not help: a max only caps a
+        // width, it never widens one. Tailwind v4 puts the important modifier at the END.
+        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl"
       >
         <div
           role="separator"
