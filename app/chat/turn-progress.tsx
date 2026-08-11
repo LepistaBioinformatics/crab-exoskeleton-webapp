@@ -11,6 +11,13 @@
 //
 // The moment the first word is revealed this component is unmounted by the
 // caller: progress and answer never share the band.
+//
+// long-turn-resilience: the line also has to look alive between events, not only
+// when one arrives. Narration can be tens of seconds apart, and a band that has
+// not moved in a minute reads as a frozen chat -- so the text shimmers on its own
+// clock, and once the turn is no longer brief it says how long it has been quiet.
+// A number that visibly advances is the strongest available evidence that nothing
+// is stuck.
 
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
@@ -30,31 +37,54 @@ const line = cva(
         tool: "text-fg-muted",
         thought: "text-fg-muted/70 italic",
         waiting: "text-fg-muted/60",
+        // Louder than `waiting`: it reports something that happened, not just that
+        // we are still here.
+        recovering: "text-fg-muted",
       },
     },
     defaultVariants: { kind: "waiting" },
   },
 );
 
+/** "45s", "1m 05s" -- units only, so both locales read it the same. */
+export function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+/**
+ * Milliseconds since `from`, recomputed every second. One interval per band; it
+ * restarts whenever `from` moves, which for the progress line means every event.
+ */
+function useElapsed(from: number): number {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    setElapsed(Date.now() - from);
+    const timer = setInterval(() => setElapsed(Date.now() - from), 1000);
+    return () => clearInterval(timer);
+  }, [from]);
+  return elapsed;
+}
+
 export default function TurnProgress({
   progress,
   lastEventAt,
 }: {
   progress: Progress | null;
-  /** Timestamp of the last event, for the silence fallback. */
+  /** Timestamp of the last event, for the silence fallback and the readout. */
   lastEventAt: number;
 }) {
   const t = useT(chatCopy);
-  const [silent, setSilent] = useState(false);
-
   // The agent can go quiet for a long time inside a single LLM call. Without
   // this the last event freezes on screen and it looks hung again -- the exact
-  // symptom this band exists to remove.
-  useEffect(() => {
-    setSilent(false);
-    const timer = setTimeout(() => setSilent(true), SILENCE_GRACE_MS);
-    return () => clearTimeout(timer);
-  }, [lastEventAt]);
+  // symptom this band exists to remove. Derived from the elapsed clock rather
+  // than its own timeout, so the fallback text and the readout it appears with
+  // cannot disagree about how long the silence has been.
+  const quietFor = useElapsed(lastEventAt);
+  const silent = quietFor >= SILENCE_GRACE_MS;
 
   // `typing` frames carry no text; they only say the agent is alive.
   const narrated = progress && progress.kind !== "typing" && progress.text !== "";
@@ -90,9 +120,42 @@ export default function TurnProgress({
       <Icon
         size={14}
         aria-hidden
-        className={Icon === Loader2 ? "animate-spin motion-reduce:animate-none" : ""}
+        // The spinner already moves; a static icon breathes instead, so no state
+        // of this band is ever completely still.
+        className={
+          Icon === Loader2
+            ? "animate-spin motion-reduce:animate-none"
+            : "animate-pulse motion-reduce:animate-none"
+        }
       />
-      <span className="animate-fade-in motion-reduce:animate-none">{text}</span>
+      <span className="progress-shimmer animate-fade-in motion-reduce:animate-none">{text}</span>
+      {/* Only once the turn is no longer brief: on a fast turn the number would be
+          noise, and it would appear and vanish before it could be read. */}
+      {silent && (
+        <span className="tabular-nums text-xs opacity-60">{formatElapsed(quietFor)}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The stream was cut and the reply is being recovered from the transcript.
+ *
+ * Its own component rather than another state of `TurnProgress`, because the caller
+ * renders it in BOTH arms of the band: in place of progress when nothing arrived
+ * yet, and beneath a partially revealed reply when the cut came mid-answer. There
+ * is no progress to show either way -- the source of progress is what went away.
+ */
+export function TurnRecovery({ since }: { since: number }) {
+  const t = useT(chatCopy);
+  const elapsed = useElapsed(since);
+  return (
+    <div className={line({ kind: "recovering" })} aria-live="polite">
+      <Loader2 size={14} aria-hidden className="animate-spin motion-reduce:animate-none" />
+      <span className="progress-shimmer animate-fade-in motion-reduce:animate-none">
+        {t.view.recovering}
+      </span>
+      <span className="tabular-nums text-xs opacity-60">{formatElapsed(elapsed)}</span>
     </div>
   );
 }

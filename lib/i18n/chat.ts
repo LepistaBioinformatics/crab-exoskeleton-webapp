@@ -399,6 +399,11 @@ const en = {
     // only that the turn is still open, which the client knows to be true.
     thinking: "Thinking…",
     working: "Still working…",
+    // long-turn-resilience: the stream was cut and the turn is being recovered from
+    // the transcript. Said plainly rather than disguised as ordinary progress: the
+    // member is now waiting on a different thing, and the honest line is also the
+    // reassuring one.
+    recovering: "Connection dropped — the agent is still working. Fetching the reply…",
     // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
@@ -1046,6 +1051,7 @@ const pt: ChatDict = {
     agentPulse: "Pulso do agente",
     thinking: "Pensando…",
     working: "Ainda trabalhando…",
+    recovering: "A conexão caiu — o agente continua trabalhando. Buscando a resposta…",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
     stepOne: "1 passo",

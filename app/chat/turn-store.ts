@@ -65,6 +65,22 @@ const REVEAL_MIN_TICK_MS = 16; // never schedule faster than a frame
 // seconds; without this the last event freezes and it looks hung again.
 export const SILENCE_GRACE_MS = 6000;
 
+// A cut stream is recovered by POLLING the durable transcript, never by re-sending.
+//
+// The proxy detaches the turn from the request (sse.go runs it on a background
+// context, deliberately not on r.Context()), so losing the stream loses the VIEW of
+// the turn and never the turn itself. It then folds the finished turn into the
+// durable transcript, which the history endpoint prefers -- so that transcript is
+// frozen for the whole turn and grows by the whole turn at once. Its growth is
+// therefore an exact completion signal, and needs no string to survive the trip
+// through picoclaw.
+export const RECOVERY_POLL_MS = 5000;
+// Must outlast the proxy's own bound on a detached turn: `turnTimeout`, 10 minutes
+// in crab-shell-proxy/internal/httpapi/sse.go. Giving up sooner would report a turn
+// as lost while the proxy is still legitimately running it; the extra minute covers
+// the durable fold plus one poll interval.
+export const RECOVERY_BUDGET_MS = 11 * 60 * 1000;
+
 // After an upload, picoclaw reloads to pick up the new workspace file. Give it a
 // moment to settle before firing the turn, so the first message right after an
 // attach doesn't hit the container mid-reload ("Can't reach the gateway").
@@ -130,6 +146,15 @@ export interface TurnState {
    * model"). Free text, never translated: it is the harness talking, not us.
    */
   errorDetail: string | null;
+  /**
+   * The stream was cut mid-turn and we are polling the transcript for the reply.
+   *
+   * Not an error state: the turn is still running upstream. `running` stays true
+   * throughout, so the bands stay on screen and a queued turn keeps waiting.
+   */
+  recovering: boolean;
+  /** When the recovery wait began, for the elapsed readout. */
+  recoveringSince: number;
   /** Waiting for picoclaw to reload after an attachment upload. */
   settling: boolean;
 }
@@ -162,6 +187,8 @@ const EMPTY: TurnState = {
   arrivalDone: true,
   error: null,
   errorDetail: null,
+  recovering: false,
+  recoveringSince: 0,
   settling: false,
 };
 
@@ -362,6 +389,66 @@ export function clearCompleted(sid: string) {
   patch(sid, { activeUserMessage: null, revealed: "", buffered: "", progress: null });
 }
 
+// ---------------------------------------------------------------------------
+// Recovering a cut stream
+// ---------------------------------------------------------------------------
+
+/**
+ * How many messages the conversation's durable transcript holds right now, or null
+ * when it could not be read. Same request the view's `reloadHistory` makes.
+ */
+async function transcriptLength(sid: string, ctx: RunContext): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `/api/chat/${ctx.workspace.r}/history?${historyQuery(ctx.workspace, sid, ctx.project)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data.messages) ? data.messages.length : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The stream ended without the proxy saying the turn was over. Wait for the reply to
+ * land in the transcript instead of calling it a failure.
+ *
+ * Runs INSIDE runTurn's try, before its finally: that is what keeps `running` true
+ * and `arrivalDone` false for the whole wait, so `finishIfDrained` cannot end the
+ * turn early -- and the completion painter cannot reload a transcript that does not
+ * hold the reply yet and then let `clearCompleted` drop the bands (the
+ * blanked-conversation defect recorded in chat-view.tsx).
+ *
+ * It never re-POSTs. The retry ladder above covers the send, before the stream
+ * exists; from here on the turn is committed upstream and sending it again would run
+ * a ten-minute turn twice.
+ */
+async function recover(sid: string, ctx: RunContext) {
+  patch(sid, { recovering: true, recoveringSince: Date.now() });
+  // The baseline comes from the first SUCCESSFUL read, not the first attempt: a
+  // recovery that starts while the network is briefly down would otherwise take
+  // `null` for "empty" and declare the turn landed on the first poll that got
+  // through.
+  let baseline = await transcriptLength(sid, ctx);
+  const deadline = Date.now() + RECOVERY_BUDGET_MS;
+  try {
+    while (Date.now() < deadline) {
+      await sleep(RECOVERY_POLL_MS);
+      const length = await transcriptLength(sid, ctx);
+      if (length === null) continue; // one lost sample, not a failure
+      if (baseline === null) {
+        baseline = length;
+        continue;
+      }
+      if (length > baseline) return; // the turn landed; the painter will pull it
+    }
+    patch(sid, { error: "turn_lost" });
+  } finally {
+    patch(sid, { recovering: false });
+  }
+}
+
 async function runTurn(sid: string, composed: string, ctx: RunContext) {
   const { workspace } = ctx;
   patch(sid, {
@@ -442,22 +529,40 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     // leaves a conversation row with no transcript behind it.
     touchConversation(workspace, sid, composed, ctx.project ?? null).catch(() => {});
 
-    await consumeStream(
-      stream,
-      (delta) => {
-        const cur = getTurn(sid);
-        patch(sid, { buffered: cur.buffered + delta, lastEventAt: Date.now() });
-        startReveal(sid);
-      },
-      (progress) => patch(sid, { progress, lastEventAt: Date.now() }),
-      // The turn FAILED. One code for the copy, the harness's own words for the
-      // detail — see TurnState.errorDetail.
-      (message) => patch(sid, { error: "harness_error", errorDetail: message }),
-    );
+    let completed = false;
+    try {
+      ({ completed } = await consumeStream(
+        stream,
+        (delta) => {
+          const cur = getTurn(sid);
+          patch(sid, { buffered: cur.buffered + delta, lastEventAt: Date.now() });
+          startReveal(sid);
+        },
+        (progress) => patch(sid, { progress, lastEventAt: Date.now() }),
+        // The turn FAILED. One code for the copy, the harness's own words for the
+        // detail — see TurnState.errorDetail.
+        (message) => patch(sid, { error: "harness_error", errorDetail: message }),
+      ));
+    } catch {
+      // The body died mid-read. Same event as a clean end with no terminal marker:
+      // the stream was open, so the turn is running upstream either way. This used
+      // to be the ONLY visible symptom of a cut ("Can't reach the gateway"), and it
+      // named the wrong problem — nothing was unreachable, we just stopped being
+      // told.
+      completed = false;
+    }
+
+    // No terminal marker and no harness failure: the connection was cut while the
+    // turn was still running. Wait for the reply rather than dropping the turn (the
+    // clean-EOF path silently reloaded a transcript with nothing new in it, leaving
+    // the member's message with no reply and no explanation).
+    if (!completed && !getTurn(sid).error) await recover(sid, ctx);
 
     syncSessionRefs(workspace, sid).catch(() => {});
     notifyConversationsUpdated();
   } catch {
+    // Only reachable before the stream exists now; a mid-stream failure is a
+    // recovery, not a connectivity error.
     patch(sid, { error: "connectivity" });
   } finally {
     patch(sid, { arrivalDone: true, retrying: null, settling: false });
@@ -597,16 +702,27 @@ function tickReveal(sid: string) {
  * `choices[0].delta.content`; progress events ride as an extra top-level
  * `x_crab_progress` on an otherwise-empty chunk, which any client that doesn't
  * know about them simply skips (it yields no content delta).
+ *
+ * `completed` says whether the proxy declared the turn OVER, as opposed to the body
+ * merely ending. The distinction was always here structurally -- `[DONE]` returned
+ * while an exhausted reader broke out of the loop -- and throwing it away is what
+ * made a cut connection indistinguishable from a finished turn.
+ *
+ * Either terminal signal counts: `data: [DONE]` or a `finish_reason: "stop"` chunk.
+ * The proxy writes both from one `done()` call in a single flush, so accepting
+ * either is what makes "no marker" mean "cut" and never "we lost the last frame of
+ * a turn that had already been folded into the transcript".
  */
 export async function consumeStream(
   body: ReadableStream<Uint8Array>,
   onDelta: (delta: string) => void,
   onProgress?: (progress: Progress) => void,
   onError?: (message: string) => void,
-): Promise<void> {
+): Promise<{ completed: boolean }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -620,7 +736,7 @@ export async function consumeStream(
       const line = frame.trim();
       if (!line.startsWith("data:")) continue;
       const payload = line.slice("data:".length).trim();
-      if (payload === "[DONE]") return;
+      if (payload === "[DONE]") return { completed: true };
 
       try {
         const parsed = JSON.parse(payload);
@@ -642,6 +758,7 @@ export async function consumeStream(
         if (failure && typeof failure.message === "string" && onError) {
           onError(failure.message);
         }
+        if (parsed?.choices?.[0]?.finish_reason === "stop") completed = true;
         const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
         if (delta) onDelta(delta);
       } catch {
@@ -649,6 +766,8 @@ export async function consumeStream(
       }
     }
   }
+
+  return { completed };
 }
 
 // ---------------------------------------------------------------------------
@@ -663,6 +782,11 @@ export function __reset() {
   turns.clear();
   contexts.clear();
   drainWaiters.clear();
+  // A test that let a turn start leaves its conversation in `draining` forever: the
+  // turn is suspended on a timer that goes away with the fake clock, so its `finally`
+  // never runs. Without this, the next test's `drain` for the same sid returns
+  // immediately and the turn silently never starts.
+  draining.clear();
   onReplyDone = null;
 }
 

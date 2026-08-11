@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  RECOVERY_BUDGET_MS,
+  RECOVERY_POLL_MS,
   SEND_DEBOUNCE_MS,
   __reset,
   __seed,
@@ -10,6 +12,7 @@ import {
   getTurn,
   parkFlush,
   revealPlan,
+  setPainter,
   type Progress,
 } from "./turn-store";
 
@@ -184,8 +187,26 @@ describe("consumeStream", () => {
 
   it("stops at [DONE]", async () => {
     const deltas: string[] = [];
-    await consumeStream(sse([chunk("a"), "data: [DONE]\n\n", chunk("b")]), (d) => deltas.push(d));
+    const { completed } = await consumeStream(
+      sse([chunk("a"), "data: [DONE]\n\n", chunk("b")]),
+      (d) => deltas.push(d),
+    );
     expect(deltas).toEqual(["a"]);
+    expect(completed).toBe(true);
+  });
+
+  // long-turn-resilience. The two terminal signals are one flush in the proxy's
+  // `done()`, so either one on its own is enough to mean "the turn is over" — which
+  // is what keeps a lost last frame from being mistaken for a cut connection.
+  it("reports a finished turn from a finish_reason chunk with no [DONE] after it", async () => {
+    const stop = `data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`;
+    const { completed } = await consumeStream(sse([chunk("a"), stop]), () => {});
+    expect(completed).toBe(true);
+  });
+
+  it("reports NOT completed when the body just ends", async () => {
+    const { completed } = await consumeStream(sse([chunk("half an answer")]), () => {});
+    expect(completed).toBe(false);
   });
 
   it("skips a malformed frame instead of aborting the stream", async () => {
@@ -269,6 +290,155 @@ describe("harness error detail lifecycle", () => {
     const turn = getTurn("s1");
     expect(turn.error).toBeNull();
     expect(turn.errorDetail).toBeNull();
+  });
+});
+
+// long-turn-resilience. A cut stream is not a failure: the proxy detached the turn
+// from the request, so it is still running and its reply will land in the durable
+// transcript. These drive a WHOLE turn (enqueue -> debounce -> POST -> cut) because
+// the placement of the recovery inside runTurn is the load-bearing part — it has to
+// sit before the `finally` that would otherwise end the turn and let the painter
+// reload a transcript that does not hold the reply yet.
+describe("recovering a cut stream", () => {
+  // No [DONE] and no finish_reason: the body simply ends, which is the shape the
+  // BFF instrumentation actually observed ("upstream ended cleanly: N chunks").
+  function cutStream(frames: string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+      start(controller) {
+        for (const f of frames) controller.enqueue(encoder.encode(f));
+        controller.close();
+      },
+    });
+  }
+
+  /**
+   * Only what the store touches: `status`, `ok`, `body`, `json`. A real `Response`
+   * would drag undici's body semantics into a node-environment unit test for no gain.
+   */
+  function stub(opts: {
+    frames?: string[];
+    /** One entry per history read, in order; the last is repeated. null = the read failed. */
+    history: (number | null)[];
+  }) {
+    const reads: (number | null)[] = [];
+    const posts: string[] = [];
+    // A finished turn notifies the sidebar through a window event, and this suite
+    // runs in the node environment. Unstubbed, the throw lands in runTurn's catch
+    // and every assertion below reads "connectivity" instead of what it is testing.
+    vi.stubGlobal("window", { dispatchEvent: () => true });
+    vi.stubGlobal("fetch", (url: string) => {
+      const u = String(url);
+      if (u.includes("/history?")) {
+        const next = opts.history[Math.min(reads.length, opts.history.length - 1)];
+        reads.push(next);
+        if (next === null) return Promise.resolve({ ok: false, status: 502 });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ messages: Array.from({ length: next }, () => ({ role: "user", content: "x" })) }),
+        });
+      }
+      if (u.startsWith("/api/chat/")) {
+        posts.push(u);
+        return Promise.resolve({ ok: true, status: 200, body: cutStream(opts.frames ?? []) });
+      }
+      // touchConversation / syncSessionRefs
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+    return { reads, posts };
+  }
+
+  /** Send a message and let the turn run until the stream is cut. */
+  async function sendAndCut() {
+    enqueue("s1", "a very long task", ctx);
+    await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("waits instead of reporting a transport error", async () => {
+    stub({ history: [2] });
+    await sendAndCut();
+    const turn = getTurn("s1");
+    expect(turn.recovering).toBe(true);
+    expect(turn.error).toBeNull();
+    expect(turn.running).toBe(true);
+  });
+
+  it("keeps the bands on screen for the whole wait", async () => {
+    stub({ history: [2] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
+    const turn = getTurn("s1");
+    // The user's message must not vanish, and the turn must not be handed to the
+    // painter — reloading now would pull a transcript with no reply in it.
+    expect(turn.activeUserMessage).toBe("a very long task");
+    expect(turn.running).toBe(true);
+    expect(turn.recovering).toBe(true);
+  });
+
+  it("finishes the turn once the transcript grows", async () => {
+    stub({ history: [2, 2, 4] });
+    const painted: string[] = [];
+    setPainter((sid) => painted.push(sid));
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
+    const turn = getTurn("s1");
+    expect(turn.recovering).toBe(false);
+    expect(turn.running).toBe(false);
+    expect(turn.error).toBeNull();
+    // The reply is pulled through the existing completion path, not re-revealed.
+    expect(painted).toEqual(["s1"]);
+  });
+
+  it("gives up with its own code when the reply never lands", async () => {
+    stub({ history: [2] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_BUDGET_MS + RECOVERY_POLL_MS);
+    const turn = getTurn("s1");
+    expect(turn.recovering).toBe(false);
+    expect(turn.error).toBe("turn_lost");
+    expect(turn.errorDetail).toBeNull(); // the harness never spoke; there is nothing to quote
+  });
+
+  it("outlasts the proxy's own bound on a detached turn", async () => {
+    stub({ history: [2] });
+    await sendAndCut();
+    // turnTimeout is 10 minutes in crab-shell-proxy/internal/httpapi/sse.go; giving
+    // up at ten would report a turn as lost while the proxy is still running it.
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(getTurn("s1").error).toBeNull();
+    expect(getTurn("s1").recovering).toBe(true);
+  });
+
+  it("does not take a failed read as the baseline", async () => {
+    // The baseline read fails, then every poll answers 3. Had the failure counted as
+    // "empty", the first poll would have looked like growth and declared the turn
+    // landed with nothing to show.
+    const { reads } = stub({ history: [null, 3] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
+    expect(reads[0]).toBeNull();
+    expect(getTurn("s1").recovering).toBe(true);
+    expect(getTurn("s1").error).toBeNull();
+  });
+
+  it("leaves a harness failure alone (a reported failure is not a cut)", async () => {
+    const failure = `data: ${JSON.stringify({
+      choices: [{ index: 0, delta: {} }],
+      x_crab_error: { message: "does not support image input" },
+    })}\n\n`;
+    const { reads } = stub({ frames: [failure], history: [2] });
+    await sendAndCut();
+    const turn = getTurn("s1");
+    expect(turn.error).toBe("harness_error");
+    expect(turn.errorDetail).toBe("does not support image input");
+    expect(turn.recovering).toBe(false);
+    expect(reads).toEqual([]); // no polling at all
   });
 });
 
