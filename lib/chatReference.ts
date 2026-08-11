@@ -22,7 +22,24 @@ export interface SpanReference {
   messages: number;
 }
 
-export type ChatReference = TaskReference | SpanReference;
+/**
+ * One entity out of the agent's knowledge graph.
+ *
+ * Carries the entity's NAME and its shape, never its observations. The agent owns the graph through
+ * its own MCP tools, so a name is a lookup key — inlining the facts would duplicate into the
+ * transcript exactly what the agent can read for itself, which is the rule every variant here
+ * follows.
+ */
+export interface EntityReference {
+  kind: "entity";
+  name: string;
+  /** The entity type, or "unknown" — normalised by the caller, as the map does. */
+  entityType: string;
+  observations: number;
+  relations: number;
+}
+
+export type ChatReference = TaskReference | SpanReference | EntityReference;
 
 /** The chip's heading and one-line detail. */
 export function referenceChip(
@@ -45,6 +62,11 @@ export function referenceChip(
         title: t.canvasActivity.referencedSpan,
         preview: `${ref.title} · ${ref.from} → ${ref.to}`,
       };
+    case "entity":
+      return {
+        title: t.memoryGraph.referencedEntity,
+        preview: `${ref.name} · ${ref.entityType}`,
+      };
   }
 }
 
@@ -63,5 +85,9 @@ export function buildReferenceMarker(ref: ChatReference, t: ChatDict): string {
       return `[${t.scheduledTasks.markerRun}: "${ref.name}" (${ref.jobId}), run ${ref.runId}, ${ref.instant}]`;
     case "span":
       return `[${t.canvasActivity.markerSpan}: "${ref.title}" — ${ref.messages} ${t.canvasActivity.markerMessages}, ${ref.from} → ${ref.to}]`;
+    // The NAME is the payload: it is the key the agent's own open_nodes takes, so the agent can
+    // read the observations rather than being handed a stale copy of them.
+    case "entity":
+      return `[${t.memoryGraph.markerEntity}: "${ref.name}" (${ref.entityType}) — ${ref.observations} ${t.memoryGraph.observations}, ${ref.relations} ${t.memoryGraph.relations}]`;
   }
 }

@@ -26,13 +26,30 @@ const rel = (from: string, to: string, relationType = "maintains"): Relation => 
 
 describe("buildElements", () => {
   it("carries what the stylesheet needs from each entity", () => {
-    const { nodes } = buildElements([entity("ledger", { type: "system", observationCount: 7 })], []);
+    const { nodes } = buildElements(
+      [entity("ledger", { type: "system", observationCount: 7, relationCount: 4 })],
+      [],
+    );
     expect(nodes[0].data).toMatchObject({
       id: "ledger",
       label: "ledger",
       type: "system",
       observations: 7,
+      relations: 4,
     });
+  });
+
+  // The degree comes off the projection, not off the drawn edges. Counting what is drawn would
+  // make an entity's degree shrink as the member filters — a number that changes when you look
+  // at it differently is not a property of the graph, and the hover card and the degree size
+  // encoding both present it as one.
+  it("reports the whole-graph degree, not the number of edges it drew", () => {
+    const { nodes, edges } = buildElements(
+      [entity("hub", { relationCount: 9 })],
+      [rel("hub", "gone")],
+    );
+    expect(edges, "the only relation points outside the page").toHaveLength(0);
+    expect(nodes[0].data.relations).toBe(9);
   });
 
   // Not cosmetic: Cytoscape THROWS on an edge naming a node that does not exist, so this
@@ -319,5 +336,141 @@ describe("buildElements — the node ceiling", () => {
     for (const e of edges) {
       expect(ids.has(e.data.source) && ids.has(e.data.target)).toBe(true);
     }
+  });
+});
+
+// GD-A3. The relation-type facet is the one filter that does NOT remove entities, and that
+// asymmetry is the whole reason it needs its own tests: an edge-only control that quietly
+// deleted nodes would move the entire layout, which is what NFR-2 exists to prevent.
+describe("buildElements — the relation-type facet", () => {
+  const graph = [
+    entity("alice", { type: "person" }),
+    entity("ledger", { type: "system" }),
+    entity("bob", { type: "person" }),
+    entity("unrelated", { type: "system" }),
+  ];
+  const rels = [rel("alice", "ledger", "maintains"), rel("ledger", "bob", "reviews")];
+
+  it("treats null as every type, which is not the same as an empty list", () => {
+    expect(buildElements(graph, rels, { relationTypes: null }).edges).toHaveLength(2);
+  });
+
+  it("hides the relations it was not given", () => {
+    const { edges } = buildElements(graph, rels, { relationTypes: ["maintains"] });
+    expect(edges.map((e) => e.data.label)).toEqual(["maintains"]);
+  });
+
+  it("KEEPS every entity when it hides an edge — no query in play", () => {
+    // The promise of GD-A3: hiding relations must not delete entities. With no query every
+    // entity is a match, which is exactly where this has to hold.
+    const { nodes, edges } = buildElements(graph, rels, { relationTypes: [] });
+    expect(nodes).toHaveLength(4);
+    expect(edges).toHaveLength(0);
+  });
+
+  it("reaches context through VISIBLE relations only, when a query is narrowing", () => {
+    // Matching "ledger" normally pulls in both alice and bob. With only `maintains` visible,
+    // bob is unreachable — so it is not drawn as a context node with no edge to explain it.
+    const all = buildElements(graph, rels, { query: "ledger" });
+    expect(all.nodes.map((n) => n.data.id).sort()).toEqual(["alice", "bob", "ledger"]);
+
+    const gated = buildElements(graph, rels, { query: "ledger", relationTypes: ["maintains"] });
+    expect(gated.nodes.map((n) => n.data.id).sort()).toEqual(["alice", "ledger"]);
+  });
+
+  it("never drops an entity the member actually matched", () => {
+    // bob matched. Its only relation is hidden, so it has no context at all — and it is still
+    // drawn, alone, rather than filtered away by a control that only governs edges.
+    const { nodes } = buildElements(graph, rels, {
+      query: "bob",
+      relationTypes: ["maintains"],
+    });
+    expect(nodes.map((n) => n.data.id)).toEqual(["bob"]);
+  });
+});
+
+// GD-A3. A hard gate on nodes, unlike the relation facet above.
+describe("buildElements — the minimum-observations facet", () => {
+  const graph = [
+    entity("thin", { observationCount: 1 }),
+    entity("thick", { observationCount: 9 }),
+  ];
+  const rels = [rel("thin", "thick")];
+
+  it("draws everything at zero", () => {
+    expect(buildElements(graph, rels, { minObservations: 0 }).nodes).toHaveLength(2);
+  });
+
+  it("removes entities below the floor", () => {
+    const { nodes } = buildElements(graph, rels, { minObservations: 5 });
+    expect(nodes.map((n) => n.data.id)).toEqual(["thick"]);
+  });
+
+  it("is inclusive at the boundary, so the floor means 'at least'", () => {
+    expect(buildElements(graph, rels, { minObservations: 9 }).nodes).toHaveLength(1);
+  });
+
+  it("drops the edges of what it removed, rather than letting the build throw", () => {
+    expect(buildElements(graph, rels, { minObservations: 5 }).edges).toHaveLength(0);
+  });
+
+  it("combines with the type gate instead of replacing it", () => {
+    const mixed = [
+      entity("a", { type: "person", observationCount: 9 }),
+      entity("b", { type: "system", observationCount: 9 }),
+    ];
+    const { nodes } = buildElements(mixed, [], { type: "person", minObservations: 5 });
+    expect(nodes.map((n) => n.data.id)).toEqual(["a"]);
+  });
+});
+
+// GD-D2. Block D supplies a set of NAMES from the server's BM25 ranking, replacing the
+// substring predicate and nothing else. Structure still comes wholly from the browse
+// projection — that is what keeps NFR-1 intact.
+describe("buildElements — matchNames replaces the name predicate", () => {
+  const graph = [
+    entity("alice", { type: "person" }),
+    entity("ledger", { type: "system" }),
+    entity("bob", { type: "person" }),
+  ];
+  const rels = [rel("alice", "ledger"), rel("ledger", "bob")];
+
+  it("matches by the given names rather than by the query text", () => {
+    // The name "ledger" contains no "alice", so a substring filter could never do this.
+    const { nodes } = buildElements(graph, rels, {
+      query: "anything at all",
+      matchNames: new Set(["alice"]),
+    });
+    const byId = new Map(nodes.map((n) => [n.data.id, n.data.match]));
+    expect(byId.get("alice")).toBe(true);
+    expect(byId.get("ledger")).toBe(false);
+  });
+
+  it("keeps the neighbours of its matches, exactly as a substring query does", () => {
+    const { nodes } = buildElements(graph, rels, { matchNames: new Set(["ledger"]) });
+    expect(nodes.map((n) => n.data.id).sort()).toEqual(["alice", "bob", "ledger"]);
+  });
+
+  it("stays inside the type gate — a hit the gate excluded stays excluded", () => {
+    // The type filter is a HARD gate and the server does not know about it.
+    const { nodes } = buildElements(graph, rels, {
+      type: "person",
+      matchNames: new Set(["ledger"]),
+    });
+    expect(nodes.map((n) => n.data.id), "ledger is a system").toEqual([]);
+  });
+
+  it("draws nothing when the server matched nothing, rather than falling back to everything", () => {
+    // An empty hit set is a real answer: "no entity mentions this". Treating it as "no filter"
+    // would answer a question nobody asked and look like the search had been ignored.
+    expect(buildElements(graph, rels, { matchNames: new Set() }).nodes).toHaveLength(0);
+  });
+
+  it("takes precedence over the substring query, so the two can never both apply", () => {
+    const { nodes } = buildElements(graph, rels, {
+      query: "bob",
+      matchNames: new Set(["alice"]),
+    });
+    expect(nodes.map((n) => n.data.id).sort()).toEqual(["alice", "ledger"]);
   });
 });

@@ -40,7 +40,7 @@ import AttachmentButton from "@/app/chat/attachment-button";
 import MemoryEditor from "@/app/chat/memory-editor";
 import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
 import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
-import type { TaskReference } from "@/lib/cronTasks";
+import type { ChatReference } from "@/lib/chatReference";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -252,7 +252,7 @@ export default function UploadsSidebar({
    * holds it as a context slot for the next message. The panel's only outbound
    * value — everything else here flows inward.
    */
-  onReference?: (ref: TaskReference) => void;
+  onReference?: (ref: ChatReference) => void;
   /**
    * Which detail to open on mount, or null for the menu.
    *
@@ -793,6 +793,7 @@ export default function UploadsSidebar({
                 <MemoryGraphPanel
                   workspace={workspace}
                   active={section === "graph"}
+                  onReference={onReference}
                 />
               )}
               {section === "tasks" && (
