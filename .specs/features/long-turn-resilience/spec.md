@@ -89,6 +89,15 @@ The member is told the reply never arrived and that reloading is worth trying �
 distinct from "can't reach the gateway" and from "the agent couldn't complete
 this message", because the action differs.
 
+**FR-9a — That banner survives a turn queued during the wait.**
+Every other error code is cleared when a turn starts, on the rule that a send
+retires the previous banner (`turn-failure-visible` DEC/T-03). That rule assumes
+the send came *after* the failure was visible. A turn queued during a recovery was
+sent up to eleven minutes before the failure existed, so the ordinary rule would
+wipe the banner in the tick it appeared — and for a turn that produced nothing at
+all, that banner is its only account. A send made *after* it appears still retires
+it.
+
 **FR-10 — Recovery survives navigation.**
 It runs in the module-scope turn store, like the turn itself, so switching
 conversation or workspace mid-recovery does not abandon it.

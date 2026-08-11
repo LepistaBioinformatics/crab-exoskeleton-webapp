@@ -326,7 +326,14 @@ describe("recovering a cut stream", () => {
     // A finished turn notifies the sidebar through a window event, and this suite
     // runs in the node environment. Unstubbed, the throw lands in runTurn's catch
     // and every assertion below reads "connectivity" instead of what it is testing.
-    vi.stubGlobal("window", { dispatchEvent: () => true });
+    //
+    // `matchMedia` answering "no preference" is what keeps the reveal driver in play:
+    // absent it, `prefersReducedMotion` reads true and content is handed over whole,
+    // so the mid-answer cut below would never exercise the driver at all.
+    vi.stubGlobal("window", {
+      dispatchEvent: () => true,
+      matchMedia: () => ({ matches: false }),
+    });
     vi.stubGlobal("fetch", (url: string) => {
       const u = String(url);
       if (u.includes("/history?")) {
@@ -424,6 +431,45 @@ describe("recovering a cut stream", () => {
     await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
     expect(reads[0]).toBeNull();
     expect(getTurn("s1").recovering).toBe(true);
+    expect(getTurn("s1").error).toBeNull();
+  });
+
+  it("keeps a partial answer on screen and stops revealing it", async () => {
+    const half = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: "half an answer" } }] })}\n\n`;
+    stub({ frames: [half], history: [2] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 2);
+    const turn = getTurn("s1");
+    // A cut can land mid-answer. What arrived stays -- it is evidence of the work --
+    // and the reveal driver must have finished draining it rather than keeping a timer
+    // alive underneath the recovery for the next eleven minutes.
+    expect(turn.revealed).toBe("half an answer");
+    expect(turn.buffered).toBe("");
+    expect(turn.recovering).toBe(true);
+    expect(turn.running).toBe(true);
+  });
+
+  // The banner is set at the END of the wait, up to eleven minutes after the member
+  // queued their next message. Clearing it on that turn's start -- which is the rule
+  // for every other code -- would wipe the only account of a turn that produced
+  // nothing, in the same tick it appeared.
+  it("carries the banner into a turn queued during the wait", async () => {
+    stub({ history: [2] });
+    await sendAndCut();
+    enqueue("s1", "still there?", ctx);
+    await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
+    expect(getTurn("s1").queue).toEqual(["still there?"]);
+    await vi.advanceTimersByTimeAsync(RECOVERY_BUDGET_MS + RECOVERY_POLL_MS);
+    // The queued turn has started by now (the recovery released the drain loop).
+    expect(getTurn("s1").activeUserMessage).toBe("still there?");
+    expect(getTurn("s1").error).toBe("turn_lost");
+  });
+
+  it("retires the banner on the next actual send", async () => {
+    __seed("s1", { error: "turn_lost" });
+    enqueue("s1", "never mind, new question", ctx);
+    // Sent AFTER the banner was visible: that is a decision to move on, and it is
+    // what the enqueue rule exists for.
     expect(getTurn("s1").error).toBeNull();
   });
 

@@ -451,11 +451,24 @@ async function recover(sid: string, ctx: RunContext) {
 
 async function runTurn(sid: string, composed: string, ctx: RunContext) {
   const { workspace } = ctx;
+  // A `turn_lost` banner is CARRIED into the next turn, unlike every other code.
+  //
+  // The rule this breaks (a send retires the previous banner, see `enqueue`) assumes
+  // the send came AFTER the failure was visible. A turn queued during a recovery was
+  // sent up to eleven minutes BEFORE the failure existed, so starting it would wipe
+  // the banner in the same tick it appeared -- and for a turn that produced nothing at
+  // all, that banner is the only account of it. The next actual send still retires it.
+  //
+  // Safe to leave standing because the budget outlasts the proxy's own bound on the
+  // turn: by the time this is set, the reply it reports as missing cannot still be on
+  // its way.
+  const lost = getTurn(sid).error === "turn_lost";
   patch(sid, {
     running: true,
-    error: null,
+    error: lost ? "turn_lost" : null,
     // Cleared with the code it belongs to, or a stale harness sentence would render
-    // underneath a later, unrelated failure.
+    // underneath a later, unrelated failure. Never set alongside `turn_lost` -- the
+    // harness never spoke in that case.
     errorDetail: null,
     activeUserMessage: composed,
     revealed: "",

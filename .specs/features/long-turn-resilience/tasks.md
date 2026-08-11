@@ -91,8 +91,24 @@ does not.
 
 ## Status
 
-All seven tasks done. `yarn test` 843 passing in 60 files (was 826 in 59);
+All seven tasks done. `yarn test` 846 passing in 60 files (was 826 in 59);
 `yarn build` clean.
+
+### T-08 — carry `turn_lost` into a queued turn (FR-9a)
+
+Found in review, after the rest was already green, and it made the banner useless
+in the one case where a member had done something about the wait.
+
+The trace: budget runs out → `error: "turn_lost"` → the recovery returns → the
+`finally` finishes the turn → `releaseDrainWaiters` lets the drain loop start the
+turn the member queued during the wait → that turn's first `patch` in `runTurn`
+sets `error: null`. The banner was wiped in the same tick it appeared, and it is
+the only account of a turn that produced nothing.
+
+`turn_lost` is now carried through `runTurn`'s reset, alone among the codes. Safe
+to leave standing precisely because of FR-8: the budget outlasts the proxy's own
+bound, so a reply it reports as missing cannot still be on its way.
+`app/chat/turn-store.ts`.
 
 ### What the tests caught
 
@@ -128,3 +144,11 @@ real cut produces `completed: false` rather than a throw *before* the body exist
 Runtime check, on a turn long enough to be cut: the band must move from progress
 to the recovery line and then to the reply, with no error and no blank
 conversation. Record the outcome here.
+
+Also worth watching for, since the suite cannot see it: the shimmer sweeping and
+the elapsed readout advancing (effects never fire under `environment: "node"`), and
+the recovery line rendered beneath a partially revealed reply — the store side of
+that cut is tested, the `chat-view.tsx` arm that draws it is not.
+
+And OQ-1 becomes answerable here for the first time: a recovery that fires is a cut
+that happened, so this is the place to finally learn what cuts the stream.
