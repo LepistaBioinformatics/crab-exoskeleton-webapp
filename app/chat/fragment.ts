@@ -44,6 +44,14 @@ export interface FragmentState {
   // shared link keeps it. Absent means the default, which is TREE: the tree shows how
   // conversations branch from one another, and a flat list is the reduction of it.
   hv?: string;
+  // Right sidebar: which section is open, or "menu" for the section list. ABSENT means
+  // the sidebar is closed, which is why one key covers what used to be two states (a
+  // boolean in localStorage plus a section that persisted nowhere).
+  //
+  // It replaced `localStorage["chat-files-open"]`, deliberately and not additively:
+  // keeping both would have left two owners of the same state, disagreeing the moment a
+  // second tab was opened. Same migration the history view mode already went through.
+  rs?: string;
   // Top-level workspace view ("canvas"); when set, the Canvas timeline replaces
   // the history sidebar + chat view. Persisted in the URL so a reload or shared
   // link keeps it. Absent means the traditional chat.
@@ -118,7 +126,21 @@ function readFragment(): FragmentState {
     msg: params.get("msg") ?? undefined,
     hv: params.get("hv") ?? undefined,
     view: params.get("view") ?? undefined,
+    rs: params.get("rs") ?? undefined,
   };
+}
+
+/**
+ * readFragment, for tests only.
+ *
+ * Exported because a setter is only half of a fragment key: `rs` shipped written but
+ * unparsed, which TypeScript cannot catch — every field of FragmentState is optional,
+ * so a key missing from readFragment's list is simply undefined forever. The round trip
+ * is the only thing that proves a key works, and useFragment cannot provide it without
+ * a DOM and an effect.
+ */
+export function readFragmentForTest(): FragmentState {
+  return readFragment();
 }
 
 // Sets `sid` on the current fragment while preserving t/s/r. Assigning
@@ -157,6 +179,20 @@ export function setView(view: "chat" | "canvas"): void {
   if (view === "canvas") params.set("view", "canvas");
   else params.delete("view");
   params.delete("msg");
+  window.location.hash = params.toString();
+}
+
+// Persists the right sidebar in the URL: `null` closes it, "menu" opens it on the
+// section list, and a section name opens it there.
+//
+// Same assign-`location.hash` mechanism as setHistoryView so a native `hashchange`
+// fires and the address bar updates. Closed is the default, so it is written by
+// REMOVING the key -- which is also what keeps a shared link from carrying a sidebar
+// the recipient did not ask for.
+export function setRightSidebar(section: string | null): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (section) params.set("rs", section);
+  else params.delete("rs");
   window.location.hash = params.toString();
 }
 

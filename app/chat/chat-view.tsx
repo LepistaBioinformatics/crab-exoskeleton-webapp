@@ -22,12 +22,13 @@ import {
   setFragmentSid,
   setFragmentProjectSid,
   historyQuery,
+  setRightSidebar,
   useFragment,
   type Workspace,
 } from "@/app/chat/fragment";
 import ViewModeToggle from "@/app/chat/view-mode-toggle";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
-import UploadsSidebar from "@/app/chat/uploads-sidebar";
+import UploadsSidebar, { type Section } from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
 import { resolveMentions, type MentionCandidate } from "@/lib/fileMentions";
@@ -232,7 +233,17 @@ export default function ChatView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
+  // The right sidebar is DERIVED from the URL, not held in state.
+  //
+  // It used to be `useState` seeded from localStorage, which survived a reload but was
+  // per-browser, unshareable, and — the actual complaint — carried no record of WHICH
+  // section was open, so every refresh landed back on the section list. One fragment key
+  // replaces both: absent is closed, "menu" is the section list, anything else is that
+  // section. Deriving rather than mirroring means there is no second owner to disagree
+  // with the URL, which is how the history view mode is handled too.
+  const rightSidebar = fragment?.rs ?? null;
+  const filesOpen = rightSidebar !== null;
+  const openSection = rightSidebar === "menu" ? null : (rightSidebar as Section | null);
   const [mediaRefresh, setMediaRefresh] = useState(0);
   // What `@` can reference. Held HERE rather than in the composer because both need
   // it and they must not disagree: the composer offers the menu, and compose() below
@@ -271,14 +282,6 @@ export default function ChatView({
   // When the current conversation is empty, the most-recent OTHER conversation
   // (if the user has one) is offered as a "resume where you left off" card.
   const [resumeCandidate, setResumeCandidate] = useState<ConversationSummary | null>(null);
-
-  // The uploads panel is a permanent right column; remember whether it's open.
-  useEffect(() => {
-    setFilesOpen(localStorage.getItem("chat-files-open") === "1");
-  }, []);
-  useEffect(() => {
-    localStorage.setItem("chat-files-open", filesOpen ? "1" : "0");
-  }, [filesOpen]);
 
   // Find the most-recent conversation other than the current one, skipping
   // freshly-minted empty chats, so an empty conversation can offer to resume a
@@ -796,7 +799,7 @@ export default function ChatView({
             size="sm"
             aria-label={t.view.files}
             title={t.view.files}
-            onClick={() => setFilesOpen((o) => !o)}
+            onClick={() => setRightSidebar(filesOpen ? null : "menu")}
           >
             <PanelRight size={18} aria-hidden />
           </IconButton>
@@ -1142,8 +1145,10 @@ export default function ChatView({
         <UploadsSidebar
           workspace={workspace}
           refreshSignal={mediaRefresh}
-          onClose={() => setFilesOpen(false)}
+          onClose={() => setRightSidebar(null)}
           onReference={onChatRef}
+          initialSection={openSection}
+          onSectionChange={(next) => setRightSidebar(next ?? "menu")}
         />
       )}
 
