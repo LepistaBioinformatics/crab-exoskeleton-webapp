@@ -218,7 +218,12 @@ export default function ChatShell({ email }: { email: string }) {
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    // `h-dvh`, not `h-screen`: `100vh` is the LARGE viewport, which ignores both the
+    // retractable browser UI and the soft keyboard, so the column stayed taller than the
+    // screen and the top bar went with it. The dynamic viewport tracks what is actually
+    // visible. Paired with `interactiveWidget: "resizes-content"` in app/layout.tsx —
+    // neither half works alone.
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Mobile top bar */}
       <div className="flex items-center gap-2 border-b border-brand/30 bg-surface px-3 py-2 md:hidden">
         <IconButton
