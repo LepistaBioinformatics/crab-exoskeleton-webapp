@@ -337,6 +337,48 @@
   --animate-fade-in: fadeIn 420ms ease-out both;
 }
 
+/* A working turn has to look like one between events, not only when one arrives:
+   the agent's narration can be tens of seconds apart, and a band that has not
+   moved in a minute reads as a frozen chat. So the progress text carries a light
+   sweep on its own clock, independent of anything arriving.
+
+   The sweep is the TEXT, not a box over it -- a gradient clipped to the glyphs,
+   which is why the color has to come from the background and `color` goes
+   transparent. That makes the reduced-motion override below mandatory rather than
+   cosmetic: the global guard only freezes animations, and a frozen sweep would
+   leave the text painted by whatever part of the gradient happened to stop over
+   it. */
+@keyframes progressShimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+.progress-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    currentColor 0%,
+    currentColor 38%,
+    color-mix(in srgb, currentColor 38%, transparent) 50%,
+    currentColor 62%,
+    currentColor 100%
+  );
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: progressShimmer 2.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-shimmer {
+    background-image: none;
+    color: inherit;
+  }
+}
+
 /* The composer breathes a soft accent ring while the user is actively typing.
    Auto-neutralized by the reduced-motion guard below. */
 @keyframes composerPulse {

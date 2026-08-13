@@ -51,7 +51,7 @@ import {
   setPainter,
   useTurn,
 } from "@/app/chat/turn-store";
-import TurnProgress from "@/app/chat/turn-progress";
+import TurnProgress, { TurnRecovery } from "@/app/chat/turn-progress";
 
 // Bands stretch the full width of the message area; the message content itself
 // stays centered at the composer width (an inner max-w wrapper in the render).
@@ -243,8 +243,18 @@ export default function ChatView({
   // module-scope store -- so it is still here when you come back from another
   // chat, or another workspace (which remounts this component).
   const turn = useTurn(sessionId);
-  const { pending, queue, running: sending, retrying, error, errorDetail, revealed, progress, settling } =
-    turn;
+  const {
+    pending,
+    queue,
+    running: sending,
+    retrying,
+    error,
+    errorDetail,
+    revealed,
+    progress,
+    recovering,
+    settling,
+  } = turn;
   // Transient feedback for slash commands (/rename, /tag).
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -982,13 +992,29 @@ export default function ChatView({
                     <div className="relative mx-auto w-full max-w-[720px] px-4">
                       {revealed === "" ? (
                         // Before the first word: progress only. The two never
-                        // share the band.
-                        <TurnProgress progress={progress} lastEventAt={turn.lastEventAt} />
+                        // share the band. A recovery REPLACES progress rather than
+                        // joining it -- what produced progress is the stream that
+                        // just went away.
+                        recovering ? (
+                          <TurnRecovery since={turn.recoveringSince} />
+                        ) : (
+                          <TurnProgress progress={progress} lastEventAt={turn.lastEventAt} />
+                        )
                       ) : (
                         <>
                           <MessageContent content={parseAnexos(revealed).text} streaming />
-                          {sending && (
-                            <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                          {/* A cut can land mid-answer, so the notice has to be
+                              reachable with content already on screen -- beneath the
+                              partial reply, and INSTEAD of the caret. A caret says
+                              more is coming down this wire; nothing is. */}
+                          {recovering ? (
+                            <div className="mt-2">
+                              <TurnRecovery since={turn.recoveringSince} />
+                            </div>
+                          ) : (
+                            sending && (
+                              <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                            )
                           )}
                         </>
                       )}

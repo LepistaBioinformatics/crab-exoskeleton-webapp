@@ -35,6 +35,11 @@ const en = {
   // sentence is shown beneath this, untranslated, because it is the only part that
   // says what to change.
   harness_error: "The agent couldn't complete this message.",
+  // long-turn-resilience: the connection was cut, the agent kept working, and the
+  // reply still hadn't landed in the transcript when the wait ran out. Its own code
+  // because the action is its own: not "try again" (the turn may yet finish) and not
+  // "the gateway is down" (nothing is unreachable).
+  turn_lost: "The connection dropped and the reply hasn't arrived yet. Reload the conversation to check.",
   gateway_retries_exhausted:
     "Still can't reach the gateway after several attempts. Try again shortly.",
   // user-owned-models. The probe answers with an error CLASS, never the
@@ -108,6 +113,8 @@ const pt: ErrorDict = {
   version_conflict: "Outro admin alterou este modelo — recarregue antes de salvar.",
   models_incomplete: "Preencha o nome do modelo, o provedor e o modelo.",
   harness_error: "O agente não conseguiu concluir esta mensagem.",
+  turn_lost:
+    "A conexão caiu e a resposta ainda não chegou. Recarregue a conversa para verificar.",
   gateway_retries_exhausted:
     "Ainda não foi possível falar com o gateway após várias tentativas. Tente daqui a pouco.",
   probe_bad_key: "O endpoint recusou essa chave de API.",
