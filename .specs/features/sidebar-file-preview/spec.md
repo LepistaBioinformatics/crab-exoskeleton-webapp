@@ -104,6 +104,9 @@ in place.
    monospaced, scrollable, `pre-wrap` block — never interpreting it as markdown.
 3. WHEN the listing reports a size above **2 MB** THEN the system SHALL NOT fetch
    the body; it SHALL say the file is too large to preview and offer Download.
+4. WHEN there is no listing size (a chat `[anexo: …]` chip) THEN the cap SHALL be
+   applied again to the fetched blob before it is read as text — the frozen-tab
+   failure the cap exists to prevent does not care which surface opened the file.
 
 **Independent Test**: Preview a small `.csv`, see its raw rows; preview a 5 MB
 `.txt`, see the size notice with no network request for the body.
@@ -124,8 +127,10 @@ the other three formats.
 1. WHEN a file's extension is `pdf` THEN the menu SHALL offer Preview.
 2. WHEN the member previews a PDF THEN the system SHALL render the fetched blob in
    an `<iframe>` sized to the overlay.
-3. WHEN the browser has no built-in PDF viewer THEN the iframe's fallback content
-   SHALL offer Download rather than showing a blank frame.
+3. WHEN the browser has no built-in PDF viewer THEN the frame SHALL show a message
+   and a Download button rather than a blank rectangle. This requires `<object>`,
+   not `<iframe>`: an iframe's children are fallback for a browser with no frame
+   support at all, so on a browser that merely lacks a PDF viewer they never paint.
 
 **Independent Test**: Preview a PDF in Chrome and in Firefox; both page through it.
 
@@ -177,23 +182,29 @@ reopen, download from the header.
 | PREV-01 | P1: Image preview | `file-preview.tsx` (`kind === "image"`, direct `mediaUrl` src) | Implemented — covered by test |
 | PREV-02 | P1: Markdown preview via `MessageContent` | `file-preview.tsx` (`kind === "markdown"`) | Implemented — runtime-unverified |
 | PREV-03 | P1: Relative image resolution inside markdown | `lib/media.ts:resolveMediaRef` + `message-content.tsx:MarkdownImageContext` | Implemented — covered by test |
-| PREV-04 | P1: Text/CSV preview with a 2 MB cap | `lib/media.ts:PREVIEW_TEXT_MAX`, `file-preview.tsx:tooLarge` | Implemented — covered by test |
-| PREV-05 | P2: PDF preview in an iframe | `file-preview.tsx` (blob URL, because the proxy sends `Content-Disposition: attachment`) | Implemented — runtime-unverified |
+| PREV-04 | P1: Text/CSV preview with a 2 MB cap | `lib/media.ts:PREVIEW_TEXT_MAX`, `file-preview.tsx` (listing size, then the blob) | Implemented — covered by test |
+| PREV-05 | P2: PDF preview in an `<object>` | `file-preview.tsx` (blob URL, because the proxy sends `Content-Disposition: attachment`) | Implemented — runtime-unverified |
 | PREV-06 | P2: Esc/backdrop/close + header Download + URL revocation | `file-preview.tsx` (document keydown, backdrop `onClick`, effect cleanup) | Implemented — partially covered |
-| PREV-07 | Edge: non-previewable formats show Download only | `attachment-button.tsx` (`kind && …`) | Implemented — covered by `previewKind` test |
+| PREV-07 | Edge: non-previewable formats show Download only | `attachment-button.tsx` (`kind && …`) | Implemented — covered by `attachment-menu.test.tsx`, which clicks the row |
 | PREV-08 | Edge: `project` forwarded on every preview fetch | `lib/media.ts:mediaUrl` (single choke point) | Implemented — covered by test |
 | PREV-09 | Edge: case-insensitive extension detection | `lib/media.ts:previewKind` | Implemented — covered by test |
 
 **Coverage:** 9 total, 9 mapped, 0 unmapped.
 
-**Gate run:** `npm test` → 70 files / 983 tests pass (baseline was 68 / 960; +23 new).
+**Gate run:** `npm test` → 71 files / 985 tests pass (baseline was 68 / 960; +25 new).
 `npm run build` compiles clean. `npm run lint` is broken in this repo and was not used.
 
-**What is NOT verified:** nothing was exercised against a live stack. The vitest
-environment is `node`, so no effect ever fires in a test — which means the fetch paths
+**What is NOT verified:** nothing was exercised against a live stack. The suite's
+default environment is `node`, where no effect ever fires — so the fetch paths
 (markdown body, text body, PDF blob), the Esc handler and the object-URL revocation are
-covered by reading, not by running. First-paint behaviour (image src, the size refusal,
-the markdown image rewrite) is genuinely asserted.
+covered by reading, not by running. What IS genuinely asserted: first-paint behaviour
+(image src, the size refusal, the markdown image rewrite) in `file-preview.test.tsx`,
+and the menu wiring in `attachment-menu.test.tsx`, which opts into jsdom and clicks.
+
+**One assumption carried into production:** the image path rests on `<img>` ignoring
+`Content-Disposition: attachment`. That is correct browser behaviour, but it is untested
+here. If it turns out otherwise the fix is one line — route the image through
+`fetchMediaBlob` the way the PDF already does.
 
 ---
 

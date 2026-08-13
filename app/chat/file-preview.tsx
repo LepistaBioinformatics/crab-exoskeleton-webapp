@@ -75,7 +75,14 @@ export default function FilePreview({
 
     if (needsBody) {
       fetchMediaBlob(workspace, path)
-        .then((blob) => blob.text())
+        .then((blob) => {
+          // Checked AGAIN, against the bytes. The listing's size is the cheap guard, but
+          // a chat `[anexo: …]` chip has no listing behind it and passes none — and the
+          // failure this cap exists to prevent (a huge CSV freezing the tab) does not
+          // care which surface opened the file.
+          if (blob.size > PREVIEW_TEXT_MAX) throw new Error("too_large");
+          return blob.text();
+        })
         .then((body) => {
           if (!cancelled) setText(body);
         })
@@ -197,9 +204,19 @@ export default function FilePreview({
           )}
 
           {!error && kind === "pdf" && frameUrl && (
-            <iframe src={frameUrl} title={name} className="h-full w-full border-0">
-              <p className="p-4 text-sm text-fg-muted">{t.preview.pdfFallback}</p>
-            </iframe>
+            // `<object>`, not `<iframe>`: an iframe's children are fallback for a browser
+            // with no frame support at all, so on a browser that simply has no PDF viewer
+            // they never paint and the member gets a blank rectangle. An object DOES
+            // render its children when it cannot display the data.
+            <object data={frameUrl} type="application/pdf" className="h-full w-full">
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+                <p className="text-sm text-fg-muted">{t.preview.pdfFallback}</p>
+                <Button size="sm" variant="outlined" disabled={downloading} onClick={onDownload}>
+                  <Download size={14} aria-hidden />
+                  {downloading ? t.attachment.downloading : t.attachment.download}
+                </Button>
+              </div>
+            </object>
           )}
 
           {!error && kind === "markdown" && text !== null && (
