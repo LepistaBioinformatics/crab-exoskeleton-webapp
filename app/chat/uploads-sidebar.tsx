@@ -622,8 +622,9 @@ export default function UploadsSidebar({
         className="group flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-2 py-1.5"
         {...dragProps(f.name)}
       >
-        <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
-        {/* The row shows only the leaf; the folder is the branch above it. */}
+        {/* The row shows only the leaf; the folder is the branch above it. No file icon:
+            every row in this list is a file, so the glyph repeated once per row said
+            nothing and cost the name the width it needed to stay readable. */}
         <AttachmentButton
           workspace={workspace}
           path={f.path}
@@ -631,22 +632,30 @@ export default function UploadsSidebar({
           size={f.size}
           tone="row"
         />
-        <span className="shrink-0 font-mono text-[11px] text-fg-muted">
-          {formatSize(f.size)}
-        </span>
-        <IconButton
-          variant="ghost"
-          size="sm"
-          aria-label={`${t.uploads.deletePrefix} ${f.name}`}
-          title={c.actions.delete}
-          onClick={() => {
-            setDeleteError(null);
-            setDeletingPath(f.path);
-          }}
-          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        >
-          <Trash2 size={14} aria-hidden />
-        </IconButton>
+        {/* Everything that is not the name, held together at the right edge. `shrink-0`
+            so the group keeps its size and the NAME is what gives way in a narrow
+            column — it truncates rather than squeezing the controls out of reach. */}
+        <div className="flex shrink-0 items-center gap-1">
+          {/* The size is information, not an action, so it does not hide on hover. */}
+          <span className="font-mono text-[11px] text-fg-muted">
+            {formatSize(f.size)}
+          </span>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label={`${t.uploads.deletePrefix} ${f.name}`}
+            title={c.actions.delete}
+            onClick={() => {
+              setDeleteError(null);
+              setDeletingPath(f.path);
+            }}
+            // Revealed on hover, but its SPACE is always reserved — hiding it outright
+            // would shift the size label sideways every time the pointer crossed a row.
+            className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Trash2 size={14} aria-hidden />
+          </IconButton>
+        </div>
       </li>
     );
   }
