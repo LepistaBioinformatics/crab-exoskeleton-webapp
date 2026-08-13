@@ -628,6 +628,7 @@ export default function UploadsSidebar({
           workspace={workspace}
           path={f.path}
           name={node.leaf}
+          size={f.size}
           tone="row"
         />
         <span className="shrink-0 font-mono text-[11px] text-fg-muted">

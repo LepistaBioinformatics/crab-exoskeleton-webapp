@@ -106,19 +106,36 @@ export function parseAnexos(content: string): { text: string; refs: Attachment[]
   return { text, refs };
 }
 
-// Downloads one file: fetches the bytes and triggers a browser save with the
-// display name (no direct navigation, so it stays out of history).
-export async function downloadMedia(workspace: Workspace, path: string, name: string): Promise<void> {
+/**
+ * The URL that serves one file's bytes.
+ *
+ * Exported because an `<img>` can point straight at it: the route authenticates from
+ * the session COOKIE, so a plain src needs no fetch, no blob and no revocation, and the
+ * browser gets to stream and cache it. An `<iframe>` may NOT — the proxy answers with
+ * `Content-Disposition: attachment` (handlers.go), which an iframe honours by
+ * downloading instead of rendering. Frames go through `fetchMediaBlob` for that reason.
+ */
+export function mediaUrl(workspace: Workspace, path: string): string {
   const query = withProject(new URLSearchParams({
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
     role: workspace.r,
-    ...(workspace.p ? { project: workspace.p } : {}),
     path,
   }), workspace);
-  const res = await fetch(`/api/media/download?${query.toString()}`);
+  return `/api/media/download?${query.toString()}`;
+}
+
+/** One file's bytes. Shared by the download-to-disk path and by the preview. */
+export async function fetchMediaBlob(workspace: Workspace, path: string): Promise<Blob> {
+  const res = await fetch(mediaUrl(workspace, path));
   if (!res.ok) throw new Error(await errorCode(res));
-  const blob = await res.blob();
+  return res.blob();
+}
+
+// Downloads one file: fetches the bytes and triggers a browser save with the
+// display name (no direct navigation, so it stays out of history).
+export async function downloadMedia(workspace: Workspace, path: string, name: string): Promise<void> {
+  const blob = await fetchMediaBlob(workspace, path);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -141,6 +158,72 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
   if (!res.ok) throw new Error(await errorCode(res));
 }
 
+
+// --- Preview -------------------------------------------------------------
+//
+// Which files the webapp can SHOW rather than only hand to the operating system.
+// Deliberately a subset of MEDIA_ALL_EXTS: everything else (office documents,
+// archives) would need a parsing library, so those keep the download-only menu.
+
+export type PreviewKind = "image" | "markdown" | "text" | "pdf";
+
+const PREVIEW_KINDS: Record<string, PreviewKind> = {
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  webp: "image",
+  gif: "image",
+  md: "markdown",
+  txt: "text",
+  csv: "text",
+  pdf: "pdf",
+};
+
+/**
+ * How a file can be previewed, or null when it cannot be.
+ *
+ * Case-insensitive: the agent writes `REPORT.MD` as readily as `report.md`, and an
+ * extension check that missed one would look like a broken menu rather than a rule.
+ */
+export function previewKind(nameOrPath: string): PreviewKind | null {
+  const leaf = nameOrPath.slice(nameOrPath.lastIndexOf("/") + 1);
+  const dot = leaf.lastIndexOf(".");
+  if (dot <= 0) return null; // no extension, or a dotfile with none
+  return PREVIEW_KINDS[leaf.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+/**
+ * Text bodies are read whole into memory, so the size is checked against the
+ * LISTING's `size` before the request rather than after `blob.text()` has already
+ * frozen the tab. 2 MB is far past any report an agent writes and far short of a
+ * CSV export that would hang.
+ */
+export const PREVIEW_TEXT_MAX = 2 * 1024 * 1024;
+
+/**
+ * Resolves an image reference found INSIDE a previewed markdown file against that
+ * file's own folder, so `![](diagram.png)` in `uploads/reports/q2.md` becomes
+ * `uploads/reports/diagram.png`.
+ *
+ * Returns null for anything already absolute (`http:`, `https:`, `data:`, or a
+ * root-relative path) — those are left exactly as the author wrote them.
+ *
+ * Without this the src resolves against the WEBAPP's origin and renders a broken
+ * image, which reads as a bug rather than as a limit.
+ */
+export function resolveMediaRef(filePath: string, src: string): string | null {
+  if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith("/") || src.startsWith("#")) {
+    return null;
+  }
+  const base = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "";
+  const segments = base ? base.split("/") : [];
+  for (const part of src.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") segments.pop();
+    else segments.push(part);
+  }
+  return segments.join("/");
+}
 
 // --- Uploads-tree organisation -------------------------------------------
 //
