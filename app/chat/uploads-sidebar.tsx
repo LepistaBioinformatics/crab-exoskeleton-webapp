@@ -1,6 +1,7 @@
 "use client";
 
 import React, { MouseEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   canDrop,
   createFolder,
@@ -14,6 +15,8 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Eye,
   FileText,
   Folder,
   FolderOpen,
@@ -31,12 +34,14 @@ import { cva } from "class-variance-authority";
 import {
   listWorkspaceMedia,
   deleteMedia,
+  downloadMedia,
+  previewKind,
   uploadMedia,
   MEDIA_ACCEPT,
   type Attachment,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
-import AttachmentButton from "@/app/chat/attachment-button";
+import FilePreview from "@/app/chat/file-preview";
 import MemoryEditor from "@/app/chat/memory-editor";
 import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
 import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
@@ -277,6 +282,10 @@ export default function UploadsSidebar({
   const [query, setQuery] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The file the preview overlay is showing, or null. Held here rather than per row so
+  // only one can ever be open.
+  const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   // Which detail the member has opened, or null for the menu. This panel is a
   // two-pane sliding track (the idiom unified-sidebar already uses): a root listing
@@ -401,6 +410,24 @@ export default function UploadsSidebar({
     }
   }
 
+  // Saves the file to disk. The listing's `name` carries the folder path, but what the
+  // browser should call the saved file is just the leaf.
+  //
+  // Failures land in the pane's existing error slot rather than in a per-row message:
+  // the row is one line tall and hides its controls when the pointer leaves it, so a
+  // message anchored there would be gone before it was read.
+  async function onDownload(file: Attachment) {
+    setFolderError(null);
+    setDownloadingPath(file.path);
+    try {
+      await downloadMedia(workspace, file.path, file.name.slice(file.name.lastIndexOf("/") + 1));
+    } catch (e) {
+      setFolderError(e instanceof Error ? e.message : "unknown");
+    } finally {
+      setDownloadingPath(null);
+    }
+  }
+
   const q = query.trim().toLowerCase();
   const visible = (files ?? []).filter(
     (f) => !q || f.name.toLowerCase().includes(q),
@@ -415,7 +442,13 @@ export default function UploadsSidebar({
 
   // Indentation is inline rather than a Tailwind class because the depth is
   // dynamic; a per-level class would need a lookup table for no gain.
-  const indent = (depth: number) => ({ paddingLeft: depth * 12 });
+  //
+  // MARGIN, not padding. It was `paddingLeft`, and an inline style beats a class — so at
+  // depth 0 it wrote `padding-left: 0` straight over the row's own `px-2` and every
+  // top-level name sat flush against the edge of the panel. A margin composes with the
+  // padding instead of replacing it, and it insets the row's hover highlight too, which
+  // is what makes the nesting read.
+  const indent = (depth: number) => ({ marginLeft: depth * 12 });
 
   // Every write refreshes the listing rather than patching local state: the agent
   // writes into this same tree, so re-reading is the only way the panel stays honest
@@ -619,33 +652,59 @@ export default function UploadsSidebar({
         key={`file:${f.path}`}
         role="treeitem"
         style={indent(depth)}
-        className="group flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-2 py-1.5"
+        className="group flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-elevated"
         {...dragProps(f.name)}
       >
-        <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
-        {/* The row shows only the leaf; the folder is the branch above it. */}
-        <AttachmentButton
-          workspace={workspace}
-          path={f.path}
-          name={node.leaf}
-          tone="row"
-        />
+        {/* Name then size, both on the left and both plain text. No file icon: every row
+            in this list is a file, so the glyph repeated once per row said nothing while
+            costing the name width. `min-w-0` is what lets `truncate` engage inside a
+            flex row — without it the name would push the controls off the edge. */}
+        <span className="min-w-0 truncate text-sm text-fg" title={node.leaf}>
+          {node.leaf}
+        </span>
         <span className="shrink-0 font-mono text-[11px] text-fg-muted">
           {formatSize(f.size)}
         </span>
-        <IconButton
-          variant="ghost"
-          size="sm"
-          aria-label={`${t.uploads.deletePrefix} ${f.name}`}
-          title={c.actions.delete}
-          onClick={() => {
-            setDeleteError(null);
-            setDeletingPath(f.path);
-          }}
-          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        >
-          <Trash2 size={14} aria-hidden />
-        </IconButton>
+        {/* The actions, all of them, at the right edge — one click each rather than a
+            menu that had to be opened first to find out what was in it.
+            Revealed on hover, but their SPACE is always reserved: releasing it would
+            widen the name on mouse-out and re-truncate it on mouse-in, so every row the
+            pointer crossed would flicker. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {previewKind(f.path) && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={`${t.preview.action} ${node.leaf}`}
+              title={t.preview.action}
+              onClick={() => setPreviewFile(f)}
+            >
+              <Eye size={14} aria-hidden />
+            </IconButton>
+          )}
+          <IconButton
+            variant="ghost"
+            size="sm"
+            disabled={downloadingPath === f.path}
+            aria-label={`${t.attachment.download} ${node.leaf}`}
+            title={t.attachment.download}
+            onClick={() => void onDownload(f)}
+          >
+            <Download size={14} aria-hidden />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label={`${t.uploads.deletePrefix} ${f.name}`}
+            title={c.actions.delete}
+            onClick={() => {
+              setDeleteError(null);
+              setDeletingPath(f.path);
+            }}
+          >
+            <Trash2 size={14} aria-hidden />
+          </IconButton>
+        </div>
       </li>
     );
   }
@@ -944,6 +1003,26 @@ export default function UploadsSidebar({
           }}
           onCancel={() => setDeletingFolder(null)}
         />
+
+        {/* One overlay for the whole panel, driven by which row was clicked. The kind is
+            re-derived rather than stored: it is a pure function of the path, and a second
+            copy of it in state could disagree with the row that opened it. */}
+        {previewFile &&
+          previewKind(previewFile.path) &&
+          // Portaled for the reason ConfirmDialog is: this panel is an `overflow-hidden`
+          // column that becomes a z-indexed drawer on mobile, and a full-screen overlay
+          // rendered inside it would be trapped in that stacking context.
+          createPortal(
+            <FilePreview
+              workspace={workspace}
+              path={previewFile.path}
+              name={previewFile.name.slice(previewFile.name.lastIndexOf("/") + 1)}
+              kind={previewKind(previewFile.path)!}
+              size={previewFile.size}
+              onClose={() => setPreviewFile(null)}
+            />,
+            document.body,
+          )}
 
         <ConfirmDialog
           open={deletingPath !== null}

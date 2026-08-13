@@ -3,9 +3,10 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cva } from "class-variance-authority";
-import { Download, Paperclip } from "lucide-react";
-import { downloadMedia } from "@/lib/media";
+import { Download, Eye, Paperclip } from "lucide-react";
+import { downloadMedia, previewKind } from "@/lib/media";
 import type { Workspace } from "./fragment";
+import FilePreview from "@/app/chat/file-preview";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
@@ -18,7 +19,6 @@ const trigger = cva("inline-flex min-w-0 items-center gap-1 text-left", {
   variants: {
     tone: {
       chip: "max-w-full rounded-lg border border-current/25 px-2 py-1 text-xs hover:bg-current/10",
-      row: "flex-1 text-sm text-fg hover:underline",
     },
   },
   defaultVariants: { tone: "chip" },
@@ -33,7 +33,7 @@ export default function AttachmentButton({
   workspace: Workspace;
   path: string;
   name: string;
-  tone?: "chip" | "row";
+  tone?: "chip";
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -42,6 +42,11 @@ export default function AttachmentButton({
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  // Null for the formats the webapp cannot show (office documents, archives). The menu
+  // then stays the one-item menu it has always been — no disabled entry explaining a
+  // rule nobody asked about.
+  const kind = previewKind(path);
 
   function toggle() {
     if (!open && btnRef.current) {
@@ -80,6 +85,19 @@ export default function AttachmentButton({
               style={{ position: "fixed", left: pos.x, top: pos.y }}
               className="z-[60] w-48 rounded-lg border border-brand bg-surface p-1 shadow-xl"
             >
+              {kind && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setPreviewing(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated"
+                >
+                  <Eye size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                  {t.preview.action}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onDownload}
@@ -92,6 +110,24 @@ export default function AttachmentButton({
               {error && <p className="px-2 py-1 text-xs text-red-500">{errorText(err, error)}</p>}
             </div>
           </>,
+          document.body,
+        )}
+
+      {/* Portaled for the same reason the menu is: this button lives inside the files
+          sidebar's `overflow-hidden` track, which would clip a fixed overlay rendered
+          in place. */}
+      {previewing &&
+        kind &&
+        createPortal(
+          <FilePreview
+            workspace={workspace}
+            path={path}
+            name={name}
+            kind={kind}
+            // No size: a chat chip has no listing behind it. The cap still applies —
+            // FilePreview checks the fetched blob as well.
+            onClose={() => setPreviewing(false)}
+          />,
           document.body,
         )}
     </span>

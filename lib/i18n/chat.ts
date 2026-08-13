@@ -100,6 +100,12 @@ const en = {
     download: "Download file",
     downloading: "Downloading…",
   },
+  preview: {
+    aria: "File preview",
+    action: "Preview",
+    tooLarge: "This file is too large to preview. Download it to open it.",
+    pdfFallback: "This browser cannot display the PDF here — download it instead.",
+  },
   markdownEditor: {
     aria: "Markdown editor",
     heading: "Markdown editor",
@@ -819,6 +825,12 @@ const pt: ChatDict = {
   attachment: {
     download: "Baixar arquivo",
     downloading: "Baixando…",
+  },
+  preview: {
+    aria: "Pré-visualização do arquivo",
+    action: "Visualizar",
+    tooLarge: "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
+    pdfFallback: "Este navegador não consegue exibir o PDF aqui — baixe o arquivo.",
   },
   markdownEditor: {
     aria: "Editor markdown",

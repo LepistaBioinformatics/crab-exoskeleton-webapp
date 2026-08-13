@@ -87,6 +87,23 @@ const codeText = cva("font-mono text-[0.85em]", {
  */
 const StreamingContext = createContext(false);
 
+/**
+ * Resolves a RELATIVE image src to a URL that actually serves the bytes, or null to
+ * leave it alone.
+ *
+ * Null (the default) is the chat's case: a message's markdown has no file of its own to
+ * resolve against, so its images render exactly as they did before this existed. The
+ * file preview supplies one, because `![](diagram.png)` inside a previewed `.md` would
+ * otherwise resolve against the WEBAPP's origin and render broken.
+ *
+ * Context rather than a prop for the same reason `StreamingContext` is: `COMPONENTS`
+ * below must be a module constant, and a renderer closing over a prop would be rebuilt
+ * on every render — which is the defect that comment exists to prevent.
+ */
+export type ImageResolver = (src: string) => string | null;
+
+export const MarkdownImageContext = createContext<ImageResolver | null>(null);
+
 // Hoisted OUT of the component, and this is a correctness fix, not a micro-optimisation.
 //
 // These were defined inline in the `components` prop, so every render produced a fresh function
@@ -185,6 +202,23 @@ const COMPONENTS: Components = {
   input: (props) => (
     <input {...props} disabled className="mr-1 align-middle accent-accent" />
   ),
+  // A module-scope function component so it may use hooks — same arrangement as `code`.
+  // Without a resolver in context this is the plain <img> react-markdown rendered
+  // before, plus the width clamp that keeps a large image inside its column.
+  img: ({ src, alt, ...rest }) => {
+    const resolve = useContext(MarkdownImageContext);
+    const raw = typeof src === "string" ? src : undefined;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- next/image cannot take a
+      // runtime-resolved workspace URL, and optimization is off in this deployment.
+      <img
+        {...rest}
+        src={(raw && resolve?.(raw)) || raw}
+        alt={alt ?? ""}
+        className="my-2 max-w-full rounded-lg"
+      />
+    );
+  },
 };
 
 // Renders assistant/user message content as markdown. GitHub-flavored (remark-gfm) so tables,
