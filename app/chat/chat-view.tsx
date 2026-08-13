@@ -49,6 +49,7 @@ import {
   noteUpload,
   parkFlush,
   setPainter,
+  stopTurn,
   useTurn,
 } from "@/app/chat/turn-store";
 import TurnProgress, { TurnRecovery } from "@/app/chat/turn-progress";
@@ -712,6 +713,8 @@ export default function ChatView({
       onTyping={bumpFlush}
       onCommand={runCommand}
       sending={sending}
+      onStop={sessionId ? () => stopTurn(sessionId) : undefined}
+      stopping={turn.stopping}
       loadingHistory={loadingHistory}
       sessionId={sessionId ?? ""}
       attachments={attachments}

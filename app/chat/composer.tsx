@@ -15,6 +15,7 @@ import {
   Paperclip,
   Presentation,
   Reply,
+  Square,
   Table2,
   X,
   type LucideIcon,
@@ -85,6 +86,15 @@ interface ComposerProps {
   // was consumed as a command, so the composer clears and nothing is sent.
   onCommand?: (raw: string) => boolean;
   sending: boolean;
+  /**
+   * Stop the running turn. Resolves to the text that will never be answered —
+   * picoclaw's abort deletes the member's message along with the turn, so it goes
+   * back into the box rather than being lost. Null when there was nothing to
+   * restore.
+   */
+  onStop?: () => Promise<string | null>;
+  /** A stop is in flight; the control waits rather than being pressed twice. */
+  stopping?: boolean;
   loadingHistory: boolean;
   sessionId: string;
   attachments: Attachment[];
@@ -113,6 +123,8 @@ export default function Composer({
   onTyping,
   onCommand,
   sending,
+  onStop,
+  stopping = false,
   loadingHistory,
   sessionId,
   attachments,
@@ -260,6 +272,23 @@ export default function Composer({
   // whole reply; now it queues behind the turn in flight.
   const canSend =
     (value.trim().length > 0 || attachments.length > 0) && !loadingHistory && !uploading;
+
+  // Stop appears BESIDE Send, not in place of it. Replacing Send would undo the
+  // decision `sending` records above: a member who thinks of a second message
+  // while the agent works can queue it instead of waiting the turn out, and
+  // taking the button away would leave that to the Enter key alone. Ghost against
+  // Send's filled, so the primary action stays the one that isn't destructive.
+  const showStop = sending && !!onStop;
+
+  async function stop() {
+    if (!onStop || stopping) return;
+    const restored = await onStop();
+    if (restored === null) return;
+    // Appended ahead of anything typed while the turn ran: the stopped message
+    // came first, and silently overwriting a newer draft would lose it.
+    setValue((v) => (v.trim() === "" ? restored : `${restored}\n\n${v}`));
+    ref.current?.focus();
+  }
 
   // Open the OS picker filtered to `accept`, then let onChange handle the files.
   function pick(accept: string) {
@@ -546,6 +575,20 @@ export default function Composer({
         </IconButton>
 
         <div className="flex-1" />
+
+        {showStop && (
+          <IconButton
+            variant="ghost"
+            size="md"
+            aria-label={stopping ? t.composer.stopping : t.composer.stop}
+            title={stopping ? t.composer.stopping : t.composer.stop}
+            disabled={stopping}
+            onClick={() => void stop()}
+            className="shrink-0"
+          >
+            <Square size={16} fill="currentColor" aria-hidden />
+          </IconButton>
+        )}
 
         <IconButton
           variant="filled"
