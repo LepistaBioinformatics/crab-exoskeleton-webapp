@@ -11,6 +11,7 @@ import {
   enqueue,
   getTurn,
   parkFlush,
+  resumeIfActive,
   revealPlan,
   setPainter,
   type Progress,
@@ -488,3 +489,113 @@ describe("recovering a cut stream", () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// resume-turn-after-reload
+// ---------------------------------------------------------------------------
+
+describe("resumeIfActive", () => {
+  beforeEach(() => __reset());
+
+  // FR-7, and the reason this function takes its probes as a parameter at all.
+  //
+  // recover() waits for the transcript to GROW past a baseline. The resume path
+  // adds a round-trip before that read, so if the baseline were taken after asking
+  // whether the turn is active, a turn that lands during the round-trip would be
+  // baselined with its reply already counted, never grow, and be reported lost
+  // eleven minutes later -- a success shown as a failure.
+  it("reads the transcript baseline BEFORE asking whether a turn is active", async () => {
+    const calls: string[] = [];
+    await resumeIfActive("s1", ctx, {
+      baseline: async () => {
+        calls.push("baseline");
+        return 4;
+      },
+      active: async () => {
+        calls.push("active");
+        return false;
+      },
+    });
+    expect(calls).toEqual(["baseline", "active"]);
+  });
+
+  it("does nothing when no turn is running upstream", async () => {
+    await resumeIfActive("s1", ctx, {
+      baseline: async () => 4,
+      active: async () => false,
+    });
+    expect(getTurn("s1").running).toBe(false);
+    expect(getTurn("s1").recovering).toBe(false);
+  });
+
+  // FR-8: the resumed turn has to look exactly like a recovering one, because
+  // that is what it is -- the stream is gone and we are polling the transcript.
+  it("puts the conversation back into a running recovery when one is in flight", async () => {
+    let resolveActive: (v: boolean) => void = () => {};
+    const gate = new Promise<boolean>((r) => (resolveActive = r));
+    const pending = resumeIfActive("s1", ctx, {
+      baseline: async () => 4,
+      active: () => gate,
+    });
+    resolveActive(true);
+    // Let the resume establish its state before the poll loop's first sleep.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getTurn("s1").running).toBe(true);
+    expect(getTurn("s1").recovering).toBe(true);
+    void pending;
+  });
+
+  // A reload is the only reason to resume. If the store still holds a live turn
+  // the page never went away, and re-entering recovery would fight runTurn for
+  // the same conversation.
+  it("leaves an already-running turn alone", async () => {
+    __seed("s1", { running: true });
+    let asked = false;
+    await resumeIfActive("s1", ctx, {
+      baseline: async () => {
+        asked = true;
+        return 4;
+      },
+      active: async () => true,
+    });
+    expect(asked).toBe(false);
+  });
+});
+
+// The mount effect that calls this has a `cancelled` flag, and every other await
+// in it re-checks that flag before touching state. This one must too: switching
+// conversations during the /active round-trip would otherwise leave a phantom
+// running turn on a conversation nobody is looking at, and its eventual
+// finishIfDrained fires the painter for a sid activeSidRef no longer matches --
+// the blanked-conversation family the store's comments keep warning about.
+describe("resumeIfActive cancellation", () => {
+  beforeEach(() => __reset());
+
+  it("does not resume a conversation the caller has navigated away from", async () => {
+    let navigatedAway = false;
+    await resumeIfActive("s1", ctx, {
+      baseline: async () => 4,
+      active: async () => {
+        navigatedAway = true; // the switch happens while the probe is in flight
+        return true;
+      },
+      cancelled: () => navigatedAway,
+    });
+    expect(getTurn("s1").running).toBe(false);
+    expect(getTurn("s1").recovering).toBe(false);
+  });
+
+  it("still resumes when the caller is on the conversation", async () => {
+    const pending = resumeIfActive("s1", ctx, {
+      baseline: async () => 4,
+      active: async () => true,
+      cancelled: () => false,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getTurn("s1").running).toBe(true);
+    void pending;
+  });
+});

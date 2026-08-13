@@ -49,6 +49,7 @@ import {
   noteUpload,
   parkFlush,
   setPainter,
+  resumeIfActive,
   stopTurn,
   useTurn,
 } from "@/app/chat/turn-store";
@@ -405,6 +406,22 @@ export default function ChatView({
         // the stale band. Also clears a turn that died while we were elsewhere,
         // which would otherwise strand a phantom message forever.
         clearCompleted(sessionId);
+        // resume-turn-after-reload: a turn may still be running upstream for this
+        // conversation -- a reload destroys the store, not the turn. Ask, and pick
+        // the wait back up if it is.
+        //
+        // The transcript just loaded IS the baseline, handed over rather than
+        // re-read: recover() waits for growth past it, so it has to predate the
+        // probe. Fire-and-forget, after clearCompleted, so it can neither delay the
+        // paint nor race the cleanup that drops a previous turn's bands.
+        //
+        // `cancelled` is threaded in for the same reason every other await in this
+        // block re-checks it: switching conversations during the probe would leave
+        // a phantom running turn on a chat nobody is watching.
+        void resumeIfActive(sessionId, runContext(), {
+          baseline: async () => loaded.length,
+          cancelled: () => cancelled,
+        });
         // Opening a conversation lands on the most recent message -- UNLESS a
         // scroll anchor is set (a past point clicked in the tree view), which the
         // anchor effect below handles instead.
