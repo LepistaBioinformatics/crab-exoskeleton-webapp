@@ -164,7 +164,7 @@ function formatSize(bytes?: number): string {
 // What a workspace holds. Ordered deliberately: memory and the graph are what a
 // member asks about ("what does it know about me"), scheduled tasks are what it does
 // on its own, files are what they manage.
-type Section = "memory" | "graph" | "tasks" | "files";
+export type Section = "memory" | "graph" | "tasks" | "files";
 
 const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files"];
 
@@ -248,6 +248,7 @@ export default function UploadsSidebar({
   onClose,
   onReference,
   initialSection = null,
+  onSectionChange,
 }: {
   workspace: Workspace;
   refreshSignal: number;
@@ -268,6 +269,12 @@ export default function UploadsSidebar({
    * the seam a future "open the files panel" link would use.
    */
   initialSection?: Section | null;
+  /**
+   * Reports every section change so the caller can persist it. The panel keeps owning
+   * the state -- it is the only thing that knows the transitions -- and the caller is
+   * the only thing that knows about the URL.
+   */
+  onSectionChange?: (section: Section | null) => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -607,7 +614,7 @@ export default function UploadsSidebar({
                 aria-label={`${t.uploads.renameAria} ${node.leaf}`}
                 title={t.uploads.rename}
                 onClick={() => promptRename(node.path, node.leaf)}
-                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100"
+                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <Pencil size={13} aria-hidden />
               </IconButton>
@@ -624,7 +631,7 @@ export default function UploadsSidebar({
                     files: filesUnder(node.path),
                   })
                 }
-                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100"
+                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <Trash2 size={13} aria-hidden />
               </IconButton>
@@ -669,8 +676,14 @@ export default function UploadsSidebar({
             menu that had to be opened first to find out what was in it.
             Revealed on hover, but their SPACE is always reserved: releasing it would
             widen the name on mouse-out and re-truncate it on mouse-in, so every row the
-            pointer crossed would flicker. */}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            pointer crossed would flicker.
+
+            `[@media(hover:none)]` keeps them visible where there is no hover to reveal
+            them with. Keyed on the CAPABILITY rather than on a width breakpoint, which
+            is the reflex: a touch laptop at desktop width has exactly this problem, and
+            a narrow desktop window does not. Reserving the space already means showing
+            them costs no layout. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {previewKind(f.path) && (
             <IconButton
               variant="ghost"
@@ -747,7 +760,10 @@ export default function UploadsSidebar({
           ) : (
             <button
               type="button"
-              onClick={() => setSection(null)}
+              onClick={() => {
+                setSection(null);
+                onSectionChange?.(null);
+              }}
               className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-accent"
             >
               <ChevronLeft
@@ -813,7 +829,10 @@ export default function UploadsSidebar({
                       <li key={key}>
                         <button
                           type="button"
-                          onClick={() => setSection(key)}
+                          onClick={() => {
+                            setSection(key);
+                            onSectionChange?.(key);
+                          }}
                           className="flex w-full items-center gap-2 border-b border-brand/30 px-3 py-3 text-left transition-colors hover:bg-elevated"
                         >
                           <s.Icon

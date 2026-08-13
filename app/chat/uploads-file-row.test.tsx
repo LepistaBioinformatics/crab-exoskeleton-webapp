@@ -118,3 +118,31 @@ describe("a file row's controls", () => {
     expect(dialog?.textContent).toContain("photo.png");
   });
 });
+
+// A row's controls are revealed on hover, which on a touch device reveals nothing: the
+// member cannot discover preview, download or delete at all. The fix is keyed on the
+// hover CAPABILITY rather than on a width breakpoint — a touch laptop at desktop width
+// has the same problem and a narrow desktop window does not — so what is asserted is
+// that the escape hatch is present on every container that hides its contents.
+describe("row controls on a device without hover", () => {
+  it("keeps every hover-revealed control group visible where hover does not exist", async () => {
+    const pane = await openFilesPane();
+
+    // The EXACT token, not a substring: IconButton carries `after:opacity-0` for its
+    // ripple, which is not a hover-reveal and needs no fallback.
+    // classList, not className: on an SVG element className is an SVGAnimatedString.
+    // The EXACT token, not a substring: IconButton carries `after:opacity-0` for its
+    // ripple, which is not a hover-reveal and needs no fallback.
+    const hidden = Array.from(pane.querySelectorAll<HTMLElement>("*")).filter((el) =>
+      el.classList.contains("opacity-0"),
+    );
+    expect(hidden.length).toBeGreaterThan(0);
+
+    for (const el of hidden) {
+      expect(
+        el.classList.contains("[@media(hover:none)]:opacity-100"),
+        `a hover-revealed group with no touch fallback: ${el.getAttribute("class")}`,
+      ).toBe(true);
+    }
+  });
+});
