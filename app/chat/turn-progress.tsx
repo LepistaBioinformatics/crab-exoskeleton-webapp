@@ -14,10 +14,14 @@
 //
 // long-turn-resilience: the line also has to look alive between events, not only
 // when one arrives. Narration can be tens of seconds apart, and a band that has
-// not moved in a minute reads as a frozen chat -- so the text shimmers on its own
-// clock, and once the turn is no longer brief it says how long it has been quiet.
-// A number that visibly advances is the strongest available evidence that nothing
-// is stuck.
+// not moved in a minute reads as a frozen chat -- so the icon breathes, and once
+// the turn is no longer brief the line says how long it has been quiet. A number
+// that visibly advances is the strongest available evidence that nothing is stuck.
+//
+// A sweeping shimmer over the text was tried here and REMOVED: on its own 2.4s
+// clock, stacked on top of the two pulses, it read as agitation rather than
+// activity. Motion that repeats faster than the thing it reports does not
+// reassure. Pulses and the advancing number stayed; the sweep did not.
 
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
@@ -82,11 +86,11 @@ function useElapsed(from: number): number {
 // inside one tool call -- picoclaw's "Continuing the current task.: ..." can own
 // the band for minutes.
 //
-// This overlaps with the shimmer and the elapsed readout below, which came from
-// long-turn-resilience and answer the same complaint. Both are kept by decision:
-// the line-level pulse is the coarsest of the three and the only one visible
-// without reading, at the cost of dimming the other two as it dips, since it
-// acts on their container.
+// This overlaps with the elapsed readout below, which came from
+// long-turn-resilience and answers the same complaint. Both are kept: the
+// line-level pulse is the coarser of the two and the only one visible without
+// reading, at the cost of dimming the readout as it dips, since it acts on the
+// container.
 //
 // The `waiting` line is deliberately excluded: it already swaps its own text at
 // SILENCE_GRACE_MS (thinking -> working), and pulsing it at the same instant it
@@ -157,11 +161,11 @@ export default function TurnProgress({
             : "animate-pulse motion-reduce:animate-none"
         }
       />
-      <span className="progress-shimmer animate-fade-in motion-reduce:animate-none">{text}</span>
+      <span className="animate-fade-in motion-reduce:animate-none">{text}</span>
       {/* Only once the turn is no longer brief: on a fast turn the number would be
           noise, and it would appear and vanish before it could be read. */}
       {silent && (
-        <span className="tabular-nums text-xs opacity-60">{formatElapsed(quietFor)}</span>
+        <span className="ml-auto tabular-nums text-xs opacity-60">{formatElapsed(quietFor)}</span>
       )}
     </div>
   );
@@ -181,10 +185,8 @@ export function TurnRecovery({ since }: { since: number }) {
   return (
     <div className={progressLine({ kind: "recovering" })} aria-live="polite">
       <Loader2 size={14} aria-hidden className="animate-spin motion-reduce:animate-none" />
-      <span className="progress-shimmer animate-fade-in motion-reduce:animate-none">
-        {t.view.recovering}
-      </span>
-      <span className="tabular-nums text-xs opacity-60">{formatElapsed(elapsed)}</span>
+      <span className="animate-fade-in motion-reduce:animate-none">{t.view.recovering}</span>
+      <span className="ml-auto tabular-nums text-xs opacity-60">{formatElapsed(elapsed)}</span>
     </div>
   );
 }

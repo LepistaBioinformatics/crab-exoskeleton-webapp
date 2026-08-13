@@ -337,59 +337,6 @@
   --animate-fade-in: fadeIn 420ms ease-out both;
 }
 
-/* A working turn has to look like one between events, not only when one arrives:
-   the agent's narration can be tens of seconds apart, and a band that has not
-   moved in a minute reads as a frozen chat. So the progress text carries a light
-   sweep on its own clock, independent of anything arriving.
-
-   The sweep is the TEXT, not a box over it. It is a MASK over the glyphs rather
-   than a gradient painted into them, and that choice is load-bearing: the
-   background-clip version had to set `color: transparent` on the same element it
-   built the gradient from `currentColor` on, so `currentColor` resolved to
-   transparent and the whole line went invisible. Reported as thinking lines the
-   same colour as the page.
-
-   A mask cannot fail that way. It only varies the alpha of whatever `color`
-   already paints, so the text keeps its own colour -- including each kind's tone
-   from `progressLine` -- and a browser that ignores the mask shows a plain,
-   legible line. */
-@keyframes progressShimmer {
-  from {
-    -webkit-mask-position: 180% 0;
-    mask-position: 180% 0;
-  }
-  to {
-    -webkit-mask-position: -80% 0;
-    mask-position: -80% 0;
-  }
-}
-.progress-shimmer {
-  --shimmer-sweep: linear-gradient(
-    100deg,
-    #000 0%,
-    #000 38%,
-    rgb(0 0 0 / 0.38) 50%,
-    #000 62%,
-    #000 100%
-  );
-  -webkit-mask-image: var(--shimmer-sweep);
-  mask-image: var(--shimmer-sweep);
-  -webkit-mask-size: 260% 100%;
-  mask-size: 260% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  animation: progressShimmer 2.4s linear infinite;
-}
-
-/* The global guard only freezes animations, and a frozen sweep would leave part
-   of the line dimmed at whatever position it stopped. Drop the mask entirely. */
-@media (prefers-reduced-motion: reduce) {
-  .progress-shimmer {
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-}
-
 /* The composer breathes a soft accent ring while the user is actively typing.
    Auto-neutralized by the reduced-motion guard below. */
 @keyframes composerPulse {
