@@ -95,6 +95,10 @@ const en = {
     otherTypes: "Other types",
     advancedEditor: "Advanced markdown editor",
     send: "Send message",
+    // Honest, not decorative: the turn is really aborted upstream and rolled out
+    // of the transcript, and what was typed comes back into the box.
+    stop: "Stop generating",
+    stopping: "Stopping…",
   },
   attachment: {
     download: "Download file",
@@ -821,6 +825,8 @@ const pt: ChatDict = {
     otherTypes: "Outros tipos",
     advancedEditor: "Editor markdown avançado",
     send: "Enviar mensagem",
+    stop: "Parar a geração",
+    stopping: "Parando…",
   },
   attachment: {
     download: "Baixar arquivo",

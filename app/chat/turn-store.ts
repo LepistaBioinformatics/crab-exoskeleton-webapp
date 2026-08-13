@@ -157,6 +157,8 @@ export interface TurnState {
   recoveringSince: number;
   /** Waiting for picoclaw to reload after an attachment upload. */
   settling: boolean;
+  /** A stop was asked for and the request has not answered yet. */
+  stopping: boolean;
 }
 
 /** Everything a queued turn needs to actually run, captured at submit time. */
@@ -190,6 +192,7 @@ const EMPTY: TurnState = {
   recovering: false,
   recoveringSince: 0,
   settling: false,
+  stopping: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -390,6 +393,108 @@ export function clearCompleted(sid: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Stopping a running turn
+// ---------------------------------------------------------------------------
+
+/**
+ * Conversations whose in-flight turn was stopped by the member.
+ *
+ * A synchronous flag rather than a field on the state, and read on every frame
+ * `runTurn` is still holding: the POST returns while the stream is open, and
+ * picoclaw answers the `/stop` with "Task stopped. …" ON THAT STREAM. Rendering
+ * it would put a sentence in the conversation that the next history reload
+ * cannot produce -- the abort rolled the turn out of the transcript.
+ *
+ * It is also what stops `recover()` from polling for a reply that was cancelled,
+ * and what keeps the completion painter from reloading over the stopped bands.
+ *
+ * Cleared by `runTurn`'s finally, so it only ever covers the one turn it was set
+ * for.
+ */
+const stopped = new Set<string>();
+
+/**
+ * Stop the turn running on this conversation and return the text that will never
+ * be answered, so the caller can put it back in the composer.
+ *
+ * picoclaw's abort rolls session history back to before the turn, which DELETES
+ * the member's own message along with it. Dropping it here as well would mean
+ * Stop silently destroys what they typed, so everything uncommitted comes back:
+ * the message in flight, then anything queued or still in the debounce burst
+ * behind it.
+ *
+ * Returns null when there was nothing to stop.
+ */
+export async function stopTurn(sid: string): Promise<string | null> {
+  const cur = getTurn(sid);
+  const ctx = contexts.get(sid);
+  if (!ctx || !cur.running || cur.stopping) return null;
+
+  // Taken before the request: the state is cleared below either way, and reading
+  // it afterwards would race the stream still writing into it.
+  const unanswered = [cur.activeUserMessage, ...cur.queue, ...cur.pending]
+    .filter((text): text is string => !!text && text.trim() !== "")
+    .join("\n\n");
+
+  patch(sid, { stopping: true });
+  try {
+    const res = await fetch(`/api/chat/${ctx.workspace.r}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sid,
+        tenant_id: ctx.workspace.t,
+        subs_acc_id: ctx.workspace.s,
+        ...(ctx.project ? { project: ctx.project } : {}),
+      }),
+    });
+    if (res.status === 401) {
+      ctx.onUnauthorized();
+      return null;
+    }
+    if (!res.ok) {
+      patch(sid, { stopping: false, error: "stop_failed" });
+      return null;
+    }
+  } catch {
+    patch(sid, { stopping: false, error: "stop_failed" });
+    return null;
+  }
+
+  // Only now, with the abort acknowledged upstream: clearing the bands on a stop
+  // that did not land would hide a turn that is still running and still writing.
+  stopped.add(sid);
+  clearFlushTimer(sid);
+  stopReveal(sid);
+  patch(sid, {
+    running: false,
+    stopping: false,
+    pending: [],
+    queue: [],
+    activeUserMessage: null,
+    revealed: "",
+    buffered: "",
+    // Nothing more is arriving for this turn, whatever the stream does next.
+    arrivalDone: true,
+    progress: null,
+    retrying: null,
+    recovering: false,
+    settling: false,
+    error: null,
+    errorDetail: null,
+  });
+  // The drain loop is parked on this; without it the queue we just emptied would
+  // never be re-checked and the conversation would stay `draining` forever.
+  releaseDrainWaiters(sid);
+  return unanswered || null;
+}
+
+/** Whether this conversation's in-flight turn was stopped by the member. */
+export function wasStopped(sid: string): boolean {
+  return stopped.has(sid);
+}
+
+// ---------------------------------------------------------------------------
 // Recovering a cut stream
 // ---------------------------------------------------------------------------
 
@@ -547,14 +652,23 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
       ({ completed } = await consumeStream(
         stream,
         (delta) => {
+          // Everything after a stop is discarded, including picoclaw's own
+          // "Task stopped." reply, which arrives on this very stream.
+          if (stopped.has(sid)) return;
           const cur = getTurn(sid);
           patch(sid, { buffered: cur.buffered + delta, lastEventAt: Date.now() });
           startReveal(sid);
         },
-        (progress) => patch(sid, { progress, lastEventAt: Date.now() }),
+        (progress) => {
+          if (stopped.has(sid)) return;
+          patch(sid, { progress, lastEventAt: Date.now() });
+        },
         // The turn FAILED. One code for the copy, the harness's own words for the
         // detail — see TurnState.errorDetail.
-        (message) => patch(sid, { error: "harness_error", errorDetail: message }),
+        (message) => {
+          if (stopped.has(sid)) return;
+          patch(sid, { error: "harness_error", errorDetail: message });
+        },
       ));
     } catch {
       // The body died mid-read. Same event as a clean end with no terminal marker:
@@ -569,20 +683,31 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     // turn was still running. Wait for the reply rather than dropping the turn (the
     // clean-EOF path silently reloaded a transcript with nothing new in it, leaving
     // the member's message with no reply and no explanation).
-    if (!completed && !getTurn(sid).error) await recover(sid, ctx);
+    //
+    // Not after a stop: there is no reply coming, and the transcript this would
+    // poll had the turn rolled OUT of it, so the wait could only end in the
+    // eleven-minute "turn lost" banner for a turn the member cancelled on purpose.
+    if (!completed && !getTurn(sid).error && !stopped.has(sid)) await recover(sid, ctx);
 
     syncSessionRefs(workspace, sid).catch(() => {});
     notifyConversationsUpdated();
   } catch {
     // Only reachable before the stream exists now; a mid-stream failure is a
     // recovery, not a connectivity error.
-    patch(sid, { error: "connectivity" });
+    if (!stopped.has(sid)) patch(sid, { error: "connectivity" });
   } finally {
-    patch(sid, { arrivalDone: true, retrying: null, settling: false });
-    // The reveal may still be draining; `running` clears when it empties so the
-    // caret and the "still working" state don't disappear mid-sentence.
-    startReveal(sid);
-    finishIfDrained(sid);
+    // A stopped turn has already cleared its own state and released the drain
+    // loop. Re-running the normal ending would repaint the bands it just cleared
+    // and reload a transcript that no longer holds the turn.
+    if (stopped.has(sid)) {
+      stopped.delete(sid);
+    } else {
+      patch(sid, { arrivalDone: true, retrying: null, settling: false });
+      // The reveal may still be draining; `running` clears when it empties so the
+      // caret and the "still working" state don't disappear mid-sentence.
+      startReveal(sid);
+      finishIfDrained(sid);
+    }
   }
 }
 
@@ -795,6 +920,7 @@ export function __reset() {
   turns.clear();
   contexts.clear();
   drainWaiters.clear();
+  stopped.clear();
   // A test that let a turn start leaves its conversation in `draining` forever: the
   // turn is suspended on a timer that goes away with the fake clock, so its `finally`
   // never runs. Without this, the next test's `drain` for the same sid returns
@@ -806,4 +932,13 @@ export function __reset() {
 /** Directly seed a conversation's state. Tests only. */
 export function __seed(sid: string, state: Partial<TurnState>) {
   patch(sid, state);
+}
+
+/**
+ * Register the run context a conversation would have captured at submit time.
+ * Tests only -- `stopTurn` needs one to know which workspace to address, and a
+ * seeded state alone has never been through `enqueue`.
+ */
+export function __seedContext(sid: string, ctx: RunContext) {
+  contexts.set(sid, ctx);
 }
