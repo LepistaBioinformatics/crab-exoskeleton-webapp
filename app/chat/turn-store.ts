@@ -461,6 +461,20 @@ export async function stopTurn(sid: string): Promise<string | null> {
     return null;
   }
 
+  // The turn may have LANDED while the request was in flight -- the proxy answers
+  // 204 for "nothing to stop" too, so a normal completion is indistinguishable
+  // from an abort here. `runTurn`'s finally has then already run and taken its
+  // normal branch, and it is the only thing that clears `stopped`; setting the
+  // flag now would leave it set forever and gate the NEXT turn's whole stream to
+  // nothing, with `running` stuck true behind it.
+  //
+  // Nothing was rolled back either, so there is no text to give back: the message
+  // was answered, and putting it in the composer would offer to send it twice.
+  if (!getTurn(sid).running) {
+    patch(sid, { stopping: false });
+    return null;
+  }
+
   // Only now, with the abort acknowledged upstream: clearing the bands on a stop
   // that did not land would hide a turn that is still running and still writing.
   stopped.add(sid);
@@ -483,8 +497,10 @@ export async function stopTurn(sid: string): Promise<string | null> {
     error: null,
     errorDetail: null,
   });
-  // The drain loop is parked on this; without it the queue we just emptied would
-  // never be re-checked and the conversation would stay `draining` forever.
+  // Belt and braces. `drain` is awaiting `runTurn` at this point, not
+  // `awaitDrained`, so there is normally nobody parked -- and the next
+  // `awaitDrained` resolves on its own now that `running` is false. This only
+  // matters if a waiter is ever added while a turn is still in flight.
   releaseDrainWaiters(sid);
   return unanswered || null;
 }

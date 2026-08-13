@@ -123,6 +123,28 @@ describe("stopTurn", () => {
     expect(wasStopped("s1")).toBe(false);
   });
 
+  // The race the proxy answers 204 to: the turn finished while the member was
+  // clicking. Indistinguishable from a real abort in the response, so it has to
+  // be caught HERE, on the state.
+  //
+  // Treating it as a stop wedges the conversation: `runTurn`'s finally has
+  // already run and it is the only thing that clears the stopped flag, so the
+  // flag would survive into the NEXT turn, gate its entire stream to nothing, and
+  // leave `running` stuck true with every later turn parked behind it.
+  it("does not claim a stop when the turn landed while the request was in flight", async () => {
+    seedRunning("s1");
+    vi.stubGlobal("fetch", () => {
+      __seed("s1", { running: false });
+      return Promise.resolve({ ok: true, status: 204 } as Response);
+    });
+
+    // Nothing was rolled back, so there is nothing to give back either: the
+    // message was answered, and restoring it would offer to send it twice.
+    expect(await stopTurn("s1")).toBeNull();
+    expect(wasStopped("s1")).toBe(false);
+    expect(getTurn("s1").stopping).toBe(false);
+  });
+
   it("does nothing when no turn is running", async () => {
     __seedContext("s1", ctx);
     __seed("s1", { running: false });
