@@ -342,40 +342,51 @@
    moved in a minute reads as a frozen chat. So the progress text carries a light
    sweep on its own clock, independent of anything arriving.
 
-   The sweep is the TEXT, not a box over it -- a gradient clipped to the glyphs,
-   which is why the color has to come from the background and `color` goes
-   transparent. That makes the reduced-motion override below mandatory rather than
-   cosmetic: the global guard only freezes animations, and a frozen sweep would
-   leave the text painted by whatever part of the gradient happened to stop over
-   it. */
+   The sweep is the TEXT, not a box over it. It is a MASK over the glyphs rather
+   than a gradient painted into them, and that choice is load-bearing: the
+   background-clip version had to set `color: transparent` on the same element it
+   built the gradient from `currentColor` on, so `currentColor` resolved to
+   transparent and the whole line went invisible. Reported as thinking lines the
+   same colour as the page.
+
+   A mask cannot fail that way. It only varies the alpha of whatever `color`
+   already paints, so the text keeps its own colour -- including each kind's tone
+   from `progressLine` -- and a browser that ignores the mask shows a plain,
+   legible line. */
 @keyframes progressShimmer {
   from {
-    background-position: 180% 0;
+    -webkit-mask-position: 180% 0;
+    mask-position: 180% 0;
   }
   to {
-    background-position: -80% 0;
+    -webkit-mask-position: -80% 0;
+    mask-position: -80% 0;
   }
 }
 .progress-shimmer {
-  background-image: linear-gradient(
+  --shimmer-sweep: linear-gradient(
     100deg,
-    currentColor 0%,
-    currentColor 38%,
-    color-mix(in srgb, currentColor 38%, transparent) 50%,
-    currentColor 62%,
-    currentColor 100%
+    #000 0%,
+    #000 38%,
+    rgb(0 0 0 / 0.38) 50%,
+    #000 62%,
+    #000 100%
   );
-  background-size: 260% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+  -webkit-mask-image: var(--shimmer-sweep);
+  mask-image: var(--shimmer-sweep);
+  -webkit-mask-size: 260% 100%;
+  mask-size: 260% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
   animation: progressShimmer 2.4s linear infinite;
 }
 
+/* The global guard only freezes animations, and a frozen sweep would leave part
+   of the line dimmed at whatever position it stopped. Drop the mask entirely. */
 @media (prefers-reduced-motion: reduce) {
   .progress-shimmer {
-    background-image: none;
-    color: inherit;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 

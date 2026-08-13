@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
 import TurnProgress, { TurnRecovery, formatElapsed } from "./turn-progress";
@@ -30,6 +31,32 @@ describe("formatElapsed", () => {
     // `Date.now() - from` can land negative for one tick if the store stamps a
     // timestamp a hair ahead of the render.
     expect(formatElapsed(-2_000)).toBe("0s");
+  });
+});
+
+// The shimmer is the one piece of this component that can make the line
+// UNREADABLE rather than merely ugly, and the markup assertions above cannot see
+// it: they prove the class is on the span, not that the span is still painted.
+//
+// It has already failed exactly once, in the shape below -- the sweep was a
+// gradient clipped to the glyphs, so the rule had to set `color: transparent`,
+// and the gradient it was built from used `currentColor`. On the same element
+// that resolves to the transparent colour just set, so every thinking line
+// rendered in the page's own background colour.
+describe(".progress-shimmer", () => {
+  const css = readFileSync(new URL("../globals.css", import.meta.url), "utf8");
+  const rule = css.slice(css.indexOf(".progress-shimmer {"), css.indexOf("}", css.indexOf(".progress-shimmer {")));
+
+  it("is a real rule, so the assertions below are not vacuous", () => {
+    expect(rule).toContain("animation: progressShimmer");
+  });
+
+  it("never blanks the text colour it is supposed to sweep", () => {
+    expect(rule).not.toMatch(/color:\s*transparent/);
+  });
+
+  it("does not paint the glyphs from a background, which is what forced that", () => {
+    expect(rule).not.toContain("background-clip: text");
   });
 });
 
