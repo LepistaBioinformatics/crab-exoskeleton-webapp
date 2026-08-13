@@ -9,6 +9,7 @@ import {
   mediaUrl,
   resolveMediaRef,
   type PreviewKind,
+  previewBlobType,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
@@ -93,7 +94,10 @@ export default function FilePreview({
       fetchMediaBlob(workspace, path)
         .then((blob) => {
           if (cancelled) return;
-          created = URL.createObjectURL(blob);
+          // Re-typed, because the bytes arrive as octet-stream and the browser believes
+          // the blob over the <object type=…> attribute. See previewBlobType.
+          const mime = previewBlobType(kind);
+          created = URL.createObjectURL(mime ? new Blob([blob], { type: mime }) : blob);
           setFrameUrl(created);
         })
         .catch((e: Error) => {
@@ -220,7 +224,20 @@ export default function FilePreview({
           )}
 
           {!error && kind === "markdown" && text !== null && (
-            <div className="mx-auto max-w-[820px] px-6 py-5 text-fg">
+            // `container-type: inline-size` is load-bearing, not styling.
+            //
+            // MessageContent breaks wide tables out past the text column using
+            // `max(0px, 50cqw - 360px)` per side. `cqw` resolves against the nearest
+            // query container, which in the chat is the message band. There is none
+            // here, so it fell back to the VIEWPORT: on a 1400px screen that is 340px
+            // of negative margin each side, and the table grew past the modal itself
+            // — a second, outer scrollbar on top of the table's own, hiding content
+            // from anyone who did not think to scroll the whole dialog.
+            //
+            // Declaring the container makes the same formula measure THIS column, and
+            // its own clamp then does the right thing: a modest breakout when the
+            // dialog is wide, and none at all once the column is under 720px.
+            <div className="mx-auto max-w-[820px] px-6 py-5 text-fg [container-type:inline-size]">
               <MarkdownImageContext.Provider value={resolveImage}>
                 <MessageContent content={text} />
               </MarkdownImageContext.Provider>
