@@ -19,20 +19,7 @@ const trigger = cva("inline-flex min-w-0 items-center gap-1 text-left", {
   variants: {
     tone: {
       chip: "max-w-full rounded-lg border border-current/25 px-2 py-1 text-xs hover:bg-current/10",
-      row: "w-full text-sm text-fg hover:underline",
     },
-  },
-  defaultVariants: { tone: "chip" },
-});
-
-// The wrapper has to grow too, and that is the whole reason it is a variant rather than
-// one constant class. `flex-1` sat on the BUTTON, whose parent is this span — so it
-// divided space inside the span instead of claiming space inside the row, and a file
-// row's size label and delete control ended up jammed against the end of the name
-// instead of at the row's right edge.
-const wrapper = cva("relative inline-flex min-w-0", {
-  variants: {
-    tone: { chip: "", row: "flex-1" },
   },
   defaultVariants: { tone: "chip" },
 });
@@ -41,19 +28,12 @@ export default function AttachmentButton({
   workspace,
   path,
   name,
-  size,
   tone = "chip",
 }: {
   workspace: Workspace;
   path: string;
   name: string;
-  /**
-   * From the listing, when there is one. Only the preview uses it, to refuse a text
-   * body too large to read into memory before it is fetched; a chat `[anexo: …]` chip
-   * has no listing behind it and passes nothing.
-   */
-  size?: number;
-  tone?: "chip" | "row";
+  tone?: "chip";
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -91,7 +71,7 @@ export default function AttachmentButton({
   }
 
   return (
-    <span className={wrapper({ tone })}>
+    <span className="relative inline-flex min-w-0">
       <button ref={btnRef} type="button" onClick={toggle} className={trigger({ tone })} title={name}>
         {tone === "chip" && <Paperclip size={12} className="shrink-0" aria-hidden />}
         <span className="truncate">{name}</span>
@@ -144,7 +124,8 @@ export default function AttachmentButton({
             path={path}
             name={name}
             kind={kind}
-            size={size}
+            // No size: a chat chip has no listing behind it. The cap still applies —
+            // FilePreview checks the fetched blob as well.
             onClose={() => setPreviewing(false)}
           />,
           document.body,

@@ -47,7 +47,6 @@ async function openMenu(path: string): Promise<string> {
         workspace={workspace}
         path={path}
         name={path.slice(path.lastIndexOf("/") + 1)}
-        tone="row"
       />,
     );
   });
