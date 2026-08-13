@@ -42,6 +42,11 @@ const en = {
   turn_lost: "The connection dropped and the reply hasn't arrived yet. Reload the conversation to check.",
   gateway_retries_exhausted:
     "Still can't reach the gateway after several attempts. Try again shortly.",
+  // stop-generation: the stop never reached the agent. Stated as "still running"
+  // rather than "stop failed", because that is the part that matters — the bands
+  // are deliberately left alone, since clearing them would hide a turn that is
+  // still working and still writing to the transcript.
+  stop_failed: "Couldn't stop the agent — it's still working on this message.",
   // user-owned-models. The probe answers with an error CLASS, never the
   // provider's response body, so each of these has to name the fix rather than
   // quote an upstream message the member cannot act on.
@@ -117,6 +122,7 @@ const pt: ErrorDict = {
     "A conexão caiu e a resposta ainda não chegou. Recarregue a conversa para verificar.",
   gateway_retries_exhausted:
     "Ainda não foi possível falar com o gateway após várias tentativas. Tente daqui a pouco.",
+  stop_failed: "Não foi possível parar o agente — ele continua trabalhando nesta mensagem.",
   probe_bad_key: "O endpoint recusou essa chave de API.",
   probe_bad_endpoint:
     "Esse host respondeu, mas não há endpoint de chat nesse caminho — confira se a URL ainda tem o caminho da versão, ex.: /v1.",
