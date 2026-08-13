@@ -424,13 +424,17 @@ async function transcriptLength(sid: string, ctx: RunContext): Promise<number | 
  * exists; from here on the turn is committed upstream and sending it again would run
  * a ten-minute turn twice.
  */
-async function recover(sid: string, ctx: RunContext) {
+async function recover(sid: string, ctx: RunContext, preRead?: number | null) {
   patch(sid, { recovering: true, recoveringSince: Date.now() });
   // The baseline comes from the first SUCCESSFUL read, not the first attempt: a
   // recovery that starts while the network is briefly down would otherwise take
   // `null` for "empty" and declare the turn landed on the first poll that got
   // through.
-  let baseline = await transcriptLength(sid, ctx);
+  //
+  // `preRead` is for the resume path, which must take its baseline BEFORE it asks
+  // the proxy whether a turn is running -- see resumeIfActive. Reading it again
+  // here would reintroduce exactly the race that ordering avoids.
+  let baseline = preRead !== undefined ? preRead : await transcriptLength(sid, ctx);
   const deadline = Date.now() + RECOVERY_BUDGET_MS;
   try {
     while (Date.now() < deadline) {
@@ -806,4 +810,108 @@ export function __reset() {
 /** Directly seed a conversation's state. Tests only. */
 export function __seed(sid: string, state: Partial<TurnState>) {
   patch(sid, state);
+}
+
+// ---------------------------------------------------------------------------
+// resume-turn-after-reload
+// ---------------------------------------------------------------------------
+
+/**
+ * Does the proxy still have a turn in flight for this conversation?
+ *
+ * The query is built here rather than borrowed from `historyQuery`, which would
+ * have been the shorter path. That helper also sends `project`, and this endpoint
+ * does not read it — the proxy's in-flight registry is keyed by
+ * tenant/subs/agent/user and NOT by workspace segment, so a project conversation
+ * registers under the same scope as a main one. Sending it anyway would put a
+ * parameter on the wire that reads like a guarantee nobody makes.
+ */
+async function fetchActive(sid: string, ctx: RunContext): Promise<boolean> {
+  const query = new URLSearchParams({
+    session_id: sid,
+    tenant_id: ctx.workspace.t,
+    subs_acc_id: ctx.workspace.s,
+  });
+  try {
+    const res = await fetch(`/api/chat/${ctx.workspace.r}/active?${query.toString()}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.active === true;
+  } catch {
+    // Unreachable is not "finished". Returning false here only means we do not
+    // resume; the transcript still holds the reply whenever it lands.
+    return false;
+  }
+}
+
+/**
+ * Pick up a turn this client lost sight of — the page was reloaded while it ran.
+ *
+ * The turn itself was never at risk: the proxy runs it on a background context so
+ * a disconnect cannot cut it, and picoclaw persists the reply. What is lost is
+ * only the view, and `long-turn-resilience` already knows how to rebuild that from
+ * the transcript. This adds the one thing a reload destroys: knowing there is
+ * anything to wait for.
+ *
+ * ORDER IS LOAD-BEARING. The baseline is read BEFORE asking whether the turn is
+ * active, which is the reverse of the obvious sequence. recover() waits for the
+ * transcript to grow past the baseline, so a turn that lands during the round-trip
+ * to /active would otherwise be baselined with its own reply already counted,
+ * never grow, and be declared lost eleven minutes later. Taking the baseline first
+ * makes `active:false` mean "already landed, nothing to do" and `active:true` mean
+ * "the baseline predates the reply".
+ *
+ * The envelope around recover() is runTurn's, not a simplified one. recover()
+ * relies on `running` staying true and `arrivalDone` false for the whole wait, or
+ * finishIfDrained ends the turn early and the completion painter reloads a
+ * transcript that has no reply in it yet and drops the bands — the
+ * blanked-conversation defect recorded in chat-view.tsx.
+ */
+export async function resumeIfActive(
+  sid: string,
+  ctx: RunContext,
+  probes: Partial<{
+    baseline: (sid: string, ctx: RunContext) => Promise<number | null>;
+    active: (sid: string, ctx: RunContext) => Promise<boolean>;
+    /**
+     * True once the caller has stopped caring — it navigated away mid-probe.
+     *
+     * Without it a conversation switch during the /active round-trip leaves a
+     * phantom running turn on a conversation nobody is looking at, and the poll
+     * loop's eventual finishIfDrained fires the painter for a sid `activeSidRef`
+     * no longer matches. The caller's own effect already tracks this; it just has
+     * to be able to say so.
+     */
+    cancelled: () => boolean;
+  }> = {},
+) {
+  // A live turn in the store means this page never went away. Resuming would put
+  // a second recovery on the same conversation, fighting runTurn for it.
+  if (getTurn(sid).running) return;
+
+  // `baseline` is overridable so the caller can hand over a transcript it has
+  // ALREADY loaded — the mount path has just fetched one. That saves a request
+  // and, more importantly, keeps the ordering guarantee: a length measured before
+  // this function was even called is necessarily older than the /active probe.
+  const readBaseline = probes.baseline ?? transcriptLength;
+  const readActive = probes.active ?? fetchActive;
+  const cancelled = probes.cancelled ?? (() => false);
+
+  const baseline = await readBaseline(sid, ctx);
+  if (cancelled()) return;
+  if (!(await readActive(sid, ctx))) return;
+  // Re-checked AFTER the probe, not only before it: the round-trip is exactly
+  // when the member switches conversations.
+  if (cancelled()) return;
+
+  patch(sid, { running: true, arrivalDone: false, error: null });
+  try {
+    await recover(sid, ctx, baseline);
+    syncSessionRefs(ctx.workspace, sid).catch(() => {});
+    notifyConversationsUpdated();
+  } finally {
+    patch(sid, { arrivalDone: true, retrying: null, settling: false });
+    startReveal(sid);
+    finishIfDrained(sid);
+  }
 }
