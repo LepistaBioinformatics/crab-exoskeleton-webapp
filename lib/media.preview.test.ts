@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { PREVIEW_TEXT_MAX, mediaUrl, previewBlobType, previewKind, resolveMediaRef } from "@/lib/media";
+import {
+  PREVIEW_TEXT_MAX,
+  fileTypeGroup,
+  mediaUrl,
+  previewBlobType,
+  previewKind,
+  resolveMediaRef,
+} from "@/lib/media";
 import type { Workspace } from "@/app/chat/fragment";
 
 const workspace = { t: "acme", s: "growth", r: "alpha" } as Workspace;
@@ -131,5 +138,41 @@ describe("previewBlobType", () => {
   it("leaves the text kinds alone — they are read as text, never framed", () => {
     expect(previewBlobType("markdown")).toBeNull();
     expect(previewBlobType("text")).toBeNull();
+  });
+});
+
+// The row deliberately had NO icon before this: a generic file glyph was identical on
+// every line, so it carried nothing while costing the name its width (the reasoning is
+// recorded in uploads-sidebar.tsx). A TYPE icon is a different proposition — it only
+// earns that width by varying, which is what these assertions are really about.
+describe("fileTypeGroup", () => {
+  it("separates the groups a member actually distinguishes at a glance", () => {
+    expect(fileTypeGroup("report.pdf")).toBe("pdf");
+    expect(fileTypeGroup("logo.png")).toBe("image");
+    expect(fileTypeGroup("notes.md")).toBe("markdown");
+    expect(fileTypeGroup("data.csv")).toBe("sheet");
+    expect(fileTypeGroup("export.xlsx")).toBe("sheet");
+    expect(fileTypeGroup("bundle.zip")).toBe("archive");
+    expect(fileTypeGroup("script.py")).toBe("code");
+    expect(fileTypeGroup("voice.mp3")).toBe("audio");
+    expect(fileTypeGroup("clip.mp4")).toBe("video");
+    expect(fileTypeGroup("readme.txt")).toBe("text");
+  });
+
+  it("falls back to a neutral group rather than guessing", () => {
+    expect(fileTypeGroup("Makefile")).toBe("unknown");
+    expect(fileTypeGroup("archive.tar.gz")).toBe("archive");
+    expect(fileTypeGroup(".gitignore")).toBe("unknown");
+  });
+
+  it("reads the extension off the LEAF, not the path", () => {
+    // A folder carrying a dot is ordinary ("2026.reports/"), and previewKind already
+    // had this bug shape covered — the same trap applies here.
+    expect(fileTypeGroup("public/2026.reports/q2.md")).toBe("markdown");
+    expect(fileTypeGroup("public/v1.2/notes")).toBe("unknown");
+  });
+
+  it("is case-insensitive, because an agent writes REPORT.PDF sometimes", () => {
+    expect(fileTypeGroup("REPORT.PDF")).toBe("pdf");
   });
 });

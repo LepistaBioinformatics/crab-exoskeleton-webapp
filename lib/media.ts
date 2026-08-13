@@ -136,6 +136,57 @@ export function mediaUrl(workspace: Workspace, path: string): string {
 }
 
 /**
+ * Coarse file-type groups, for the icon at the left of a row's name.
+ *
+ * GROUPS, not extensions, and that is the whole design. The row deliberately carried no
+ * icon before: a generic file glyph was identical on every line, so it said nothing
+ * while costing the name its width (recorded in uploads-sidebar.tsx). An icon only earns
+ * that width by VARYING, and it only varies usefully along distinctions a member makes
+ * at a glance — "spreadsheet" and "archive" are such distinctions, `.xlsx` versus `.xls`
+ * is not.
+ *
+ * `unknown` is a real answer, not a gap. Guessing from an unrecognised extension would
+ * put a confident wrong glyph on the row, which is worse than a neutral one.
+ */
+export type FileTypeGroup =
+  | "pdf"
+  | "image"
+  | "markdown"
+  | "text"
+  | "sheet"
+  | "archive"
+  | "code"
+  | "audio"
+  | "video"
+  | "unknown";
+
+const FILE_TYPE_GROUPS: Record<string, FileTypeGroup> = {
+  pdf: "pdf",
+  png: "image", jpg: "image", jpeg: "image", webp: "image", gif: "image", svg: "image",
+  md: "markdown",
+  txt: "text", log: "text", json: "text", yml: "text", yaml: "text",
+  csv: "sheet", tsv: "sheet", xlsx: "sheet", xls: "sheet", ods: "sheet",
+  zip: "archive", gz: "archive", tar: "archive", tgz: "archive", rar: "archive", "7z": "archive",
+  py: "code", js: "code", ts: "code", tsx: "code", jsx: "code", go: "code",
+  rs: "code", sh: "code", sql: "code", html: "code", css: "code",
+  mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio",
+  mp4: "video", webm: "video", mov: "video", mkv: "video",
+};
+
+/**
+ * The group for a filename or workspace path.
+ *
+ * Reads the extension off the LEAF, so a folder carrying a dot ("2026.reports/") does not
+ * lend its suffix to a file inside it — the same trap previewKind documents.
+ */
+export function fileTypeGroup(nameOrPath: string): FileTypeGroup {
+  const leaf = nameOrPath.slice(nameOrPath.lastIndexOf("/") + 1);
+  const dot = leaf.lastIndexOf(".");
+  if (dot <= 0) return "unknown"; // no extension, or a dotfile with none
+  return FILE_TYPE_GROUPS[leaf.slice(dot + 1).toLowerCase()] ?? "unknown";
+}
+
+/**
  * The MIME type a preview has to assert locally, or null when none is needed.
  *
  * The proxy serves EVERY media file as `application/octet-stream` with
