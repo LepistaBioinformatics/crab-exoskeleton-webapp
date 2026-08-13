@@ -307,6 +307,18 @@
   opacity: 0.72;
 }
 
+/* A narrated progress line that has not changed for SILENCE_GRACE_MS. The agent
+   can sit inside one tool call for minutes -- picoclaw's "Continuing the current
+   task.: ..." owns the band that whole time -- and a line that never moves reads
+   as a frozen chat rather than a working one.
+
+   Borrows originPulse's curve deliberately: both mean "not settled yet", so they
+   should look like the same idea rather than two. Auto-neutralized by the
+   reduced-motion guard below. */
+.progress-stalled {
+  animation: originPulse 1.1s ease-in-out infinite;
+}
+
 /* Progress lines in the assistant band fade in rather than snapping, so a
    sequence of tool-call narrations reads as one settling surface instead of
    flickering. Auto-neutralized by the reduced-motion guard below. */
