@@ -70,6 +70,18 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
+  // The soft keyboard must SHRINK the layout viewport, not just offset the visual one.
+  //
+  // `resizes-visual` is the default, and under it the keyboard leaves the layout viewport
+  // at full height and scrolls it to keep the focused input in view — which pushed the
+  // mobile top bar off the top of the screen, reachable only by scrolling back. The shell
+  // is a fixed-height column, so it had no scroll of its own to fix that with, and
+  // `position: sticky` could not see it either: sticky tracks a scroll CONTAINER, and here
+  // the thing moving is the viewport.
+  //
+  // `resizes-content` makes the keyboard reduce the viewport instead, so `h-dvh` on the
+  // shell resolves to the space actually visible and nothing needs to scroll.
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#14171a" },

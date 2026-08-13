@@ -9,6 +9,8 @@ import {
   dropTarget,
   isReservedFolder,
   moveMedia,
+  fileTypeGroup,
+  type FileTypeGroup,
 } from "@/lib/media";
 import {
   Brain,
@@ -17,7 +19,15 @@ import {
   ChevronRight,
   Download,
   Eye,
+  File,
+  FileArchive,
+  FileAudio,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
   FileText,
+  FileType,
+  FileVideo,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -29,6 +39,7 @@ import {
   Search,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { cva } from "class-variance-authority";
 import {
@@ -164,7 +175,37 @@ function formatSize(bytes?: number): string {
 // What a workspace holds. Ordered deliberately: memory and the graph are what a
 // member asks about ("what does it know about me"), scheduled tasks are what it does
 // on its own, files are what they manage.
-type Section = "memory" | "graph" | "tasks" | "files";
+export type Section = "memory" | "graph" | "tasks" | "files";
+
+// One glyph per file-type GROUP, at the left of a row's name.
+//
+// Grouped rather than per-extension because the icon only helps along distinctions a
+// member makes at a glance: "spreadsheet" and "archive" are such distinctions, `.xlsx`
+// versus `.xls` is not. `unknown` gets the plain file glyph — the honest answer for an
+// extension we do not recognise, and better than a confident wrong one.
+//
+// Colour, deliberately not the accent: in this design system the accent means
+// "interactive", and a type marker is not. Muted keeps it subordinate to the name, which
+// is what the member is actually scanning.
+const FILE_TYPE_ICONS: Record<FileTypeGroup, LucideIcon> = {
+  pdf: FileType,
+  image: FileImage,
+  markdown: FileText,
+  text: FileText,
+  sheet: FileSpreadsheet,
+  archive: FileArchive,
+  code: FileCode,
+  audio: FileAudio,
+  video: FileVideo,
+  unknown: File,
+};
+
+function FileTypeIcon({ group }: { group: FileTypeGroup }) {
+  const Icon = FILE_TYPE_ICONS[group];
+  // aria-hidden: the extension is already in the visible name, so announcing the type
+  // before it would be noise to a screen reader rather than information.
+  return <Icon size={14} aria-hidden className="shrink-0 text-fg-muted" />;
+}
 
 const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files"];
 
@@ -248,6 +289,7 @@ export default function UploadsSidebar({
   onClose,
   onReference,
   initialSection = null,
+  onSectionChange,
 }: {
   workspace: Workspace;
   refreshSignal: number;
@@ -268,6 +310,12 @@ export default function UploadsSidebar({
    * the seam a future "open the files panel" link would use.
    */
   initialSection?: Section | null;
+  /**
+   * Reports every section change so the caller can persist it. The panel keeps owning
+   * the state -- it is the only thing that knows the transitions -- and the caller is
+   * the only thing that knows about the URL.
+   */
+  onSectionChange?: (section: Section | null) => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -607,7 +655,7 @@ export default function UploadsSidebar({
                 aria-label={`${t.uploads.renameAria} ${node.leaf}`}
                 title={t.uploads.rename}
                 onClick={() => promptRename(node.path, node.leaf)}
-                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100"
+                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <Pencil size={13} aria-hidden />
               </IconButton>
@@ -624,7 +672,7 @@ export default function UploadsSidebar({
                     files: filesUnder(node.path),
                   })
                 }
-                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100"
+                className="opacity-0 transition-opacity group-hover/dir:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <Trash2 size={13} aria-hidden />
               </IconButton>
@@ -655,10 +703,20 @@ export default function UploadsSidebar({
         className="group flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-elevated"
         {...dragProps(f.name)}
       >
-        {/* Name then size, both on the left and both plain text. No file icon: every row
-            in this list is a file, so the glyph repeated once per row said nothing while
-            costing the name width. `min-w-0` is what lets `truncate` engage inside a
-            flex row — without it the name would push the controls off the edge. */}
+        {/* A TYPE icon, then the name, then the size.
+            
+            This row carried no icon for a while, and the reason was sound: a generic file
+            glyph was identical on every line, so it said nothing while costing the name
+            its width. What earns the width back is VARYING — "this one is a PDF, that one
+            is a spreadsheet" is readable before the name is, which is the whole point in a
+            narrow column where names truncate.
+
+            `aria-hidden` because the extension is already in the visible name: announcing
+            "PDF" before "report.pdf" is noise to a screen reader, not information.
+
+            `min-w-0` is what lets `truncate` engage inside a flex row — without it the
+            name would push the controls off the edge. */}
+        <FileTypeIcon group={fileTypeGroup(node.leaf)} />
         <span className="min-w-0 truncate text-sm text-fg" title={node.leaf}>
           {node.leaf}
         </span>
@@ -669,8 +727,14 @@ export default function UploadsSidebar({
             menu that had to be opened first to find out what was in it.
             Revealed on hover, but their SPACE is always reserved: releasing it would
             widen the name on mouse-out and re-truncate it on mouse-in, so every row the
-            pointer crossed would flicker. */}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            pointer crossed would flicker.
+
+            `[@media(hover:none)]` keeps them visible where there is no hover to reveal
+            them with. Keyed on the CAPABILITY rather than on a width breakpoint, which
+            is the reflex: a touch laptop at desktop width has exactly this problem, and
+            a narrow desktop window does not. Reserving the space already means showing
+            them costs no layout. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {previewKind(f.path) && (
             <IconButton
               variant="ghost"
@@ -747,7 +811,10 @@ export default function UploadsSidebar({
           ) : (
             <button
               type="button"
-              onClick={() => setSection(null)}
+              onClick={() => {
+                setSection(null);
+                onSectionChange?.(null);
+              }}
               className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-accent"
             >
               <ChevronLeft
@@ -813,7 +880,10 @@ export default function UploadsSidebar({
                       <li key={key}>
                         <button
                           type="button"
-                          onClick={() => setSection(key)}
+                          onClick={() => {
+                            setSection(key);
+                            onSectionChange?.(key);
+                          }}
                           className="flex w-full items-center gap-2 border-b border-brand/30 px-3 py-3 text-left transition-colors hover:bg-elevated"
                         >
                           <s.Icon

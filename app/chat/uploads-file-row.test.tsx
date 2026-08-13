@@ -118,3 +118,55 @@ describe("a file row's controls", () => {
     expect(dialog?.textContent).toContain("photo.png");
   });
 });
+
+// A row's controls are revealed on hover, which on a touch device reveals nothing: the
+// member cannot discover preview, download or delete at all. The fix is keyed on the
+// hover CAPABILITY rather than on a width breakpoint — a touch laptop at desktop width
+// has the same problem and a narrow desktop window does not — so what is asserted is
+// that the escape hatch is present on every container that hides its contents.
+// The icon has to VARY to be worth the width it takes from the name — a glyph identical
+// on every line is what was removed from this row once already, for exactly that reason.
+// So what is asserted is difference, not presence: two files of different groups must not
+// render the same glyph.
+describe("file type icon", () => {
+  it("draws a different glyph for a different file type", async () => {
+    const pane = await openFilesPane();
+    const rows = Array.from(pane.querySelectorAll('li[role="treeitem"]'));
+
+    const glyphOf = (name: string) => {
+      const row = rows.find((r) => r.textContent?.includes(name));
+      expect(row, `no row for ${name}`).toBeTruthy();
+      // lucide renders an <svg> whose class names carry the icon identity.
+      return row!.querySelector("svg")?.getAttribute("class") ?? "";
+    };
+
+    const png = glyphOf("photo.png");
+    const xlsx = glyphOf("sheet.xlsx");
+    expect(png).not.toBe("");
+    expect(xlsx).not.toBe("");
+    expect(png, "an image and a spreadsheet drew the same icon").not.toBe(xlsx);
+  });
+});
+
+describe("row controls on a device without hover", () => {
+  it("keeps every hover-revealed control group visible where hover does not exist", async () => {
+    const pane = await openFilesPane();
+
+    // The EXACT token, not a substring: IconButton carries `after:opacity-0` for its
+    // ripple, which is not a hover-reveal and needs no fallback.
+    // classList, not className: on an SVG element className is an SVGAnimatedString.
+    // The EXACT token, not a substring: IconButton carries `after:opacity-0` for its
+    // ripple, which is not a hover-reveal and needs no fallback.
+    const hidden = Array.from(pane.querySelectorAll<HTMLElement>("*")).filter((el) =>
+      el.classList.contains("opacity-0"),
+    );
+    expect(hidden.length).toBeGreaterThan(0);
+
+    for (const el of hidden) {
+      expect(
+        el.classList.contains("[@media(hover:none)]:opacity-100"),
+        `a hover-revealed group with no touch fallback: ${el.getAttribute("class")}`,
+      ).toBe(true);
+    }
+  });
+});

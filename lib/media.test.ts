@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
+  attachmentName,
   canDrop,
   dropTarget,
+  parseAnexos,
   isInsideReserved,
   isReservedFolder,
   RESERVED_FOLDER,
@@ -138,5 +140,29 @@ describe("uploadMedia carries the project", () => {
     const seen = captureForm();
     await uploadMedia({ ...base, p: null }, new File(["abc"], "x.zip"));
     expect(seen.form?.has("project")).toBe(false);
+  });
+});
+
+// The rename of the member-facing folder from `uploads/` to `public/` is a change
+// of LABEL, not of path: the proxy strips whichever prefix arrives before resolving
+// the file. So both have to be recognised here, and the legacy one is the one that
+// matters — every marker already written into a picoclaw transcript says `uploads/`,
+// those transcripts are never rewritten, and a marker that fails to match is left
+// on screen as prose instead of becoming a download chip. Silently.
+describe("public/ and its legacy uploads/ name", () => {
+  it("pulls chips from both prefixes", () => {
+    const got = parseAnexos("a [anexo: public/new.pdf] b [anexo: uploads/old.pdf] c");
+    expect(got.refs.map((r) => r.path)).toEqual(["public/new.pdf", "uploads/old.pdf"]);
+    expect(got.text).not.toContain("anexo:");
+  });
+
+  it("strips either prefix from the display name", () => {
+    expect(attachmentName("public/reports/q2.pdf")).toBe("reports/q2.pdf");
+    expect(attachmentName("uploads/reports/q2.pdf")).toBe("reports/q2.pdf");
+  });
+
+  it("does not strip a folder that merely starts with the word", () => {
+    // `publicity/` is a folder a member could plausibly create.
+    expect(attachmentName("public/publicity/plan.md")).toBe("publicity/plan.md");
   });
 });

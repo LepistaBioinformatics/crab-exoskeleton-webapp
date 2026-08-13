@@ -80,15 +80,25 @@ export async function listWorkspaceMedia(workspace: Workspace): Promise<Attachme
   return Array.isArray(data.files) ? data.files : [];
 }
 
-// Display name for a workspace path: drop the "uploads/" prefix and any legacy
+// The member-facing folder, and the name it used to have.
+//
+// Both are matched everywhere a stored path is read, and the legacy one is not
+// deprecation politeness: the prefix is a LABEL the proxy strips before resolving,
+// so every `[anexo: uploads/...]` marker already sitting in a picoclaw transcript
+// still points at a real file. Those transcripts are never rewritten. Matching
+// only the new name would stop rendering download chips for every past
+// conversation -- silently, since a marker that does not match is left as prose.
+const PUBLIC_PREFIX_RE = /^(?:public|uploads)\//;
+
+// Display name for a workspace path: drop the folder prefix and any legacy
 // 8-hex storage uid prefix.
 export function attachmentName(path: string): string {
-  return path.replace(/^uploads\//, "").replace(/^[0-9a-f]{8}-/, "");
+  return path.replace(PUBLIC_PREFIX_RE, "").replace(/^[0-9a-f]{8}-/, "");
 }
 
-const ANEXO_RE = /\[anexo:\s*(uploads\/[^\]\s]+)\]/gi;
+const ANEXO_RE = /\[anexo:\s*((?:public|uploads)\/[^\]\s]+)\]/gi;
 
-// Pulls `[anexo: uploads/...]` references out of a message so they can render as
+// Pulls `[anexo: public/...]` references out of a message so they can render as
 // download chips, and returns the remaining text (refs stripped) for markdown.
 export function parseAnexos(content: string): { text: string; refs: Attachment[] } {
   const refs: Attachment[] = [];
@@ -123,6 +133,75 @@ export function mediaUrl(workspace: Workspace, path: string): string {
     path,
   }), workspace);
   return `/api/media/download?${query.toString()}`;
+}
+
+/**
+ * Coarse file-type groups, for the icon at the left of a row's name.
+ *
+ * GROUPS, not extensions, and that is the whole design. The row deliberately carried no
+ * icon before: a generic file glyph was identical on every line, so it said nothing
+ * while costing the name its width (recorded in uploads-sidebar.tsx). An icon only earns
+ * that width by VARYING, and it only varies usefully along distinctions a member makes
+ * at a glance — "spreadsheet" and "archive" are such distinctions, `.xlsx` versus `.xls`
+ * is not.
+ *
+ * `unknown` is a real answer, not a gap. Guessing from an unrecognised extension would
+ * put a confident wrong glyph on the row, which is worse than a neutral one.
+ */
+export type FileTypeGroup =
+  | "pdf"
+  | "image"
+  | "markdown"
+  | "text"
+  | "sheet"
+  | "archive"
+  | "code"
+  | "audio"
+  | "video"
+  | "unknown";
+
+const FILE_TYPE_GROUPS: Record<string, FileTypeGroup> = {
+  pdf: "pdf",
+  png: "image", jpg: "image", jpeg: "image", webp: "image", gif: "image", svg: "image",
+  md: "markdown",
+  txt: "text", log: "text", json: "text", yml: "text", yaml: "text",
+  csv: "sheet", tsv: "sheet", xlsx: "sheet", xls: "sheet", ods: "sheet",
+  zip: "archive", gz: "archive", tar: "archive", tgz: "archive", rar: "archive", "7z": "archive",
+  py: "code", js: "code", ts: "code", tsx: "code", jsx: "code", go: "code",
+  rs: "code", sh: "code", sql: "code", html: "code", css: "code",
+  mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio",
+  mp4: "video", webm: "video", mov: "video", mkv: "video",
+};
+
+/**
+ * The group for a filename or workspace path.
+ *
+ * Reads the extension off the LEAF, so a folder carrying a dot ("2026.reports/") does not
+ * lend its suffix to a file inside it — the same trap previewKind documents.
+ */
+export function fileTypeGroup(nameOrPath: string): FileTypeGroup {
+  const leaf = nameOrPath.slice(nameOrPath.lastIndexOf("/") + 1);
+  const dot = leaf.lastIndexOf(".");
+  if (dot <= 0) return "unknown"; // no extension, or a dotfile with none
+  return FILE_TYPE_GROUPS[leaf.slice(dot + 1).toLowerCase()] ?? "unknown";
+}
+
+/**
+ * The MIME type a preview has to assert locally, or null when none is needed.
+ *
+ * The proxy serves EVERY media file as `application/octet-stream` with
+ * `Content-Disposition: attachment` (crab-shell-proxy handlers.go), which is a
+ * deliberate posture: a member's file is untrusted content and must never render
+ * inline from this origin. `res.blob()` inherits that type, and a browser trusts the
+ * blob's own type over an `<object type=…>` attribute — so a PDF preview showed the
+ * fallback in Firefox and downloaded itself in Chromium.
+ *
+ * Images are unaffected and get null: `<img>` sniffs the bytes and ignores the type.
+ * Re-typing is scoped to the blob: URL the preview builds, which is an opaque origin —
+ * the server's posture for every other consumer is untouched.
+ */
+export function previewBlobType(kind: PreviewKind): string | null {
+  return kind === "pdf" ? "application/pdf" : null;
 }
 
 /** One file's bytes. Shared by the download-to-disk path and by the preview. */

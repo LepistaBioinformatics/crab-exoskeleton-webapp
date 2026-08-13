@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
 
@@ -128,5 +129,33 @@ describe("markdown image resolution", () => {
     );
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");
+  });
+});
+
+// MessageContent widens a table past its text column with `max(0px, 50cqw - 360px)`
+// per side. `cqw` measures the nearest query container, and this dialog had none — so
+// it fell back to the viewport and the table grew past the modal, producing a second
+// outer scrollbar that hid content from anyone who did not scroll the whole dialog.
+//
+// Declaring the container is the whole fix: the same formula then measures this
+// column, and its own clamp yields no breakout at all once the column is under 720px.
+describe("markdown preview table overflow", () => {
+  // Asserted against the SOURCE, not the render. The markdown column only exists
+  // once the fetched body is in state, and this suite runs `environment: "node"`
+  // where effects never fire — so a render-based check would pass on markup that
+  // never contained the column at all. Same approach the globals.css rules are
+  // guarded with.
+  const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
+
+  it("declares a query container on the markdown column", () => {
+    const column = src.slice(src.indexOf('kind === "markdown" && text !== null'));
+    const openingDiv = column.slice(0, column.indexOf(">"));
+    expect(openingDiv).toContain("container-type:inline-size");
+  });
+
+  it("keeps the max-width that the breakout formula is calibrated against", () => {
+    // 50cqw - 360px is zero below a 720px column. A column allowed to grow past
+    // that is what makes any breakout happen at all, so the two belong together.
+    expect(src).toContain("max-w-[820px]");
   });
 });
