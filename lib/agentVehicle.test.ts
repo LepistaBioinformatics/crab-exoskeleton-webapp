@@ -13,6 +13,45 @@ describe("pickVehicle", () => {
     ).toBe("zcrab");
   });
 
+  it("skips management grants, which name no service", () => {
+    // The exact shape that motivated this: an operator who administers the
+    // subscription AND is a member of the agent. Picking the first role would
+    // route through `subscriptions-manager` and reproduce the 400.
+    expect(
+      pickVehicle({
+        licensedResources: {
+          records: [
+            { role: "subscriptions-manager", sysAcc: true },
+            { role: "tenant-manager", sysAcc: true },
+            { role: "zcrab", sysAcc: false },
+          ],
+        },
+      }),
+    ).toBe("zcrab");
+  });
+
+  it("returns null when every grant is a management one", () => {
+    // Better to fall back than to route through a role that names no service.
+    expect(
+      pickVehicle({
+        licensedResources: { records: [{ role: "tenant-owner", sysAcc: true }] },
+      }),
+    ).toBeNull();
+  });
+
+  it("skips management grants in the compact url form too (s=1)", () => {
+    expect(
+      pickVehicle({
+        licensedResources: {
+          urls: [
+            "t/aa/a/bb/r/cc?p=subscriptions-manager:1&s=1&v=1&n=QQ",
+            "t/aa/a/dd/r/ee?p=zcrab:1&s=0&v=1&n=Qg",
+          ],
+        },
+      }),
+    ).toBe("zcrab");
+  });
+
   it("skips records whose role is empty or whitespace", () => {
     // A grant we cannot name cannot be routed through; the next one still can.
     expect(
