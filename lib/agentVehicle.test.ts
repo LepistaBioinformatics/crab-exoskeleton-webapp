@@ -1,24 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pickVehicle, resolveVehicleAgent } from "./agentVehicle";
+import { candidateRoles, resolveVehicleAgent, serviceNames } from "./agentVehicle";
 
-const myceliumRpc = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/mycelium", () => ({ myceliumRpc }));
+const { myceliumRpc, fetchMycelium } = vi.hoisted(() => ({
+  myceliumRpc: vi.fn(),
+  fetchMycelium: vi.fn(),
+}));
+vi.mock("@/lib/mycelium", () => ({ myceliumRpc, fetchMycelium }));
+
+function toolsResponse(names: string[], key: "tools" | "contexts" = "tools") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ [key]: names.map((name) => ({ name })) }),
+  } as unknown as Response;
+}
+
+function profile(records: { role: string; sysAcc?: boolean }[]) {
+  return { ok: true, result: { licensedResources: { records } } };
+}
 
 afterEach(() => vi.clearAllMocks());
 
-describe("pickVehicle", () => {
-  it("takes the role from the records variant", () => {
+describe("candidateRoles", () => {
+  it("keeps ordinary grants and drops management ones", () => {
+    // The shape that motivated the sysAcc filter: an operator who administers the
+    // subscription AND is a member of the agent.
     expect(
-      pickVehicle({ licensedResources: { records: [{ role: "zcrab" }] } }),
-    ).toBe("zcrab");
-  });
-
-  it("skips management grants, which name no service", () => {
-    // The exact shape that motivated this: an operator who administers the
-    // subscription AND is a member of the agent. Picking the first role would
-    // route through `subscriptions-manager` and reproduce the 400.
-    expect(
-      pickVehicle({
+      candidateRoles({
         licensedResources: {
           records: [
             { role: "subscriptions-manager", sysAcc: true },
@@ -27,21 +35,12 @@ describe("pickVehicle", () => {
           ],
         },
       }),
-    ).toBe("zcrab");
+    ).toEqual(["zcrab"]);
   });
 
-  it("returns null when every grant is a management one", () => {
-    // Better to fall back than to route through a role that names no service.
+  it("reads the compact url variant and drops s=1 there too", () => {
     expect(
-      pickVehicle({
-        licensedResources: { records: [{ role: "tenant-owner", sysAcc: true }] },
-      }),
-    ).toBeNull();
-  });
-
-  it("skips management grants in the compact url form too (s=1)", () => {
-    expect(
-      pickVehicle({
+      candidateRoles({
         licensedResources: {
           urls: [
             "t/aa/a/bb/r/cc?p=subscriptions-manager:1&s=1&v=1&n=QQ",
@@ -49,43 +48,49 @@ describe("pickVehicle", () => {
           ],
         },
       }),
-    ).toBe("zcrab");
+    ).toEqual(["zcrab"]);
   });
 
-  it("skips records whose role is empty or whitespace", () => {
-    // A grant we cannot name cannot be routed through; the next one still can.
+  it("dedupes and skips blank roles", () => {
     expect(
-      pickVehicle({
-        licensedResources: { records: [{ role: "" }, { role: "  " }, { role: "beta" }] },
-      }),
-    ).toBe("beta");
-  });
-
-  it("reads the role out of the compact url variant", () => {
-    // t/<tenantHex>/a/<accHex>/r/<roleHex>?p=<role>:<permInt>&s=0&v=1&n=<b64>
-    expect(
-      pickVehicle({
+      candidateRoles({
         licensedResources: {
-          urls: ["t/aa/a/bb/r/cc?p=eva-natural-ai:1&s=0&v=1&n=RXZh"],
+          records: [{ role: "beta" }, { role: "  " }, { role: "beta" }, { role: "" }],
         },
       }),
-    ).toBe("eva-natural-ai");
+    ).toEqual(["beta"]);
   });
 
-  it("returns null when there is nothing to pick", () => {
-    expect(pickVehicle(null)).toBeNull();
-    expect(pickVehicle({})).toBeNull();
-    expect(pickVehicle({ licensedResources: { records: [] } })).toBeNull();
-    expect(pickVehicle({ licensedResources: { urls: [] } })).toBeNull();
+  it("is empty when there is nothing to pick", () => {
+    expect(candidateRoles(null)).toEqual([]);
+    expect(candidateRoles({})).toEqual([]);
+    expect(candidateRoles({ licensedResources: { records: [] } })).toEqual([]);
+  });
+});
+
+describe("serviceNames", () => {
+  it("collects from tools and contexts alike", () => {
+    // Both are the same Tool shape, split by isContextApi; both are routable.
+    expect(
+      serviceNames({ tools: [{ name: "zcrab" }], contexts: [{ name: "ctx-api" }] }),
+    ).toEqual(new Set(["zcrab", "ctx-api"]));
+  });
+
+  it("survives a payload that carries neither", () => {
+    expect(serviceNames({})).toEqual(new Set());
+    expect(serviceNames(null)).toEqual(new Set());
+    expect(serviceNames({ tools: "nope" })).toEqual(new Set());
   });
 });
 
 describe("resolveVehicleAgent", () => {
-  it("asks for the records variant and returns the caller's role", async () => {
-    myceliumRpc.mockResolvedValue({
-      ok: true,
-      result: { licensedResources: { records: [{ role: "zcrab" }] } },
-    });
+  it("picks the role the gateway confirms it routes, not merely the first", async () => {
+    // The whole point: `other-service` comes first in the profile but names no
+    // agent this gateway declares, so routing through it would 400.
+    myceliumRpc.mockResolvedValue(
+      profile([{ role: "other-service" }, { role: "zcrab" }]),
+    );
+    fetchMycelium.mockResolvedValue(toolsResponse(["zcrab"]));
 
     await expect(resolveVehicleAgent("jwt")).resolves.toBe("zcrab");
     expect(myceliumRpc).toHaveBeenCalledWith(
@@ -93,14 +98,31 @@ describe("resolveVehicleAgent", () => {
       { withUrl: false },
       "jwt",
     );
+    expect(fetchMycelium).toHaveBeenCalledWith("/tools", { cache: "no-store" });
   });
 
-  it("falls back to alpha when the profile carries no roles", async () => {
-    // Today's behaviour for a caller with no guest grant -- a staff account that
-    // was never invited into a subscription. Keeping the old constant here means
-    // this change can only ever improve on what a deployment had.
-    myceliumRpc.mockResolvedValue({ ok: true, result: { licensedResources: { records: [] } } });
+  it("falls back to the profile order when the catalog says nothing", async () => {
+    // 204, an older gateway without /tools, or discoverable=false everywhere.
+    // "Could not tell" must not veto a role the profile vouched for.
+    myceliumRpc.mockResolvedValue(profile([{ role: "zcrab" }]));
+    fetchMycelium.mockResolvedValue({ ok: true, status: 204 } as unknown as Response);
+
+    await expect(resolveVehicleAgent("jwt")).resolves.toBe("zcrab");
+  });
+
+  it("falls back to the profile order when /tools is unreachable", async () => {
+    myceliumRpc.mockResolvedValue(profile([{ role: "zcrab" }]));
+    fetchMycelium.mockRejectedValue(new Error("connect ECONNREFUSED"));
+
+    await expect(resolveVehicleAgent("jwt")).resolves.toBe("zcrab");
+  });
+
+  it("falls back to alpha when the caller holds only management grants", async () => {
+    myceliumRpc.mockResolvedValue(profile([{ role: "tenant-owner", sysAcc: true }]));
+
     await expect(resolveVehicleAgent("jwt")).resolves.toBe("alpha");
+    // No point asking the catalog when there is no candidate to check it against.
+    expect(fetchMycelium).not.toHaveBeenCalled();
   });
 
   it("falls back to alpha when the profile call fails", async () => {

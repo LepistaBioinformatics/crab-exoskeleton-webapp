@@ -1,4 +1,4 @@
-import { myceliumRpc } from "@/lib/mycelium";
+import { fetchMycelium, myceliumRpc } from "@/lib/mycelium";
 
 // Server-side only.
 //
@@ -15,63 +15,57 @@ import { myceliumRpc } from "@/lib/mycelium";
 // `{"error":"Request path does not match any service","status":400}`, with the
 // admin panel and workspace discovery dead while chat keeps working.
 //
-// The name is resolvable at runtime, so nothing needs to be configured. In this
-// stack a guest role's NAME *is* the agent key (mycelium's config declares
-// `protectedByRoles = [{ name = "<agent>" }]` per service), which means the
-// caller's own profile already lists exactly the agents they may route through.
-// Reading the role from there also makes the choice authorized by construction:
-// we can only pick a service this caller is licensed for.
+// Nothing needs to be configured, because both halves of "a real agent this
+// caller may use" are readable at runtime:
 //
-// NOT every role is an agent, though. A member who also administers something
-// holds management grants -- `subscriptions-manager`, `tenant-manager`,
-// `tenant-owner` -- and those name no downstream service, so routing through one
-// would reproduce the very 400 this exists to avoid. They are excluded by
-// mycelium's own marker rather than by a list of names we would have to chase:
-// a management grant sits on a SYSTEM account, `sysAcc: true` ("System accounts
-// has permissions to act as special users into the Mycelium system",
-// core/src/domain/dtos/profile/licensed_resources.rs), and mycelium itself
-// selects them with `with_system_accounts_access()`. The complement -- an
-// ordinary, non-system grant -- is a subscription membership, which in this
-// stack exists because some gateway service declared a role for it.
+//   MAY USE   -- the caller's own profile. In this stack a guest role's NAME *is*
+//                the agent key (mycelium declares `protectedByRoles = [{ name =
+//                "<agent>" }]` per service), so the roles in licensedResources are
+//                the services this caller is licensed for. Picking from there
+//                makes the choice authorized by construction.
+//
+//   IS REAL   -- the gateway's own catalog at GET /tools. `Tool.name` is
+//                documented upstream as the name "used to identify the service
+//                and call it from the gateway url path" -- literally this
+//                segment. The endpoint is public (`security(())`), so asking it
+//                costs no privilege and cannot deadlock: every proxy route lives
+//                under /v1/*, reachable only through a service segment, so asking
+//                crab-shell-proxy for its own agent list would be circular.
+//
+// Management grants are dropped before the intersection even runs. A member who
+// also administers something holds `subscriptions-manager` / `tenant-manager` /
+// `tenant-owner`, and those name no downstream service. They are excluded by
+// mycelium's own marker rather than by a list of names we would have to chase: a
+// management grant sits on a SYSTEM account, `sysAcc: true` ("System accounts has
+// permissions to act as special users into the Mycelium system",
+// core/src/domain/dtos/profile/licensed_resources.rs), which mycelium itself
+// selects with `with_system_accounts_access()`.
 
 const FALLBACK = "alpha";
 
 interface LicensedResource {
   role?: string;
-  // True for management grants (see above); those are never routable agents.
+  // True for management grants; those are never routable agents.
   sysAcc?: boolean;
 }
 
-interface ProfileResult {
+export interface ProfileResult {
   licensedResources?: { records?: LicensedResource[] } | { urls?: string[] };
 }
 
-// `withUrl: false` asks for the RECORDS variant of licensedResources. The other
-// variant is a list of compact URL strings (`t/<hex>/a/<hex>/r/<hex>?p=<role>:<n>…`)
-// that also carries the role, but parsing it to reach a field we can request
-// directly would be work for nothing. Both shapes are accepted below anyway, so a
-// gateway that ignores the flag does not break this.
-export async function resolveVehicleAgent(token: string): Promise<string> {
-  const rpc = await myceliumRpc<ProfileResult>(
-    "beginners.profile.get",
-    { withUrl: false },
-    token,
-  );
-  if (!rpc.ok) return FALLBACK;
-  return pickVehicle(rpc.result) ?? FALLBACK;
-}
-
-// Exported for tests, and kept pure: everything that can vary about the wire
-// shape is decided here rather than inside the fetch.
-export function pickVehicle(profile: ProfileResult | null | undefined): string | null {
+// Every role this caller holds that could name an agent, in profile order and
+// without the management grants. Kept separate from the catalog check so the two
+// reasons a role can be rejected stay distinguishable.
+export function candidateRoles(profile: ProfileResult | null | undefined): string[] {
   const lr = profile?.licensedResources;
-  if (!lr) return null;
+  if (!lr) return [];
+  const out: string[] = [];
 
   if ("records" in lr && Array.isArray(lr.records)) {
     for (const record of lr.records) {
       if (record?.sysAcc === true) continue;
       const role = typeof record?.role === "string" ? record.role.trim() : "";
-      if (role) return role;
+      if (role && !out.includes(role)) out.push(role);
     }
   }
 
@@ -82,10 +76,60 @@ export function pickVehicle(profile: ProfileResult | null | undefined): string |
     for (const url of lr.urls) {
       if (typeof url !== "string") continue;
       if (/[?&]s=1(&|$)/.test(url)) continue;
-      const role = /[?&]p=([^:&]+)/.exec(url)?.[1];
-      if (role) return decodeURIComponent(role);
+      const raw = /[?&]p=([^:&]+)/.exec(url)?.[1];
+      if (!raw) continue;
+      const role = decodeURIComponent(raw);
+      if (role && !out.includes(role)) out.push(role);
     }
   }
 
-  return null;
+  return out;
+}
+
+// The service names the gateway will actually route. `tools` and `contexts` are
+// the same Tool shape split by `isContextApi`; both are routable, so both count.
+export function serviceNames(payload: unknown): Set<string> {
+  const names = new Set<string>();
+  for (const key of ["tools", "contexts"] as const) {
+    const list = (payload as Record<string, unknown> | null)?.[key];
+    if (!Array.isArray(list)) continue;
+    for (const tool of list) {
+      const name = (tool as { name?: unknown })?.name;
+      if (typeof name === "string" && name.trim()) names.add(name.trim());
+    }
+  }
+  return names;
+}
+
+// An empty set means "could not tell", never "no services exist" -- a 204, an
+// older gateway without /tools, or a deployment that left `discoverable = false`
+// all land here, and none of them should veto a role the profile vouched for.
+async function fetchServiceNames(): Promise<Set<string>> {
+  try {
+    const res = await fetchMycelium("/tools", { cache: "no-store" });
+    if (!res.ok || res.status === 204) return new Set();
+    return serviceNames(await res.json());
+  } catch {
+    return new Set();
+  }
+}
+
+export async function resolveVehicleAgent(token: string): Promise<string> {
+  const rpc = await myceliumRpc<ProfileResult>(
+    "beginners.profile.get",
+    // Asks for the RECORDS variant of licensedResources; candidateRoles accepts
+    // the compact-url variant too, so a gateway that ignores the flag still works.
+    { withUrl: false },
+    token,
+  );
+  if (!rpc.ok) return FALLBACK;
+
+  const roles = candidateRoles(rpc.result);
+  if (roles.length === 0) return FALLBACK;
+
+  const declared = await fetchServiceNames();
+  // Prefer a role the gateway confirms it routes. When the catalog is empty we
+  // could not tell, so the profile alone decides -- still strictly better than
+  // the constant this replaced.
+  return roles.find((role) => declared.has(role)) ?? roles[0];
 }
