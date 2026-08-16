@@ -1,15 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { fetchMycelium, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
+import { resolveVehicleAgent } from "@/lib/agentVehicle";
 import type { SessionCookie } from "@/lib/session";
 
 // Every /v1/admin/* endpoint is agent-agnostic: shared content is stored under
 // tenant/subscription scope, not per-role. We still route through a picoclaw
-// service so the proxy's resolveAgent bearer guard runs -- alpha is just the
+// service so the proxy's resolveAgent bearer guard runs -- the agent is just the
 // vehicle (same pattern as /api/subscriptions). Authorization (caller tier vs
 // target scope) is enforced server-side in the proxy from the injected profile;
 // this BFF only forwards the session JWT and surfaces the real status.
-const ADMIN_BASE = "/alpha/v1/admin";
+//
+// The vehicle is resolved from the caller's own profile rather than hardcoded --
+// see lib/agentVehicle.ts for why a literal "alpha" broke every deployment that
+// named its agents anything else.
+const adminBase = (vehicle: string) => `/${vehicle}/v1/admin`;
 
 export const ADMIN_SCOPES = ["tenant", "subscription"] as const;
 export type AdminScopeKind = (typeof ADMIN_SCOPES)[number];
@@ -52,9 +57,11 @@ export async function forwardAdmin(
   suffix: string,
   init: RequestInit = {},
 ): Promise<Response | NextResponse> {
+  const vehicle = await resolveVehicleAgent(session.token);
+
   let res: Response;
   try {
-    res = await fetchMycelium(`${ADMIN_BASE}${suffix}`, {
+    res = await fetchMycelium(`${adminBase(vehicle)}${suffix}`, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${session.token}` },
     });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
+import { resolveVehicleAgent } from "@/lib/agentVehicle";
 
 interface Subscription {
   tenantId: string;
@@ -16,8 +17,8 @@ interface DiscoveryResponse {
   subscriptions: Subscription[];
 }
 
-// Workspace discovery. The `/alpha/v1/subscriptions` proxy route is
-// `protected` (any member) and agent-agnostic -- alpha is just the vehicle,
+// Workspace discovery. The `/<agent>/v1/subscriptions` proxy route is
+// `protected` (any member) and agent-agnostic -- the agent is just the vehicle,
 // the response lists every workspace the caller is licensed into regardless
 // of agent. We keep every row with a non-empty role: with the service==role
 // rename the agent list is no longer an allowlist, so any subscribed role is
@@ -28,9 +29,12 @@ export async function GET() {
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
 
+  // Resolved from the caller's profile, not hardcoded -- see lib/agentVehicle.ts.
+  const vehicle = await resolveVehicleAgent(session.token);
+
   let res: Response;
   try {
-    res = await fetchMycelium("/alpha/v1/subscriptions", {
+    res = await fetchMycelium(`/${vehicle}/v1/subscriptions`, {
       headers: { Authorization: `Bearer ${session.token}` },
     });
   } catch (err) {
