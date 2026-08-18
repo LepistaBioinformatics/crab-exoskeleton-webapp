@@ -42,12 +42,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
+  // pageSize is EXPLICIT, for the reason the sibling roles route already records: mycelium
+  // defaults it to TEN, and this response is one row PER GRANT rather than per person — so
+  // a subscription with four or five members guested on two agents each already reaches it.
+  // A truncated roster does not read as an error; it reads as people who were never
+  // invited, on the one screen whose job is to say who has access.
   const out = await rpc<unknown>(session, "subscriptionsManager.guests.listGuestOnSubscriptionAccount", {
     tenantId,
     accountId,
+    pageSize: GUEST_PAGE_SIZE,
   });
   if (out instanceof NextResponse) return out;
-  return NextResponse.json({ guests: unwrapRecords(out.result) });
+
+  const guests = unwrapRecords(out.result);
+  const total = recordCount(out.result);
+  // If mycelium still says there are more than came back, say so rather than presenting a
+  // partial list as the whole truth. The client surfaces it; nothing here guesses.
+  return NextResponse.json({
+    guests,
+    truncated: total !== null && total > guests.length,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -105,6 +119,17 @@ export async function DELETE(req: NextRequest) {
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// One row per GRANT, and a person can hold several. 500 is the same ceiling the roles route
+// uses: high enough that no real subscription reaches it, low enough to stay one round trip.
+const GUEST_PAGE_SIZE = 500;
+
+// The envelope's own count, when there is an envelope. `null` for a bare array, which
+// carries no claim about a total and must not be treated as one.
+function recordCount(result: unknown): number | null {
+  const count = (result as { count?: unknown })?.count;
+  return typeof count === "number" ? count : null;
 }
 
 function unwrapRecords(result: unknown): unknown[] {

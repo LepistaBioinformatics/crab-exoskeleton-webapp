@@ -4,6 +4,8 @@ import {
   embeddedRole,
   emailText,
   isValidEmail,
+  filterRoster,
+  grantsForAgent,
   mergeRoster,
   permissionLevel,
   resolveRoleId,
@@ -307,5 +309,93 @@ describe("isValidEmail", () => {
     for (const bad of ["", "a", "a@", "a@b", "a b@c.co"]) {
       expect(isValidEmail(bad)).toBe(false);
     }
+  });
+});
+
+// A guest role's name IS the agent key, so one person carries one grant per agent they are
+// guested on. The members panel sits inside an agent the admin chose deliberately.
+describe("grantsForAgent", () => {
+  const grant = (agentKey: string, roleId: string | null = "r") => ({
+    label: `${agentKey} (write)`,
+    roleId,
+    agentKey,
+    level: "write" as const,
+  });
+
+  it("keeps only the selected agent's grants", () => {
+    const all = [grant("alpha"), grant("beta"), grant("hermes-glm")];
+    expect(grantsForAgent(all, "alpha")).toEqual([grant("alpha")]);
+  });
+
+  // Both feeds carry `agentKey`: the guest rows from mycelium, and the workspace rows,
+  // whose grant has no roleId because there is no guest record behind them.
+  it("covers grants from the workspace feed too", () => {
+    const all = [grant("alpha"), grant("alpha", null)];
+    expect(grantsForAgent(all, "alpha")).toHaveLength(2);
+  });
+
+  // The person stays on the roster either way — they are a member of the subscription —
+  // they simply carry no badge for this agent.
+  it("returns nothing for an agent the person is not guested on", () => {
+    expect(grantsForAgent([grant("beta")], "alpha")).toEqual([]);
+  });
+});
+
+// The order is spelled out rather than left to the runtime: a bare localeCompare resolves
+// against the DEFAULT locale, which is the server's ICU on one side of this app and the
+// browser's on the other.
+describe("mergeRoster — order", () => {
+  const guest = (email: string) => ({
+    email,
+    guestRole: { record: { id: "r", name: "alpha", slug: "alpha", permission: "write" } },
+  });
+
+  it("sorts by address, ignoring case", () => {
+    const roster = mergeRoster(
+      [guest("Zeca@x.com"), guest("ana@x.com"), guest("Bruno@x.com"), guest("carla@x.com")] as never,
+      [],
+      [],
+    );
+    expect(roster.map((r) => r.email)).toEqual([
+      "ana@x.com",
+      "Bruno@x.com",
+      "carla@x.com",
+      "Zeca@x.com",
+    ]);
+  });
+});
+
+// Client-side, and honest only because the roster is complete: the BFF asks mycelium for an
+// explicit page size and reports when it still did not fit. Filtering a silently truncated
+// list would answer "nobody matches" about people the screen never had.
+describe("filterRoster", () => {
+  const entry = (email: string, agentKey = "alpha") => ({
+    email,
+    roles: [{ label: `${agentKey} (write)`, roleId: "r", agentKey, level: "write" as const }],
+    active: true,
+  });
+  const roster = [entry("ana@x.com"), entry("bruno@y.com", "beta"), entry("carla@x.com")];
+
+  it("returns everything for an empty or blank query", () => {
+    expect(filterRoster(roster, "")).toHaveLength(3);
+    expect(filterRoster(roster, "   ")).toHaveLength(3);
+  });
+
+  it("matches part of an address, ignoring case", () => {
+    expect(filterRoster(roster, "ANA").map((r) => r.email)).toEqual(["ana@x.com"]);
+    expect(filterRoster(roster, "@x.com").map((r) => r.email)).toEqual([
+      "ana@x.com",
+      "carla@x.com",
+    ]);
+  });
+
+  // The grant label is how an agent appears in this list, so it is a reasonable thing to
+  // type when looking for who has one.
+  it("matches the grant label too", () => {
+    expect(filterRoster(roster, "beta").map((r) => r.email)).toEqual(["bruno@y.com"]);
+  });
+
+  it("returns nothing when nothing matches", () => {
+    expect(filterRoster(roster, "zzz")).toEqual([]);
   });
 });

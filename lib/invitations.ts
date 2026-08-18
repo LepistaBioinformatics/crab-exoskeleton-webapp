@@ -240,7 +240,14 @@ export function mergeRoster(guests: GuestUser[], users: UserRef[], roles: GuestR
     byEmail.set(key || u.accId, entry);
   }
 
-  return [...byEmail.values()].sort((a, b) => a.email.localeCompare(b.email));
+  // Sorted by address, with the comparison spelled out rather than left to the runtime:
+  // bare `localeCompare` resolves against the DEFAULT locale, which is the server's ICU on
+  // one side of this app and the browser's on the other, so the same roster could come back
+  // in two orders. `sensitivity: "base"` also keeps `Bruno@` between `ana@` and `carla@`,
+  // which is what a person reading a list of addresses expects.
+  return [...byEmail.values()].sort((a, b) =>
+    a.email.localeCompare(b.email, "en", { sensitivity: "base" }),
+  );
 }
 
 // --- client calls (all through the BFF; the session JWT never reaches here) ---
@@ -252,12 +259,21 @@ export async function listGuestRoles(tenantId: string): Promise<GuestRole[]> {
   return Array.isArray(data.roles) ? (data.roles as GuestRole[]) : [];
 }
 
-export async function listGuests(tenantId: string, subsAccId: string): Promise<GuestUser[]> {
+// `truncated` rides along because mycelium paginates this and the roster is the one screen
+// whose job is to say who has access: a partial list there reads as people who were never
+// invited, not as a page.
+export async function listGuests(
+  tenantId: string,
+  subsAccId: string,
+): Promise<{ guests: GuestUser[]; truncated: boolean }> {
   const q = new URLSearchParams({ tenantId, subsAccId });
   const res = await fetch(`/api/invitations?${q.toString()}`);
   if (!res.ok) throw new Error(await errorMessage(res));
   const data = await res.json();
-  return Array.isArray(data.guests) ? (data.guests as GuestUser[]) : [];
+  return {
+    guests: Array.isArray(data.guests) ? (data.guests as GuestUser[]) : [],
+    truncated: data?.truncated === true,
+  };
 }
 
 export async function inviteMember(input: {
@@ -300,4 +316,35 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmail(value: string): boolean {
   return EMAIL_RE.test(value.trim());
+}
+
+// The grants that belong to ONE agent.
+//
+// A guest role's name IS the agent key, so a person guested on alpha, beta and hermes-glm
+// carries three grants — and the members panel sits inside an agent the admin chose
+// deliberately. Showing all three there reports on agents the admin is not administering,
+// which is the exact class of confusion the whole screen was rebuilt around.
+//
+// Both feeds carry `agentKey`: the guest rows from mycelium, and the workspace rows, whose
+// `role` IS the agent. One filter covers them.
+export function grantsForAgent(grants: RoleGrant[], agentKey: string): RoleGrant[] {
+  return grants.filter((g) => g.agentKey === agentKey);
+}
+
+// The roster, narrowed to what the admin typed.
+//
+// Client-side, and that is only honest because the roster is COMPLETE: the guest list asks
+// mycelium for an explicit page size and reports when it still could not fit. Filtering a
+// silently truncated list would answer "nobody matches" about people the screen never had.
+//
+// Matches the address and the grant labels — the labels are how an agent appears in this
+// list, so "beta" is a reasonable thing to type when looking for who has it.
+export function filterRoster(roster: RosterEntry[], query: string): RosterEntry[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return roster;
+  return roster.filter(
+    (entry) =>
+      entry.email.toLowerCase().includes(needle) ||
+      entry.roles.some((r) => r.label.toLowerCase().includes(needle)),
+  );
 }

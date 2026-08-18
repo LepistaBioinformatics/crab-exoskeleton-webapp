@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
+import { railItems } from "./admin-nav";
 import {
   DEFAULT_TAB,
   SECTION_TABS,
   TAB_KEYS,
-  availableModes,
   parseTab,
-  resolveMode,
+  resolveRailItem,
+  sectionNeedsDelivery,
 } from "./tabs";
 
-const NONE = { hasScopes: false, hasSubscriptions: false, canEditBranding: false };
-const ALL = { hasScopes: true, hasSubscriptions: true, canEditBranding: true };
+const ALL = { hasScopes: true, canEditBranding: true };
 
 // `?tab=` is user-editable, so the parse is the boundary that keeps a hand-typed
 // or stale URL from rendering an empty admin panel.
@@ -27,18 +27,22 @@ describe("parseTab", () => {
   });
 });
 
-// Members used to be a section beside Files and Secrets, with the screen snapping the
-// scope to a subscription whenever it became active. It is a MODE now: a member list
-// belongs to a subscription whatever agents that subscription runs, so putting it
-// under an agent would have meant filtering by a selection it does not depend on.
+// Members came BACK from being a mode, and the reason it left still holds: a roster
+// belongs to a subscription whatever agents it runs. What changed is that the screen now
+// asks for the agent and the scope once, up front, instead of asking for the agent again
+// inside the invite form -- so the section can sit under that one selection without
+// implying the roster is filtered by it.
 describe("SECTION_TABS", () => {
-  it("is the sections of an agent", () => {
-    expect(SECTION_TABS).toEqual(["files", "secrets", "skills", "persona", "model", "config"]);
-  });
-
-  it("holds neither mode", () => {
-    expect(SECTION_TABS).not.toContain("members");
-    expect(SECTION_TABS).not.toContain("branding");
+  it("is the sections of a selected workspace, with members last", () => {
+    expect(SECTION_TABS).toEqual([
+      "files",
+      "secrets",
+      "skills",
+      "persona",
+      "model",
+      "config",
+      "members",
+    ]);
   });
 
   it("only names tabs that exist", () => {
@@ -47,62 +51,66 @@ describe("SECTION_TABS", () => {
     }
   });
 
-  // Every tab is either a section or a mode. A tab that is neither would be
+  // Every tab is either a section or the branding item. A tab that is neither would be
   // reachable by URL and rendered by nothing.
-  it("leaves exactly the two modes over, so the nav has no gap", () => {
-    expect(TAB_KEYS.filter((k) => !SECTION_TABS.includes(k))).toEqual(["members", "branding"]);
+  it("leaves exactly branding over, so the nav has no gap", () => {
+    expect(TAB_KEYS.filter((k) => !SECTION_TABS.includes(k))).toEqual(["branding"]);
   });
 });
 
-describe("availableModes", () => {
-  it("offers nothing to a caller with no authority at all", () => {
-    expect(availableModes(NONE)).toEqual([]);
+// The one place that answers "does the menu's restart policy apply here". It gates both
+// the control's not-applicable form and the invalid-policy block, so a wrong answer here
+// either promises a delivery that does not happen or locks a section that never needed
+// one.
+describe("sectionNeedsDelivery", () => {
+  it("says no for files -- a live read-only mount has nothing to deliver", () => {
+    expect(sectionNeedsDelivery("files")).toBe(false);
   });
 
-  it("offers all three when the caller holds all three", () => {
-    expect(availableModes(ALL)).toEqual(["agents", "members", "branding"]);
+  // Its one write that needs delivery is a member's config.json, and the instance editor
+  // carries its own per-workspace policy for it.
+  it("says no for members", () => {
+    expect(sectionNeedsDelivery("members")).toBe(false);
   });
 
-  // A tenant manager administers scopes but may manage no subscription directly, and
-  // a member list belongs to a subscription.
-  it("withholds members from a caller who manages no subscription", () => {
-    expect(availableModes({ ...ALL, hasSubscriptions: false })).toEqual(["agents", "branding"]);
+  it("says yes for every other section", () => {
+    for (const tab of SECTION_TABS) {
+      if (tab === "files" || tab === "members") continue;
+      expect(sectionNeedsDelivery(tab)).toBe(true);
+    }
   });
 });
 
-describe("resolveMode", () => {
+describe("resolveRailItem", () => {
   it("honours the tab the URL asks for when the caller may use it", () => {
-    expect(resolveMode("branding", ALL)).toBe("branding");
-    expect(resolveMode("members", ALL)).toBe("members");
-    expect(resolveMode("files", ALL)).toBe("agents");
+    expect(resolveRailItem("branding", ALL)).toBe("branding");
+    expect(resolveRailItem("files", ALL)).toBe("workspaces");
+    expect(resolveRailItem("members", ALL)).toBe("workspaces");
   });
 
-  // `?tab=` is user-editable. A hand-typed mode the caller cannot use must not
-  // render a panel they have no rights to, nor an empty rail.
-  it("refuses a mode the caller cannot use", () => {
-    expect(resolveMode("branding", { ...ALL, canEditBranding: false })).toBe("agents");
-    expect(resolveMode("members", { ...ALL, hasSubscriptions: false })).toBe("agents");
+  // `?tab=` is user-editable. A hand-typed item the caller cannot use must not render a
+  // panel they have no rights to.
+  it("refuses branding to a caller without branding rights", () => {
+    expect(resolveRailItem("branding", { ...ALL, canEditBranding: false })).toBe("workspaces");
   });
 
-  // The fallback is the caller's first AVAILABLE mode, not a fixed one: landing a
-  // branding-only caller on `agents` would give them a gate leading nowhere.
+  // The fallback is the caller's first AVAILABLE item, not a fixed one: landing a
+  // branding-only caller on `workspaces` would give them a gate leading nowhere.
   it("sends a branding-only caller to branding whatever the tab says", () => {
-    const brandingOnly = { hasScopes: false, hasSubscriptions: false, canEditBranding: true };
+    const brandingOnly = { hasScopes: false, canEditBranding: true };
     for (const tab of TAB_KEYS) {
-      expect(resolveMode(tab, brandingOnly)).toBe("branding");
+      expect(resolveRailItem(tab, brandingOnly)).toBe("branding");
     }
   });
 
-  it("never returns a mode that is not available, except with no authority at all", () => {
+  it("never returns an item that is not available, except with no authority at all", () => {
     for (const hasScopes of [false, true]) {
-      for (const hasSubscriptions of [false, true]) {
-        for (const canEditBranding of [false, true]) {
-          const a = { hasScopes, hasSubscriptions, canEditBranding };
-          const modes = availableModes(a);
-          if (modes.length === 0) continue; // the screen shows "no admin access"
-          for (const tab of TAB_KEYS) {
-            expect(modes).toContain(resolveMode(tab, a));
-          }
+      for (const canEditBranding of [false, true]) {
+        const a = { hasScopes, canEditBranding };
+        const items = railItems(a);
+        if (items.length === 0) continue; // the screen shows "no admin access"
+        for (const tab of TAB_KEYS) {
+          expect(items).toContain(resolveRailItem(tab, a));
         }
       }
     }

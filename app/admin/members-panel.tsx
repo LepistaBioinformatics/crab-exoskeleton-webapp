@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Boxes, ChevronDown, ChevronRight, FileText, Trash2, User, UserMinus } from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, FileText, Trash2, User, Users } from "lucide-react";
 import {
   listSubscriptionUsers,
   listUserFiles,
@@ -14,6 +14,8 @@ import {
 import {
   listGuestRoles,
   listGuests,
+  filterRoster,
+  grantsForAgent,
   mergeRoster,
   revokeMember,
   type GuestRole,
@@ -26,8 +28,10 @@ import { formatBytes, formatModified } from "./format";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { PanelEmpty } from "@/components/ui/panel-empty";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { BCP47 } from "@/lib/i18n/format";
 import { useLocale } from "@/lib/i18n/context";
@@ -50,10 +54,29 @@ import { useT } from "@/lib/i18n/context";
 // content, and it never appears in the file list below (which is the uploads
 // dir). It is reached from an instance row, never from a file row. See
 // admin-instance-config-editor's spec.
-export default function MembersPanel({ scope }: { scope: ScopeRef }) {
+export default function MembersPanel({
+  scope,
+  agent,
+  tenantLabel,
+  scopeLabel,
+  onPickSubscription,
+}: {
+  scope: ScopeRef;
+  /** The agent named in the context bar: what an invitation here grants access to. */
+  agent: string;
+  tenantLabel: string;
+  scopeLabel: string;
+  /** Sends the admin back to the scope step, for the tenant-selected state below. */
+  onPickSubscription: () => void;
+}) {
   const t = useT(adminCopy);
   const [users, setUsers] = useState<UserRef[] | null>(null);
   const [guests, setGuests] = useState<GuestUser[]>([]);
+  // Mycelium paginates the guest list. The BFF asks for a page big enough for any real
+  // subscription and reports when it still did not fit — a partial roster is worse than an
+  // error here, because it looks like people who were never invited.
+  const [truncated, setTruncated] = useState(false);
+  const [query, setQuery] = useState("");
   const [roles, setRoles] = useState<GuestRole[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -91,12 +114,14 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
     ])
       .then(([g, r]) => {
         if (cancelled) return;
-        setGuests(g);
+        setGuests(g.guests);
+        setTruncated(g.truncated);
         setRoles(r);
       })
       .catch(() => {
         if (!cancelled) {
           setGuests([]);
+          setTruncated(false);
           setRoles([]);
         }
       });
@@ -106,6 +131,7 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
   }, [scope.tenantId, scope.subsAccId, reload]);
 
   const roster = mergeRoster(guests, users ?? [], roles);
+  const shown = filterRoster(roster, query);
 
   // Revokes by the role id the grant carried out of mycelium's own guest row. It
   // is deliberately NOT re-derived from the badge text: that round-trip depended
@@ -126,9 +152,27 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
     }
   }
 
+  // A TENANT IS SELECTED. A roster belongs to a subscription -- a tenant is the
+  // grouping above that, so there is no single list to show.
+  //
+  // The section is still OFFERED in that case, which is a deliberate exception to this
+  // screen's rule that a section a target cannot use is absent rather than
+  // present-and-explaining-itself. An admin who administers tenants and never sees a
+  // Members entry has no way to learn that member management exists one level down.
+  // Discoverability wins here; see this feature's context.md, DEC-3. Do not "fix" it
+  // into an absence.
   if (scope.kind !== "subscription" || !scope.subsAccId) {
     return (
-      <p className="py-3 text-sm text-fg-muted">{t.members.selectSubscription}</p>
+      <div className="flex flex-col items-center gap-2">
+        <PanelEmpty
+          icon={Users}
+          title={t.members.tenantSelected}
+          body={t.members.tenantSelectedBody}
+        />
+        <Button variant="outlined" size="sm" onClick={onPickSubscription}>
+          {t.members.pickSubscription}
+        </Button>
+      </div>
     );
   }
 
@@ -141,7 +185,13 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
       {error && <Alert severity="error">{error}</Alert>}
 
       {scope.subsAccId && (
-        <InviteMember scope={scope} onInvited={() => setReload((n) => n + 1)} />
+        <InviteMember
+          scope={scope}
+          agent={agent}
+          tenantLabel={tenantLabel}
+          scopeLabel={scopeLabel}
+          onInvited={() => setReload((n) => n + 1)}
+        />
       )}
 
       <ConfirmDialog
@@ -174,64 +224,108 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
           active-with-a-workspace are two states of the same person; two tables
           would make the normal first state look like an inconsistency. Only a
           person with a workspace expands — there are no files before one. */}
+      {truncated && <Alert severity="info">{t.roster.truncated}</Alert>}
+
+      {/* Always offered once anyone is here. It was briefly gated on "more than five rows",
+          on the theory that a filter over three costs more attention than it saves — but
+          the subscriptions this runs against hold three and four people, so the gate simply
+          meant the control was never drawn. A feature that hides at the scale it ships to
+          is not a feature. */}
+      {roster.length > 0 && (
+        <Input
+          inputSize="sm"
+          type="search"
+          placeholder={t.roster.filterPlaceholder}
+          aria-label={t.roster.filterPlaceholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+
       {users === null && !error ? (
         <div className="flex justify-center py-6">
           <Spinner size={22} />
         </div>
       ) : roster.length === 0 ? (
         <p className="py-3 text-sm text-fg-muted">{t.roster.noneYet}</p>
+      ) : shown.length === 0 ? (
+        <p className="py-3 text-sm text-fg-muted">{t.roster.noMatches}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {roster.map((entry) => {
+          {shown.map((entry) => {
             const open = expanded === entry.email;
+            // ONLY THE SELECTED AGENT'S GRANTS. A guest role's name IS the agent key, so a
+            // person guested on alpha, beta and hermes-glm carries three — and this panel
+            // sits inside an agent the admin chose deliberately. Reporting on the other two
+            // here is the class of confusion the whole screen was rebuilt around.
+            const grants = grantsForAgent(entry.roles, agent);
             return (
               <li key={entry.email} className="rounded-lg border border-brand/30 bg-elevated">
                 <div className="flex items-center gap-2 px-3 py-2">
-                  {entry.accId ? (
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(open ? null : entry.email)}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      aria-expanded={open}
-                    >
-                      {open ? (
-                        <ChevronDown size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                      ) : (
-                        <ChevronRight size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                      )}
-                      <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
-                    </button>
-                  ) : (
-                    <div className="flex min-w-0 flex-1 items-center gap-2 pl-[21px]">
-                      <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
+                  {/* EVERY row expands, including one with no workspace yet. It used to be
+                      gated on `accId`, which was fine while revoking lived on the row —
+                      now the box is the only way to reach it, and an invited-but-never-
+                      active person would have an invitation nobody could remove. */}
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : entry.email)}
+                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+                    aria-expanded={open}
+                  >
+                    {open ? (
+                      <ChevronDown size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                    ) : (
+                      <ChevronRight size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                    )}
+                    <User size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-sm text-fg">{entry.email}</span>
+                    {!entry.accId && (
                       <span className="shrink-0 text-[11px] text-fg-muted">
                         {t.roster.notYetActive}
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </button>
 
-                  {entry.roles.map((grant) => {
-                    return (
-                      <span key={grant.label} className="flex shrink-0 items-center gap-0.5">
-                        <Badge>{grant.label}</Badge>
-                        {grant.roleId && (
-                          <IconButton
-                            variant="ghost"
-                            size="sm"
-                            aria-label={t.roster.revokeAria
-                        .replace("{role}", grant.label)
-                        .replace("{email}", entry.email)}
-                            onClick={() => setPendingRevoke({ email: entry.email, grant })}
-                          >
-                            <UserMinus size={14} aria-hidden />
-                          </IconButton>
-                        )}
-                      </span>
-                    );
-                  })}
+                  {/* Badges only. Nothing destructive on a collapsed row — it sat one
+                      mis-tap away, beside a chevron whose whole job is to be tapped. */}
+                  {grants.map((grant) => (
+                    <Badge key={grant.label} className="shrink-0">
+                      {grant.label}
+                    </Badge>
+                  ))}
                 </div>
+
+                {open && (
+                  <div className="border-t border-brand/20 px-3 py-2">
+                    <span className="text-[11px] font-medium text-fg-muted">
+                      {t.roster.accessHeading}
+                    </span>
+                    <ul className="mt-1 flex flex-col gap-1">
+                      {grants.map((grant) => (
+                        <li key={grant.label} className="flex items-center gap-2 py-0.5">
+                          <Badge>{grant.label}</Badge>
+                          {grant.roleId ? (
+                            <Button
+                              variant="text"
+                              size="sm"
+                              className="ml-auto"
+                              aria-label={t.roster.revokeAria
+                                .replace("{role}", grant.label)
+                                .replace("{email}", entry.email)}
+                              onClick={() => setPendingRevoke({ email: entry.email, grant })}
+                            >
+                              {t.roster.revoke}
+                            </Button>
+                          ) : (
+                            <span className="ml-auto text-[11px] text-fg-muted">
+                              {t.roster.notRevocable}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {open && entry.accId && scope.subsAccId && (
                   <>
@@ -241,12 +335,13 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
                         email loses the (accId, role) pairing an instance is. */}
                     <UserInstances
                       instances={(users ?? []).filter((u) => u.accId === entry.accId)}
-                      onEdit={(agent) =>
+                      contextAgent={agent}
+                      onEdit={(target) =>
                         setEditing({
                           tenantId: scope.tenantId,
                           subsAccId: scope.subsAccId as string,
                           userAccId: entry.accId as string,
-                          agent,
+                          agent: target,
                           label: entry.email,
                         })
                       }
@@ -283,15 +378,29 @@ export default function MembersPanel({ scope }: { scope: ScopeRef }) {
 // One row per agent this member has a workspace under -- one container, one
 // config.json. A member with grants on two agents has two instances, and each
 // can be broken independently.
+//
+// The other agents' instances are LISTED, because a broken config.json may be the reason
+// its member cannot reach anything, and making an admin re-select the whole context to
+// repair one file would be a worse screen. But listing them puts a second agent back on
+// a surface this feature just removed one from, so each row says which agent it is and
+// the one in the current context is marked as such. A row must never be mistakable for
+// "the agent I chose".
 function UserInstances({
   instances,
+  contextAgent,
   onEdit,
 }: {
   instances: UserRef[];
+  contextAgent: string;
   onEdit: (agent: string) => void;
 }) {
   const t = useT(adminCopy);
-  const agents = instances.map((i) => i.role).filter((r): r is string => Boolean(r));
+  const agents = instances
+    .map((i) => i.role)
+    .filter((r): r is string => Boolean(r))
+    // The context's agent first: it is the one the admin came here for, and a list that
+    // buries it under two others invites clicking the nearest row instead.
+    .sort((a, b) => Number(b === contextAgent) - Number(a === contextAgent));
 
   return (
     <div className="border-t border-brand/20 px-3 py-2">
@@ -307,15 +416,21 @@ function UserInstances({
         <p className="py-1 text-xs text-fg-muted">{t.members.noInstances}</p>
       ) : (
         <ul className="mt-1 flex flex-col gap-1">
-          {agents.map((agent) => (
-            <li key={agent} className="flex items-center gap-2 py-0.5">
-              <Boxes size={14} className="shrink-0 text-fg-muted" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-xs text-fg">{agent}</span>
-              <Button variant="text" size="sm" onClick={() => onEdit(agent)}>
-                {t.members.editConfig}
-              </Button>
-            </li>
-          ))}
+          {agents.map((agent) => {
+            const inContext = agent === contextAgent;
+            return (
+              <li key={agent} className="flex items-center gap-2 py-0.5">
+                <Boxes size={14} className="shrink-0 text-fg-muted" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-xs text-fg">{agent}</span>
+                <Badge tone={inContext ? "accent" : "neutral"}>
+                  {inContext ? t.members.instanceInContext : t.members.instanceOtherAgent}
+                </Badge>
+                <Button variant="text" size="sm" onClick={() => onEdit(agent)}>
+                  {t.members.editConfig}
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
