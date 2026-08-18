@@ -425,6 +425,44 @@ const en = {
     // The model's own chain of thought, collapsed. The length is there for the
     // same reason: these run to a couple of thousand characters.
     reasoning: "reasoning ({n} chars)",
+    // The jump-to-end button, which only exists while the newest message is off-screen.
+    // Labelled by what it DOES, not by where it goes ("bottom" names a scroll position;
+    // the member is looking for the newest thing said).
+    scrollToLatest: "Jump to the latest message",
+  },
+  // background-turn-dock: the bar of conversations left running elsewhere.
+  //
+  // Every label is read inside a narrow segment, so they are short by requirement
+  // rather than by preference. The two elapsed phrasings are NOT interchangeable:
+  // in-session the number is how long the agent has been quiet (the same number the
+  // assistant band shows), while a conversation restored after a reload only knows the
+  // total the server reports. Saying "quiet for" about a total would be a lie.
+  dock: {
+    label: "Conversations running in the background",
+    open: "Open {chat}",
+    // A parked burst: the member hit send and navigated away inside the debounce
+    // window, so the message is still sitting in the composer's queue unsent. It
+    // deliberately does not sound like progress -- nothing is running, and the next
+    // move is theirs.
+    unsent: "Message not sent",
+    working: "Working…",
+    reconnecting: "Reconnecting…",
+    ready: "Reply ready",
+    // Distinct from the transcript's own failure banner, which stays where it is: this
+    // only says the turn ended without an answer, in the space of a chip.
+    failed: "Didn't complete",
+    quietFor: "quiet for {t}",
+    runningFor: "running for {t}",
+    overflow: "+{n} more",
+    overflowAria: "Show all background conversations",
+    // The collapsed mobile box. A phone-width bar cut into segments truncates the title, the
+    // state and the alias into each other, so mobile shows one summary and opens a list.
+    summaryOne: "1 conversation in the background",
+    summaryOther: "{n} conversations in the background",
+    // The qualifier shown when a docked conversation does not belong to the workspace
+    // on screen. Without it a bare chat title is ambiguous across agents.
+    inAgent: "in {agent}",
+    inProject: "in {project}",
   },
   commands: {
     // /rename writes the ALIAS, not the title — hence the wording. "Alias" is
@@ -1075,6 +1113,24 @@ const pt: ChatDict = {
     stepOne: "1 passo",
     stepsOther: "{n} passos",
     reasoning: "raciocínio ({n} chars)",
+    scrollToLatest: "Ir para a mensagem mais recente",
+  },
+  dock: {
+    label: "Conversas rodando em segundo plano",
+    open: "Abrir {chat}",
+    unsent: "Mensagem não enviada",
+    working: "Trabalhando…",
+    reconnecting: "Reconectando…",
+    ready: "Resposta pronta",
+    failed: "Não concluiu",
+    quietFor: "em silêncio há {t}",
+    runningFor: "rodando há {t}",
+    overflow: "+{n} outras",
+    overflowAria: "Mostrar todas as conversas em segundo plano",
+    summaryOne: "1 conversa em segundo plano",
+    summaryOther: "{n} conversas em segundo plano",
+    inAgent: "em {agent}",
+    inProject: "em {project}",
   },
   commands: {
     aliasSet: "Apelido definido: “{alias}”.",

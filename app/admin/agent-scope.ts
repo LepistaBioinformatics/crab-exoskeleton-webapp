@@ -34,10 +34,21 @@ export const LEGACY_AGENT = ALL_AGENTS;
 // means anything to an agent that reads it.
 const PICOCLAW_ONLY: Tab[] = ["persona", "model", "config"];
 
-// The sections every agent has: the shared content stores. Derived from the full
-// section list rather than spelled out again, so adding a section is one edit — the
-// two enumerations would otherwise have to be kept in agreement by hand.
-const CONTENT_TABS: Tab[] = SECTION_TABS.filter((s) => !PICOCLAW_ONLY.includes(s));
+// The sections every REAL agent has, whatever harness runs it: the shared content
+// stores and its roster. Derived from the full section list rather than spelled out
+// again, so adding a section is one edit — the two enumerations would otherwise have to
+// be kept in agreement by hand.
+const AGENT_TABS: Tab[] = SECTION_TABS.filter((s) => !PICOCLAW_ONLY.includes(s));
+
+// What the LEGACY all-agents entry offers: the content stores alone.
+//
+// `members` is withheld, and not for the reason the picoclaw sections are. An
+// invitation is a mycelium guest role, and a guest role's NAME IS THE AGENT KEY
+// (`lib/invitations.ts`) — the gateway declares `protectedByRoles = [{ name = "alpha" }]`
+// and mycelium creates those roles at boot. `ALL_AGENTS` is a store address, not an
+// agent, so no role is ever named for it and an invitation through it could not be
+// constructed. A roster shown there would be a list nobody could add to.
+const LEGACY_TABS: Tab[] = AGENT_TABS.filter((s) => s !== "members");
 
 // `?agent=` is user-editable, so this has to resolve to something. An unknown key
 // yields null — the agent list, never an empty working view whose header names an
@@ -55,10 +66,11 @@ export function resolveAgent(raw: string | null | undefined, agents: AgentRef[])
 // The legacy store gets neither picoclaw-only section, and for its own reason: both
 // are addressed PER AGENT — the model registry is stored under `agent/<agent>`, and
 // the proxy rejects an agent-less persona write outright — so an all-agents address
-// was never a place either record could live.
+// was never a place either record could live. It gets no `members` either; see
+// LEGACY_TABS for why that one is a different argument.
 export function agentTabs(agent: string, agents: AgentRef[]): Tab[] {
-  if (agent === LEGACY_AGENT) return CONTENT_TABS;
-  return picoclawAgentKeys(agents).includes(agent) ? [...SECTION_TABS] : CONTENT_TABS;
+  if (agent === LEGACY_AGENT) return LEGACY_TABS;
+  return picoclawAgentKeys(agents).includes(agent) ? [...SECTION_TABS] : AGENT_TABS;
 }
 
 // The tab to render for an agent, given what the URL asked for. A URL can name a

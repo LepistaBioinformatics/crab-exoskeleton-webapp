@@ -17,7 +17,7 @@ import { pickResumeCandidate } from "@/app/chat/conversation-filter";
 import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
+import { ArrowDown, Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
 import {
   setFragmentSid,
   setFragmentProjectSid,
@@ -327,6 +327,55 @@ export default function ChatView({
   // the message stays visible and the answer fills the space beneath it.
   const newestSentRef = useRef<HTMLDivElement | null>(null);
   const creatingSid = useRef(false);
+
+  // Jump-to-latest: is the end of the conversation off-screen?
+  //
+  // An IntersectionObserver on a sentinel after the last row, NOT scroll arithmetic. The
+  // scroll area carries `pb-[80vh]`, so `scrollHeight` is most of a viewport taller than the
+  // messages and "distance from the bottom" would answer a different question than the one
+  // being asked -- a member reading the newest message is nowhere near the scroll bottom.
+  //
+  // `rootMargin` pulls the bottom edge up by the composer's own height: the sentinel sits
+  // behind it, and without the inset it would count as visible while hidden underneath.
+  //
+  // A CALLBACK REF, not a ref plus an effect, and that is not a style preference -- the effect
+  // version was written first and never attached. The sentinel lives in only ONE of this
+  // component's three branches (not the loading spinner, not the empty-conversation prompt), so
+  // on every conversation open the order is: sid changes, `loadingHistory` renders the spinner,
+  // the effect runs against a null ref and bails, history arrives, the sentinel finally mounts
+  // -- and the effect never re-runs, because `sessionId` did not change again. `atLatest` stayed
+  // true forever and the button never appeared. A callback ref is driven by the node mounting,
+  // which is the actual event of interest.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [atLatest, setAtLatest] = useState(true);
+  const attachEndSentinel = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!node) {
+      // The branch carrying the sentinel unmounted (an emptied conversation, or a switch to
+      // the loading spinner). Nothing is off-screen when there is nothing to be off-screen.
+      setAtLatest(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => setAtLatest(entry.isIntersecting), {
+      rootMargin: "0px 0px -140px 0px",
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+  useEffect(() => () => observerRef.current?.disconnect(), []);
+
+  // Straight to scrollIntoView rather than through `scrollToIndex`. That is state with no
+  // reset, so a second click on the same target would set an unchanged value and its effect
+  // would never fire -- a button that works once. `landingIndex` skips trailing `step` rows,
+  // so this lands on the last thing actually said, and `block: "start"` matches what every
+  // other scroll in this view does.
+  const scrollToLatest = useCallback(() => {
+    messageRefs.current[landingIndex(messages)]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [messages]);
 
   // Always mirrors the currently-viewed session, so an in-flight stream can
   // tell whether the user is still looking at the conversation the reply
@@ -1130,12 +1179,35 @@ export default function ChatView({
                   </div>
                 </div>
               )}
+              {/* The end of the conversation. Inside the content column, so it sits directly
+                  after the last row and ABOVE the scroll area's 80vh pad -- observing the pad
+                  instead would report "not at the end" for a member looking straight at the
+                  newest message. */}
+              <div ref={attachEndSentinel} aria-hidden className="h-px w-full" />
             </div>
           </div>
           {/* The composer floats, suspended over the chat; the scroll area's
               bottom padding keeps the last messages clear of it. */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-6">
-            <div className="pointer-events-auto mx-auto w-full max-w-[720px]">{composer}</div>
+            <div className="mx-auto w-full max-w-[720px]">
+              {/* Above the composer and inside its column, so it tracks the composer's height
+                  as the textarea grows instead of colliding with it at some fixed offset. */}
+              {!atLatest && (
+                <div className="pointer-events-none mb-2 flex justify-end">
+                  <IconButton
+                    variant="outlined"
+                    size="sm"
+                    onClick={scrollToLatest}
+                    aria-label={t.view.scrollToLatest}
+                    title={t.view.scrollToLatest}
+                    className="pointer-events-auto bg-surface/95 shadow-e backdrop-blur"
+                  >
+                    <ArrowDown size={16} aria-hidden />
+                  </IconButton>
+                </div>
+              )}
+              <div className="pointer-events-auto">{composer}</div>
+            </div>
           </div>
         </div>
       )}

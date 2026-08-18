@@ -337,6 +337,43 @@
   --animate-fade-in: fadeIn 420ms ease-out both;
 }
 
+/* The selection chain. While the admin is still choosing an agent, a tenant or a
+   subscription, that list IS the screen's content, so its rows rise in as the level opens
+   — staggered, so the eye reads them as a list arriving rather than a block appearing.
+   Auto-neutralized by the reduced-motion guard below. */
+@keyframes chooserRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Confirmation that a choice landed. The press dips the row a little before the next level
+   replaces it: without it the screen simply changes and the admin has no moment that says
+   "that click was yours". Auto-neutralized by the reduced-motion guard below — and the
+   component skips its matching delay there too, since a CSS-only guard would leave the
+   pause without the animation it exists to show. */
+@keyframes chooserPick {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@theme {
+  --animate-chooser-rise: chooserRise 240ms ease-out both;
+  --animate-chooser-pick: chooserPick 150ms ease-out;
+}
+
 /* The composer breathes a soft accent ring while the user is actively typing.
    Auto-neutralized by the reduced-motion guard below. */
 @keyframes composerPulse {

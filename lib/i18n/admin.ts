@@ -13,25 +13,16 @@ const en = {
   shell: {
     heading: "Administration",
     backToChat: "Back to chat",
-    noSubscriptionsManaged:
-      "You don't manage any subscriptions directly, so there are no member workspaces to list here.",
-    selectScope: "Select a scope on the left to manage it.",
-
-    areaAria: "Admin area",
-    // Was "Scoped actions". That name described the old model, in which the scope
-    // came first and the agent was a setting inside each section.
-    agents: "Agents",
-    members: "Members",
     branding: "Branding",
     brandingNote:
       "Instance-wide. Branding applies to everyone on this deployment, so it has no scope to select.",
+    // Shown when Branding is the ONLY thing on the rail. Without it a single-item
+    // console reads as a broken screen rather than as an answer about your authority.
+    noScopesTitle: "No tenant or subscription to administer",
+    noScopesBody:
+      "Branding is instance-wide, so it is offered without a scope. The workspace sections need a management role — tenant manager or subscriptions manager — on a specific tenant or subscription. A guest role named after an agent grants access to that agent, not authority over the workspace it runs in.",
     noAuthority:
       "You don't have administrative authority over any scope. Ask a tenant or subscription manager if you think this is a mistake.",
-    scopes: "Scopes",
-    subscriptions: "Subscriptions",
-    resizeScopes: "Resize scopes",
-    sectionsAria: "Sections of this agent",
-    backToAgents: "Back to agents",
     tabs: {
       files: "Files",
       secrets: "Secrets",
@@ -56,11 +47,68 @@ const en = {
     throughBefore: ", through ",
     throughAfter: " only.",
     period: ".",
+
+
+    // The Members sentence. The roster is the SUBSCRIPTION's whatever agents it
+    // runs, and the agent still decides what an invitation grants — saying only one
+    // of those would reproduce the confusion this screen was rebuilt to remove.
+    membersRosterBefore: "The roster belongs to ",
+    membersRosterAfter: " whatever agents it runs. ",
+    membersAgentBefore: "Invitations, workspace configuration and instance restarts apply to ",
+    membersAgentAfter: ".",
   },
-  agentGate: {
-    heading: "Choose an agent",
-    note: "Agents exist before any tenant or subscription does — they come from this deployment's proxy configuration. Pick one, then choose the tenant or subscription to configure it for.",
-    none: "The proxy reported no agents. Check its configuration, or ask whoever administers this deployment.",
+  // The two questions the merged menu asks, named the same way in the rail and in the
+  // content area so the admin can see where they are in the sequence at any moment.
+  // The column browser. Each heading names the QUESTION its column answers, in the
+  // admin's vocabulary rather than the system's — the columns are the navigation and the
+  // breadcrumb at once, so a heading that named a data structure would be the only place
+  // the screen spoke about itself instead of about the work.
+  columns: {
+    headings: {
+      root: "Administration",
+      agents: "Agent",
+      tenants: "Tenant",
+      subscriptions: "Where",
+      sections: "Manage",
+    },
+    rows: {
+      agents: "Agents",
+      // The tenant itself, as a target among that tenant's targets.
+      tenantWide: "The whole tenant",
+    },
+    hints: {
+      tenantWide: "Reaches every subscription under it",
+    },
+    empty: {
+      noAgents: "The proxy reported no agents",
+      noTenants: "No tenant to administer",
+      noSubscriptions: "No subscriptions under this tenant",
+    },
+    // The one line in the space to the right of the deepest column, naming what to click.
+    // Finder leaves that space blank; an admin tool earns the sentence.
+    next: {
+      agents: "Choose an agent to administer.",
+      tenants: "Choose the tenant to administer it in.",
+      subscriptions: "Choose a subscription, or the tenant as a whole.",
+      sections: "Choose what to manage.",
+    },
+    pathAria: "Selected target",
+    // The breadcrumb. Segments name what was CHOSEN; the trailing hint names the question
+    // still open, so the bar reads as a sentence rather than as a list of headings.
+    trailAria: "Path",
+    // "Change alpha" — the segment's accessible name, since the visible text is the value.
+    changeAria: "Change {level}",
+    hintSuffix: "?",
+  },
+  restartChrome: {
+    // The policy is chrome of the menu now, not an accordion inside each section: what
+    // is in force has to be readable without opening anything.
+    label: "Delivery",
+    change: "Change",
+    done: "Done",
+    notNeeded: "This section needs no restart.",
+    notNeededFiles: "Shared files reach every container through a live read-only mount.",
+    notNeededMembers: "A member's workspace carries its own restart control, on its row.",
   },
   legacyStore: {
     groupLabel: "Legacy",
@@ -285,7 +333,6 @@ const en = {
   invite: {
     title: "Invite someone",
     emailPlaceholder: "person@example.com",
-    agentAria: "Agent",
     accessAria: "Access",
     read: "read",
     write: "write",
@@ -298,22 +345,12 @@ const en = {
     invited: "Invited {email} to {agent} ({level}).",
     alreadyInvited: "{email} already had this access.",
     failed: "Could not send the invitation.",
-    actionAria: "What to do",
-    actionInvite: "Invite",
-    actionUninvite: "Uninvite",
-    uninviteTitle: "Remove someone's access",
-    // "{agent}" is the agent identifier, which is never translated.
-    noRoleUninvite:
-      "This deployment declares no guest role for {agent}, so there is nothing to remove here.",
-    uninviteSubmit: "Remove invitation",
-    uninviting: "Removing…",
-    uninvited: "Removed {email}'s access to {agent} ({level}).",
-    uninviteFailed: "Could not remove the invitation.",
-    uninviteConfirmTitle: "Remove this invitation?",
-    uninviteConfirmMessage: "{email} will lose {level} access to {agent}.",
-    uninviteConfirmDetail:
-      "Their workspace and files are kept — deleting those is a separate action in the list below.",
-    uninviteConfirm: "Remove",
+    // Inviting reaches a person, and the reported failure was reaching the wrong one
+    // in the wrong place. Revoking already confirmed; this did not.
+    confirmTitle: "Send this invitation?",
+    confirmMessage: "{email} gets {level} access to {agent}.",
+    confirmDetail: "In {tenant} › {subscription}.",
+    confirm: "Send invitation",
   },
   roster: {
     notYetActive: "not yet active",
@@ -326,6 +363,21 @@ const en = {
       "{email} will lose {level} access to {agent}. Their workspace and files are kept — deleting those is a separate action.",
     revoke: "Revoke",
     revokeFailed: "Could not revoke access.",
+    // The expanded box's access section. Revoking lives ONLY here: a collapsed row is one
+    // mis-tap from a person's access, right beside a chevron whose whole job is to be
+    // tapped.
+    filterPlaceholder: "Filter by email or agent",
+    noMatches: "No member matches this filter.",
+    // Mycelium paginates the guest list, and this response is one row per grant. Saying so
+    // beats presenting a partial roster as the whole truth on the screen whose job is to
+    // say who has access.
+    truncated:
+      "This subscription has more invitations than fit in one page, so some people may be missing from this list.",
+    accessHeading: "Access",
+    // A grant that came from the workspace feed alone: the proxy records which agent a
+    // workspace belongs to, not which guest grant produced it, so there is no record to
+    // revoke.
+    notRevocable: "Granted outside this list — no invitation to remove.",
   },
   restartPolicy: {
     heading: "When changes take effect",
@@ -404,7 +456,6 @@ const en = {
     blocked: "Finish the schedule above before making changes here.",
   },
   members: {
-    selectSubscription: "Select a subscription to see its members.",
     none: "No members under this subscription yet.",
     privacyNote:
       "You can list and delete a member's private files, but never open or edit their contents — a member's private content never leaves their workspace (FR-7).",
@@ -419,6 +470,18 @@ const en = {
       "One instance per agent this member has started. Editing its configuration is not the same as opening their files — see below.",
     editConfig: "Edit configuration",
     noInstances: "No instances yet.",
+    // A roster belongs to a subscription. A tenant is a grouping above that, so there
+    // is no single list to show -- but the section stays in the rail rather than
+    // vanishing, because an admin who only ever selects tenants would otherwise never
+    // discover that member management exists one level down.
+    tenantSelected: "A roster belongs to a subscription",
+    tenantSelectedBody:
+      "You have a tenant selected. Choose one of its subscriptions to see and invite its members.",
+    pickSubscription: "Choose a subscription",
+    // The instance rows. One is the agent named in the context bar; the others are
+    // reachable for repair and must never be mistaken for it.
+    instanceInContext: "selected agent",
+    instanceOtherAgent: "another agent",
   },
   branding: {
     lightLogo: "Light logo",
@@ -669,23 +732,14 @@ const pt: AdminDict = {
   shell: {
     heading: "Administração",
     backToChat: "Voltar ao chat",
-    noSubscriptionsManaged:
-      "Você não administra nenhuma assinatura diretamente, então não há workspaces de membros para listar aqui.",
-    selectScope: "Selecione um escopo à esquerda para administrá-lo.",
-
-    areaAria: "Área administrativa",
-    agents: "Agentes",
-    members: "Membros",
     branding: "Marca",
     brandingNote:
       "Vale para toda a instância. A marca se aplica a todos neste deployment, então não há escopo a selecionar.",
+    noScopesTitle: "Nenhum tenant ou assinatura para administrar",
+    noScopesBody:
+      "A marca vale para toda a instância, então é oferecida sem escopo. As seções de workspace exigem um papel de gestão — gestor de tenant ou gestor de assinaturas — sobre um tenant ou uma assinatura específicos. Uma guest role com nome de agente dá acesso àquele agente, não autoridade sobre o workspace em que ele roda.",
     noAuthority:
       "Você não tem autoridade administrativa sobre nenhum escopo. Fale com um gestor de tenant ou de assinatura se achar que isso é um engano.",
-    scopes: "Escopos",
-    subscriptions: "Assinaturas",
-    resizeScopes: "Redimensionar escopos",
-    sectionsAria: "Seções deste agente",
-    backToAgents: "Voltar aos agentes",
     tabs: {
       files: "Arquivos",
       secrets: "Segredos",
@@ -704,11 +758,53 @@ const pt: AdminDict = {
     throughBefore: ", através de ",
     throughAfter: " apenas.",
     period: ".",
+
+
+    membersRosterBefore: "A lista de pessoas pertence a ",
+    membersRosterAfter: ", quaisquer que sejam os agentes que ela roda. ",
+    membersAgentBefore: "Convites, configuração de workspace e restart de instância valem para ",
+    membersAgentAfter: ".",
   },
-  agentGate: {
-    heading: "Escolha um agente",
-    note: "Agentes existem antes de qualquer tenant ou assinatura — eles vêm da configuração do proxy deste deployment. Escolha um e depois selecione o tenant ou a assinatura para configurá-lo.",
-    none: "O proxy não reportou nenhum agente. Verifique a configuração dele, ou fale com quem administra este deployment.",
+  columns: {
+    headings: {
+      root: "Administração",
+      agents: "Agente",
+      tenants: "Tenant",
+      subscriptions: "Onde",
+      sections: "Administrar",
+    },
+    rows: {
+      agents: "Agentes",
+      tenantWide: "O tenant inteiro",
+    },
+    hints: {
+      tenantWide: "Alcança todas as assinaturas sob ele",
+    },
+    empty: {
+      noAgents: "O proxy não reportou nenhum agente",
+      noTenants: "Nenhum tenant para administrar",
+      noSubscriptions: "Nenhuma assinatura sob este tenant",
+    },
+    next: {
+      agents: "Escolha um agente para administrar.",
+      tenants: "Escolha o tenant em que ele será administrado.",
+      subscriptions: "Escolha uma assinatura, ou o tenant como um todo.",
+      sections: "Escolha o que administrar.",
+    },
+    pathAria: "Alvo selecionado",
+    trailAria: "Caminho",
+    changeAria: "Trocar {level}",
+    hintSuffix: "?",
+  },
+  restartChrome: {
+    label: "Entrega",
+    change: "Alterar",
+    done: "Pronto",
+    notNeeded: "Esta seção não precisa de restart.",
+    notNeededFiles:
+      "Arquivos compartilhados chegam a todos os contêineres por um mount somente leitura, ao vivo.",
+    notNeededMembers:
+      "O workspace de cada membro tem o próprio controle de restart, na linha dele.",
   },
   legacyStore: {
     groupLabel: "Legado",
@@ -915,7 +1011,6 @@ const pt: AdminDict = {
   invite: {
     title: "Convidar alguém",
     emailPlaceholder: "pessoa@exemplo.com",
-    agentAria: "Agente",
     accessAria: "Acesso",
     read: "leitura",
     write: "escrita",
@@ -927,22 +1022,10 @@ const pt: AdminDict = {
     invited: "{email} convidado para {agent} ({level}).",
     alreadyInvited: "{email} já tinha este acesso.",
     failed: "Não foi possível enviar o convite.",
-    actionAria: "O que fazer",
-    actionInvite: "Convidar",
-    actionUninvite: "Desconvidar",
-    uninviteTitle: "Remover o acesso de alguém",
-    // "{agent}" é o identificador do agente, que nunca é traduzido.
-    noRoleUninvite:
-      "Esta instalação não declara nenhum guest role para {agent}, então não há nada a remover aqui.",
-    uninviteSubmit: "Remover convite",
-    uninviting: "Removendo…",
-    uninvited: "Acesso de {email} a {agent} ({level}) removido.",
-    uninviteFailed: "Não foi possível remover o convite.",
-    uninviteConfirmTitle: "Remover este convite?",
-    uninviteConfirmMessage: "{email} perderá o acesso de {level} a {agent}.",
-    uninviteConfirmDetail:
-      "O espaço de trabalho e os arquivos são mantidos — excluí-los é uma ação separada na lista abaixo.",
-    uninviteConfirm: "Remover",
+    confirmTitle: "Enviar este convite?",
+    confirmMessage: "{email} recebe acesso de {level} a {agent}.",
+    confirmDetail: "Em {tenant} › {subscription}.",
+    confirm: "Enviar convite",
   },
   roster: {
     notYetActive: "ainda não ativo",
@@ -953,6 +1036,12 @@ const pt: AdminDict = {
       "{email} perderá o acesso de {level} a {agent}. O workspace e os arquivos são mantidos — excluí-los é uma ação separada.",
     revoke: "Revogar",
     revokeFailed: "Não foi possível revogar o acesso.",
+    filterPlaceholder: "Filtrar por email ou agente",
+    noMatches: "Nenhum membro corresponde a este filtro.",
+    truncated:
+      "Esta assinatura tem mais convites do que cabe em uma página, então pode faltar gente nesta lista.",
+    accessHeading: "Acesso",
+    notRevocable: "Concedido fora desta lista — não há convite a remover.",
   },
   restartPolicy: {
     heading: "Quando as alterações passam a valer",
@@ -1010,7 +1099,6 @@ const pt: AdminDict = {
     blocked: "Conclua o agendamento acima antes de fazer alterações aqui.",
   },
   members: {
-    selectSubscription: "Selecione uma assinatura para ver seus membros.",
     none: "Nenhum membro nesta assinatura ainda.",
     privacyNote:
       "Você pode listar e excluir os arquivos privados de um membro, mas nunca abrir ou editar o conteúdo — o conteúdo privado de um membro nunca sai do workspace dele (FR-7).",
@@ -1024,6 +1112,12 @@ const pt: AdminDict = {
       "Uma instância por agente que este membro já iniciou. Editar a configuração dela não é o mesmo que abrir os arquivos dele — veja abaixo.",
     editConfig: "Editar configuração",
     noInstances: "Nenhuma instância ainda.",
+    tenantSelected: "A lista de pessoas pertence a uma assinatura",
+    tenantSelectedBody:
+      "Você está com um tenant selecionado. Escolha uma das assinaturas dele para ver e convidar as pessoas.",
+    pickSubscription: "Escolher uma assinatura",
+    instanceInContext: "agente selecionado",
+    instanceOtherAgent: "outro agente",
   },
   branding: {
     lightLogo: "Logo claro",

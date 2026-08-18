@@ -59,7 +59,16 @@ const SHARED = new Set([
   "admin.bulkConfig.keyPlaceholder",
   "admin.bulkConfig.valuePlaceholder",
   "admin.shell.period",
+  // Sentence-final punctuation, like admin.shell.period above -- the "reaches"
+  // sentence is assembled from fragments so the bold spans can sit inside it.
+  "admin.shell.membersAgentAfter",
+  // Punctuation again: the breadcrumb's trailing hint is the column heading plus a question
+  // mark, kept apart so the heading itself stays reusable.
+  "admin.columns.hintSuffix",
   "admin.scope.tenantPrefix",
+  // The column browser's heading for the same word admin.scope.tenantPrefix already keeps
+  // unchanged: "tenant" is the product's own term in both locales.
+  "admin.columns.headings.tenants",
   "admin.ladderRungs.tenant",
   "admin.ladderRungs.tenantNamed",
   "admin.models.keyGoesToAfter",

@@ -50,6 +50,7 @@ describe("agentTabs", () => {
       "persona",
       "model",
       "config",
+      "members",
     ]);
   });
 
@@ -62,7 +63,12 @@ describe("agentTabs", () => {
   // own file layout, so for an agent the proxy does not report as picoclaw they would
   // be forms whose writes reach nothing. Absent beats present-and-explaining-itself.
   it("withholds both picoclaw-only sections from a non-picoclaw agent", () => {
-    expect(agentTabs("other-harness", agents)).toEqual(["files", "secrets", "skills"]);
+    expect(agentTabs("other-harness", agents)).toEqual([
+      "files",
+      "secrets",
+      "skills",
+      "members",
+    ]);
   });
 
   // Both are addressed PER AGENT — the registry is stored under `agent/<agent>`, and
@@ -106,5 +112,26 @@ describe("resolveAgentTab", () => {
     expect(resolveAgentTab("config", "alpha", agents)).toBe("config");
     expect(resolveAgentTab("config", "other-harness", agents)).toBe("files");
     expect(resolveAgentTab("config", LEGACY_AGENT, agents)).toBe("files");
+  });
+});
+
+// `members` joins the sections of a real agent: the screen asks for the agent and the
+// scope once, and the invitation that used to pick its own agent inside the form now
+// takes that one.
+describe("agentTabs — members", () => {
+  it("offers members for a picoclaw agent and for one of another harness", () => {
+    expect(agentTabs("alpha", [{ key: "alpha" }])).toContain("members");
+    expect(agentTabs("hermes", [{ key: "hermes", harness: "hermes" }])).toContain("members");
+  });
+
+  // A guest role's name IS the agent key, and no role is ever named for the all-agents
+  // store -- an invitation through it could not be constructed, so the roster would be a
+  // list nobody could add to.
+  it("withholds members from the legacy all-agents entry", () => {
+    expect(agentTabs(LEGACY_AGENT, [{ key: "alpha" }])).not.toContain("members");
+  });
+
+  it("leaves the legacy entry with the content stores alone", () => {
+    expect(agentTabs(LEGACY_AGENT, [{ key: "alpha" }])).toEqual(["files", "secrets", "skills"]);
   });
 });

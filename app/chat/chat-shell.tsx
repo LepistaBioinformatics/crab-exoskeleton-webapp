@@ -15,10 +15,12 @@ import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
 import { projectInitials } from "@/lib/projects";
 import { createConversation } from "@/lib/chatSession";
+import { restoreDockedTurns } from "./turn-restore";
 import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
 import ChatView from "./chat-view";
+import TurnDock from "./turn-dock";
 import CanvasTimeline from "./canvas-timeline";
 import WorkspaceGrid from "./workspace-grid";
 import RestartBanner from "./restart-banner";
@@ -133,6 +135,25 @@ export default function ChatShell({ email }: { email: string }) {
   // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
   const router = useRouter();
   const { groups } = useWorkspaceGroups();
+
+  // background-turn-dock: a reload loses sight of every turn but the one it happens to
+  // mount, so the dock is rebuilt from the proxy as soon as we know which workspaces to
+  // ask. Fire-and-forget, and idempotent at module scope — this effect can re-run on a
+  // groups refetch and the fan-out must not.
+  useEffect(() => {
+    if (!groups) return;
+    const workspaces = groups.flatMap((tenant) =>
+      tenant.accounts.flatMap((account) =>
+        account.agents.map((agent) => ({
+          t: agent.tenantId,
+          s: agent.subsAccId,
+          r: agent.role,
+        })),
+      ),
+    );
+    if (workspaces.length === 0) return;
+    void restoreDockedTurns(workspaces, () => router.push("/signin"));
+  }, [groups, router]);
   // The same list the sidebar's projects section shows, so the rail cannot offer a
   // shortcut into a project that was just deleted.
   const { projects } = useProjects(workspace ?? null);
@@ -337,6 +358,18 @@ export default function ChatShell({ email }: { email: string }) {
               <WorkspaceGrid />
             )}
           </div>
+          {/* Last child of the chat column, and a SIBLING of ChatView rather than a child:
+              ChatView is keyed on the workspace above and unmounts on a workspace switch,
+              which is exactly the moment the dock has to keep standing.
+
+              SPEC_DEVIATION: spec DEC-11 put the mobile dock ABOVE the composer.
+              Reason: the composer lives inside ChatView, so "above the composer" would
+              mean mounting the dock inside the component it must outlive. DEC-11's actual
+              goal — no collision with the composer or the soft keyboard — is met instead by
+              document order (the bar cannot cover what precedes it, since the shell is
+              `h-dvh` with `interactiveWidget: "resizes-content"`) plus hiding the bar on
+              mobile while a text field has focus. See dock-segments.hidesForKeyboard. */}
+          <TurnDock currentSid={sessionId} currentWorkspace={workspace} desktop={desktop} />
         </main>
       </div>
     </div>
