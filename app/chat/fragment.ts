@@ -201,18 +201,28 @@ export function setRightSidebar(section: string | null): void {
 // Same native-hashchange mechanism as setFragmentSid. Preserves the history view
 // mode (`hv`) so switching workspaces doesn't silently reset tree -> list; drops
 // the transient scroll anchor (`msg`).
-export function setWorkspace(workspace: Workspace, sid: string): void {
+export function setWorkspace(workspace: Workspace, sid: string, project?: string | null): void {
   const params = new URLSearchParams(window.location.hash.slice(1));
   params.set("t", workspace.t);
   params.set("s", workspace.s);
   params.set("r", workspace.r);
   params.set("sid", sid);
   params.delete("msg");
-  // A project belongs to ONE agent — it is a picoclaw agent of its own, under that
-  // agent's workspace. Carrying `p` into a different workspace would name a project
-  // that does not exist there, and every per-project fetch would address a directory
-  // nobody created.
-  params.delete("p");
+  if (project) {
+    // background-turn-dock: a docked chip can be a project conversation in a workspace
+    // the shell is not on, and the caller knows which project because it read it off the
+    // conversation record. It has to arrive in the SAME write: splitting it into
+    // setWorkspace + setFragmentProjectSid leaves a frame on the right workspace with no
+    // project, and every per-project fetch in that frame addresses the agent root.
+    params.set("p", project);
+  } else {
+    // A project belongs to ONE agent — it is a picoclaw agent of its own, under that
+    // agent's workspace. Carrying `p` into a different workspace would name a project
+    // that does not exist there, and every per-project fetch would address a directory
+    // nobody created. This stays the default: only a caller that has resolved the project
+    // for THIS workspace may pass one.
+    params.delete("p");
+  }
   window.location.hash = params.toString();
 }
 

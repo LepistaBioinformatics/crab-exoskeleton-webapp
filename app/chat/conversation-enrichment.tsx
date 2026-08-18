@@ -41,7 +41,18 @@ export function TagChip({ tag }: { tag: Tag }) {
 // one) so tags don't crowd the row; hovering (or focusing) expands the full
 // chips in a small popover to the icon's lower-right. Shared by the browsing
 // views.
-export function TagCluster({ tags }: { tags: Tag[] }) {
+export function TagCluster({
+  tags,
+  open = "down",
+}: {
+  tags: Tag[];
+  /**
+   * Which way the popover expands. `down` for rows in a scrollable list, which is every
+   * caller but one; `up` for the background-turn dock, which is pinned to the bottom of
+   * the viewport where a downward popover opens off-screen entirely.
+   */
+  open?: "down" | "up";
+}) {
   const t = useT(chatCopy);
   if (tags.length === 0) return null;
   // Tint the mini-tag with the first colored tag's color (border + faint fill +
@@ -64,9 +75,13 @@ export function TagCluster({ tags }: { tags: Tag[] }) {
           <span className="text-[10px] font-semibold leading-none tabular-nums">{tags.length}</span>
         )}
       </span>
-      {/* The pt-1 (not mt-1) bridges the icon-to-popover gap so moving the
+      {/* The pt-1/pb-1 (not mt/mb) bridges the icon-to-popover gap so moving the
           cursor into the popover keeps the group hovered. */}
-      <span className="absolute right-0 top-full z-30 hidden pt-1 group-hover/tags:block group-focus-within/tags:block">
+      <span
+        className={`absolute right-0 z-30 hidden group-hover/tags:block group-focus-within/tags:block ${
+          open === "up" ? "bottom-full pb-1" : "top-full pt-1"
+        }`}
+      >
         <span className="flex max-w-[240px] flex-wrap justify-end gap-1 rounded-lg border border-brand/30 bg-elevated p-1.5 shadow-lg">
           {tags.map((tag) => (
             <TagChip key={tag.name} tag={tag} />

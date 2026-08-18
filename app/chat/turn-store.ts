@@ -929,6 +929,143 @@ export async function consumeStream(
 }
 
 // ---------------------------------------------------------------------------
+// background-turn-dock: enumerating turns
+// ---------------------------------------------------------------------------
+
+/**
+ * What a docked conversation is doing, in the dock's own vocabulary.
+ *
+ * ONE decision, not two. Membership ("is this docked?") and label ("what does the chip
+ * say?") are the same question here on purpose: a predicate in the store plus a `switch`
+ * in the component would be two places that can disagree, and the failure mode is a
+ * docked chip with nothing to say.
+ */
+export type DockState = "unsent" | "working" | "reconnecting" | "ready" | "failed";
+
+/** One segment of the dock. */
+export interface DockedTurn {
+  sid: string;
+  state: DockState;
+  /**
+   * Timestamp of the last event, for the in-session quiet-for readout. 0 for a
+   * conversation restored after a reload -- only `runTurn` and `consumeStream` ever write
+   * it, and a resumed turn goes through neither. Those read the server's timestamp
+   * instead; see turn-restore.ts.
+   */
+  lastEventAt: number;
+  /** The harness's own sentence about the failure. Free text, never translated. */
+  errorDetail: string | null;
+  /** Where the conversation lives, for navigating to it. Null if it never ran here. */
+  ctx: RunContext | null;
+}
+
+/**
+ * The docked state of one conversation, or null when it has nothing worth showing.
+ *
+ * NEVER decided by `turns` membership. The map is never pruned -- `clearCompleted` blanks
+ * the bands and leaves the entry, and nothing deletes -- so `turns.keys()` is a list of
+ * every conversation touched this page-load, not a list of live ones. A dock built on
+ * membership fills with corpses.
+ *
+ * Order of the checks IS the precedence, and each step earns its place:
+ *  - `failed` outranks `ready`, because a turn that produced half a reply and then failed
+ *    is a failure; the partial text is not the news.
+ *  - `reconnecting` outranks `working`, because `running` stays true for the whole
+ *    recovery (long-turn-resilience FR-4) so the two always coincide.
+ *  - `working` outranks `unsent`, because a burst can sit in `pending` behind a turn that
+ *    is already running.
+ */
+export function dockStateOf(state: TurnState): DockState | null {
+  if (state.error !== null) return "failed";
+  if (state.recovering) return "reconnecting";
+  if (state.running || state.retrying !== null || state.queue.length > 0 || state.settling || state.stopping) {
+    return "working";
+  }
+  // Nothing is running and a message is still sitting in the debounce burst. `parkFlush`
+  // only clears the timer, and `bumpFlush` on typing is the only thing that re-arms it --
+  // so this message will NOT be sent until the member comes back to the conversation.
+  if (state.pending.length > 0) return "unsent";
+  if (state.revealed !== "" || state.activeUserMessage !== null) return "ready";
+  return null;
+}
+
+/**
+ * Conversations whose terminal chip the member has already seen.
+ *
+ * Only needed for `failed`. A `ready` chip retires itself: opening the conversation calls
+ * `clearCompleted`, which blanks the bands, and the entry stops qualifying. But
+ * `clearCompleted` DELIBERATELY preserves `error`/`errorDetail` -- for a harness failure
+ * that banner is the only surviving trace, because picoclaw does not persist errors -- so
+ * a failed chip would otherwise stay docked forever. Tracking the acknowledgement here is
+ * how the chip goes away without the banner going with it.
+ */
+const acknowledged = new Set<string>();
+
+/** The member opened this conversation; stop showing its terminal chip. */
+export function acknowledgeTurn(sid: string) {
+  if (acknowledged.has(sid)) return;
+  acknowledged.add(sid);
+  emit();
+}
+
+let dockSnapshot: DockedTurn[] = [];
+let dockSignature = "";
+
+/**
+ * Every docked conversation, in the order they were first touched.
+ *
+ * MEMOIZED, and that is not an optimisation. `emit()` fires on every reveal tick -- up to
+ * REVEAL_MAX_STEPS per reply -- and `useSyncExternalStore` compares snapshots by
+ * reference, so a freshly built array would re-render the dock sixty times per reply for
+ * fields it does not display. The signature therefore covers only what a chip renders.
+ *
+ * `lastEventAt` is in the signature but BUCKETED TO THE SECOND. Excluding it would leave a
+ * chip counting up from a stale event; including it raw would re-render on every content
+ * delta. The readout has one-second resolution, so the second is the honest granularity.
+ *
+ * `revealed`/`buffered` are excluded outright: the dock shows a state, never the reply.
+ *
+ * Insertion order comes from the `turns` Map, which approximates oldest-first for
+ * conversations started in this page-load. Restored entries carry a real server timestamp
+ * and are sorted by it before rendering; see turn-restore.ts.
+ */
+export function dockedTurns(): DockedTurn[] {
+  const next: DockedTurn[] = [];
+  const parts: string[] = [];
+  for (const [sid, state] of turns) {
+    const dockState = dockStateOf(state);
+    if (dockState === null) continue;
+    // Lazy un-acknowledge: a conversation that is working again is not the failure the
+    // member dismissed. `runTurn` clears `error` when a new turn starts, so the same
+    // conversation can fail again later, and a stale acknowledgement would swallow that
+    // second failure in silence. Safe to mutate from here -- it is idempotent, and the
+    // snapshot is rebuilt from the same store state on every call.
+    if (dockState !== "failed" && dockState !== "ready") acknowledged.delete(sid);
+    if (acknowledged.has(sid)) continue;
+    next.push({
+      sid,
+      state: dockState,
+      lastEventAt: state.lastEventAt,
+      errorDetail: state.errorDetail,
+      ctx: contexts.get(sid) ?? null,
+    });
+    parts.push(`${sid}:${dockState}:${Math.floor(state.lastEventAt / 1000)}:${state.errorDetail ?? ""}`);
+  }
+  const signature = parts.join("|");
+  if (signature === dockSignature) return dockSnapshot;
+  dockSignature = signature;
+  dockSnapshot = next;
+  return dockSnapshot;
+}
+
+const EMPTY_DOCK: DockedTurn[] = [];
+
+/** Every conversation with work worth showing. Excludes nothing -- see DEC-5. */
+export function useActiveTurns(): DockedTurn[] {
+  return useSyncExternalStore(subscribe, dockedTurns, () => EMPTY_DOCK);
+}
+
+// ---------------------------------------------------------------------------
 // Test seam
 // ---------------------------------------------------------------------------
 
@@ -947,6 +1084,11 @@ export function __reset() {
   // immediately and the turn silently never starts.
   draining.clear();
   onReplyDone = null;
+  // background-turn-dock: without these, one test's docked conversation leaks into the
+  // next, and the memoized snapshot outlives the state it was built from.
+  acknowledged.clear();
+  dockSnapshot = [];
+  dockSignature = "";
 }
 
 /** Directly seed a conversation's state. Tests only. */
