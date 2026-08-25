@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { fetchMycelium, isInstance, mediaError, MyceliumConnectivityError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 
 // BFF for the proxy's media upload (media-upload). The browser posts multipart
 // with `role` + `tenant_id`/`subs_acc_id` (from the fragment) + `file`; `role`
 // picks the gateway service path and is NOT forwarded. The session JWT is
-// attached here. Real 4xx (413 too large, 400 bad type/name, 403 unlicensed)
-// are surfaced via upstreamError, never masked as connectivity.
+// attached here. Real 4xx (413 too large, 400 unusable name, 403 unlicensed) are
+// surfaced as the codes above, never masked as connectivity.
 // Lists the files currently in the caller's workspace uploads dir (names +
 // sizes, never contents) for the uploads sidebar.
 export async function GET(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
   if (!res.ok) {
-    const { error, status } = await upstreamError(res);
+    const { error, status } = mediaError(res);
     return NextResponse.json({ error, status }, { status });
   }
   const data = await res.json();
@@ -93,7 +93,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
   if (!res.ok) {
-    const { error, status } = await upstreamError(res);
+    const { error, status } = mediaError(res);
     return NextResponse.json({ error, status }, { status });
   }
   const data = await res.json().catch(() => ({}));
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
   if (!res.ok) {
-    const { error, status } = await upstreamError(res);
+    const { error, status } = mediaError(res);
     return NextResponse.json({ error, status }, { status });
   }
   const data = await res.json();

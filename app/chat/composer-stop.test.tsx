@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import Composer from "./composer";
+import type { Workspace } from "./fragment";
 import { chatCopy } from "@/lib/i18n/chat";
 
 // stop-generation, R3.1/R3.5. Two things no unit test of the store can answer:
@@ -33,6 +34,7 @@ afterEach(async () => {
 
 const baseProps = {
   onSend: () => true,
+  workspace: { t: "acme", s: "growth", r: "alpha" } as Workspace,
   loadingHistory: false,
   sessionId: "s1",
   attachments: [],

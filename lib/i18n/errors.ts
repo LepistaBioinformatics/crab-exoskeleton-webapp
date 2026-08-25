@@ -16,6 +16,10 @@ const en = {
   not_found: "We couldn't find that.",
   forbidden: "You don't have permission to do that.",
   media_reserved: "That folder is managed by the system and cannot be created, renamed or deleted.",
+  // paste-and-drop-upload: a dropped folder arrives as a zero-byte entry, which
+  // would upload as a nonsense file wearing the folder's name.
+  media_directory: "Folders can't be dropped here — drop the files inside them.",
+  media_name_taken: "Something with that name is already there.",
   invalid_instance: "That workspace isn't available.",
   unsupported_type: "That file type isn't supported.",
   too_large: "That file is too large.",
@@ -105,6 +109,8 @@ const pt: ErrorDict = {
   not_found: "Não encontramos isso.",
   forbidden: "Você não tem permissão para fazer isso.",
   media_reserved: "Essa pasta é gerenciada pelo sistema e não pode ser criada, renomeada ou excluída.",
+  media_directory: "Não dá para soltar pastas aqui — solte os arquivos de dentro dela.",
+  media_name_taken: "Já existe algo com esse nome aí.",
   invalid_instance: "Esse workspace não está disponível.",
   unsupported_type: "Esse tipo de arquivo não é suportado.",
   too_large: "Esse arquivo é grande demais.",

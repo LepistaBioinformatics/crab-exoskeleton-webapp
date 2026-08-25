@@ -17,14 +17,21 @@ vi.mock("@/lib/session", () => ({
   clearSession: async () => {},
 }));
 
-vi.mock("@/lib/mycelium", () => ({
-  fetchMycelium: (...args: unknown[]) => fetchMycelium(...args),
-  isInstance: (v: unknown) => v === "alpha" || v === "beta",
-  MyceliumConnectivityError: class extends Error {},
-  upstreamError: async () => ({ error: "upstream", status: 500 }),
-}));
+// `mediaError` is deliberately NOT stubbed: the status→code mapping is the thing
+// under test below, and a fake would only prove the fake.
+vi.mock("@/lib/mycelium", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mycelium")>();
+  return {
+    ...actual,
+    fetchMycelium: (...args: unknown[]) => fetchMycelium(...args),
+    isInstance: (v: unknown) => v === "alpha" || v === "beta",
+    MyceliumConnectivityError: class extends Error {},
+    upstreamError: async () => ({ error: "upstream", status: 500 }),
+  };
+});
 
 const { POST, DELETE } = await import("./route");
+const { POST: MOVE } = await import("./move/route");
 const { GET: DOWNLOAD } = await import("./download/route");
 
 const QUERY = "role=alpha&tenant_id=t1&subs_acc_id=s1&path=uploads/x.zip";
@@ -101,5 +108,62 @@ describe("GET /api/media/download", () => {
   it("omits it outside a project", async () => {
     await DOWNLOAD(new NextRequest(`http://app/api/media/download?${QUERY}`));
     expect(calledPath()).not.toContain("project=");
+  });
+});
+
+// A refused upload has to arrive as a CODE. The proxy answers with an English
+// sentence, and forwarding that sentence is what made "file exceeds the
+// 10485760-byte limit" reach the member as "Algo deu errado." — the client's
+// dictionary is keyed by code, and an unrecognised string falls through to
+// `unknown`.
+describe("media failures map to translatable codes", () => {
+  const cases: Array<[number, string]> = [
+    [413, "too_large"],
+    [403, "forbidden"],
+    [404, "not_found"],
+    [400, "invalid_request"],
+    [500, "unknown"],
+  ];
+
+  for (const [status, code] of cases) {
+    it(`turns ${status} into ${code}`, async () => {
+      fetchMycelium.mockResolvedValue({
+        ok: false,
+        status,
+        headers: new Headers(),
+        json: async () => ({ error: { message: "file exceeds the 10485760-byte limit" } }),
+        text: async () => "file exceeds the 10485760-byte limit",
+      });
+
+      const res = await POST(uploadRequest());
+      expect(res.status).toBe(status);
+      expect((await res.json()).error).toBe(code);
+    });
+  }
+
+  // The move route matters as much as the upload now: an external drop onto a
+  // folder is an upload FOLLOWED BY A MOVE, so this is a failure a member reaches
+  // by dragging a file in — not an admin-only path.
+  it("maps the move route's failures too", async () => {
+    fetchMycelium.mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: new Headers(),
+      json: async () => ({ error: { message: "destination exists" } }),
+      text: async () => "destination exists",
+    });
+
+    const req = new NextRequest("http://app/api/media/move", {
+      method: "POST",
+      body: JSON.stringify({
+        role: "alpha",
+        tenant_id: "t1",
+        subs_acc_id: "s1",
+        path: "q1.pdf",
+        to: "reports/q1.pdf",
+      }),
+    });
+    const res = await MOVE(req);
+    expect((await res.json()).error).toBe("media_name_taken");
   });
 });

@@ -16,8 +16,13 @@ export interface Attachment {
 }
 
 // Attach categories shown in the composer's attach menu. Each opens the picker
-// filtered to its extensions; "Outros" (rendered separately) uses MEDIA_ACCEPT
-// (the full allowlist). Must stay in sync with the proxy's MediaAllowedExts.
+// filtered to its extensions.
+//
+// A CONVENIENCE, not a policy: nothing enforces these, and the menu's last entry
+// opens the picker with no filter at all. They exist so that looking for one image
+// in a crowded folder does not mean reading past forty files. The proxy has no
+// opinion about file types either (unrestricted-upload-types), so there is nothing
+// left for this list to stay in sync with.
 export interface MediaCategory {
   key: string;
   label: string;
@@ -32,17 +37,106 @@ export const MEDIA_CATEGORIES: MediaCategory[] = [
   { key: "archive", label: "Comprimidos", exts: ["zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar"] },
 ];
 
-// The full allowlist (union of every category) — the proxy rejects anything
-// outside it with 400.
-export const MEDIA_ALL_EXTS = [...new Set(MEDIA_CATEGORIES.flatMap((c) => c.exts))];
 
 // `accept` string for a set of extensions (e.g. ".png,.jpg").
 export function acceptFor(exts: string[]): string {
   return exts.map((e) => `.${e}`).join(",");
 }
 
-// Full allowlist as an `accept` string (used by the "Outros" option).
-export const MEDIA_ACCEPT = acceptFor(MEDIA_ALL_EXTS);
+
+// --- Pasted and dropped files --------------------------------------------
+//
+// Two ways in besides the picker (paste-and-drop-upload). Both hand the same
+// `File` objects to the same `uploadMedia`; what they need first is a name and a
+// yes/no about what the drag is carrying.
+
+// Extension for a clipboard file, from its MIME type. Only the types a clipboard
+// actually produces are listed — a general mime→extension table would be a
+// hundred rows to serve a screenshot.
+const PASTE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+  "text/csv": "csv",
+};
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+/**
+ * The name a pasted file is stored under: `pasted-<YYYYMMDD-HHMMSS>.<ext>`.
+ *
+ * NOT cosmetic. Every screenshot a browser puts on the clipboard arrives as a
+ * `File` called `image.png` — the same name, every time — and `StoreMedia` opens
+ * with `O_TRUNC` keyed on the sanitized name. Without a unique name the second
+ * paste silently OVERWRITES the first, including one an earlier message in the
+ * transcript already points at.
+ *
+ * A timestamp rather than a uuid because the member reads this name, in a chip and
+ * in the files tree, and has to be able to find the file again.
+ *
+ * `at` is a parameter so the result is testable; callers pass `new Date()`.
+ */
+export function pastedFileName(file: File, at: Date): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  const stamp =
+    `${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}` +
+    `-${p(at.getHours())}${p(at.getMinutes())}${p(at.getSeconds())}`;
+  const ext = PASTE_EXTENSIONS[file.type] || extensionOf(file.name);
+  return ext ? `pasted-${stamp}.${ext}` : `pasted-${stamp}`;
+}
+
+/**
+ * The same bytes under a different name.
+ *
+ * A copy, because `File.name` is read-only — assigning to it silently does
+ * nothing, and `uploadMedia` sends `form.set("file", file, file.name)`, so the
+ * mutation would be invisible right up until two pastes collided on the server.
+ */
+export function renamedFile(file: File, name: string): File {
+  return new File([file], name, { type: file.type, lastModified: file.lastModified });
+}
+
+/**
+ * Whether a drag is carrying files from OUTSIDE the browser.
+ *
+ * The files sidebar's own rows are draggable and put `text/plain` on the transfer
+ * (they are moves, not uploads). Without this check every internal drag would light
+ * up the chat's drop zone and then upload nothing.
+ */
+export function isExternalFileDrag(dt: DataTransfer | null | undefined): boolean {
+  if (!dt) return false;
+  // `types` is a DOMStringList in older engines: `includes` may not exist.
+  return Array.from(dt.types ?? []).includes("Files");
+}
+
+/**
+ * The names among a drop's files that are actually DIRECTORIES.
+ *
+ * A dropped folder arrives in `dataTransfer.files` as a zero-byte entry with no
+ * MIME type, which would otherwise upload as a nonsense file carrying the folder's
+ * name. `webkitGetAsEntry` answers definitively where it exists; the heuristic is
+ * the fallback, and it is safe in the direction that matters — an empty file with
+ * no type is not something anyone means to send to an agent either.
+ */
+export function droppedDirectories(dt: DataTransfer | null | undefined): string[] {
+  if (!dt) return [];
+  const files = Array.from(dt.files ?? []);
+  const items = Array.from(dt.items ?? []);
+  return files
+    .filter((file, i) => {
+      const entry = items[i]?.webkitGetAsEntry?.();
+      if (entry) return entry.isDirectory;
+      return file.size === 0 && !file.type;
+    })
+    .map((f) => f.name);
+}
 
 export async function uploadMedia(workspace: Workspace, file: File): Promise<Attachment> {
   const form = new FormData();
@@ -241,8 +335,12 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
 // --- Preview -------------------------------------------------------------
 //
 // Which files the webapp can SHOW rather than only hand to the operating system.
-// Deliberately a subset of MEDIA_ALL_EXTS: everything else (office documents,
-// archives) would need a parsing library, so those keep the download-only menu.
+// Deliberately narrow, and narrower than what may be UPLOADED: anything outside
+// this set keeps the download-only menu. That is the invariant that makes
+// accepting arbitrary bytes safe — the proxy serves every media file as
+// `application/octet-stream` with `Content-Disposition: attachment`, so a
+// member's file never renders from this origin. Widening this list is what would
+// spend that.
 
 export type PreviewKind = "image" | "markdown" | "text" | "pdf";
 

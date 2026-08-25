@@ -43,6 +43,31 @@ export async function upstreamError(res: Response): Promise<{ error: string; sta
   return { error: message || res.statusText || "request failed", status: res.status };
 }
 
+// The media surface answers in CODES, not prose.
+//
+// crab-shell-proxy states its media refusals as English sentences — "file exceeds
+// the 10485760-byte limit". `upstreamError` forwards that verbatim, `errorCode`
+// passes an unrecognised string through, and `errorText` cannot find it in the
+// dictionary: every media failure reached the member as "Algo deu errado.",
+// whatever had actually gone wrong. The STATUS is the part that survives
+// translation, so it is what these routes forward.
+//
+// The distinctions the folder operations rely on are preserved — 409 is "that name
+// is taken", 404 is "it is already gone", 400 is "that move is not legal" — because
+// each keeps its own code. Collapsing them was never the goal; untranslatable prose
+// was the problem.
+const MEDIA_ERROR_CODES: Record<number, string> = {
+  400: "invalid_request",
+  403: "forbidden",
+  404: "not_found",
+  409: "media_name_taken",
+  413: "too_large",
+};
+
+export function mediaError(res: Response): { error: string; status: number } {
+  return { error: MEDIA_ERROR_CODES[res.status] ?? "unknown", status: res.status };
+}
+
 // Wraps fetch() against mycelium-gateway so every route handler distinguishes
 // "the gateway answered" (even with 401/403/500) from "couldn't reach it at
 // all" -- the two need different error shapes downstream (design.md's Error

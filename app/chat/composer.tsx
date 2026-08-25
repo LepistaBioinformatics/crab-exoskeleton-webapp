@@ -24,7 +24,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
+import {
+  MEDIA_CATEGORIES,
+  acceptFor,
+  parseAnexos,
+  pastedFileName,
+  renamedFile,
+  type Attachment,
+} from "@/lib/media";
 import {
   applyMention,
   filterCandidates,
@@ -34,6 +41,8 @@ import {
 import type { ReplyTo } from "@/app/chat/chat-view";
 import { referenceChip, type ChatReference } from "@/lib/chatReference";
 import MarkdownEditor from "@/app/chat/markdown-editor";
+import AttachmentButton from "@/app/chat/attachment-button";
+import type { Workspace } from "@/app/chat/fragment";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
 
@@ -50,6 +59,32 @@ const REFERENCE_ICON: Record<ChatReference["kind"], typeof CalendarClock> = {
   span: GitBranch,
   entity: Network,
 };
+
+/**
+ * Files on the clipboard become attachments; text on the clipboard is left
+ * entirely alone.
+ *
+ * The early return is load-bearing: pasting text into a textarea is the most
+ * common thing that happens to this element, and a handler that calls
+ * preventDefault unconditionally breaks it.
+ *
+ * Every pasted screenshot arrives named `image.png` — the SAME name, every time —
+ * and the proxy stores by sanitized name with O_TRUNC, so without renaming here the
+ * second paste silently overwrites the first, including one an earlier message
+ * already points at.
+ *
+ * Exported because the advanced editor is the other place someone composes, and
+ * therefore the other place someone pastes a screenshot.
+ */
+export function pasteFilesHandler(onPickFiles: (files: File[]) => void) {
+  return (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    e.preventDefault();
+    const now = new Date();
+    onPickFiles(files.map((f) => renamedFile(f, pastedFileName(f, now))));
+  };
+}
 
 // A context chip's accent, the only thing that differs between the two kinds.
 const contextChip = cva(
@@ -100,7 +135,11 @@ interface ComposerProps {
   attachments: Attachment[];
   uploading: boolean;
   attachError: string | null;
-  onPickFiles: (files: FileList) => void;
+  // FileList from the OS picker; a plain array from a paste or a drop, which
+  // build their own list and rename what they carry.
+  /** Where the attached files live — the previews point their `<img>` at it. */
+  workspace: Workspace;
+  onPickFiles: (files: FileList | File[]) => void;
   onRemoveAttachment: (path: string) => void;
   replyTo: ReplyTo | null;
   onCancelReply: () => void;
@@ -130,6 +169,7 @@ export default function Composer({
   attachments,
   uploading,
   attachError,
+  workspace,
   onPickFiles,
   onRemoveAttachment,
   replyTo,
@@ -290,12 +330,33 @@ export default function Composer({
     ref.current?.focus();
   }
 
+  /**
+   * Files on the clipboard become attachments; text on the clipboard is left
+   * entirely alone.
+   *
+   * The early return is load-bearing: pasting text into a textarea is the most
+   * common thing that happens to this element, and a handler that calls
+   * preventDefault unconditionally breaks it.
+   *
+   * Every pasted screenshot arrives named `image.png` — the SAME name, every time
+   * — and the proxy stores by sanitized name with O_TRUNC, so without renaming
+   * here the second paste silently overwrites the first.
+   */
+  const onPasteFiles = pasteFilesHandler(onPickFiles);
+
   // Open the OS picker filtered to `accept`, then let onChange handle the files.
-  function pick(accept: string) {
+  //
+  // No argument means NO filter, which is the whole point of the last menu entry:
+  // the attribute is what the OS dialog filters on, so a member whose format none
+  // of the categories names has to be able to open a dialog that carries none. It
+  // is removed rather than emptied — and it has to be removed every time, or the
+  // previous category's filter survives into the next open.
+  function pick(accept?: string) {
     setMenuOpen(false);
     const el = fileRef.current;
     if (!el) return;
-    el.accept = accept;
+    if (accept) el.accept = accept;
+    else el.removeAttribute("accept");
     el.click();
   }
 
@@ -330,28 +391,46 @@ export default function Composer({
         />
       )}
 
+      {/* ONE ROW that scrolls, not a wrapping grid.
+          
+          Attachments are fixed-width tiles now, so enough of them are wider than the
+          chat column. Wrapping answered that by growing DOWNWARD, which pushes the
+          input toward the top of the screen exactly when someone has a lot to send. A
+          deck of overlapping tiles was the other candidate and was refused: it hides
+          files, and the remove control of a covered one cannot be reached.
+          
+          The vertical padding is not decoration — the remove buttons sit at the tiles'
+          top corners and an `overflow-x` container clips whatever leaves its box. */}
       {(attachments.length > 0 || uploading) && (
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div className="mb-2 flex gap-2 overflow-x-auto pb-1 pt-1">
+          {/* The preview is the point of this row: it is where someone notices they
+              pasted the wrong screenshot, while there is still time to remove it. The
+              remove control moves to the corner rather than sitting in the line, so an
+              image and a type card carry it in the same place. */}
           {attachments.map((a) => (
-            <span
-              key={a.path}
-              className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg"
-            >
-              <Paperclip size={12} aria-hidden />
-              <span className="max-w-[160px] truncate">{a.name}</span>
+            <span key={a.path} className="relative inline-flex shrink-0">
+              <AttachmentButton
+                workspace={workspace}
+                path={a.path}
+                name={a.name}
+                size={a.size}
+                tone="compact"
+              />
+              {/* Inside the square rather than outside it: an offset corner is what a
+                  scrolling container clips first. */}
               <button
                 type="button"
                 aria-label={`${t.composer.removeAttachment} ${a.name}`}
                 onClick={() => onRemoveAttachment(a.path)}
-                className="text-fg-muted transition-colors hover:text-fg"
+                className="absolute right-1 top-1 z-10 rounded-full border border-brand/40 bg-surface/90 p-0.5 text-fg-muted shadow-sm transition-colors hover:text-fg"
               >
                 <X size={12} aria-hidden />
               </button>
             </span>
           ))}
           {uploading && (
-            <span className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg-muted">
-              <Spinner size={12} /> Uploading…
+            <span className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg-muted">
+              <Spinner size={12} /> {t.composer.uploading}
             </span>
           )}
         </div>
@@ -422,7 +501,6 @@ export default function Composer({
         <input
           ref={fileRef}
           type="file"
-          accept={MEDIA_ACCEPT}
           multiple
           hidden
           onChange={(e) => {
@@ -440,6 +518,7 @@ export default function Composer({
           lang={locale}
           spellCheck
           value={value}
+          onPaste={onPasteFiles}
           onChange={(e) => {
             setValue(e.target.value);
             setCaret(e.target.selectionStart ?? e.target.value.length);
@@ -551,11 +630,11 @@ export default function Composer({
                 <div className="my-1 border-t border-brand/20" />
                 <button
                   type="button"
-                  onClick={() => pick(MEDIA_ACCEPT)}
+                  onClick={() => pick()}
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated"
                 >
                   <Files size={16} className="shrink-0 text-fg-muted" aria-hidden />
-                  {t.composer.otherTypes}
+                  {t.composer.anyFile}
                 </button>
               </div>
             </>
@@ -607,6 +686,7 @@ export default function Composer({
         <MarkdownEditor
           initialValue={value}
           lang={locale}
+          onPasteFiles={onPasteFiles}
           onClose={(draft) => {
             setValue(draft);
             setAdvancedOpen(false);

@@ -33,11 +33,18 @@ export default function MarkdownEditor({
   lang,
   onClose,
   onSubmit,
+  onPasteFiles,
 }: {
   initialValue: string;
   lang?: string;
   onClose: (draft: string) => void;
   onSubmit: (text: string) => void;
+  /**
+   * Files pasted here upload and attach, exactly as they do in the chat box. This
+   * is where a long message gets composed, so it is where a screenshot gets pasted
+   * — the composer owns the handler and hands it down.
+   */
+  onPasteFiles?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -169,6 +176,7 @@ export default function MarkdownEditor({
           <textarea
             ref={ref}
             value={text}
+            onPaste={onPasteFiles}
             onChange={(e) => setText(e.target.value)}
             lang={lang}
             spellCheck

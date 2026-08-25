@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { fetchMycelium, isInstance, mediaError, MyceliumConnectivityError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 
 // Shared BFF plumbing for the uploads-tree write operations (create folder, move,
@@ -12,7 +12,10 @@ import { clearSession, getSession } from "@/lib/session";
 // Upstream statuses are passed through rather than flattened, because the interface
 // distinguishes them: 409 is "that name is taken", 400 is "that move is not legal",
 // 404 is "it is already gone". Collapsing them to one error would make a drag that
-// lands badly indistinguishable from a bug.
+// lands badly indistinguishable from a bug. They travel as CODES (`mediaError`), not
+// as the proxy's English prose, which the client cannot translate — that matters
+// here now that an external drop onto a folder is an upload FOLLOWED BY A MOVE, so
+// this route's failure is one a member reaches by dragging a file in.
 export async function proxyMediaWrite(
   req: NextRequest,
   method: "POST" | "DELETE",
@@ -57,7 +60,7 @@ export async function proxyMediaWrite(
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
   if (!res.ok) {
-    const { error, status } = await upstreamError(res);
+    const { error, status } = mediaError(res);
     return NextResponse.json({ error, status }, { status });
   }
   return NextResponse.json(await res.json().catch(() => ({})));

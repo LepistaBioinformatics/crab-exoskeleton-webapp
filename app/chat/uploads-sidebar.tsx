@@ -7,10 +7,9 @@ import {
   createFolder,
   deleteFolder,
   dropTarget,
+  isInsideReserved,
   isReservedFolder,
   moveMedia,
-  fileTypeGroup,
-  type FileTypeGroup,
 } from "@/lib/media";
 import {
   Brain,
@@ -19,15 +18,7 @@ import {
   ChevronRight,
   Download,
   Eye,
-  File,
-  FileArchive,
-  FileAudio,
-  FileCode,
-  FileImage,
-  FileSpreadsheet,
   FileText,
-  FileType,
-  FileVideo,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -39,7 +30,6 @@ import {
   Search,
   Trash2,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { cva } from "class-variance-authority";
 import {
@@ -48,9 +38,11 @@ import {
   downloadMedia,
   previewKind,
   uploadMedia,
-  MEDIA_ACCEPT,
+  droppedDirectories,
+  isExternalFileDrag,
   type Attachment,
 } from "@/lib/media";
+import { FileThumb, formatSize } from "@/app/chat/file-visuals";
 import type { Workspace } from "./fragment";
 import FilePreview from "@/app/chat/file-preview";
 import MemoryEditor from "@/app/chat/memory-editor";
@@ -162,13 +154,6 @@ export function allFolderPaths(nodes: TreeNode[]): string[] {
   return out;
 }
 
-function formatSize(bytes?: number): string {
-  if (bytes == null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 // A permanent, resizable right-hand column (desktop) listing the current
 // workspace's uploads. Not an overlay -- part of the layout, toggled from the
 // chat header. Filter box + per-file delete. Refreshes on `refreshSignal`.
@@ -176,36 +161,6 @@ function formatSize(bytes?: number): string {
 // member asks about ("what does it know about me"), scheduled tasks are what it does
 // on its own, files are what they manage.
 export type Section = "memory" | "graph" | "tasks" | "files";
-
-// One glyph per file-type GROUP, at the left of a row's name.
-//
-// Grouped rather than per-extension because the icon only helps along distinctions a
-// member makes at a glance: "spreadsheet" and "archive" are such distinctions, `.xlsx`
-// versus `.xls` is not. `unknown` gets the plain file glyph — the honest answer for an
-// extension we do not recognise, and better than a confident wrong one.
-//
-// Colour, deliberately not the accent: in this design system the accent means
-// "interactive", and a type marker is not. Muted keeps it subordinate to the name, which
-// is what the member is actually scanning.
-const FILE_TYPE_ICONS: Record<FileTypeGroup, LucideIcon> = {
-  pdf: FileType,
-  image: FileImage,
-  markdown: FileText,
-  text: FileText,
-  sheet: FileSpreadsheet,
-  archive: FileArchive,
-  code: FileCode,
-  audio: FileAudio,
-  video: FileVideo,
-  unknown: File,
-};
-
-function FileTypeIcon({ group }: { group: FileTypeGroup }) {
-  const Icon = FILE_TYPE_ICONS[group];
-  // aria-hidden: the extension is already in the visible name, so announcing the type
-  // before it would be noise to a screen reader rather than information.
-  return <Icon size={14} aria-hidden className="shrink-0 text-fg-muted" />;
-}
 
 const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files"];
 
@@ -278,7 +233,7 @@ const folderRow = cva(
 // The tree root is a drop target too: dragging something OUT of a folder needs
 // somewhere to land, and without this the only way back to the root would be to
 // re-upload.
-const rootZone = cva("min-h-8 rounded-lg transition-colors", {
+const rootZone = cva("relative min-h-8 rounded-lg transition-colors", {
   variants: { over: { true: "bg-accent/10 ring-1 ring-accent/40", false: "" } },
   defaultVariants: { over: false },
 });
@@ -356,6 +311,10 @@ export default function UploadsSidebar({
   // Folders the user has opened. Collapsed by default so a deep workspace shows
   // its shape first rather than dumping every file at once.
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
+  // Whether the drag currently over the pane came from OUTSIDE the browser. The two
+  // kinds land in different places — an external drag uploads, an internal one moves
+  // — so the root zone has to say which one it is offering to do.
+  const [externalDrag, setExternalDrag] = useState(false);
 
   // Upload straight into the workspace, without going through a message.
   //
@@ -370,22 +329,48 @@ export default function UploadsSidebar({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  async function onUpload(files: FileList) {
-    setFolderError(null);
+  // `pending` is the error a caller already has in hand — a dropped folder, which
+  // is refused before any upload starts. It is set here rather than by the caller
+  // because this function clears the alert on entry, and an upload FAILURE
+  // legitimately replaces it: the file that could not be stored is the more
+  // actionable of the two.
+  async function onUpload(files: FileList | File[], folder = "", pending: string | null = null) {
+    setFolderError(pending);
     setUploading(true);
     try {
       // Sequential rather than Promise.all: each upload chowns the uploads tree on
       // the proxy side, and a burst of parallel writes into one directory buys
       // nothing on a panel where two or three files is the realistic case.
       for (const file of Array.from(files)) {
-        await uploadMedia(workspace, file);
+        const stored = await uploadMedia(workspace, file);
+        // A destination folder costs a SECOND call: an upload cannot express a
+        // subfolder, because StoreMedia reduces the name to a base name. If the
+        // move fails the file is visibly at the root with the error beside it —
+        // which is the right failure, since nothing was lost.
+        if (folder) {
+          await moveMedia(workspace, stored.name, dropTarget(stored.name, folder));
+        }
       }
       setLocalRefresh((n) => n + 1);
     } catch (e) {
       setFolderError(e instanceof Error ? e.message : "unknown");
+      setLocalRefresh((n) => n + 1);
     } finally {
       setUploading(false);
     }
+  }
+
+  // A drop from OUTSIDE the browser, which is an upload — as opposed to the drag
+  // of a row already in this tree, which is a move. The two share the highlight and
+  // nothing else: they answer different questions (`canDrop` for a move, "is it
+  // carrying files" for an upload) and merging them is what made the external drop
+  // inert, since every handler was gated on an internal drag being in progress.
+  function onExternalDrop(folder: string, dt: DataTransfer) {
+    const directories = droppedDirectories(dt);
+    const files = Array.from(dt.files ?? []).filter((f) => !directories.includes(f.name));
+    const refusal = directories.length ? "media_directory" : null;
+    if (files.length) void onUpload(files, folder, refusal);
+    else setFolderError(refusal);
   }
 
   function toggleFolder(path: string) {
@@ -563,27 +548,64 @@ export default function UploadsSidebar({
     );
   }
 
-  // Drop props shared by every folder row and by the root zone.
+  // Drop props shared by every folder row and by the root zone, for BOTH kinds of
+  // drop: a row from this tree (a move) and files from outside the browser (an
+  // upload).
   function dropProps(folder: string) {
-    const active = dragPath !== null && canDrop(dragPath, folder);
+    const move = dragPath !== null && canDrop(dragPath, folder);
+    // The system folder takes neither kind of drop: the proxy answers 403 for a
+    // write into it, and it is the agent's, not the member's.
+    //
+    // It has to SWALLOW the drop rather than ignore it. A target that does not
+    // accept `dragover` is not offered the drop at all — the browser hands it to the
+    // nearest ancestor that did, which here is the root zone, so ignoring it would
+    // quietly file the drop at the root instead. Refusing out loud is the only
+    // answer that matches what the member sees.
+    const reserved = isReservedFolder(folder) || isInsideReserved(folder);
+    const accepts = (e: React.DragEvent) => move || isExternalFileDrag(e.dataTransfer);
     return {
       onDragOver: (e: React.DragEvent) => {
-        if (!active) return;
+        if (!accepts(e)) return;
+        if (reserved) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "none";
+          return;
+        }
         // preventDefault is what makes a target droppable at all; without it the
         // browser refuses the drop and the row silently does nothing.
         e.preventDefault();
         e.stopPropagation();
         setDropFolder(folder);
+        setExternalDrag(isExternalFileDrag(e.dataTransfer));
       },
       onDragLeave: (e: React.DragEvent) => {
         e.stopPropagation();
+        // `dragleave` fires for every CHILD the pointer crosses and the synthetic event
+        // BUBBLES, so a pointer moving inside a row — over its chevron, its name, its
+        // count — cleared the highlight that the very next `dragover` put back. At
+        // pointer speed that is a strobe, not a highlight, and it reads as the pane
+        // freezing.
+        //
+        // `relatedTarget` is where the pointer actually went. Still inside this row
+        // means it never left. Null (it left the window) counts as leaving.
+        if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) {
+          return;
+        }
         setDropFolder((cur) => (cur === folder ? null : cur));
       },
       onDrop: (e: React.DragEvent) => {
-        if (!active) return;
+        if (!accepts(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        onDropInto(folder);
+        setDropFolder(null);
+        setExternalDrag(false);
+        if (reserved) {
+          setFolderError("media_reserved");
+          return;
+        }
+        if (isExternalFileDrag(e.dataTransfer)) onExternalDrop(folder, e.dataTransfer);
+        else onDropInto(folder);
       },
     };
   }
@@ -600,6 +622,7 @@ export default function UploadsSidebar({
       onDragEnd: () => {
         setDragPath(null);
         setDropFolder(null);
+        setExternalDrag(false);
       },
     };
   }
@@ -716,7 +739,7 @@ export default function UploadsSidebar({
 
             `min-w-0` is what lets `truncate` engage inside a flex row — without it the
             name would push the controls off the edge. */}
-        <FileTypeIcon group={fileTypeGroup(node.leaf)} />
+        <FileThumb workspace={workspace} path={f.path} name={node.leaf} />
         <span className="min-w-0 truncate text-sm text-fg" title={node.leaf}>
           {node.leaf}
         </span>
@@ -938,7 +961,6 @@ export default function UploadsSidebar({
                     <input
                       ref={fileRef}
                       type="file"
-                      accept={MEDIA_ACCEPT}
                       multiple
                       hidden
                       onChange={(e) => {
@@ -1037,6 +1059,18 @@ export default function UploadsSidebar({
                       className={rootZone({ over: dropFolder === "" })}
                       {...dropProps("")}
                     >
+                      {/* Absolutely positioned, and `pointer-events-none`, because BOTH
+                          would otherwise feed the flicker this pane had: a hint in the
+                          flow pushes every row down as it appears, which slides the row
+                          out from under the pointer, which hides the hint, which slides
+                          the rows back — a loop that sustains itself at pointer speed.
+                          An element that can receive pointer events would add its own
+                          dragenter/dragleave pair on top of that. */}
+                      {externalDrag && dropFolder === "" && (
+                        <p className="pointer-events-none absolute inset-x-1 top-1 z-10 rounded-md bg-surface/95 px-2 py-1 text-center text-xs font-semibold text-accent shadow-sm">
+                          {t.uploads.dropToUpload}
+                        </p>
+                      )}
                       {tree.length > 0 && (
                         <ul
                           role="tree"
