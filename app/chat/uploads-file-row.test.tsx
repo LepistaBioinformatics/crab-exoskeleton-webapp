@@ -124,27 +124,39 @@ describe("a file row's controls", () => {
 // hover CAPABILITY rather than on a width breakpoint — a touch laptop at desktop width
 // has the same problem and a narrow desktop window does not — so what is asserted is
 // that the escape hatch is present on every container that hides its contents.
-// The icon has to VARY to be worth the width it takes from the name — a glyph identical
-// on every line is what was removed from this row once already, for exactly that reason.
-// So what is asserted is difference, not presence: two files of different groups must not
-// render the same glyph.
-describe("file type icon", () => {
-  it("draws a different glyph for a different file type", async () => {
+// The mark at the left of a row has to VARY to be worth the width it takes from the
+// name — a glyph identical on every line is what was removed from this row once
+// already, for exactly that reason. Since chat-attachment-previews it varies twice
+// over: an image row shows the picture, everything else shows its type glyph.
+describe("a row's leading mark", () => {
+  const rowFor = (pane: HTMLElement, name: string) => {
+    const row = Array.from(pane.querySelectorAll('li[role="treeitem"]')).find((r) =>
+      r.textContent?.includes(name),
+    );
+    expect(row, `no row for ${name}`).toBeTruthy();
+    return row!;
+  };
+
+  it("shows the image itself for an image", async () => {
     const pane = await openFilesPane();
-    const rows = Array.from(pane.querySelectorAll('li[role="treeitem"]'));
+    const thumb = rowFor(pane, "photo.png").querySelector("img");
 
-    const glyphOf = (name: string) => {
-      const row = rows.find((r) => r.textContent?.includes(name));
-      expect(row, `no row for ${name}`).toBeTruthy();
-      // lucide renders an <svg> whose class names carry the icon identity.
-      return row!.querySelector("svg")?.getAttribute("class") ?? "";
-    };
+    expect(thumb, "an image row drew a glyph where its thumbnail should be").not.toBeNull();
+    // Pointed straight at the media route: the session cookie authenticates it, so no
+    // fetch, no blob and no revocation are involved.
+    expect(thumb!.getAttribute("src")).toContain("/api/media/download");
+    expect(thumb!.getAttribute("src")).toContain("uploads%2Fphoto.png");
+    // A pane can list dozens of images; they must not all be requested on mount.
+    expect(thumb!.getAttribute("loading")).toBe("lazy");
+  });
 
-    const png = glyphOf("photo.png");
-    const xlsx = glyphOf("sheet.xlsx");
-    expect(png).not.toBe("");
-    expect(xlsx).not.toBe("");
-    expect(png, "an image and a spreadsheet drew the same icon").not.toBe(xlsx);
+  it("draws a type glyph for a file it cannot show", async () => {
+    const pane = await openFilesPane();
+    const row = rowFor(pane, "sheet.xlsx");
+
+    expect(row.querySelector("img"), "a spreadsheet row tried to render itself").toBeNull();
+    // The FIRST svg is the leading mark; the ones after it are the row's controls.
+    expect(row.querySelector("svg")?.getAttribute("class") ?? "").not.toBe("");
   });
 });
 

@@ -31,6 +31,7 @@ import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar, { type Section } from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { useFileDrop, type DroppedFiles } from "@/app/chat/use-file-drop";
 import { resolveMentions, type MentionCandidate } from "@/lib/fileMentions";
 import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { TagChip } from "@/app/chat/conversation-enrichment";
@@ -579,8 +580,12 @@ export default function ChatView({
     }
   }
 
-  async function uploadFiles(files: FileList) {
-    setAttachError(null);
+  // `pending` is an error the caller already has — a dropped folder, refused before
+  // any upload starts. It is applied here because this function clears the alert on
+  // entry, and an upload FAILURE legitimately replaces it: the file that could not be
+  // stored is the more actionable of the two.
+  async function uploadFiles(files: FileList | File[], pending: string | null = null) {
+    setAttachError(pending);
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
@@ -595,6 +600,16 @@ export default function ChatView({
       setUploading(false);
     }
   }
+
+  // Files dragged in from outside the browser attach exactly as the paperclip's do
+  // — the member aimed at the conversation, so the point is to talk about them.
+  function onDropped({ files, directories }: DroppedFiles) {
+    const refusal = directories.length ? "media_directory" : null;
+    if (files.length) void uploadFiles(files, refusal);
+    else setAttachError(refusal);
+  }
+
+  const drop = useFileDrop(onDropped, loadingHistory);
 
   function removeAttachment(path: string) {
     setAttachments((prev) => prev.filter((a) => a.path !== path));
@@ -789,6 +804,7 @@ export default function ChatView({
       attachments={attachments}
       uploading={uploading}
       attachError={attachError ? errorText(err, attachError) : null}
+      workspace={workspace}
       onPickFiles={uploadFiles}
       onRemoveAttachment={removeAttachment}
       replyTo={replyTo}
@@ -801,7 +817,17 @@ export default function ChatView({
 
   return (
     <div className="flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* The whole column is the drop target, not the composer: a member aims at the
+          conversation, and a small target means most drops land outside it — where the
+          hook's window guard swallows them silently. */}
+      <div className="relative flex min-w-0 flex-1 flex-col" {...drop.dropProps}>
+        {drop.over && (
+          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-bg/80">
+            <span className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-fg shadow-lg">
+              {t.composer.dropToAttach}
+            </span>
+          </div>
+        )}
       <div
         className={`flex items-center gap-2 border-b border-brand/30 px-4 py-2 ${PANEL_HEADER_H}`}
       >
@@ -1017,14 +1043,17 @@ export default function ChatView({
                         </div>
                         {text && <MessageContent content={text} />}
                         {refs.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          // Scrolls sideways rather than wrapping, for the reason the
+                          // composer's row does — and with the precedent a wide table
+                          // and a code block already set inside a message.
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                             {refs.map((ref) => (
                               <AttachmentButton
                                 key={ref.path}
                                 workspace={workspace}
                                 path={ref.path}
                                 name={ref.name}
-                                tone="chip"
+                                tone="card"
                               />
                             ))}
                           </div>
@@ -1126,14 +1155,17 @@ export default function ChatView({
                       <div className="relative mx-auto w-full max-w-[720px] px-4">
                         {text && <MessageContent content={text} />}
                         {refs.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          // Scrolls sideways rather than wrapping, for the reason the
+                          // composer's row does — and with the precedent a wide table
+                          // and a code block already set inside a message.
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                             {refs.map((r) => (
                               <AttachmentButton
                                 key={r.path}
                                 workspace={workspace}
                                 path={r.path}
                                 name={r.name}
-                                tone="chip"
+                                tone="card"
                               />
                             ))}
                           </div>

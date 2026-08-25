@@ -92,7 +92,11 @@ const en = {
     placeholder: "Message your agent…",
     placeholderHint: "Message your agent…  (Shift+Enter for a new line)",
     attach: "Attach file",
-    otherTypes: "Other types",
+    uploading: "Uploading…",
+    anyFile: "Any file",
+    // The overlay shown while files from outside the browser are held over the
+    // conversation.
+    dropToAttach: "Drop to attach to this message",
     advancedEditor: "Advanced markdown editor",
     send: "Send message",
     // Honest, not decorative: the turn is really aborted upstream and rolled out
@@ -701,6 +705,9 @@ const en = {
   uploads: {
     newFolder: "New folder",
     upload: "Upload",
+    // Files dragged in from outside the browser land in the workspace without
+    // going through a message — this pane is filing, not composing.
+    dropToUpload: "Drop to add to this workspace",
     // The system folder's DISPLAYED name. The path on disk stays `attachments` —
     // the proxy owns it — so this is a label, never a rename.
     attachmentsFolder: "Agent deliveries",
@@ -860,7 +867,9 @@ const pt: ChatDict = {
     placeholder: "Escreva para o seu agente…",
     placeholderHint: "Escreva para o seu agente…  (Shift+Enter para nova linha)",
     attach: "Anexar arquivo",
-    otherTypes: "Outros tipos",
+    uploading: "Enviando…",
+    anyFile: "Qualquer arquivo",
+    dropToAttach: "Solte para anexar a esta mensagem",
     advancedEditor: "Editor markdown avançado",
     send: "Enviar mensagem",
     stop: "Parar a geração",
@@ -1336,6 +1345,7 @@ const pt: ChatDict = {
   uploads: {
     newFolder: "Nova pasta",
     upload: "Enviar",
+    dropToUpload: "Solte para adicionar a este workspace",
     attachmentsFolder: "Entregas do agente",
     systemFolder: "Gerenciada pelo sistema",
     newFolderPrompt: "Nome da pasta",

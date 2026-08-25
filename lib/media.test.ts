@@ -2,7 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   attachmentName,
   canDrop,
+  droppedDirectories,
   dropTarget,
+  isExternalFileDrag,
+  pastedFileName,
+  renamedFile,
   parseAnexos,
   isInsideReserved,
   isReservedFolder,
@@ -164,5 +168,88 @@ describe("public/ and its legacy uploads/ name", () => {
   it("does not strip a folder that merely starts with the word", () => {
     // `publicity/` is a folder a member could plausibly create.
     expect(attachmentName("public/publicity/plan.md")).toBe("publicity/plan.md");
+  });
+});
+
+// paste-and-drop-upload. The naming rule is the load-bearing one: every clipboard
+// screenshot is called `image.png`, and StoreMedia's O_TRUNC turns "same name"
+// into "overwrite" without a word to anyone.
+describe("pastedFileName", () => {
+  const at = new Date(2026, 7, 24, 14, 22, 33); // 2026-08-24 14:22:33, local
+
+  it("names a screenshot after the moment it was pasted", () => {
+    const png = new File([""], "image.png", { type: "image/png" });
+    expect(pastedFileName(png, at)).toBe("pasted-20260824-142233.png");
+  });
+
+  it("gives two pastes of the identically-named file different names", () => {
+    const a = new File([""], "image.png", { type: "image/png" });
+    const b = new File([""], "image.png", { type: "image/png" });
+    const later = new Date(2026, 7, 24, 14, 22, 34);
+    expect(pastedFileName(a, at)).not.toBe(pastedFileName(b, later));
+  });
+
+  it("falls back to the original extension when the type is unknown", () => {
+    const f = new File([""], "reads.fastq", { type: "" });
+    expect(pastedFileName(f, at)).toBe("pasted-20260824-142233.fastq");
+  });
+
+  it("emits no trailing dot when there is no extension anywhere", () => {
+    const f = new File([""], "Makefile", { type: "" });
+    expect(pastedFileName(f, at)).toBe("pasted-20260824-142233");
+  });
+});
+
+describe("renamedFile", () => {
+  // `File.name` is read-only: a mutation would no-op and the collision would only
+  // show up on the server, as a lost file.
+  it("returns a copy carrying the new name, the type and the bytes", async () => {
+    const original = new File(["hello"], "image.png", { type: "image/png" });
+    const renamed = renamedFile(original, "pasted-20260824-142233.png");
+    expect(renamed.name).toBe("pasted-20260824-142233.png");
+    expect(renamed.type).toBe("image/png");
+    expect(await renamed.text()).toBe("hello");
+  });
+});
+
+describe("isExternalFileDrag", () => {
+  it("is true for a drag carrying files", () => {
+    expect(isExternalFileDrag({ types: ["Files"] } as unknown as DataTransfer)).toBe(true);
+  });
+
+  // The sidebar's own rows set `text/plain` — that drag is a move, and treating it
+  // as an upload would light up a zone that then does nothing.
+  it("is false for the sidebar's internal row drag", () => {
+    expect(isExternalFileDrag({ types: ["text/plain"] } as unknown as DataTransfer)).toBe(false);
+  });
+
+  it("is false for nothing at all", () => {
+    expect(isExternalFileDrag(null)).toBe(false);
+  });
+});
+
+describe("droppedDirectories", () => {
+  const dir = new File([], "reports", { type: "" });
+  const file = new File(["x"], "q1.pdf", { type: "application/pdf" });
+
+  it("believes webkitGetAsEntry when it is available", () => {
+    const dt = {
+      files: [dir, file],
+      items: [
+        { webkitGetAsEntry: () => ({ isDirectory: true }) },
+        { webkitGetAsEntry: () => ({ isDirectory: false }) },
+      ],
+    } as unknown as DataTransfer;
+    expect(droppedDirectories(dt)).toEqual(["reports"]);
+  });
+
+  it("falls back to zero bytes and no type", () => {
+    const dt = { files: [dir, file], items: [] } as unknown as DataTransfer;
+    expect(droppedDirectories(dt)).toEqual(["reports"]);
+  });
+
+  it("finds nothing in an ordinary drop", () => {
+    const dt = { files: [file], items: [] } as unknown as DataTransfer;
+    expect(droppedDirectories(dt)).toEqual([]);
   });
 });
