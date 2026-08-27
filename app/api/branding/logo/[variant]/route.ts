@@ -27,8 +27,8 @@ const MAX_BYTES = 1024 * 1024; // ~1MB cap; large uploads are rejected 400.
 // endpoint used to 302 to the static file when unset, which put a redirect in the
 // middle of every manifest-icon fetch (pwa-installability).
 const DEFAULTS: Record<BrandImage, { file: string; type: string }> = {
-  light: { file: "logo-light.jpg", type: "image/jpeg" },
-  dark: { file: "logo-dark.jpg", type: "image/jpeg" },
+  light: { file: "logo-light.png", type: "image/png" },
+  dark: { file: "logo-dark.png", type: "image/png" },
   icon: { file: "icon-512.png", type: "image/png" },
 };
 
