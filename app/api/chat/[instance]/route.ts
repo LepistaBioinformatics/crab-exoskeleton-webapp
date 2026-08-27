@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { fetchMyceliumStream } from "@/lib/mycelium-stream";
 import { clearSession, getSession } from "@/lib/session";
 
 export async function POST(
@@ -32,7 +33,10 @@ export async function POST(
 
   let res: Response;
   try {
-    res = await fetchMycelium(`/${instance}/v1/chat/completions`, {
+    // fetchMyceliumStream, not fetchMycelium: this body is legitimately silent for
+    // minutes while the agent thinks, and the default client aborts it at 300s --
+    // measured, see the comment on that function.
+    res = await fetchMyceliumStream(`/${instance}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -82,6 +86,13 @@ export async function POST(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      // Inert today and deliberately kept: Traefik fronts this app and does not
+      // buffer responses, so nothing currently reads this. It is a guard against an
+      // nginx-shaped hop being introduced later, which would hold the whole stream
+      // and release it at the end -- turning progressive delivery into a single blob
+      // and presenting as the exact bug turn-stream-continuity exists to fix. One
+      // header is cheaper than diagnosing that a second time.
+      "X-Accel-Buffering": "no",
     },
   });
 }

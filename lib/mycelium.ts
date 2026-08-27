@@ -85,6 +85,7 @@ export async function fetchMycelium(
   }
 }
 
+
 // JSON-RPC 2.0 call to mycelium's /_adm/rpc, mirroring the reference
 // mycelium-webapp `rpcCall`. The beginners account endpoints must go over RPC
 // for an internal (magic-link) user: the REST create_default_account is

@@ -41,6 +41,84 @@ const RETRY_MAX_MS = 30000;
 const retryDelay = (attempt: number) => Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// ---------------------------------------------------------------------------
+// Waking a wait when the network comes back (turn-stream-continuity Group D)
+// ---------------------------------------------------------------------------
+
+// `recover` polls blind: it sleeps a fixed interval and tries again, and nothing
+// listens for the member's connection actually returning. Someone leaving a tunnel
+// waits up to a whole interval past the moment they were reachable again, and a
+// backgrounded mobile tab is worse — browsers throttle timers there, so the poll
+// they come back to can be minutes stale.
+//
+// These are the resolvers of every interruptible sleep currently parked. Waking one
+// takes the next sample immediately; it never extends the wait, because the budget
+// that bounds a recovery is wall-clock.
+const wakers = new Set<() => void>();
+
+function wakeAll() {
+  for (const wake of [...wakers]) wake();
+}
+
+/**
+ * `sleep`, but it returns early when the browser says the network is back or the tab
+ * became visible. Used by the recovery poll; safe anywhere a wait should not outlive
+ * the condition it is waiting on.
+ */
+function interruptibleSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      wakers.delete(finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    wakers.add(finish);
+  });
+}
+
+// Registered once, at module scope, like everything else in this file: the listeners
+// must outlive any component, since the wait they serve already does.
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    notifyNetworkChanged();
+    wakeAll();
+  });
+  window.addEventListener("offline", notifyNetworkChanged);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") wakeAll();
+  });
+}
+
+// `navigator.onLine` is not a store value, so a change to it re-renders nothing on
+// its own. This is the nudge; `useOnline` below is what reads it.
+const networkListeners = new Set<() => void>();
+
+function notifyNetworkChanged() {
+  for (const fn of [...networkListeners]) fn();
+}
+
+/**
+ * Whether the browser believes it has a connection.
+ *
+ * Deliberately used only to SOFTEN a message when it is definitely false, never to
+ * conclude the network is fine: `navigator.onLine` is famously optimistic and reports
+ * a captive portal as online. "Definitely offline" is trustworthy; "online" is not.
+ */
+export function useOnline(): boolean {
+  return useSyncExternalStore(
+    (fn) => {
+      networkListeners.add(fn);
+      return () => networkListeners.delete(fn);
+    },
+    () => (typeof navigator === "undefined" ? true : navigator.onLine),
+    () => true, // server render: never claim the member is offline
+  );
+}
+
 // Reveal pacing is planned per turn, not fixed per tick.
 //
 // The first version ticked every 40ms and let the STEP COUNT follow from the
@@ -559,7 +637,10 @@ async function recover(sid: string, ctx: RunContext, preRead?: number | null) {
   const deadline = Date.now() + RECOVERY_BUDGET_MS;
   try {
     while (Date.now() < deadline) {
-      await sleep(RECOVERY_POLL_MS);
+      // Interruptible: `online` or a tab becoming visible takes the next sample at
+      // once. The deadline is wall-clock, so waking early samples sooner and can
+      // never extend the wait.
+      await interruptibleSleep(RECOVERY_POLL_MS);
       const length = await transcriptLength(sid, ctx);
       if (length === null) continue; // one lost sample, not a failure
       if (baseline === null) {
