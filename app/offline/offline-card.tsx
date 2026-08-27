@@ -15,11 +15,11 @@ export default function OfflineCard() {
     <Surface bordered className="flex w-[380px] flex-col items-center gap-4 p-8 text-center">
       <span className="contents [@media(prefers-color-scheme:dark)]:hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-light.jpg" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
+        <img src="/logo-light.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
       </span>
       <span className="hidden [@media(prefers-color-scheme:dark)]:contents">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-dark.jpg" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
+        <img src="/logo-dark.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
       </span>
       <div className="flex items-center gap-2 text-fg-muted">
         <WifiOff size={18} aria-hidden />
