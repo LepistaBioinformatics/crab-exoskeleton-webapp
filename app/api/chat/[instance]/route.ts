@@ -82,6 +82,13 @@ export async function POST(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      // Inert today and deliberately kept: Traefik fronts this app and does not
+      // buffer responses, so nothing currently reads this. It is a guard against an
+      // nginx-shaped hop being introduced later, which would hold the whole stream
+      // and release it at the end -- turning progressive delivery into a single blob
+      // and presenting as the exact bug turn-stream-continuity exists to fix. One
+      // header is cheaper than diagnosing that a second time.
+      "X-Accel-Buffering": "no",
     },
   });
 }

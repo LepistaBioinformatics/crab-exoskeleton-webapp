@@ -418,6 +418,11 @@ const en = {
     // member is now waiting on a different thing, and the honest line is also the
     // reassuring one.
     recovering: "Connection dropped — the agent is still working. Fetching the reply…",
+    // turn-stream-continuity FR-22: the member's OWN device has no connection.
+    // Distinct from `recovering`, which says we lost the stream but can still reach
+    // the gateway — different problem, different action. Reading them as the same
+    // thing is what makes a tunnel feel like a broken app.
+    offline: "You're offline — the agent is still working. Reconnecting when your connection returns…",
     // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
@@ -1117,6 +1122,7 @@ const pt: ChatDict = {
     thinking: "Pensando…",
     working: "Ainda trabalhando…",
     recovering: "A conexão caiu — o agente continua trabalhando. Buscando a resposta…",
+    offline: "Você está sem conexão — o agente continua trabalhando. Reconectando assim que a internet voltar…",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
     stepOne: "1 passo",

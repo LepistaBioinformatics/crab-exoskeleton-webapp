@@ -26,7 +26,7 @@
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
 import { Brain, Loader2, Wrench } from "lucide-react";
-import { SILENCE_GRACE_MS, type Progress } from "@/app/chat/turn-store";
+import { SILENCE_GRACE_MS, useOnline, type Progress } from "@/app/chat/turn-store";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
 
@@ -182,10 +182,21 @@ export default function TurnProgress({
 export function TurnRecovery({ since }: { since: number }) {
   const t = useT(chatCopy);
   const elapsed = useElapsed(since);
+  // FR-22. Two waits that look identical to the member today, and they are not the
+  // same thing: `recovering` means we lost the stream but can still reach the
+  // gateway, `offline` means their device has no connection at all. The action
+  // differs, so the sentence must.
+  //
+  // Only the definitely-false direction is trusted — see useOnline. A captive portal
+  // reports as online, and in that case the member simply sees the ordinary
+  // recovering line, which is not wrong.
+  const online = useOnline();
   return (
     <div className={progressLine({ kind: "recovering" })} aria-live="polite">
       <Loader2 size={14} aria-hidden className="animate-spin motion-reduce:animate-none" />
-      <span className="animate-fade-in motion-reduce:animate-none">{t.view.recovering}</span>
+      <span className="animate-fade-in motion-reduce:animate-none">
+        {online ? t.view.recovering : t.view.offline}
+      </span>
       <span className="ml-auto tabular-nums text-xs opacity-60">{formatElapsed(elapsed)}</span>
     </div>
   );
