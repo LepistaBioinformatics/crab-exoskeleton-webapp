@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import { fetchMyceliumStream } from "@/lib/mycelium-stream";
 import { clearSession, getSession } from "@/lib/session";
 
 export async function POST(
@@ -32,7 +33,10 @@ export async function POST(
 
   let res: Response;
   try {
-    res = await fetchMycelium(`/${instance}/v1/chat/completions`, {
+    // fetchMyceliumStream, not fetchMycelium: this body is legitimately silent for
+    // minutes while the agent thinks, and the default client aborts it at 300s --
+    // measured, see the comment on that function.
+    res = await fetchMyceliumStream(`/${instance}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
