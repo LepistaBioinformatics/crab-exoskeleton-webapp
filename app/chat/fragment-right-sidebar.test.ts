@@ -25,7 +25,10 @@ describe("rs survives the trip back", () => {
   });
 
   it("is parsed back out of the hash", () => {
-    for (const section of ["menu", "graph", "memory", "tasks", "files"]) {
+    // `secrets` is in the list because it stopped being a drawer with local state
+    // and became a section like the rest (right-rail-discoverability FR-3.3): its
+    // pane now survives a reload and travels in a shared link.
+    for (const section of ["menu", "graph", "memory", "tasks", "files", "secrets"]) {
       setRightSidebar(section);
       expect(readFragmentForTest().rs).toBe(section);
     }

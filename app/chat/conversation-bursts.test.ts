@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildEvents,
   aggregateBursts,
-  deriveLanes,
   laneColorFor,
   type TreeEvent,
   type Burst,
@@ -87,47 +86,6 @@ describe("aggregateBursts", () => {
     ];
     const bursts = aggregateBursts(events);
     expect(bursts.map((x) => x.isLatest)).toEqual([true, true, false]);
-  });
-});
-
-describe("deriveLanes", () => {
-  const burst = (conversationId: string, ts: number, count: number): Burst => ({
-    conversationId, label: conversationId, text: "m", anchor: iso(ts), startAnchor: iso(ts),
-    ts, count, isLatest: true,
-  });
-
-  it("groups bursts into one lane per conversation, ordered by first activity", () => {
-    const { lanes, tMin, tMax, range, overflow } = deriveLanes(
-      [burst("b", 3000, 1), burst("a", 1000, 2), burst("a", 5000, 1)],
-      40,
-    );
-    expect(lanes.map((l) => l.id)).toEqual(["a", "b"]); // a starts first (1000)
-    const a = lanes[0];
-    expect(a.firstT).toBe(1000);
-    expect(a.lastT).toBe(5000);
-    expect(a.totalMsgs).toBe(3);
-    expect(tMin).toBe(1000);
-    expect(tMax).toBe(5000);
-    expect(range).toBe(4000);
-    expect(overflow).toBe(0);
-  });
-
-  it("collapses the quietest lanes past the cap, keeping first-activity order", () => {
-    const { lanes, overflow } = deriveLanes(
-      [burst("c1", 100, 1), burst("c2", 200, 5), burst("c3", 300, 3)],
-      2,
-    );
-    expect(overflow).toBe(1); // c1 (fewest messages) dropped
-    expect(lanes.map((l) => l.id)).toEqual(["c2", "c3"]); // still ordered by firstT
-  });
-
-  it("handles an empty burst list without dividing by zero", () => {
-    const { lanes, tMin, tMax, range, overflow } = deriveLanes([], 40);
-    expect(lanes).toEqual([]);
-    expect(tMin).toBe(0);
-    expect(tMax).toBe(1);
-    expect(range).toBe(1);
-    expect(overflow).toBe(0);
   });
 });
 

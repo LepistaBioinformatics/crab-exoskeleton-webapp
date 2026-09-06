@@ -52,10 +52,6 @@ export interface FragmentState {
   // keeping both would have left two owners of the same state, disagreeing the moment a
   // second tab was opened. Same migration the history view mode already went through.
   rs?: string;
-  // Top-level workspace view ("canvas"); when set, the Canvas timeline replaces
-  // the history sidebar + chat view. Persisted in the URL so a reload or shared
-  // link keeps it. Absent means the traditional chat.
-  view?: string;
 }
 
 export function fragmentHash(workspace: Workspace, sid: string): string {
@@ -125,7 +121,6 @@ function readFragment(): FragmentState {
     p: params.get("p") ?? undefined,
     msg: params.get("msg") ?? undefined,
     hv: params.get("hv") ?? undefined,
-    view: params.get("view") ?? undefined,
     rs: params.get("rs") ?? undefined,
   };
 }
@@ -169,18 +164,6 @@ export function setHistoryView(view: "list" | "tree"): void {
   window.location.hash = params.toString();
 }
 
-// Persists the top-level workspace view in the URL. Same assign-`location.hash`
-// mechanism as setHistoryView so a native `hashchange` fires and the address bar
-// updates; other params (t/s/r/sid/hv) are preserved. "chat" is the default, so
-// it's dropped from the hash to keep it clean; entering canvas drops the
-// transient scroll anchor (`msg`).
-export function setView(view: "chat" | "canvas"): void {
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  if (view === "canvas") params.set("view", "canvas");
-  else params.delete("view");
-  params.delete("msg");
-  window.location.hash = params.toString();
-}
 
 // Persists the right sidebar in the URL: `null` closes it, "menu" opens it on the
 // section list, and a section name opens it there.

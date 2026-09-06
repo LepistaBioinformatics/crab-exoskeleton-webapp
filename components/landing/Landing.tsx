@@ -10,7 +10,6 @@ import { landingCopy } from "@/lib/i18n/landing";
 import styles from "./landing.module.css";
 import {
   HeroArt,
-  CanvasMini,
   TreeMini,
   InjectionFlow,
   ComponentMap,
@@ -192,13 +191,6 @@ export default function Landing() {
               <NextNudge href="#s2" label={t.thought.next} />
             </div>
             <div className={styles.artCol} data-reveal>
-              <div className={styles.panel}>
-                <CanvasMini label={t.diagrams.canvas} />
-                <div className={styles.panelCaption}>
-                  {t.thought.canvasCaption}
-                </div>
-              </div>
-              <div style={{ height: "1rem" }} />
               <div className={styles.panel}>
                 <TreeMini label={t.diagrams.tree} />
                 <div className={styles.panelCaption}>

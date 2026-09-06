@@ -81,7 +81,7 @@ async function mount(): Promise<HTMLElement> {
         workspace={workspace}
         refreshSignal={0}
         onClose={() => {}}
-        initialSection="files"
+        section="files"
       />,
     );
   });
@@ -121,7 +121,9 @@ async function drop(el: Element, dt: unknown) {
 
 /** The row whose visible label is `name` — folders render their path. */
 function folderRow(host: HTMLElement, name: string): Element {
-  const label = [...host.querySelectorAll("span")].find((s) => s.textContent === name);
+  // A previewable file's name is a BUTTON (it opens the document); a folder's and an
+  // unpreviewable file's is a span. The row is the same either way.
+  const label = [...host.querySelectorAll("span, button")].find((s) => s.textContent === name);
   if (!label) throw new Error(`no row labelled ${name}`);
   const row = label.closest("[draggable]");
   if (!row) throw new Error(`row ${name} has no drop target`);

@@ -82,12 +82,13 @@ function maxDetailHeight(): number {
 export default function MemoryGraphPanel({
   workspace,
   active,
+  refreshSignal = 0,
   onReference,
 }: {
   workspace: Workspace;
   /**
-   * Puts the open entity in the composer's reference slot — the same slot scheduled tasks and
-   * Canvas spans use. Absent when there is no chat to reference into.
+   * Puts the open entity in the composer's reference slot — the same slot a scheduled
+   * task uses. Absent when there is no chat to reference into.
    */
   onReference?: (ref: EntityReference) => void;
   /**
@@ -96,6 +97,12 @@ export default function MemoryGraphPanel({
    * workspace change even for a member who never opens it.
    */
   active: boolean;
+  /**
+   * Bumped by the panel header's refresh control. In the deps of every fetch below,
+   * for the same reason `active` is: the agent writes to this graph while the member
+   * is reading it, and arriving at the section was the only thing that re-read it.
+   */
+  refreshSignal?: number;
 }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -215,7 +222,7 @@ export default function MemoryGraphPanel({
     // Primitives, NOT `workspace`: ChatShell rebuilds that object on every one of its
     // own renders, so depending on its identity re-fetches on any unrelated re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, mode, workspace.t, workspace.s, workspace.r, workspace.p]);
+  }, [active, mode, refreshSignal, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   useEffect(() => {
     if (!active || mode !== "recent") return;
@@ -236,7 +243,7 @@ export default function MemoryGraphPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, mode, workspace.t, workspace.s, workspace.r, workspace.p]);
+  }, [active, mode, refreshSignal, workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // The map's content search. Only the NAMES of the hits are kept — see `matchNames`.
   //

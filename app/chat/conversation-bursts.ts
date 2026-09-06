@@ -99,58 +99,6 @@ export function buildEvents(
 }
 
 // A stable timeline lane: one per conversation, its visits, and its active span.
-export interface ConversationLane {
-  id: string;
-  bursts: Burst[];
-  firstT: number;
-  lastT: number;
-  totalMsgs: number;
-}
-
-// Group bursts into stable per-conversation lanes for the Canvas timeline
-// (canvas-timeline-view). Lanes are ordered by first activity and NEVER pop
-// in/out as the user scrolls — horizontal scroll pages through time, it is not a
-// window filter. When there are more conversations than `maxLanes`, the quietest
-// (fewest messages) collapse out (graceful overflow), à la the tree's lane cap.
-export function deriveLanes(
-  bursts: Burst[],
-  maxLanes: number,
-): { lanes: ConversationLane[]; tMin: number; tMax: number; range: number; overflow: number } {
-  const byConv = new Map<string, Burst[]>();
-  for (const b of bursts) {
-    const arr = byConv.get(b.conversationId);
-    if (arr) arr.push(b);
-    else byConv.set(b.conversationId, [b]);
-  }
-  let lanes: ConversationLane[] = [...byConv.entries()].map(([id, bs]) => {
-    const times = bs.map((b) => b.ts);
-    return {
-      id,
-      bursts: bs,
-      firstT: Math.min(...times),
-      lastT: Math.max(...times),
-      totalMsgs: bs.reduce((s, b) => s + b.count, 0),
-    };
-  });
-  let overflow = 0;
-  if (lanes.length > maxLanes) {
-    overflow = lanes.length - maxLanes;
-    const keep = new Set(
-      [...lanes].sort((a, b) => b.totalMsgs - a.totalMsgs).slice(0, maxLanes).map((l) => l.id),
-    );
-    lanes = lanes.filter((l) => keep.has(l.id));
-  }
-  lanes.sort((a, b) => a.firstT - b.firstT);
-  const allTs = bursts.map((b) => b.ts);
-  const tMin = allTs.length ? Math.min(...allTs) : 0;
-  const tMax = allTs.length ? Math.max(...allTs) : 1;
-  return { lanes, tMin, tMax, range: Math.max(tMax - tMin, 1), overflow };
-}
-
-// Collapse consecutive same-conversation messages into visits. Since events are
-// globally time-sorted (desc), adjacency here means no other conversation's
-// message fell between them -> exactly one visit. The first element of a run is
-// the most recent, so its ts positions the burst.
 export function aggregateBursts(events: TreeEvent[]): Burst[] {
   const bursts: Burst[] = [];
   const seenConv = new Set<string>(); // first burst seen per conv (desc) = its latest

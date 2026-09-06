@@ -80,10 +80,10 @@ export default function ConversationSearchBar({
   const suggestions = useMemo(() => {
     if (!prefix) return [];
     const pool =
-      prefix === "tag" ? tagNames : prefix === "alias" ? aliases : datePresets(t.canvas.today);
+      prefix === "tag" ? tagNames : prefix === "alias" ? aliases : datePresets(t.search.today);
     const needle = partial.toLowerCase();
     return pool.filter((s) => s.toLowerCase().includes(needle)).slice(0, 8);
-  }, [prefix, partial, tagNames, aliases, t.canvas.today]);
+  }, [prefix, partial, tagNames, aliases, t.search.today]);
 
   function applySuggestion(suggestion: string) {
     if (!prefix || !suggestion) return;

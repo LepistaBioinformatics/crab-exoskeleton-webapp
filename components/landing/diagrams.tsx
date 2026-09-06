@@ -19,7 +19,7 @@ import type { LandingDict } from "@/lib/i18n/landing";
 import styles from "./landing.module.css";
 
 // Presentational diagrams for the landing. Each echoes a real product surface:
-// HeroArt/CanvasMini/TreeMini mirror the canvas-timeline lanes and the
+// HeroArt/TreeMini mirror the
 // conversation tree; InjectionFlow mirrors the separate secret channel;
 // ComponentMap mirrors the lepista.com.br zombie-crab stack map; HierarchyTree
 // mirrors the admin scope tree (same lucide icons). Product names are not
@@ -101,51 +101,6 @@ export function HeroArt({ label }: { label: string }) {
           />
         ))}
       </g>
-    </svg>
-  );
-}
-
-export function CanvasMini({ label }: { label: string }) {
-  const lanes = [
-    { y: 40, x2: 250, color: CY, nodes: [40, 110, 180, 250] },
-    { y: 90, x2: 210, color: VI, nodes: [40, 130, 210] },
-    { y: 140, x2: 290, color: CY, nodes: [40, 100, 170, 230, 290] },
-  ];
-  return (
-    <svg
-      className={styles.svg}
-      viewBox="0 0 320 180"
-      role="img"
-      aria-label={label}
-    >
-      <g stroke="rgba(169,136,201,0.18)" strokeWidth={1} strokeDasharray="2 4">
-        {[70, 130, 190, 250].map((x) => (
-          <line key={x} x1={x} y1={16} x2={x} y2={164} />
-        ))}
-      </g>
-      {lanes.map((l, li) => (
-        <g key={li}>
-          <path
-            className={`${styles.line} ${styles.grow}`}
-            pathLength={1}
-            style={d(0.2 + li * 0.25)}
-            stroke={l.color}
-            strokeWidth={2.4}
-            d={`M40 ${l.y} L${l.x2} ${l.y}`}
-          />
-          {l.nodes.map((x, ni) => (
-            <circle
-              key={ni}
-              className={styles.node}
-              style={d(0.4 + li * 0.25 + ni * 0.08)}
-              cx={x}
-              cy={l.y}
-              r={ni === l.nodes.length - 1 ? 5 : 3.4}
-              fill={l.color}
-            />
-          ))}
-        </g>
-      ))}
     </svg>
   );
 }

@@ -74,7 +74,6 @@ export default function UnifiedSidebar({
   resolved,
   workspace,
   project,
-  forceWorkspaces,
   onConversationSelect,
   onCollapse,
   browsing,
@@ -91,12 +90,6 @@ export default function UnifiedSidebar({
   workspace: Workspace | null;
   /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
-  /**
-   * True in the canvas view, which pins the tree. The canvas already lanes every
-   * conversation, so listing them beside it is the same information twice — and
-   * switching agent is the only navigation it still needs.
-   */
-  forceWorkspaces: boolean;
   /**
    * Closes the mobile drawer. Wired to CONVERSATION selection only.
    *
@@ -125,7 +118,7 @@ export default function UnifiedSidebar({
   // The back control was pressed. Deliberately not persisted: a stored panel outlives
   // the fragment that justified it, so a reload or a shared link would open on the
   // wrong one. Everything else is derived.
-  const panel = resolvePanel({ workspace, browsing, forceWorkspaces });
+  const panel = resolvePanel({ workspace, browsing });
 
   // Whether the track may animate. See the `animate` variant for why it starts off.
   //

@@ -40,14 +40,10 @@ const SHARED = new Set([
   // Same loanword, singular -- the eyebrow over the chats sidebar's first section.
   "chat.sections.workspace",
   "chat.uploads.workspace",
-  "chat.viewMode.chat",
-  "chat.viewMode.canvas",
   "chat.markdownEditor.tools.link",
   "chat.search.tag",
   "chat.enrichment.tagsOne",
   "chat.enrichment.tagsOther",
-  "chat.canvas.msgOne",
-  "chat.canvas.msgOther",
   // "cron" and "status" are loanwords Portuguese uses unchanged, and the third is
   // a bare interpolation of a tool's own name — there is no word to translate.
   "chat.scheduledTasks.schedule.cron",

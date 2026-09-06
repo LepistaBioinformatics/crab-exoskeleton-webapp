@@ -34,11 +34,54 @@ describe("previewKind", () => {
     expect(previewKind("Photo.PNG")).toBe("image");
   });
 
+  // FR-4.1 / FR-4.2, and the reason the two BINARY ancestors stay out: mammoth and
+  // exceljs read the zipped XML formats, not `.doc` and `.xls`.
+  it("previews the office formats it can actually read", () => {
+    expect(previewKind("report.docx")).toBe("docx");
+    expect(previewKind("sheet.xlsx")).toBe("xlsx");
+    expect(previewKind("legacy.doc")).toBeNull();
+    expect(previewKind("legacy.xls")).toBeNull();
+  });
+
   it("refuses what it cannot render, so the menu stays download-only", () => {
-    expect(previewKind("sheet.xlsx")).toBeNull();
-    expect(previewKind("doc.docx")).toBeNull();
     expect(previewKind("slides.pptx")).toBeNull();
     expect(previewKind("bundle.zip")).toBeNull();
+    expect(previewKind("archive.tar.gz")).toBeNull();
+  });
+
+  // file-preview-in-pane FR-1.1. The agent writes scripts and configs constantly and
+  // every one of them was download-only, while the chat has highlighted the same
+  // languages in code blocks all along. The list is DERIVED from that highlighter's
+  // alias table rather than written out again here — two lists of languages drift.
+  it("previews any file the chat could already highlight", () => {
+    for (const name of [
+      "run.py",
+      "deploy.sh",
+      "server.ts",
+      "app.jsx",
+      "main.go",
+      "lib.rs",
+      "query.sql",
+      "compose.yml",
+      "pyproject.toml",
+      "settings.ini",
+    ]) {
+      expect(previewKind(name), name).toBe("code");
+    }
+  });
+
+  // FR-1.3, and the line that keeps this expansion honest: `html` maps to the xml
+  // grammar, so it is shown as SOURCE. Nothing a member uploads renders as markup
+  // from this origin — which is the invariant that let the old list stay short.
+  it("shows markup as source, never as markup", () => {
+    expect(previewKind("page.html")).toBe("code");
+    expect(previewKind("feed.xml")).toBe("code");
+  });
+
+  // FR-1.2: plain text with no grammar to colour.
+  it("keeps grammar-less text as text", () => {
+    expect(previewKind("server.log")).toBe("text");
+    expect(previewKind("notes.txt")).toBe("text");
   });
 
   it("handles names with no usable extension", () => {

@@ -39,7 +39,7 @@ describe("files pane controls", () => {
         workspace={workspace}
         refreshSignal={0}
         onClose={() => {}}
-        initialSection="files"
+        section="files"
       />,
     );
 
