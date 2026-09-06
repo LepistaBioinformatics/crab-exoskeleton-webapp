@@ -17,7 +17,7 @@ import { pickResumeCandidate } from "@/app/chat/conversation-filter";
 import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { ArrowDown, Bot, ChevronRight, KeyRound, PanelRight, Reply, User } from "lucide-react";
+import { ArrowDown, Bot, ChevronRight, Reply, User } from "lucide-react";
 import {
   setFragmentSid,
   setFragmentProjectSid,
@@ -26,9 +26,11 @@ import {
   useFragment,
   type Workspace,
 } from "@/app/chat/fragment";
-import ViewModeToggle from "@/app/chat/view-mode-toggle";
-import SecretsDrawer from "@/app/chat/secrets-drawer";
-import UploadsSidebar, { type Section } from "@/app/chat/uploads-sidebar";
+import UploadsSidebar from "@/app/chat/uploads-sidebar";
+import RightRail from "@/app/chat/right-rail";
+import SectionMenu from "@/app/chat/section-menu";
+import { subscribeToPreviewRequests, type PreviewRequest } from "@/app/chat/media-preview-bus";
+import { asSection } from "@/app/chat/workspace-sections";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
 import { useFileDrop, type DroppedFiles } from "@/app/chat/use-file-drop";
@@ -55,7 +57,7 @@ import {
   stopTurn,
   useTurn,
 } from "@/app/chat/turn-store";
-import TurnProgress, { TurnRecovery } from "@/app/chat/turn-progress";
+import TurnProgress, { TurnRecovery, TurnSteering } from "@/app/chat/turn-progress";
 
 // Bands stretch the full width of the message area; the message content itself
 // stays centered at the composer width (an inner max-w wrapper in the render).
@@ -211,9 +213,9 @@ export default function ChatView({
    */
   subscription: string | null;
   /**
-   * The composer's context slot, owned by the shell — see chat-shell. A reference picked
-   * in Canvas has to outlive the view it was picked from, and this component is exactly
-   * what Canvas replaces.
+   * The composer's context slot, owned by the shell — see chat-shell. This component is
+   * keyed on the workspace and unmounts on a switch; a reference held here would go with
+   * it.
    */
   chatRef: ChatReference | null;
   onChatRef: (ref: ChatReference | null) => void;
@@ -230,7 +232,6 @@ export default function ChatView({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const rows = useMemo(() => toRows(messages), [messages]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [secretsOpen, setSecretsOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -244,7 +245,11 @@ export default function ChatView({
   // with the URL, which is how the history view mode is handled too.
   const rightSidebar = fragment?.rs ?? null;
   const filesOpen = rightSidebar !== null;
-  const openSection = rightSidebar === "menu" ? null : (rightSidebar as Section | null);
+  const openSection = asSection(rightSidebar);
+  // A document asked for from the transcript (an attachment chip). Held here because
+  // the panel is a sibling, and kept as the LAST request rather than a boolean: the
+  // panel opens on whichever file was clicked most recently.
+  const [requestedFile, setRequestedFile] = useState<PreviewRequest | null>(null);
   const [mediaRefresh, setMediaRefresh] = useState(0);
   // What `@` can reference. Held HERE rather than in the composer because both need
   // it and they must not disagree: the composer offers the menu, and compose() below
@@ -267,8 +272,19 @@ export default function ChatView({
     revealed,
     progress,
     recovering,
+    steering,
     settling,
   } = turn;
+  // The chip is several components below the markdown renderer; see media-preview-bus
+  // for why this is a channel and not a prop. Opening the files section is part of the
+  // request: a document with no panel around it has nowhere to render.
+  useEffect(() => {
+    return subscribeToPreviewRequests((file) => {
+      setRequestedFile(file);
+      setRightSidebar("files");
+    });
+  }, []);
+
   // Transient feedback for slash commands (/rename, /tag).
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -853,31 +869,12 @@ export default function ChatView({
             {t.view.agentPrefix} {workspace.r}
           </span>
         )}
-        {/* Desktop only. Canvas is already a desktop-only view (chat-shell ignores
-            view=canvas on mobile), so on a phone this control offered a destination the
-            shell would refuse — and it competed for a cramped header. */}
-        <span className="hidden md:inline-flex">
-          <ViewModeToggle view="chat" />
-        </span>
         <div className="flex flex-1 items-center justify-end gap-1">
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.view.secrets}
-            title={t.view.secrets}
-            onClick={() => setSecretsOpen(true)}
-          >
-            <KeyRound size={18} aria-hidden />
-          </IconButton>
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.view.files}
-            title={t.view.files}
-            onClick={() => setRightSidebar(filesOpen ? null : "menu")}
-          >
-            <PanelRight size={18} aria-hidden />
-          </IconButton>
+          {/* Mobile only. On a desktop the rail down the right edge IS this control,
+              always visible and one click from the pane — which is the whole point of
+              right-rail-discoverability. Keeping a header button there too would put
+              back the second door the feature removes. */}
+          <SectionMenu className="md:hidden" open={rightSidebar} onSelect={setRightSidebar} />
         </div>
       </div>
 
@@ -1091,6 +1088,16 @@ export default function ChatView({
                   </div>
                   <div className={`${messageBand({ role: "assistant" })} ${bandPad(false)}`}>
                     <div className="relative mx-auto w-full max-w-[720px] px-4">
+                      {/* ABOVE both arms, not inside either: the message was folded
+                          into a turn that was already running, and that fact holds
+                          whether the other turn is still narrating or already
+                          answering. It explains the wait; the arms below still show
+                          whatever that turn is doing. */}
+                      {steering && (
+                        <div className="mb-2">
+                          <TurnSteering />
+                        </div>
+                      )}
                       {revealed === "" ? (
                         // Before the first word: progress only. The two never
                         // share the band. A recovery REPLACES progress rather than
@@ -1251,17 +1258,16 @@ export default function ChatView({
           refreshSignal={mediaRefresh}
           onClose={() => setRightSidebar(null)}
           onReference={onChatRef}
-          initialSection={openSection}
+          section={openSection}
           onSectionChange={(next) => setRightSidebar(next ?? "menu")}
+          openFile={requestedFile}
+          onRestartNeeded={onRestartNeeded}
         />
       )}
 
-      <SecretsDrawer
-        workspace={workspace}
-        open={secretsOpen}
-        onClose={() => setSecretsOpen(false)}
-        onRestartNeeded={onRestartNeeded}
-      />
+      {/* LAST, so the sidebar opens to its left and the rail never moves. A control
+          that shifts when you use it is a control you have to find twice. */}
+      <RightRail open={rightSidebar} onSelect={setRightSidebar} />
 
     </div>
   );

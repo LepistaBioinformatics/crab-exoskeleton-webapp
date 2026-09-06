@@ -25,7 +25,7 @@
 
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Brain, Loader2, Wrench } from "lucide-react";
+import { Brain, Loader2, Merge, Wrench } from "lucide-react";
 import { SILENCE_GRACE_MS, useOnline, type Progress } from "@/app/chat/turn-store";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -47,6 +47,9 @@ export const progressLine = cva(
         // Louder than `waiting`: it reports something that happened, not just that
         // we are still here.
         recovering: "text-fg-muted",
+        // Same weight as `recovering`, and for the same reason: it explains the wait
+        // rather than narrating work.
+        steering: "text-fg-muted",
       },
       stalled: {
         true: "progress-stalled",
@@ -198,6 +201,25 @@ export function TurnRecovery({ since }: { since: number }) {
         {online ? t.view.recovering : t.view.offline}
       </span>
       <span className="ml-auto tabular-nums text-xs opacity-60">{formatElapsed(elapsed)}</span>
+    </div>
+  );
+}
+
+/**
+ * This message was folded into a turn that was already running.
+ *
+ * No spinner and no elapsed readout, unlike `TurnRecovery`: nothing here is waiting
+ * on THIS message. It is a standing explanation of whose reply the member is about to
+ * read, and it stays put while the other turn's progress renders beside it.
+ *
+ * See the project repo's .specs/features/steering-messages/investigation.md §6-§7.
+ */
+export function TurnSteering() {
+  const t = useT(chatCopy);
+  return (
+    <div className={progressLine({ kind: "steering" })} aria-live="polite">
+      <Merge size={14} aria-hidden />
+      <span className="animate-fade-in motion-reduce:animate-none">{t.view.steering}</span>
     </div>
   );
 }

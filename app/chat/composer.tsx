@@ -8,7 +8,6 @@ import {
   FileArchive,
   FileText,
   Files,
-  GitBranch,
   Image as ImageIcon,
   Maximize2,
   Network,
@@ -56,7 +55,6 @@ import { useT } from "@/lib/i18n/context";
 const REFERENCE_ICON: Record<ChatReference["kind"], typeof CalendarClock> = {
   task: CalendarClock,
   run: CalendarClock,
-  span: GitBranch,
   entity: Network,
 };
 

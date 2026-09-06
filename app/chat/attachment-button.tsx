@@ -7,7 +7,7 @@ import { Download, Eye, Paperclip } from "lucide-react";
 import { downloadMedia, fileTypeGroup, mediaUrl, previewKind } from "@/lib/media";
 import { FileTypeIcon, formatSize } from "@/app/chat/file-visuals";
 import type { Workspace } from "./fragment";
-import FilePreview from "@/app/chat/file-preview";
+import { requestPreview } from "@/app/chat/media-preview-bus";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
@@ -81,8 +81,12 @@ export default function AttachmentButton({
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewing, setPreviewing] = useState(false);
   const [broken, setBroken] = useState(false);
+
+  // Asks the panel to show it, instead of opening an overlay over the conversation.
+  // `size` is absent for a transcript chip — there is no listing behind it — and the
+  // preview re-checks the fetched bytes anyway.
+  const openInPanel = () => requestPreview({ path, name, size });
   // Null for the formats the webapp cannot show (office documents, archives). The menu
   // then stays the one-item menu it has always been — no disabled entry explaining a
   // rule nobody asked about.
@@ -140,7 +144,7 @@ export default function AttachmentButton({
       // A picture that is already showing has no "show me or save it" ambiguity left,
       // so it opens the full preview; a type tile is not the content, so its click
       // still has a question to ask and keeps the menu.
-      onClick={showsImage ? () => setPreviewing(true) : toggle}
+      onClick={showsImage ? openInPanel : toggle}
       className="block shrink-0 text-left"
       title={caption}
     >
@@ -189,7 +193,7 @@ export default function AttachmentButton({
                   type="button"
                   onClick={() => {
                     setOpen(false);
-                    setPreviewing(true);
+                    openInPanel();
                   }}
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated"
                 >
@@ -212,24 +216,6 @@ export default function AttachmentButton({
           document.body,
         )}
 
-      {/* Portaled for the same reason the menu is: this button lives inside the files
-          sidebar's `overflow-hidden` track, which would clip a fixed overlay rendered
-          in place. */}
-      {previewing &&
-        kind &&
-        createPortal(
-          <FilePreview
-            workspace={workspace}
-            path={path}
-            name={name}
-            kind={kind}
-            // Absent for a transcript chip, which has no listing behind it. The cap
-            // still applies — FilePreview checks the fetched blob as well.
-            size={size}
-            onClose={() => setPreviewing(false)}
-          />,
-          document.body,
-        )}
     </span>
   );
 }

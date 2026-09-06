@@ -3,24 +3,13 @@ import type { TaskReference } from "@/lib/cronTasks";
 
 // What the next message will carry besides the prose the member types.
 //
-// Held above ChatView (in the shell) rather than inside it, because the Canvas REPLACES
-// the chat view: a reference picked there has to survive the switch back, and a slot that
-// unmounts with the view it was picked from cannot.
+// Held above ChatView (in the shell) rather than inside it: ChatView is keyed on the
+// workspace and unmounts on a switch, and a slot that goes with the view it was picked
+// from loses the reference the member just chose.
 //
 // Every variant serializes to ONE self-contained line and never inlines content. That is
 // the rule the `[anexo: …]` refs and the reply quote already follow — a transcript runs to
 // six figures of bytes, and the agent can read its own store and files anyway.
-
-/** A span of the timeline: one conversation over a window, as Canvas shows it. */
-export interface SpanReference {
-  kind: "span";
-  conversationId: string;
-  title: string;
-  /** Pre-formatted by the caller, which is where the locale lives. */
-  from: string;
-  to: string;
-  messages: number;
-}
 
 /**
  * One entity out of the agent's knowledge graph.
@@ -39,7 +28,7 @@ export interface EntityReference {
   relations: number;
 }
 
-export type ChatReference = TaskReference | SpanReference | EntityReference;
+export type ChatReference = TaskReference | EntityReference;
 
 /** The chip's heading and one-line detail. */
 export function referenceChip(
@@ -56,11 +45,6 @@ export function referenceChip(
       return {
         title: t.scheduledTasks.referencedRun,
         preview: `${ref.name} · ${ref.instant}`,
-      };
-    case "span":
-      return {
-        title: t.canvasActivity.referencedSpan,
-        preview: `${ref.title} · ${ref.from} → ${ref.to}`,
       };
     case "entity":
       return {
@@ -83,8 +67,6 @@ export function buildReferenceMarker(ref: ChatReference, t: ChatDict): string {
       return `[${t.scheduledTasks.markerTask}: "${ref.name}" (${ref.jobId}) — ${ref.schedule}, ${t.scheduledTasks.markerLastRun} ${ref.lastRun}]`;
     case "run":
       return `[${t.scheduledTasks.markerRun}: "${ref.name}" (${ref.jobId}), run ${ref.runId}, ${ref.instant}]`;
-    case "span":
-      return `[${t.canvasActivity.markerSpan}: "${ref.title}" — ${ref.messages} ${t.canvasActivity.markerMessages}, ${ref.from} → ${ref.to}]`;
     // The NAME is the payload: it is the key the agent's own open_nodes takes, so the agent can
     // read the observations rather than being handed a stale copy of them.
     case "entity":

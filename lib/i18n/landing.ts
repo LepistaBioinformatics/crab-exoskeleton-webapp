@@ -22,9 +22,8 @@ const en = {
   thought: {
     index: "01",
     eyebrow: "Lines of thought",
-    title: "Two ways to see how you got here.",
-    body: "Canvas draws every conversation as a lane on a timeline — each message a node, growing left to right as the thought unfolds. Tree turns the same history into branches, so you can see where an idea split and which path you took. The evolution of a thought, made visible.",
-    canvasCaption: "Canvas — conversations as growing timelines",
+    title: "See how you got here.",
+    body: "Tree turns your history into branches, so you can see where an idea split and which path you took. Each message is a node; the shape of the thread is the shape of the thought. The evolution of a thought, made visible.",
     treeCaption: "Tree — where each idea branched",
     next: "A thought you can see is one you'll want to keep",
   },
@@ -158,7 +157,6 @@ const en = {
   // untranslated.
   diagrams: {
     hero: "Branching lines of thought growing like mycelium",
-    canvas: "Canvas timeline: conversations as lanes with message nodes",
     tree: "Conversation tree: an idea branching into paths",
     map: "The zombie-crab stack: components behind a single authenticated gateway",
     graph:
@@ -194,9 +192,8 @@ const pt: LandingDict = {
   thought: {
     index: "01",
     eyebrow: "Linhas de pensamento",
-    title: "Dois jeitos de ver como você chegou aqui.",
-    body: "O Canvas desenha cada conversa como uma trilha numa linha do tempo — cada mensagem um nó, crescendo da esquerda para a direita conforme o pensamento se desenrola. A Árvore transforma o mesmo histórico em ramos, mostrando onde uma ideia se dividiu e qual caminho você seguiu. A evolução de um pensamento, tornada visível.",
-    canvasCaption: "Canvas — conversas como linhas do tempo que crescem",
+    title: "Veja como você chegou aqui.",
+    body: "A Árvore transforma o seu histórico em ramos, mostrando onde uma ideia se dividiu e qual caminho você seguiu. Cada mensagem é um nó; o formato da conversa é o formato do pensamento. A evolução de um pensamento, tornada visível.",
     treeCaption: "Árvore — onde cada ideia se ramificou",
     next: "Um pensamento que você vê é um que vai querer guardar",
   },
@@ -325,8 +322,6 @@ const pt: LandingDict = {
   },
   diagrams: {
     hero: "Linhas de pensamento se ramificando como micélio",
-    canvas:
-      "Linha do tempo do Canvas: conversas como faixas com nós de mensagens",
     tree: "Árvore de conversas: uma ideia se ramificando em caminhos",
     map: "A stack zombie-crab: componentes atrás de um único gateway autenticado",
     graph:

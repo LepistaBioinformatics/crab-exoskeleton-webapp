@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Boxes, Folders, Menu, MessageSquarePlus, MessagesSquare, X } from "lucide-react";
 import {
   useFragment,
-  setView,
   toWorkspace,
   setFragmentProject,
   setFragmentProjectSid,
@@ -21,7 +20,6 @@ import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
 import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
-import CanvasTimeline from "./canvas-timeline";
 import WorkspaceGrid from "./workspace-grid";
 import RestartBanner from "./restart-banner";
 import ResizablePane, { type RailPanel } from "./resizable-pane";
@@ -58,8 +56,7 @@ export default function ChatShell({ email }: { email: string }) {
   const workspace = base ? { ...base, p: project } : null;
   const sessionId = fragment?.sid;
 
-  // Canvas is a desktop-only top-level view; on mobile a shared `view=canvas`
-  // link is ignored and the traditional chat renders (spec edge case).
+  // Drives the turn dock's layout: it docks differently on a phone.
   const [desktop, setDesktop] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -68,8 +65,6 @@ export default function ChatShell({ email }: { email: string }) {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  const canvas = fragment?.view === "canvas" && !!workspace && desktop;
-
   // Bumped whenever something the member did needs a restart (a secret write),
   // so the banner appears at once instead of at its next poll.
   const [restartRefresh, setRestartRefresh] = useState(0);
@@ -127,9 +122,9 @@ export default function ChatShell({ email }: { email: string }) {
   // collapse on an already-collapsed pane — a no-op, so the button a member could
   // plainly see did nothing. Here it can end the preview, which is what it means.
   const [peeking, setPeeking] = useState(false);
-  // The composer's context slot, owned HERE rather than in ChatView: Canvas replaces the
-  // chat view entirely, so a reference picked on the timeline would unmount with the view
-  // it was picked from. Held above both, it survives the switch.
+  // The composer's context slot. Owned here rather than in ChatView because ChatView is
+  // keyed on the workspace and unmounts on a switch; a reference picked before the
+  // switch would go with it.
   const [chatRef, setChatRef] = useState<ChatReference | null>(null);
   // The tree, for the subscription NAME the chat header leads with. Same hook the
   // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
@@ -160,11 +155,7 @@ export default function ChatShell({ email }: { email: string }) {
   const subscription = workspace
     ? accountName(groups, workspace.t, workspace.s)
     : null;
-  const panel = resolvePanel({
-    workspace: workspace ?? null,
-    browsing,
-    forceWorkspaces: canvas,
-  });
+  const panel = resolvePanel({ workspace: workspace ?? null, browsing });
 
   // The rail's content hints.
   //
@@ -289,7 +280,6 @@ export default function ChatShell({ email }: { email: string }) {
             resolved={resolved}
             workspace={workspace}
             project={project}
-            forceWorkspaces={canvas}
             onConversationSelect={closeDrawer}
             // UNDEFINED while collapsed, which OMITS the header's collapse button
             // entirely (the sidebar guards on this prop).
@@ -314,7 +304,7 @@ export default function ChatShell({ email }: { email: string }) {
         </ResizablePane>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          {/* Above both the chat and the canvas: a pending restart is a property
+          {/* Above the chat: a pending restart is a property
               of the workspace, not of the view you happen to be in. */}
           {workspace && (
             // Keyed by the workspace so switching agents remounts it: without
@@ -331,16 +321,6 @@ export default function ChatShell({ email }: { email: string }) {
               <div className="flex h-full items-center justify-center">
                 <Spinner size={28} />
               </div>
-            ) : canvas && workspace ? (
-              <CanvasTimeline
-                workspace={workspace}
-                onReference={(ref) => {
-                  setChatRef(ref);
-                  // Back to the chat, because that is where the composer is — picking a
-                  // reference is the member saying they want to say something about it.
-                  setView("chat");
-                }}
-              />
             ) : workspace ? (
               <ChatView
                 workspace={workspace}

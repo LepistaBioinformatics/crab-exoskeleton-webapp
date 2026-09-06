@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
-import TurnProgress, { TurnRecovery, formatElapsed } from "./turn-progress";
+import TurnProgress, { TurnRecovery, TurnSteering, formatElapsed } from "./turn-progress";
 import { chatCopy } from "@/lib/i18n/chat";
 
 // long-turn-resilience. The band has to look alive between events, not only when one
@@ -78,5 +78,19 @@ describe("TurnRecovery", () => {
     // turn has already outlived a whole stream.
     const html = renderToStaticMarkup(<TurnRecovery since={Date.now()} />);
     expect(html).toContain("tabular-nums");
+  });
+});
+
+// steering-messages §6-§7. A message sent while a turn is already running is folded
+// into that turn by picoclaw, which answers nothing of its own -- and the frames that
+// follow are the OTHER turn's, because the pico channel broadcasts per session. The
+// member is owed the sentence that explains why their message got no reply and why the
+// wait is as long as someone else's turn.
+describe("TurnSteering", () => {
+  it("says the message joined the turn already running", () => {
+    const html = renderToStaticMarkup(<TurnSteering />);
+    expect(html).toContain(en.steering);
+    // Not dressed up as progress: nothing here is the agent working on THIS message.
+    expect(html).not.toContain(en.thinking);
   });
 });

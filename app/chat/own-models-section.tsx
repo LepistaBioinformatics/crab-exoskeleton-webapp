@@ -200,14 +200,14 @@ export default function OwnModelsSection({
   // not make the groups below it jump.
   if (error && state === null) {
     return (
-      <Accordion title={t.heading} summary={t.summaryUnknown} variant="section" defaultOpen>
+      <Accordion title={t.heading} summary={t.summaryUnknown} variant="section">
         <Alert severity="error">{error}</Alert>
       </Accordion>
     );
   }
   if (state === null) {
     return (
-      <Accordion title={t.heading} summary={t.summaryLoading} variant="section" defaultOpen>
+      <Accordion title={t.heading} summary={t.summaryLoading} variant="section">
         <div className="flex justify-center py-2">
           <Spinner size={20} />
         </div>
@@ -230,7 +230,7 @@ export default function OwnModelsSection({
         : t.summaryOrg.replace("{name}", orgName);
 
   return (
-    <Accordion title={t.heading} summary={summary} variant="section" defaultOpen>
+    <Accordion title={t.heading} summary={summary} variant="section">
       {/* What is answering, right now. */}
       <div className="rounded-lg border border-brand/30 bg-elevated px-3 py-2">
         <p className="flex items-center gap-2 text-xs font-medium text-fg">

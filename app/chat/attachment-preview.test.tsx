@@ -3,6 +3,10 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import AttachmentButton from "./attachment-button";
+import {
+  subscribeToPreviewRequests,
+  type PreviewRequest,
+} from "./media-preview-bus";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
 
@@ -89,18 +93,23 @@ describe("an image attachment", () => {
   });
 
   // Clicking a picture means "show it bigger". The menu's two items are preview and
-  // download, and the preview carries download — so the menu has nothing left to ask.
-  it("opens the full preview on click, with no menu in between", async () => {
+  // download, and the panel carries download — so the menu has nothing left to ask.
+  //
+  // file-preview-in-pane FR-3.1: it asks the PANEL to show the file rather than opening
+  // an overlay over the conversation. The chip cannot open anything itself — it is
+  // rendered inside a message, and the panel is a sibling of the whole transcript.
+  it("asks the panel to open it, with no menu and no overlay in between", async () => {
+    const heard: PreviewRequest[] = [];
+    const stop = subscribeToPreviewRequests((f) => heard.push(f));
     const host = await mount({});
     await act(async () => {
       host.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    stop();
 
-    // The full preview, not the two-item menu. Asserted on the dialog rather than on
-    // its copy: FilePreview carries a download control of its own, with the same words
-    // the menu uses.
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(document.querySelectorAll('[role="dialog"] img').length).toBe(1);
+    expect(heard).toHaveLength(1);
+    expect(heard[0].path).toBe("uploads/photo.png");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   // Square and fixed, in both tones. A box that only CAPPED the image took the shape

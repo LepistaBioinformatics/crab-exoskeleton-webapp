@@ -251,7 +251,7 @@ describe("scheduled tasks section", () => {
         workspace={workspace}
         refreshSignal={0}
         onClose={() => {}}
-        initialSection="tasks"
+        section="tasks"
       />,
     );
     expect(
@@ -284,7 +284,7 @@ describe("scheduled tasks section", () => {
         workspace={workspace}
         refreshSignal={0}
         onClose={() => {}}
-        initialSection="tasks"
+        section="tasks"
       />,
     );
     expect(html).toContain(t.scheduledTasks.refreshAria);
@@ -293,39 +293,5 @@ describe("scheduled tasks section", () => {
       html,
       "the tasks panel is showing the files tree's refresh label",
     ).not.toContain(t.uploads.refreshAria);
-  });
-});
-
-// The span variant, added when Canvas gained a way out. Same rule as the other two: one
-// bracketed line, and never the content — a thread's messages are exactly what must not
-// be inlined.
-describe("conversation span markers", () => {
-  const span = {
-    kind: "span" as const,
-    conversationId: "conv-a",
-    title: "Assay pipeline v3",
-    from: "01 Aug",
-    to: "03 Aug",
-    messages: 12,
-  };
-
-  it("names the thread, its window and how much is in it", () => {
-    const marker = buildReferenceMarker(span, t);
-    expect(marker).toContain("Assay pipeline v3");
-    expect(marker).toContain("01 Aug");
-    expect(marker).toContain("03 Aug");
-    expect(marker).toContain("12");
-  });
-
-  it("stays a single bracketed line", () => {
-    const marker = buildReferenceMarker(span, t);
-    expect(marker).not.toContain("\n");
-    expect(marker.startsWith("[")).toBe(true);
-    expect(marker.endsWith("]")).toBe(true);
-  });
-
-  it("is distinguishable from a task or a run reference", () => {
-    expect(buildReferenceMarker(span, t)).toContain(t.canvasActivity.markerSpan);
-    expect(buildReferenceMarker(span, t)).not.toContain(t.scheduledTasks.markerTask);
   });
 });

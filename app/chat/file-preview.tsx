@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Download } from "lucide-react";
 import {
   PREVIEW_TEXT_MAX,
   downloadMedia,
@@ -13,22 +13,28 @@ import {
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
-import { IconButton } from "@/components/ui/icon-button";
+import CodeBlock from "@/app/chat/code-block";
+import { languageForFile } from "@/lib/code-highlight";
+import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { commonCopy } from "@/lib/i18n/common";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
 
 /**
- * A modal that SHOWS a workspace file instead of handing it to the operating system.
+ * SHOWS a workspace file instead of handing it to the operating system.
  *
- * An overlay rather than a third pane in the files sidebar: that sidebar is a two-slot
- * track (`w-[200%]`, slid by exactly half) whose default width is 280px, so a third
+ * A PANE, not a modal. It used to be an overlay, for a reason that has since expired:
+ * "the sidebar is a two-slot track whose default width is 280px, so a third
  * destination would mean reworking its geometry to arrive at a column too narrow to
- * read a document in anyway.
+ * read a document in anyway". The panel now opens at a third of the viewport, and the
+ * document does not need a third slot — it takes the detail slot the tree was using,
+ * which is what lets a member read a document with the conversation still beside it.
+ *
+ * Body only: the panel's own header carries the file name, the back control and the
+ * download button, so this renders content and nothing else.
  *
  * How the bytes arrive differs by kind, and the difference is forced rather than
  * stylistic: an `<img>` may point straight at the media route, but the proxy answers
@@ -42,7 +48,6 @@ export default function FilePreview({
   name,
   kind,
   size,
-  onClose,
 }: {
   workspace: Workspace;
   path: string;
@@ -50,22 +55,30 @@ export default function FilePreview({
   kind: PreviewKind;
   /** From the listing, so an oversized text file is refused before it is fetched. */
   size?: number;
-  onClose: () => void;
 }) {
   const t = useT(chatCopy);
-  const c = useT(commonCopy);
   const err = useT(errorCopy);
   const [text, setText] = useState<string | null>(null);
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  // The two office formats, each read by a library imported only when one is opened.
+  const [docHtml, setDocHtml] = useState<string | null>(null);
+  const [sheets, setSheets] = useState<SheetPreview[] | null>(null);
+  const [sheetIndex, setSheetIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
-  const needsBody = kind === "markdown" || kind === "text";
+  const needsBody = kind === "markdown" || kind === "text" || kind === "code";
+  // Resolved from the NAME, like previewKind itself: the grammar and the decision to
+  // preview at all come from the same table, so they cannot disagree.
+  const language = kind === "code" ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
   // An <img> streams from the route itself, so only the frame and the text bodies
   // are actually loading here.
   const loading = !error && !tooLarge &&
-    ((needsBody && text === null) || (kind === "pdf" && frameUrl === null));
+    ((needsBody && text === null) ||
+      (kind === "pdf" && frameUrl === null) ||
+      (kind === "docx" && docHtml === null) ||
+      (kind === "xlsx" && sheets === null));
 
   useEffect(() => {
     if (tooLarge) return;
@@ -86,6 +99,40 @@ export default function FilePreview({
         })
         .then((body) => {
           if (!cancelled) setText(body);
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setError(e.message);
+        });
+    } else if (kind === "docx") {
+      // mammoth and the sanitizer arrive together and only here: a conversation that
+      // never opens a .docx pays for neither (FR-4.4).
+      fetchMediaBlob(workspace, path)
+        .then(async (blob) => {
+          const [{ convertToHtml }, { sanitizeDocxHtml }] = await Promise.all([
+            import("mammoth/mammoth.browser"),
+            import("@/lib/docx-html"),
+          ]);
+          const { value } = await convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+          // Sanitized before it is ever handed to the DOM — mammoth's output is derived
+          // from the member's own file, which makes it untrusted markup (DEC-4).
+          return sanitizeDocxHtml(value);
+        })
+        .then((html) => {
+          if (!cancelled) setDocHtml(html);
+        })
+        .catch((e: Error) => {
+          if (!cancelled) setError(e.message);
+        });
+    } else if (kind === "xlsx") {
+      fetchMediaBlob(workspace, path)
+        .then(async (blob) => {
+          const { readWorkbook } = await import("@/lib/sheet-preview");
+          return readWorkbook(await blob.arrayBuffer());
+        })
+        .then((read) => {
+          if (cancelled) return;
+          setSheets(read);
+          setSheetIndex(0);
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
@@ -113,16 +160,6 @@ export default function FilePreview({
     // depending on the object would refetch (and re-revoke) on every one. Same idiom
     // uploads-sidebar's listing effect uses.
   }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge]);
-
-  // Esc on the document rather than on the dialog: an image preview has nothing
-  // focusable inside it, so a keydown handler on the dialog would never fire.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   // Relative refs inside the previewed markdown resolve against ITS folder and load
   // through the media route. Memoised because it is a context value read by a
@@ -152,31 +189,7 @@ export default function FilePreview({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="flex h-[min(88vh,900px)] w-[min(1100px,96vw)] flex-col overflow-hidden rounded-2xl border border-brand/40 bg-surface shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t.preview.aria}
-      >
-        <div className="flex shrink-0 items-center gap-2 border-b border-brand/20 px-4 py-2.5">
-          <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg" title={name}>
-            {name}
-          </span>
-          <Button size="sm" variant="outlined" disabled={downloading} onClick={onDownload}>
-            <Download size={14} aria-hidden />
-            {downloading ? t.attachment.downloading : t.attachment.download}
-          </Button>
-          <IconButton variant="ghost" size="sm" aria-label={c.actions.close} onClick={onClose}>
-            <X size={16} aria-hidden />
-          </IconButton>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto bg-bg">
+    <div className="min-h-0 flex-1 overflow-auto bg-bg" aria-label={t.preview.aria}>
           {error && (
             <div className="p-4">
               <Alert severity="error">{errorText(err, error)}</Alert>
@@ -244,13 +257,81 @@ export default function FilePreview({
             </div>
           )}
 
-          {!error && kind === "text" && text !== null && (
-            <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-fg">
-              {text}
-            </pre>
+      {!error && kind === "text" && text !== null && (
+        <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-fg">
+          {text}
+        </pre>
+      )}
+
+      {!error && kind === "docx" && docHtml !== null && (
+        // The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
+        // acceptable is the line above it: what goes in has been through
+        // sanitizeDocxHtml, which is an allowlist and has its own suite.
+        <div
+          className="mx-auto max-w-[820px] px-6 py-5 text-fg docx-body"
+          dangerouslySetInnerHTML={{ __html: docHtml }}
+        />
+      )}
+
+      {!error && kind === "xlsx" && sheets !== null && (
+        <div className="flex h-full min-h-0 flex-col">
+          {sheets.length > 1 && (
+            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-brand/20 px-2 py-1.5">
+              {sheets.map((sheet, i) => (
+                <button
+                  key={sheet.name}
+                  type="button"
+                  aria-current={i === sheetIndex ? "true" : undefined}
+                  onClick={() => setSheetIndex(i)}
+                  className={`shrink-0 rounded-lg px-2 py-1 text-xs transition-colors ${
+                    i === sheetIndex ? "bg-accent text-accent-fg" : "text-fg-muted hover:bg-elevated"
+                  }`}
+                >
+                  {sheet.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-max border-collapse text-xs">
+              <tbody>
+                {(sheets[sheetIndex]?.rows ?? []).map((row, r) => (
+                  <tr key={r} className="even:bg-elevated/40">
+                    {row.map((cell, c) => (
+                      <td
+                        key={c}
+                        className="max-w-[320px] truncate border border-brand/20 px-2 py-1 text-fg"
+                        title={cell}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {sheets[sheetIndex]?.truncated && (
+            <div className="shrink-0 border-t border-brand/20 px-3 py-1.5 text-[11px] text-fg-muted">
+              {t.preview.sheetTruncated.replace("{n}", String(SHEET_ROW_CAP))}
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Code goes through the SAME highlighter the chat's code blocks use, with the
+          grammar resolved from the file's own name. Escaped by highlight.js, which is
+          what makes widening the format list free of the "member bytes never render
+          from this origin" posture — `page.html` arrives here as source. */}
+      {!error && kind === "code" && text !== null && (
+        <div className="p-3">
+          <CodeBlock
+            code={text}
+            className={language ? `language-${language}` : undefined}
+            streaming={false}
+          />
+        </div>
+      )}
     </div>
   );
 }

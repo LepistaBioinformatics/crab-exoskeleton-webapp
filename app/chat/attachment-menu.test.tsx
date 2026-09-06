@@ -67,6 +67,9 @@ describe("the file row's menu", () => {
       "uploads/notes.txt",
       "uploads/rows.csv",
       "uploads/paper.pdf",
+      "uploads/run.py",
+      "uploads/report.docx",
+      "uploads/sheet.xlsx",
     ]) {
       const menu = await openMenu(path);
       expect(menu, path).toContain(t.preview.action);
@@ -82,7 +85,10 @@ describe("the file row's menu", () => {
   // The formats that keep the one-item menu they have always had. No disabled entry:
   // it would explain a rule nobody asked about.
   it("offers only Download for what it cannot show", async () => {
-    for (const path of ["uploads/sheet.xlsx", "uploads/doc.docx", "uploads/bundle.zip"]) {
+    // .docx and .xlsx moved to the other list when the pane learned to read them
+    // (file-preview-in-pane, slice 2); `.doc` and `.xls` are the binary ancestors
+    // neither library reads.
+    for (const path of ["uploads/legacy.doc", "uploads/legacy.xls", "uploads/bundle.zip"]) {
       const menu = await openMenu(path);
       expect(menu, path).toContain(t.attachment.download);
       expect(menu, path).not.toContain(t.preview.action);

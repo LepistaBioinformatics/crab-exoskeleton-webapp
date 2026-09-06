@@ -24,7 +24,6 @@ function render(over: Partial<Parameters<typeof UnifiedSidebar>[0]> = {}) {
       resolved
       workspace={workspace}
       project={null}
-      forceWorkspaces={false}
       browsing={false}
       setBrowsing={() => {}}
       {...over}
@@ -57,12 +56,6 @@ describe("UnifiedSidebar", () => {
 
   it("rests on the workspaces panel before a workspace is chosen", () => {
     expect(trackClasses(render({ workspace: null }))).toContain("translate-x-0");
-  });
-
-  // The canvas already lanes every conversation; switching agent is the only
-  // navigation it needs. It PINS the tree rather than hiding a group.
-  it("pins the workspaces panel in the canvas view", () => {
-    expect(trackClasses(render({ forceWorkspaces: true }))).toContain("translate-x-0");
   });
 
   // The off-screen panel is MOUNTED, so without `inert` its controls stay tabbable and

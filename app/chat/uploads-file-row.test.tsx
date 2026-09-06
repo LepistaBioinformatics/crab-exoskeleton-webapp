@@ -32,7 +32,7 @@ const workspace = { t: "acme", s: "growth", r: "alpha" } as Workspace;
 const LISTING = {
   files: [
     { path: "uploads/photo.png", name: "photo.png", size: 2048 },
-    { path: "uploads/sheet.xlsx", name: "sheet.xlsx", size: 4096 },
+    { path: "uploads/bundle.zip", name: "bundle.zip", size: 4096 },
   ],
 };
 
@@ -63,7 +63,7 @@ async function openFilesPane(): Promise<HTMLElement> {
         workspace={workspace}
         refreshSignal={0}
         onClose={() => {}}
-        initialSection="files"
+        section="files"
       />,
     );
   });
@@ -81,7 +81,7 @@ describe("a file row's controls", () => {
   it("renders the rows the listing returned", async () => {
     const host = await openFilesPane();
     expect(host.textContent).toContain("photo.png");
-    expect(host.textContent).toContain("sheet.xlsx");
+    expect(host.textContent).toContain("bundle.zip");
   });
 
   it("offers preview, download and delete on a previewable file", async () => {
@@ -93,29 +93,31 @@ describe("a file row's controls", () => {
 
   // The one control that is conditional. Download and delete are not: every file can be
   // saved and every file can be removed.
-  it("drops only the preview control on a file it cannot show", async () => {
+  // A file with no preview keeps a plain label rather than a link that does nothing —
+  // and it still downloads and deletes like any other row. (`.xlsx` used to be the
+  // example here; it is previewable now, so the example is an archive.)
+  it("leaves the name unlinked on a file it cannot show", async () => {
     const host = await openFilesPane();
-    expect(byLabel(host, `${t.preview.action} sheet.xlsx`)).toBeNull();
-    expect(byLabel(host, `${t.attachment.download} sheet.xlsx`)).not.toBeNull();
-    expect(byLabel(host, `${t.uploads.deletePrefix} sheet.xlsx`)).not.toBeNull();
+    expect(byLabel(host, `${t.preview.action} bundle.zip`)).toBeNull();
+    expect(byLabel(host, `${t.attachment.download} bundle.zip`)).not.toBeNull();
+    expect(byLabel(host, `${t.uploads.deletePrefix} bundle.zip`)).not.toBeNull();
   });
 
-  // Clicking preview must reach the overlay — the row holds the state, so a wiring
-  // mistake here would leave a button that does nothing.
-  it("opens the preview overlay when preview is clicked", async () => {
+  // file-preview-in-pane: the document opens IN the panel, in place of the tree, so the
+  // conversation stays where it was. There is no overlay to portal any more, and no eye
+  // icon to find first — the name is the control.
+  it("opens the document in the panel when the name is clicked", async () => {
     const host = await openFilesPane();
     const button = byLabel(host, `${t.preview.action} photo.png`);
     await act(async () => {
       button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    // The overlay is portaled out of the panel, so it is on <body>, not under `host`.
-    // `preview.aria` is the dialog's LABEL, not its text — reading it off the attribute
-    // is what proves this is the preview and not some other dialog.
-    const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(dialog?.getAttribute("aria-label")).toBe(t.preview.aria);
-    // …and that it is showing the file the row was for.
-    expect(dialog?.textContent).toContain("photo.png");
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    // The panel's header now names the open document, and the preview region is
+    // labelled inside the panel rather than portaled to <body>.
+    expect(host.querySelector(`[aria-label="${t.preview.aria}"]`)).not.toBeNull();
+    expect(host.textContent).toContain("photo.png");
   });
 });
 
@@ -152,9 +154,9 @@ describe("a row's leading mark", () => {
 
   it("draws a type glyph for a file it cannot show", async () => {
     const pane = await openFilesPane();
-    const row = rowFor(pane, "sheet.xlsx");
+    const row = rowFor(pane, "bundle.zip");
 
-    expect(row.querySelector("img"), "a spreadsheet row tried to render itself").toBeNull();
+    expect(row.querySelector("img"), "an archive row tried to render itself").toBeNull();
     // The FIRST svg is the leading mark; the ones after it are the row's controls.
     expect(row.querySelector("svg")?.getAttribute("class") ?? "").not.toBe("");
   });

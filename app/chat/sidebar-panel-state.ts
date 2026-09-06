@@ -13,7 +13,6 @@ export type SidebarPanel = "workspaces" | "chats";
 export function resolvePanel({
   workspace,
   browsing,
-  forceWorkspaces,
 }: {
   /** From the URL fragment. Null until one is chosen (or until the hash is read). */
   workspace: Workspace | null;
@@ -23,13 +22,7 @@ export function resolvePanel({
    * chat on the right never blanks and the link stays shareable.
    */
   browsing: boolean;
-  /**
-   * The canvas view. It already lanes every conversation, so listing them beside it
-   * is the same information twice; switching agent is the only navigation it needs.
-   */
-  forceWorkspaces: boolean;
 }): SidebarPanel {
-  if (forceWorkspaces) return "workspaces";
   if (!workspace) return "workspaces";
   return browsing ? "workspaces" : "chats";
 }

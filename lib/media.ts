@@ -1,5 +1,6 @@
 import { errorCode } from "@/lib/i18n/errors";
 import type { Workspace } from "@/app/chat/fragment";
+import { languageForFile } from "@/lib/code-highlight";
 
 export interface Attachment {
   path: string; // workspace-relative, e.g. "uploads/ab12cd34-photo.png"
@@ -342,7 +343,7 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
 // member's file never renders from this origin. Widening this list is what would
 // spend that.
 
-export type PreviewKind = "image" | "markdown" | "text" | "pdf";
+export type PreviewKind = "image" | "markdown" | "text" | "pdf" | "code" | "docx" | "xlsx";
 
 const PREVIEW_KINDS: Record<string, PreviewKind> = {
   png: "image",
@@ -354,6 +355,15 @@ const PREVIEW_KINDS: Record<string, PreviewKind> = {
   txt: "text",
   csv: "text",
   pdf: "pdf",
+  // Text with no grammar to colour. Everything else textual is resolved through the
+  // highlighter's own alias table — see previewKind.
+  log: "text",
+  env: "text",
+  // Read in the browser by mammoth and exceljs, both imported only when one is opened
+  // (file-preview-in-pane FR-4.4). `doc` and `xls` are the pre-2007 binary formats,
+  // which neither library reads — they stay download-only rather than failing loudly.
+  docx: "docx",
+  xlsx: "xlsx",
 };
 
 /**
@@ -366,7 +376,13 @@ export function previewKind(nameOrPath: string): PreviewKind | null {
   const leaf = nameOrPath.slice(nameOrPath.lastIndexOf("/") + 1);
   const dot = leaf.lastIndexOf(".");
   if (dot <= 0) return null; // no extension, or a dotfile with none
-  return PREVIEW_KINDS[leaf.slice(dot + 1).toLowerCase()] ?? null;
+  const explicit = PREVIEW_KINDS[leaf.slice(dot + 1).toLowerCase()];
+  if (explicit) return explicit;
+  // Anything the chat could already highlight is readable here too, and the alias
+  // table over there is the single list of what that means (DEC-1). It renders as
+  // ESCAPED text, so widening the set this way costs nothing of the posture above:
+  // `html` resolves to the xml grammar and is shown as source.
+  return languageForFile(leaf) ? "code" : null;
 }
 
 /**

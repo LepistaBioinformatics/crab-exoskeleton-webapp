@@ -230,6 +230,31 @@ describe("consumeStream", () => {
     'Error processing message: selected vision model "glm-4.7-flash" does not support ' +
     "image input; update agents.defaults.image_model to a multimodal model";
 
+  // steering-messages §6-§7: the proxy says so when this POST's message was folded
+  // into a turn that was already running. Same shape as progress and error.
+  const steeringFrame = `data: ${JSON.stringify({
+    choices: [{ index: 0, delta: {} }],
+    x_crab_steering: { folded: true },
+  })}\n\n`;
+
+  it("routes x_crab_steering without emitting a content delta", async () => {
+    const deltas: string[] = [];
+    let folded = false;
+    await consumeStream(
+      sse([steeringFrame, chunk("the other turn's answer")]),
+      (d) => deltas.push(d),
+      undefined,
+      undefined,
+      () => {
+        folded = true;
+      },
+    );
+    expect(folded).toBe(true);
+    // The frames that follow belong to the turn it was folded into, and the member
+    // still wants to read them.
+    expect(deltas).toEqual(["the other turn's answer"]);
+  });
+
   it("routes x_crab_error to the error handler", async () => {
     const failures: string[] = [];
     await consumeStream(sse([errorFrame(visionErr)]), () => {}, undefined, (m) => failures.push(m));
@@ -597,5 +622,113 @@ describe("resumeIfActive cancellation", () => {
     await Promise.resolve();
     expect(getTurn("s1").running).toBe(true);
     void pending;
+  });
+});
+
+// ---------------------------------------------------------------------------
+// turn-stream-continuity/field-observation-resume.md
+// ---------------------------------------------------------------------------
+
+// A resumed turn is not a turn that is about to land -- it may have minutes left.
+// `recover()`'s "the transcript grew, so the reply arrived" exit is right for a
+// stream cut near the end of a turn and wrong here: the first thing to land is a
+// TOOL STEP (picoclaw appends each message to the session file as it happens), so
+// the resume stopped tracking seconds after it started and everything the agent did
+// afterwards needed another reload to appear.
+describe("a resumed turn keeps tracking until the turn ends", () => {
+  beforeEach(() => __reset());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("repaints on every transcript growth instead of stopping at the first", async () => {
+    // 4 (baseline) -> a step -> nothing new -> another step -> the reply.
+    const lengths = [5, 5, 6, 7, 7];
+    let reads = 0;
+    vi.stubGlobal("window", { dispatchEvent: () => true, matchMedia: () => ({ matches: false }) });
+    vi.stubGlobal("fetch", (url: string) => {
+      if (String(url).includes("/history?")) {
+        const next = lengths[Math.min(reads++, lengths.length - 1)];
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            messages: Array.from({ length: next }, () => ({ role: "assistant", content: "x" })),
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+    const painted: string[] = [];
+    setPainter((sid) => painted.push(sid));
+
+    let active = true;
+    const pending = resumeIfActive("s1", ctx, {
+      baseline: async () => 4,
+      active: async () => active,
+    });
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
+
+    // Still running upstream: the member must be watching the steps land, not a
+    // conversation that went quiet.
+    expect(painted.length).toBeGreaterThanOrEqual(2);
+    expect(getTurn("s1").running).toBe(true);
+
+    // The proxy says the turn is over -- only now does tracking stop.
+    active = false;
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 2);
+    await pending;
+    expect(getTurn("s1").running).toBe(false);
+    expect(getTurn("s1").error).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// steering-messages §6-§7
+// ---------------------------------------------------------------------------
+
+// A message sent while the conversation already has a turn running is folded into
+// that turn by picoclaw, silently, and this stream then carries the OTHER turn's
+// frames. Reachable in production after a reload, which wipes the client-side queue
+// that otherwise prevents it. The member must be told, or "my message took four
+// minutes to send" is the only reading available to them.
+describe("a folded message is marked as steering", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("marks the conversation while the folded turn streams", async () => {
+    const steering = `data: ${JSON.stringify({
+      choices: [{ index: 0, delta: {} }],
+      x_crab_steering: { folded: true },
+    })}\n\n`;
+    vi.stubGlobal("window", {
+      dispatchEvent: () => true,
+      matchMedia: () => ({ matches: false }),
+    });
+    vi.stubGlobal("fetch", (url: string) => {
+      const u = String(url);
+      if (u.includes("/history?")) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ messages: [] }) });
+      }
+      if (u.startsWith("/api/chat/")) {
+        const encoder = new TextEncoder();
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          body: new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(encoder.encode(steering));
+              c.close();
+            },
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    enqueue("s1", "na verdade, só o Q3", ctx);
+    await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getTurn("s1").steering).toBe(true);
   });
 });

@@ -23,19 +23,20 @@ function paint(props: Partial<Parameters<typeof FilePreview>[0]> = {}) {
       path="uploads/photo.png"
       name="photo.png"
       kind="image"
-      onClose={() => {}}
       {...props}
     />,
   );
 }
 
 describe("FilePreview", () => {
-  it("is a labelled modal dialog carrying the file's name", () => {
+  // file-preview-in-pane FR-2.1: a pane, not a dialog. The panel's header carries the
+  // name and the way back; this is the body, and it is labelled so a screen reader
+  // still knows what the region is.
+  it("is a labelled region, not a modal dialog", () => {
     const html = paint();
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
     expect(html).toContain(t.preview.aria);
-    expect(html).toContain("photo.png");
+    expect(html).not.toContain('role="dialog"');
+    expect(html).not.toContain('aria-modal');
   });
 
   // An <img> may point straight at the route (the session is a cookie), so there is no
@@ -56,12 +57,10 @@ describe("FilePreview", () => {
     expect(html).toContain("project=proj-1");
   });
 
-  it("keeps a download button in the header for every kind", () => {
-    expect(paint()).toContain(t.attachment.download);
-    expect(paint({ path: "uploads/a.pdf", name: "a.pdf", kind: "pdf" })).toContain(
-      t.attachment.download,
-    );
-  });
+  // The download button moved to the panel's header (one header, not two). One stays
+  // inside the PDF fallback, for a browser that cannot show a PDF at all — and it is
+  // NOT asserted here: the fallback renders only once the blob effect has resolved,
+  // and this suite paints once with no effects. Covered by the pane suite instead.
 
   // Refused from the LISTING's size, before any request.
   it("refuses a text body above the cap instead of fetching it", () => {

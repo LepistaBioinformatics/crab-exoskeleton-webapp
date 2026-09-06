@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Eye,
   FileText,
   Folder,
   FolderOpen,
@@ -48,6 +47,18 @@ import FilePreview from "@/app/chat/file-preview";
 import MemoryEditor from "@/app/chat/memory-editor";
 import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
 import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
+import SecretsSection from "@/app/chat/secrets-section";
+import type { PreviewRequest } from "@/app/chat/media-preview-bus";
+import {
+  SECTIONS,
+  SECTION_ORDER,
+  type Section,
+} from "@/app/chat/workspace-sections";
+
+// Re-exported because this panel is where a Section used to be defined and callers
+// still import it from here. The list itself moved to workspace-sections.ts, which
+// the right rail and the mobile expander read too.
+export type { Section };
 import type { ChatReference } from "@/lib/chatReference";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +73,7 @@ import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { PANEL_HEADER_H } from "./panel-header";
 import { useT } from "@/lib/i18n/context";
 
-const MIN_WIDTH = 240;
+export const MIN_WIDTH = 240;
 // No fixed maximum: the knowledge graph is the reason — a member inspecting it wants
 // the column as wide as their screen. The only ceiling is the viewport itself, so the
 // resize handle (the panel's LEFT edge) can never be dragged off-screen and leave the
@@ -73,6 +84,24 @@ const DEFAULT_WIDTH = 280;
 function maxWidth(): number {
   if (typeof window === "undefined") return Number.MAX_SAFE_INTEGER;
   return Math.max(MIN_WIDTH, window.innerWidth - 48);
+}
+
+/**
+ * How wide the panel opens when the member has never resized it: a THIRD of the
+ * viewport.
+ *
+ * 280px was a width for a file list. What members open this panel for is a document,
+ * the knowledge graph or a memory note, and none of those are readable in a column
+ * that narrow — the point of the panel is reading something while the chat stays
+ * usable beside it.
+ *
+ * Bounded on both sides: never under what the file tree needs, never wider than the
+ * viewport can show (which is also what keeps the resize handle reachable).
+ */
+export function defaultPanelWidth(viewport?: number): number {
+  const w = viewport ?? (typeof window === "undefined" ? 0 : window.innerWidth);
+  const max = viewport === undefined ? maxWidth() : Math.max(MIN_WIDTH, viewport - 48);
+  return Math.min(Math.max(Math.round(w / 3), MIN_WIDTH), max);
 }
 const WIDTH_KEY = "chat-files-width";
 
@@ -157,43 +186,6 @@ export function allFolderPaths(nodes: TreeNode[]): string[] {
 // A permanent, resizable right-hand column (desktop) listing the current
 // workspace's uploads. Not an overlay -- part of the layout, toggled from the
 // chat header. Filter box + per-file delete. Refreshes on `refreshSignal`.
-// What a workspace holds. Ordered deliberately: memory and the graph are what a
-// member asks about ("what does it know about me"), scheduled tasks are what it does
-// on its own, files are what they manage.
-export type Section = "memory" | "graph" | "tasks" | "files";
-
-const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files"];
-
-const SECTIONS: Record<
-  Section,
-  {
-    Icon: typeof Brain;
-    label: (t: ChatDict) => string;
-    blurb: (t: ChatDict) => string;
-  }
-> = {
-  memory: {
-    Icon: Brain,
-    label: (t) => t.memory.title,
-    blurb: (t) => t.uploads.sections.memory,
-  },
-  graph: {
-    Icon: Network,
-    label: (t) => t.memoryGraph.title,
-    blurb: (t) => t.uploads.sections.graph,
-  },
-  tasks: {
-    Icon: CalendarClock,
-    label: (t) => t.scheduledTasks.title,
-    blurb: (t) => t.uploads.sections.tasks,
-  },
-  files: {
-    Icon: FileText,
-    label: (t) => t.uploads.files,
-    blurb: (t) => t.uploads.sections.files,
-  },
-};
-
 // The track holds both panes side by side at exactly twice the panel's width and
 // slides by half.
 //
@@ -243,8 +235,10 @@ export default function UploadsSidebar({
   refreshSignal,
   onClose,
   onReference,
-  initialSection = null,
+  section = null,
   onSectionChange,
+  onRestartNeeded,
+  openFile = null,
 }: {
   workspace: Workspace;
   refreshSignal: number;
@@ -256,15 +250,30 @@ export default function UploadsSidebar({
    */
   onReference?: (ref: ChatReference) => void;
   /**
-   * Which detail to open on mount, or null for the menu.
+   * Which detail is open, or null for the menu. CONTROLLED — the caller owns it.
    *
-   * Exists for two reasons. It makes the detail panes reachable in a test at all — the
-   * detail CONTENT is conditional on the chosen section, so at first paint with the
-   * menu showing there is nothing of the files pane in the markup, and that is exactly
-   * how a missing "New folder" button went unnoticed by six passing tests. And it is
-   * the seam a future "open the files panel" link would use.
+   * It used to be an initial value the panel copied into state at mount, on the
+   * assumption that the panel's own menu was the only way to change sections. The
+   * right rail broke that assumption: clicking another icon with the panel already
+   * open changed the URL and moved nothing, because nothing re-read the prop. The
+   * fragment is the owner of this now, and the panel renders what it is handed.
    */
-  initialSection?: Section | null;
+  section?: Section | null;
+  /**
+   * Forwarded to the secrets pane: saving a secret leaves the container needing a
+   * restart, and the banner that says so lives in the chat view (restart-control
+   * DEC-3). It arrives here rather than in a drawer of its own because secrets is a
+   * section now — right-rail-discoverability FR-3.4.
+   */
+  onRestartNeeded?: () => void;
+  /**
+   * A document the CALLER wants shown — an attachment chip clicked in the transcript.
+   *
+   * A new object per request, and that identity is the signal: two clicks on the same
+   * file must reopen it, so the effect below depends on the object rather than on the
+   * path. Opening from the tree does not go through here; the panel owns that.
+   */
+  openFile?: PreviewRequest | null;
   /**
    * Reports every section change so the caller can persist it. The panel keeps owning
    * the state -- it is the only thing that knows the transitions -- and the caller is
@@ -282,20 +291,45 @@ export default function UploadsSidebar({
   // localRefresh: sharing one would re-list the files tree on every task refresh,
   // and the two sections never need refreshing together.
   const [taskRefresh, setTaskRefresh] = useState(0);
+  // And the graph's own, for the same reason and kept apart for the same reason: the
+  // agent writes to the graph mid-conversation, so the pane goes stale while it is
+  // being read, and re-listing files on a graph refresh would be work nobody asked for.
+  const [graphRefresh, setGraphRefresh] = useState(0);
   const [query, setQuery] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // The file the preview overlay is showing, or null. Held here rather than per row so
   // only one can ever be open.
   const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
+
+  // The document showing in the detail slot, or null for the tree.
+  //
+  // DERIVED, never stored as a second piece of state: the kind is a pure function of
+  // the path, and a copy of it could disagree with the row that opened it. A file whose
+  // extension is not previewable resolves to null, so a stale request cannot leave the
+  // panel on a blank pane.
+  useEffect(() => {
+    if (!openFile) return;
+    setPreviewFile({ path: openFile.path, name: openFile.name, size: openFile.size });
+  }, [openFile]);
+
+  const openDoc =
+    previewFile && previewKind(previewFile.path)
+      ? {
+          file: previewFile,
+          leaf: previewFile.name.slice(previewFile.name.lastIndexOf("/") + 1),
+          kind: previewKind(previewFile.path)!,
+        }
+      : null;
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  // Which detail the member has opened, or null for the menu. This panel is a
-  // two-pane sliding track (the idiom unified-sidebar already uses): a root listing
-  // the three things a workspace holds, and one detail pane that renders whichever
-  // was picked. Two panes rather than four because the animation is identical and the
+  // The panel is a two-pane sliding track (the idiom unified-sidebar already uses): a
+  // root listing what a workspace holds, and one detail pane that renders whichever
+  // was picked. Two panes rather than five because the animation is identical and the
   // incoming pane simply renders different content.
-  const [section, setSection] = useState<Section | null>(initialSection);
+  //
+  // `section` arrives as a prop and every change is reported up; the panel holds no
+  // copy of it. One owner, which is the fragment.
   // Drag state. `dragPath` is the workspace-relative path being dragged (a file's
   // `name` or a folder's `path` — both already live in the same space, without the
   // `uploads/` prefix). `dropFolder` is the folder currently under the pointer, or ""
@@ -386,7 +420,10 @@ export default function UploadsSidebar({
     const raw = Number(localStorage.getItem(WIDTH_KEY));
     // Clamped on READ as well as on drag: a width persisted on a wide monitor must not
     // swallow the whole screen when the same member opens the app on a laptop.
-    if (raw >= MIN_WIDTH) setWidth(Math.min(raw, maxWidth()));
+    //
+    // A stored width WINS over the default: it is the member having dragged the handle,
+    // and a default that overrode that would undo the drag on every open.
+    setWidth(raw >= MIN_WIDTH ? Math.min(raw, maxWidth()) : defaultPanelWidth());
   }, []);
   useEffect(() => {
     localStorage.setItem(WIDTH_KEY, String(width));
@@ -740,9 +777,28 @@ export default function UploadsSidebar({
             `min-w-0` is what lets `truncate` engage inside a flex row — without it the
             name would push the controls off the edge. */}
         <FileThumb workspace={workspace} path={f.path} name={node.leaf} />
-        <span className="min-w-0 truncate text-sm text-fg" title={node.leaf}>
-          {node.leaf}
-        </span>
+        {/* The NAME opens the document, rather than an eye icon at the far edge of the
+            row that only appears on hover. A member looking for a file looks at its
+            name; making the thing they are already reading the thing they can click is
+            the whole affordance (file-preview-in-pane). A file with no preview keeps a
+            plain label — a link that does nothing is worse than no link. */}
+        {previewKind(f.path) ? (
+          <button
+            type="button"
+            className="min-w-0 truncate text-left text-sm text-fg underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current hover:text-accent"
+            title={node.leaf}
+            aria-label={`${t.preview.action} ${node.leaf}`}
+            onClick={() => setPreviewFile(f)}
+          >
+            {node.leaf}
+          </button>
+        ) : (
+          /* Dimmed, and that is the signal: with the name as the control, a member has
+             to be able to see WHICH names are controls. This one only downloads. */
+          <span className="min-w-0 truncate text-sm text-fg-muted" title={node.leaf}>
+            {node.leaf}
+          </span>
+        )}
         <span className="shrink-0 font-mono text-[11px] text-fg-muted">
           {formatSize(f.size)}
         </span>
@@ -758,17 +814,6 @@ export default function UploadsSidebar({
             a narrow desktop window does not. Reserving the space already means showing
             them costs no layout. */}
         <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-          {previewKind(f.path) && (
-            <IconButton
-              variant="ghost"
-              size="sm"
-              aria-label={`${t.preview.action} ${node.leaf}`}
-              title={t.preview.action}
-              onClick={() => setPreviewFile(f)}
-            >
-              <Eye size={14} aria-hidden />
-            </IconButton>
-          )}
           <IconButton
             variant="ghost"
             size="sm"
@@ -832,11 +877,14 @@ export default function UploadsSidebar({
               {t.uploads.workspace}
             </h2>
           ) : (
+            /* A two-step stack once a document is open: document → tree → menu. One
+               control, because there is only ever one way back and a member reads the
+               label to know where it goes (file-preview-in-pane FR-2.2). */
             <button
               type="button"
               onClick={() => {
-                setSection(null);
-                onSectionChange?.(null);
+                if (openDoc) setPreviewFile(null);
+                else onSectionChange?.(null);
               }}
               className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-accent"
             >
@@ -846,17 +894,40 @@ export default function UploadsSidebar({
                 aria-hidden
               />
               <span className="truncate font-display text-sm font-semibold text-fg">
-                {SECTIONS[section].label(t)}
+                {openDoc ? openDoc.leaf : SECTIONS[section].label(t)}
               </span>
             </button>
           )}
-          {section === "files" && (
+          {openDoc && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              disabled={downloadingPath === openDoc.file.path}
+              aria-label={`${t.attachment.download} ${openDoc.leaf}`}
+              title={t.attachment.download}
+              onClick={() => void onDownload(openDoc.file)}
+            >
+              <Download size={15} aria-hidden />
+            </IconButton>
+          )}
+          {section === "files" && !openDoc && (
             <IconButton
               variant="ghost"
               size="sm"
               aria-label={t.uploads.refreshAria}
               title={t.uploads.refresh}
               onClick={() => setLocalRefresh((n) => n + 1)}
+            >
+              <RefreshCw size={15} aria-hidden />
+            </IconButton>
+          )}
+          {section === "graph" && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={t.memoryGraph.refreshAria}
+              title={t.memoryGraph.refresh}
+              onClick={() => setGraphRefresh((n) => n + 1)}
             >
               <RefreshCw size={15} aria-hidden />
             </IconButton>
@@ -903,10 +974,7 @@ export default function UploadsSidebar({
                       <li key={key}>
                         <button
                           type="button"
-                          onClick={() => {
-                            setSection(key);
-                            onSectionChange?.(key);
-                          }}
+                          onClick={() => onSectionChange?.(key)}
                           className="flex w-full items-center gap-2 border-b border-brand/30 px-3 py-3 text-left transition-colors hover:bg-elevated"
                         >
                           <s.Icon
@@ -945,8 +1013,12 @@ export default function UploadsSidebar({
                 <MemoryGraphPanel
                   workspace={workspace}
                   active={section === "graph"}
+                  refreshSignal={graphRefresh}
                   onReference={onReference}
                 />
+              )}
+              {section === "secrets" && (
+                <SecretsSection workspace={workspace} onRestartNeeded={onRestartNeeded} />
               )}
               {section === "tasks" && (
                 <ScheduledTasksPanel
@@ -955,7 +1027,18 @@ export default function UploadsSidebar({
                   onReference={onReference}
                 />
               )}
-              {section === "files" && (
+              {/* The document takes the files slot while it is open (FR-2.1): one detail
+                  destination, and the way back is the header's own control. */}
+              {section === "files" && openDoc && (
+                <FilePreview
+                  workspace={workspace}
+                  path={openDoc.file.path}
+                  name={openDoc.leaf}
+                  kind={openDoc.kind}
+                  size={openDoc.file.size}
+                />
+              )}
+              {section === "files" && !openDoc && (
                 <>
                   <div className="flex items-center gap-1 px-2 pt-2">
                     <input
@@ -1107,26 +1190,6 @@ export default function UploadsSidebar({
           }}
           onCancel={() => setDeletingFolder(null)}
         />
-
-        {/* One overlay for the whole panel, driven by which row was clicked. The kind is
-            re-derived rather than stored: it is a pure function of the path, and a second
-            copy of it in state could disagree with the row that opened it. */}
-        {previewFile &&
-          previewKind(previewFile.path) &&
-          // Portaled for the reason ConfirmDialog is: this panel is an `overflow-hidden`
-          // column that becomes a z-indexed drawer on mobile, and a full-screen overlay
-          // rendered inside it would be trapped in that stacking context.
-          createPortal(
-            <FilePreview
-              workspace={workspace}
-              path={previewFile.path}
-              name={previewFile.name.slice(previewFile.name.lastIndexOf("/") + 1)}
-              kind={previewKind(previewFile.path)!}
-              size={previewFile.size}
-              onClose={() => setPreviewFile(null)}
-            />,
-            document.body,
-          )}
 
         <ConfirmDialog
           open={deletingPath !== null}
