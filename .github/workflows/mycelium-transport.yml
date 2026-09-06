@@ -21,6 +21,11 @@ on:
 jobs:
   rpc-only:
     runs-on: ubuntu-latest
+    # Reads the tree and greps it. Nothing here needs to write anything, and an
+    # unrestricted GITHUB_TOKEN in a workflow that runs on pull_request is a hole
+    # CodeQL is right to flag.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
