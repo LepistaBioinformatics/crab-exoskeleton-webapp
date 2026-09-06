@@ -1,0 +1,54 @@
+# Every mycelium call goes over JSON-RPC. This fails a PR that adds a REST one.
+#
+# The rule has been written down in two CLAUDE.md files for a long time and the
+# codebase already disagrees with it in one place (app/api/tenants/[id]) — which is
+# exactly what prose cannot tell you. An allowlist can: adding a REST call now means
+# adding a line here, in the PR that adds it, where a reviewer sees it.
+#
+# Scope, and its limit. This looks for a `/_adm` path passed to fetchMycelium on one
+# line, which is how all four current call sites are written. A call built across lines,
+# or through a variable, is not caught: the check is a ratchet against the easy way in,
+# not a proof.
+name: mycelium transport
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - ".github/workflows/mycelium-transport.yml"
+
+jobs:
+  rpc-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No new REST calls to the mycelium gateway
+        run: |
+          set -uo pipefail
+
+          # Allowed, each for a stated reason:
+          #
+          #   auth/request, auth/verify — the magic-link pair. Pre-session, so there is
+          #     no token to authenticate an RPC call with. This is the exception the
+          #     rule itself names.
+          #   lib/mycelium.ts — POST /_adm/rpc IS the RPC transport.
+          #   tenants/[id] — GET /_adm/beginners/tenants/{id}, a gateway-native route
+          #     reached with the session's JWT. It predates this check and contradicts
+          #     the rule as written; allowlisted so it is visible rather than silently
+          #     tolerated. Replacing it with an RPC call is a change worth making, not a
+          #     reason to hold up unrelated work.
+          allowed='app/api/auth/request/route.ts|app/api/auth/verify/route.ts|app/api/tenants/\[id\]/route.ts|lib/mycelium.ts'
+
+          hits="$(grep -rnE 'fetchMycelium\(\s*[`"]/_adm' app lib \
+                   --include='*.ts' --include='*.tsx' \
+                 | grep -vE "^($allowed):" || true)"
+
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::A new REST call to the mycelium gateway. Use myceliumRpc() — see .claude/rules/mycelium-transport.md."
+            echo "::error::If REST is genuinely the only way, add the file to the allowlist in this workflow and say why."
+            exit 1
+          fi
+          echo "ok — no REST calls outside the allowlist"
