@@ -233,6 +233,16 @@ export interface TurnState {
   recovering: boolean;
   /** When the recovery wait began, for the elapsed readout. */
   recoveringSince: number;
+  /**
+   * This turn's message was folded into a turn that was ALREADY running on the
+   * conversation, so no answer of its own is coming -- what streams here belongs to
+   * the other turn (`x_crab_steering`, see the proxy's sse.go).
+   *
+   * Reachable after a reload, which wipes the queue that otherwise keeps one turn in
+   * flight per conversation. Without this the member reads a four-minute wait as
+   * "the chat is slow to send".
+   */
+  steering: boolean;
   /** Waiting for picoclaw to reload after an attachment upload. */
   settling: boolean;
   /** A stop was asked for and the request has not answered yet. */
@@ -269,6 +279,7 @@ const EMPTY: TurnState = {
   errorDetail: null,
   recovering: false,
   recoveringSince: 0,
+  steering: false,
   settling: false,
   stopping: false,
 };
@@ -622,8 +633,26 @@ async function transcriptLength(sid: string, ctx: RunContext): Promise<number | 
  * It never re-POSTs. The retry ladder above covers the send, before the stream
  * exists; from here on the turn is committed upstream and sending it again would run
  * a ten-minute turn twice.
+ *
+ * TWO MODES, and the difference is which end of a turn we are at.
+ *
+ * Without `stillActive` (a stream cut on an open page) the first growth IS the reply:
+ * the cut happened while the turn was finishing, so one repaint ends the wait.
+ *
+ * With it (a resume after a reload) the turn may have minutes left, and the first
+ * thing to land is a TOOL STEP -- picoclaw appends every message to the session file
+ * as it happens (`pkg/memory/jsonl.go`'s `addMsg`), and the proxy's history handler
+ * syncs before each read. Returning there is what made a reloaded conversation go
+ * quiet seconds after the resume and need ANOTHER reload to show the rest. So in this
+ * mode each growth repaints and the loop keeps going until the proxy says the turn is
+ * over. See `.specs/features/turn-stream-continuity/field-observation-resume.md`.
  */
-async function recover(sid: string, ctx: RunContext, preRead?: number | null) {
+async function recover(
+  sid: string,
+  ctx: RunContext,
+  preRead?: number | null,
+  stillActive?: () => Promise<boolean>,
+) {
   patch(sid, { recovering: true, recoveringSince: Date.now() });
   // The baseline comes from the first SUCCESSFUL read, not the first attempt: a
   // recovery that starts while the network is briefly down would otherwise take
@@ -635,6 +664,7 @@ async function recover(sid: string, ctx: RunContext, preRead?: number | null) {
   // here would reintroduce exactly the race that ordering avoids.
   let baseline = preRead !== undefined ? preRead : await transcriptLength(sid, ctx);
   const deadline = Date.now() + RECOVERY_BUDGET_MS;
+  let grew = false;
   try {
     while (Date.now() < deadline) {
       // Interruptible: `online` or a tab becoming visible takes the next sample at
@@ -642,14 +672,27 @@ async function recover(sid: string, ctx: RunContext, preRead?: number | null) {
       // never extend the wait.
       await interruptibleSleep(RECOVERY_POLL_MS);
       const length = await transcriptLength(sid, ctx);
-      if (length === null) continue; // one lost sample, not a failure
-      if (baseline === null) {
-        baseline = length;
-        continue;
+      if (length !== null) {
+        if (baseline === null) {
+          baseline = length;
+        } else if (length > baseline) {
+          grew = true;
+          if (!stillActive) return; // the turn landed; the painter will pull it
+          baseline = length;
+          // Repaint NOW rather than at the end. The turn is still running, so
+          // `clearCompleted` no-ops and the bands stay put; all this does is pull the
+          // steps that have landed since the last look.
+          onReplyDone?.(sid);
+        }
       }
-      if (length > baseline) return; // the turn landed; the painter will pull it
+      // Asked AFTER the read, so the last growth is never left unpainted: a turn that
+      // ends between the two is still repainted by the caller's finishIfDrained.
+      if (stillActive && !(await stillActive())) return;
     }
-    patch(sid, { error: "turn_lost" });
+    // Only when NOTHING ever arrived. A resumed turn that kept producing and simply
+    // outlived the budget was not lost, and saying so would be the "success shown as
+    // a failure" this whole path exists to avoid.
+    if (!grew) patch(sid, { error: "turn_lost" });
   } finally {
     patch(sid, { recovering: false });
   }
@@ -681,6 +724,7 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     buffered: "",
     arrivalDone: false,
     progress: null,
+    steering: false,
     lastEventAt: Date.now(),
   });
 
@@ -769,6 +813,12 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
         (message) => {
           if (stopped.has(sid)) return;
           patch(sid, { error: "harness_error", errorDetail: message });
+        },
+        // Folded into a turn that was already running: no reply of its own is
+        // coming, and what follows is the other turn's.
+        () => {
+          if (stopped.has(sid)) return;
+          patch(sid, { steering: true, lastEventAt: Date.now() });
         },
       ));
     } catch {
@@ -957,6 +1007,7 @@ export async function consumeStream(
   onDelta: (delta: string) => void,
   onProgress?: (progress: Progress) => void,
   onError?: (message: string) => void,
+  onSteering?: () => void,
 ): Promise<{ completed: boolean }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -997,6 +1048,11 @@ export async function consumeStream(
         if (failure && typeof failure.message === "string" && onError) {
           onError(failure.message);
         }
+        // steering-messages §6-§7: this POST's message was folded into a turn that
+        // was already running. Everything after it on this stream belongs to that
+        // turn — which is the member's own conversation, so it keeps flowing; only
+        // the reading of it changes.
+        if (parsed?.x_crab_steering?.folded === true && onSteering) onSteering();
         if (parsed?.choices?.[0]?.finish_reason === "stop") completed = true;
         const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
         if (delta) onDelta(delta);
@@ -1271,7 +1327,7 @@ export async function resumeIfActive(
 
   patch(sid, { running: true, arrivalDone: false, error: null });
   try {
-    await recover(sid, ctx, baseline);
+    await recover(sid, ctx, baseline, () => readActive(sid, ctx));
     syncSessionRefs(ctx.workspace, sid).catch(() => {});
     notifyConversationsUpdated();
   } finally {
