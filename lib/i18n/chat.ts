@@ -52,12 +52,6 @@ const en = {
     confirmMessage: "You'll need to sign in again with a magic link.",
     pending: "Logging out…",
   },
-  viewMode: {
-    chat: "Chat",
-    chatTitle: "Traditional chat",
-    canvas: "Canvas",
-    canvasTitle: "Canvas timeline",
-  },
   // The chats sidebar's three parts. Shared rather than per-panel: the whole point
   // of the section headers is that they are the same control in three places.
   sections: {
@@ -113,6 +107,9 @@ const en = {
     action: "Preview",
     tooLarge: "This file is too large to preview. Download it to open it.",
     pdfFallback: "This browser cannot display the PDF here — download it instead.",
+    // Said rather than silently shown: a preview that cut a sheet off without saying so
+    // would misrepresent the file.
+    sheetTruncated: "Showing the first {n} rows. Download the file for all of them.",
   },
   markdownEditor: {
     aria: "Markdown editor",
@@ -201,26 +198,15 @@ const en = {
     showMoreRuns: "Show {count} older run(s)",
     showFewerRuns: "Show fewer runs",
   },
-  canvasActivity: {
-    ran: "{name} ran",
-    learned: "learned: {entity}",
-    // The row for work no conversation claims. Its own lane rather than hidden: an agent
-    // that did something your history does not mention is the most useful thing this
-    // view can surface.
-    unattributed: "No conversation",
-    unattributedHint: "Scheduled runs and facts the agent could not tie to a chat.",
-    referencedSpan: "Conversation span",
-    // Travels inside the sent message, like the `[anexo: …]` refs.
-    markerSpan: "conversation span",
-    markerMessages: "messages",
-    reference: "Reference in chat",
-    referenceAria: "Reference this conversation in the chat",
-  },
   memoryGraph: {
     // Deliberately NOT "memory": the panel already has one, and t.memory.* is
     // MEMORY_CUSTOM.md. Two different memories need two different visible names.
     title: "Knowledge graph",
     open: "Open the knowledge graph",
+    // The agent writes to the graph mid-conversation, so the pane goes stale while
+    // it is being read. Same control, same words as the files tree and the task list.
+    refresh: "Refresh",
+    refreshAria: "Refresh the knowledge graph",
     hint: "What the agent has learned on its own — entities, how they relate, and the observations behind each one. Read-only: the agent writes this, you inspect it.",
     tabs: {
       browse: "Entities",
@@ -387,8 +373,6 @@ const en = {
     replyAria: "Reply to this message",
     reply: "Reply",
     agentPrefix: "agent",
-    secrets: "Agent secrets",
-    files: "Workspace files",
     // "…retrying… (attempt 2 of 3)"
     retrying: "Couldn't reach the gateway — retrying… (attempt {n} of {total})",
     settling: "We're storing your file…",
@@ -423,6 +407,11 @@ const en = {
     // the gateway — different problem, different action. Reading them as the same
     // thing is what makes a tunnel feel like a broken app.
     offline: "You're offline — the agent is still working. Reconnecting when your connection returns…",
+    // steering-messages: this message was folded into a turn that was already
+    // running, so it gets no reply of its own and what streams below belongs to that
+    // turn. Said plainly because the alternative reading — "the chat is slow to
+    // send" — is the one the member arrives at on their own, and it is wrong.
+    steering: "Added to the turn already in progress — the agent will take it into account. The reply below belongs to that turn.",
     // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
@@ -520,6 +509,9 @@ const en = {
     tag: "Tag",
     alias: "Alias",
     text: "Text",
+    // The first date preset the filter offers. It lived in the canvas copy until the
+    // canvas was removed; its only reader has always been the search bar.
+    today: "today",
     date: "Date",
   },
   enrichment: {
@@ -537,24 +529,6 @@ const en = {
     addTag: "Add tag",
     nameEmpty: "Tag name can't be empty.",
     valueRequired: "Tag value is required.",
-  },
-  canvas: {
-    pageLeft: "Page left",
-    pageRight: "Page right",
-    previewPrefix: "Preview",
-    closePreview: "Close preview",
-    showAll: "Show all",
-    soloLane: "Solo this lane",
-    fullTranscript: "Full transcript",
-    msgOne: "msg",
-    msgOther: "msgs",
-    today: "today",
-    dayAgo: "1d ago",
-    daysAgo: "{n}d ago",
-    laneSummary: "{msgs} messages · {bursts} bursts · last {ago}",
-    volumeOverTime: "message volume over time · {n} total",
-    timeFlowsRight: "· time flows right →",
-    showAllLanes: "show all",
   },
   restart: {
     // The proxy ships a reason ENUM, not a sentence, so the phrasing lives here.
@@ -732,6 +706,7 @@ const en = {
       graph: "What the agent learned on its own.",
       tasks: "What runs on a schedule, and its results.",
       files: "Uploads and files in this workspace.",
+      secrets: "Keys the agent uses, and which model answers.",
     },
     resize: "Resize Workspace files",
     workspace: "Workspace",
@@ -841,12 +816,6 @@ const pt: ChatDict = {
     confirmMessage: "Você precisará entrar de novo com um link mágico.",
     pending: "Saindo…",
   },
-  viewMode: {
-    chat: "Chat",
-    chatTitle: "Chat tradicional",
-    canvas: "Canvas",
-    canvasTitle: "Linha do tempo do Canvas",
-  },
   sections: {
     collapse: "Recolher {name}",
     expand: "Expandir {name}",
@@ -889,6 +858,7 @@ const pt: ChatDict = {
     action: "Visualizar",
     tooLarge: "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
     pdfFallback: "Este navegador não consegue exibir o PDF aqui — baixe o arquivo.",
+    sheetTruncated: "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
   },
   markdownEditor: {
     aria: "Editor markdown",
@@ -967,20 +937,11 @@ const pt: ChatDict = {
     showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
     showFewerRuns: "Mostrar menos execuções",
   },
-  canvasActivity: {
-    ran: "{name} rodou",
-    learned: "aprendeu: {entity}",
-    unattributed: "Sem conversa",
-    unattributedHint: "Execuções agendadas e fatos que o agente não conseguiu ligar a um chat.",
-    referencedSpan: "Trecho de conversa",
-    markerSpan: "trecho de conversa",
-    markerMessages: "mensagens",
-    reference: "Referenciar no chat",
-    referenceAria: "Referenciar esta conversa no chat",
-  },
   memoryGraph: {
     title: "Grafo de conhecimento",
     open: "Abrir o grafo de conhecimento",
+    refresh: "Atualizar",
+    refreshAria: "Atualizar o grafo de conhecimento",
     hint: "O que o agente aprendeu por conta própria — entidades, como se relacionam e as observações por trás de cada uma. Somente leitura: o agente escreve, você confere.",
     tabs: {
       browse: "Entidades",
@@ -1108,8 +1069,6 @@ const pt: ChatDict = {
     replyAria: "Responder a esta mensagem",
     reply: "Responder",
     agentPrefix: "agente",
-    secrets: "Segredos do agente",
-    files: "Arquivos do workspace",
     retrying: "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
     settling: "Estamos guardando o arquivo para você…",
     resumeHeading: "Continue de onde parou",
@@ -1123,6 +1082,7 @@ const pt: ChatDict = {
     working: "Ainda trabalhando…",
     recovering: "A conexão caiu — o agente continua trabalhando. Buscando a resposta…",
     offline: "Você está sem conexão — o agente continua trabalhando. Reconectando assim que a internet voltar…",
+    steering: "Enviada para o turno que já estava em andamento — o agente vai levá-la em conta. O que vem abaixo é a resposta desse turno.",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
     stepOne: "1 passo",
@@ -1185,6 +1145,7 @@ const pt: ChatDict = {
     tag: "Tag",
     alias: "Apelido",
     text: "Texto",
+    today: "hoje",
     date: "Data",
   },
   enrichment: {
@@ -1202,24 +1163,6 @@ const pt: ChatDict = {
     addTag: "Adicionar tag",
     nameEmpty: "O nome da tag não pode ficar vazio.",
     valueRequired: "O valor da tag é obrigatório.",
-  },
-  canvas: {
-    pageLeft: "Página à esquerda",
-    pageRight: "Página à direita",
-    previewPrefix: "Prévia de",
-    closePreview: "Fechar prévia",
-    showAll: "Mostrar todas",
-    soloLane: "Isolar esta faixa",
-    fullTranscript: "Transcrição completa",
-    msgOne: "msg",
-    msgOther: "msgs",
-    today: "hoje",
-    dayAgo: "há 1d",
-    daysAgo: "há {n}d",
-    laneSummary: "{msgs} mensagens · {bursts} rajadas · última {ago}",
-    volumeOverTime: "volume de mensagens ao longo do tempo · {n} no total",
-    timeFlowsRight: "· o tempo corre para a direita →",
-    showAllLanes: "mostrar todas",
   },
   restart: {
     reasons: {
@@ -1367,6 +1310,7 @@ const pt: ChatDict = {
       graph: "O que o agente aprendeu por conta própria.",
       tasks: "O que roda em horário programado, e seus resultados.",
       files: "Uploads e arquivos deste workspace.",
+      secrets: "Chaves que o agente usa, e qual modelo responde.",
     },
     resize: "Redimensionar Arquivos do workspace",
     workspace: "Workspace",
