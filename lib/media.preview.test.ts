@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   PREVIEW_TEXT_MAX,
   fileTypeGroup,
+  isDocumentKind,
+  isSheetKind,
   mediaUrl,
   previewBlobType,
   previewKind,
@@ -41,6 +43,34 @@ describe("previewKind", () => {
     expect(previewKind("sheet.xlsx")).toBe("xlsx");
     expect(previewKind("legacy.doc")).toBeNull();
     expect(previewKind("legacy.xls")).toBeNull();
+  });
+
+  // preview-formatting-and-odf FR-3. The OpenDocument family were the last office
+  // formats with no way to be read in the browser at all. Each keeps a kind of its OWN
+  // even though `.odt` shares the word-processor pane with `.docx` and `.ods` shares the
+  // spreadsheet pane with `.xlsx`: the kind is what selects the READER, so collapsing
+  // them would move that decision out of this table and into the component.
+  it("previews the OpenDocument family", () => {
+    expect(previewKind("report.odt")).toBe("odt");
+    expect(previewKind("budget.ods")).toBe("ods");
+    expect(previewKind("deck.odp")).toBe("odp");
+    expect(previewKind("REPORT.ODT")).toBe("odt");
+  });
+
+  it("routes each office kind to the pane that paints it", () => {
+    for (const n of ["report.docx", "report.odt", "deck.odp"]) {
+      expect(isDocumentKind(previewKind(n)!)).toBe(true);
+      expect(isSheetKind(previewKind(n)!)).toBe(false);
+    }
+    for (const n of ["sheet.xlsx", "budget.ods"]) {
+      expect(isSheetKind(previewKind(n)!)).toBe(true);
+      expect(isDocumentKind(previewKind(n)!)).toBe(false);
+    }
+    // The text kinds belong to neither, which is what keeps the `<pre>` paths separate.
+    for (const n of ["notes.txt", "run.py", "report.md"]) {
+      expect(isDocumentKind(previewKind(n)!)).toBe(false);
+      expect(isSheetKind(previewKind(n)!)).toBe(false);
+    }
   });
 
   it("refuses what it cannot render, so the menu stays download-only", () => {
@@ -200,6 +230,19 @@ describe("fileTypeGroup", () => {
     expect(fileTypeGroup("voice.mp3")).toBe("audio");
     expect(fileTypeGroup("clip.mp4")).toBe("video");
     expect(fileTypeGroup("readme.txt")).toBe("text");
+  });
+
+  // preview-formatting-and-odf FR-3.5. `docx` and `doc` were never in this table at all,
+  // so a Word file has been drawing the neutral `unknown` glyph since it was written —
+  // a gap that predates the OpenDocument work and was found by it.
+  it("gives a word-processor document a group of its own", () => {
+    expect(fileTypeGroup("q2.docx")).toBe("document");
+    expect(fileTypeGroup("legacy.doc")).toBe("document");
+    expect(fileTypeGroup("q2.odt")).toBe("document");
+    expect(fileTypeGroup("deck.odp")).toBe("document");
+    // A Calc file is a spreadsheet before it is a LibreOffice file: the group is what a
+    // member distinguishes at a glance, and "spreadsheet" is that distinction.
+    expect(fileTypeGroup("budget.ods")).toBe("sheet");
   });
 
   it("falls back to a neutral group rather than guessing", () => {

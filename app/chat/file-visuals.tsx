@@ -10,6 +10,7 @@ import {
   FileText,
   FileType,
   FileVideo,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -46,6 +47,9 @@ export const FILE_TYPE_ICONS: Record<FileTypeGroup, LucideIcon> = {
   markdown: FileText,
   text: FileText,
   sheet: FileSpreadsheet,
+  // Not `FileText` — markdown and text already share it, and a Word report that drew
+  // the same glyph as a .txt would say nothing. `FileType` is the PDF's.
+  document: ScrollText,
   archive: FileArchive,
   code: FileCode,
   audio: FileAudio,
@@ -59,6 +63,7 @@ export const FILE_TYPE_TONE: Record<FileTypeGroup, string> = {
   markdown: "text-sky-400",
   text: "text-slate-400",
   sheet: "text-emerald-400",
+  document: "text-indigo-400",
   archive: "text-amber-400",
   code: "text-cyan-400",
   audio: "text-pink-400",

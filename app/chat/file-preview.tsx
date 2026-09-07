@@ -10,6 +10,8 @@ import {
   resolveMediaRef,
   type PreviewKind,
   previewBlobType,
+  isDocumentKind,
+  isSheetKind,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import MessageContent, { MarkdownImageContext, codeText } from "@/app/chat/message-content";
@@ -121,13 +123,16 @@ export default function FilePreview({
   // preview at all come from the same table, so they cannot disagree.
   const language = kind === "code" ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
+  // Read out here, so the effect below depends on a STRING rather than on the copy
+  // object — the same reason its other dependencies are `workspace`'s primitives.
+  const slideLabel = t.preview.slide;
   // An <img> streams from the route itself, so only the frame and the text bodies
   // are actually loading here.
   const loading = !error && !tooLarge &&
     ((needsBody && text === null) ||
       (kind === "pdf" && frameUrl === null) ||
-      (kind === "docx" && docHtml === null) ||
-      (kind === "xlsx" && sheets === null));
+      (isDocumentKind(kind) && docHtml === null) ||
+      (isSheetKind(kind) && sheets === null));
 
   useEffect(() => {
     if (tooLarge) return;
@@ -152,19 +157,32 @@ export default function FilePreview({
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
         });
-    } else if (kind === "docx") {
-      // mammoth and the sanitizer arrive together and only here: a conversation that
-      // never opens a .docx pays for neither (FR-4.4).
+    } else if (isDocumentKind(kind)) {
+      // The reader and the sanitizer arrive together and only here: a conversation that
+      // never opens a document pays for neither (file-preview-in-pane FR-4.4). Which
+      // reader is decided by the KIND, which is why `.odt` and `.odp` are kinds of their
+      // own rather than sharing `docx` — the format table stays the one place that knows.
       fetchMediaBlob(workspace, path)
         .then(async (blob) => {
-          const [{ convertToHtml }, { sanitizeDocxHtml }] = await Promise.all([
-            import("mammoth/mammoth.browser"),
-            import("@/lib/docx-html"),
-          ]);
-          const { value } = await convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
-          // Sanitized before it is ever handed to the DOM — mammoth's output is derived
-          // from the member's own file, which makes it untrusted markup (DEC-4).
-          return sanitizeDocxHtml(value);
+          const bytes = await blob.arrayBuffer();
+          const { sanitizeDocxHtml } = await import("@/lib/docx-html");
+          if (kind === "docx") {
+            const { convertToHtml } = await import("mammoth/mammoth.browser");
+            const { value } = await convertToHtml({ arrayBuffer: bytes });
+            // Sanitized before it is ever handed to the DOM — mammoth's output is derived
+            // from the member's own file, which makes it untrusted markup (DEC-4).
+            return sanitizeDocxHtml(value);
+          }
+          const odf = await import("@/lib/odf");
+          const xml = await odf.readOdfContent(bytes);
+          // Filtered too, even though the ODF walk emits only tags it chose itself and
+          // escapes every text node. Two filters is the point: this is the one with the
+          // suite and the stated posture behind it (preview-formatting-and-odf FR-4.1).
+          return sanitizeDocxHtml(
+            kind === "odp"
+              ? odf.presentationHtml(xml, (n) => slideLabel.replace("{n}", String(n)))
+              : odf.textDocumentHtml(xml),
+          );
         })
         .then((html) => {
           if (!cancelled) setDocHtml(html);
@@ -172,11 +190,19 @@ export default function FilePreview({
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
         });
-    } else if (kind === "xlsx") {
+    } else if (isSheetKind(kind)) {
       fetchMediaBlob(workspace, path)
         .then(async (blob) => {
+          const bytes = await blob.arrayBuffer();
+          if (kind === "ods") {
+            const { readOdfContent, spreadsheetSheets } = await import("@/lib/odf");
+            // Returns the shape the spreadsheet pane already consumes, so `.ods` inherits
+            // the sheet tabs, the row cap and the truncation notice without a line of
+            // UI (DEC-5).
+            return spreadsheetSheets(await readOdfContent(bytes));
+          }
           const { readWorkbook } = await import("@/lib/sheet-preview");
-          return readWorkbook(await blob.arrayBuffer());
+          return readWorkbook(bytes);
         })
         .then((read) => {
           if (cancelled) return;
@@ -208,7 +234,7 @@ export default function FilePreview({
     // Primitives, not the `workspace` object — the caller rebuilds it per render, and
     // depending on the object would refetch (and re-revoke) on every one. Same idiom
     // uploads-sidebar's listing effect uses.
-  }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge, slideLabel]);
 
   // Relative refs inside the previewed markdown resolve against ITS folder and load
   // through the media route. Memoised because it is a context value read by a
@@ -312,17 +338,24 @@ export default function FilePreview({
         </pre>
       )}
 
-      {!error && kind === "docx" && docHtml !== null && (
-        // The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
-        // acceptable is the line above it: what goes in has been through
-        // sanitizeDocxHtml, which is an allowlist and has its own suite.
-        <div
-          className={`mx-auto max-w-[820px] px-6 py-5 text-fg ${DOCX_BODY}`}
-          dangerouslySetInnerHTML={{ __html: docHtml }}
-        />
+      {!error && isDocumentKind(kind) && docHtml !== null && (
+        <div className="mx-auto max-w-[820px] px-6 py-5">
+          {kind === "odp" && (
+            // Said out loud for the same reason the sheet's row cap is: this shows the
+            // deck's TEXT, and a partial view that does not admit it misrepresents the
+            // file (FR-3.3).
+            <div className="mb-4">
+              <Alert severity="info">{t.preview.slidesPartial}</Alert>
+            </div>
+          )}
+          {/* The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
+              acceptable is the line above it: what goes in has been through
+              sanitizeDocxHtml, which is an allowlist and has its own suite. */}
+          <div className={`text-fg ${DOCX_BODY}`} dangerouslySetInnerHTML={{ __html: docHtml }} />
+        </div>
       )}
 
-      {!error && kind === "xlsx" && sheets !== null && (
+      {!error && isSheetKind(kind) && sheets !== null && (
         <div className="flex h-full min-h-0 flex-col">
           {sheets.length > 1 && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-brand/20 px-2 py-1.5">

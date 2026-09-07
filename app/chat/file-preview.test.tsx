@@ -206,7 +206,7 @@ describe("docx typography", () => {
   it("no longer leans on a class nothing defines", () => {
     // The container's own className, not the file: the prose above it names the old
     // class while explaining why it was a defect.
-    const branch = src.slice(src.indexOf('kind === "docx" && docHtml !== null'));
+    const branch = src.slice(src.indexOf("isDocumentKind(kind) && docHtml !== null"));
     const className = /className=\{`([^`]+)`\}/.exec(branch)?.[1] ?? "";
     expect(className).not.toContain("docx-body");
     expect(className).toContain("DOCX_BODY");

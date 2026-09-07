@@ -21,6 +21,7 @@
     "cytoscape": "^3.34.0",
     "exceljs": "^4.4.0",
     "highlight.js": "^11.11.1",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.24.0",
     "mammoth": "^1.12.2",
     "next": "^15.5.21",

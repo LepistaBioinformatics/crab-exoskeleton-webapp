@@ -4,6 +4,28 @@ Persistent memory across sessions. Last updated: 2026-07-20.
 
 ## Completed this session
 
+- **The file preview showed things badly, for three unrelated reasons** —
+  `features/preview-formatting-and-odf`. Reported as one complaint about one pane;
+  the causes had nothing to do with each other.
+  **(1)** The `code` kind rendered a bare `<CodeBlock>`, which returns a `<code>` and
+  no `<pre>` — deliberately, because in the chat the wrapper comes from the markdown
+  renderer. The preview has no markdown renderer, so under preflight the `<code>` kept
+  `white-space: normal` and every `.yaml`, `.json`, `.ts` collapsed to ONE LINE. The
+  `text` kind was fine the whole time because it always had its own `<pre>`, and that
+  asymmetry is why the bug survived the feature that shipped it.
+  **(2)** The `.docx` pane was styled by `docx-body`, **a class nothing in the repo
+  defines**. mammoth's conversion was never the problem — its default style map covers
+  Heading 1-6 and lists, and the sanitizer keeps those tags — the markup was simply
+  painted by a rule that did not exist.
+  **METHOD — this one was nearly mis-diagnosed.** The obvious theory was that mammoth
+  was not mapping Word's heading styles and needed a `styleMap`. Reading
+  `node_modules/mammoth/lib/options-reader.js` before writing anything showed the
+  default map already covers them in three spellings, which turned a speculative
+  conversion fix into a ten-line CSS one.
+  **(3)** `.odt`/`.ods`/`.odp` were not in `PREVIEW_KINDS` at all. New `lib/odf.ts`:
+  one parser, three entry points, landing in the panes that already existed.
+
+
 - **Thinking vs. answer in the transcript** — `features/thinking-vs-answer-messages`.
   The live stream separates the agent's narration from its answer
   (`pico/turn.go:172` → `x_crab_progress`); history did not, so on reload the

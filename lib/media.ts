@@ -249,6 +249,12 @@ export type FileTypeGroup =
   | "markdown"
   | "text"
   | "sheet"
+  // A word-processor document. Added late, and the gap it closes was visible before the
+  // OpenDocument work: `docx` and `doc` were not in the table at all, so a Word file has
+  // been carrying the neutral `unknown` glyph the whole time. It earns its own group by
+  // the rule below — "document" is a distinction a member makes at a glance, and it is
+  // now also a distinction the preview acts on.
+  | "document"
   | "archive"
   | "code"
   | "audio"
@@ -261,6 +267,7 @@ const FILE_TYPE_GROUPS: Record<string, FileTypeGroup> = {
   md: "markdown",
   txt: "text", log: "text", json: "text", yml: "text", yaml: "text",
   csv: "sheet", tsv: "sheet", xlsx: "sheet", xls: "sheet", ods: "sheet",
+  doc: "document", docx: "document", odt: "document", odp: "document", rtf: "document",
   zip: "archive", gz: "archive", tar: "archive", tgz: "archive", rar: "archive", "7z": "archive",
   py: "code", js: "code", ts: "code", tsx: "code", jsx: "code", go: "code",
   rs: "code", sh: "code", sql: "code", html: "code", css: "code",
@@ -343,7 +350,32 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
 // member's file never renders from this origin. Widening this list is what would
 // spend that.
 
-export type PreviewKind = "image" | "markdown" | "text" | "pdf" | "code" | "docx" | "xlsx";
+export type PreviewKind =
+  | "image"
+  | "markdown"
+  | "text"
+  | "pdf"
+  | "code"
+  // The office families. `docx`/`odt`/`odp` all land in the word-processor pane and
+  // `xlsx`/`ods` in the spreadsheet pane, but the KIND stays per-format because it is
+  // what selects the reader — mammoth, exceljs or the ODF walk — and a kind that meant
+  // "some document" would put that decision back into the component, away from the
+  // table that decided the file was previewable at all.
+  | "docx"
+  | "odt"
+  | "odp"
+  | "xlsx"
+  | "ods";
+
+/** True for the kinds the word-processor pane paints. */
+export function isDocumentKind(kind: PreviewKind): boolean {
+  return kind === "docx" || kind === "odt" || kind === "odp";
+}
+
+/** True for the kinds the spreadsheet pane paints. */
+export function isSheetKind(kind: PreviewKind): boolean {
+  return kind === "xlsx" || kind === "ods";
+}
 
 const PREVIEW_KINDS: Record<string, PreviewKind> = {
   png: "image",
@@ -364,6 +396,12 @@ const PREVIEW_KINDS: Record<string, PreviewKind> = {
   // which neither library reads — they stay download-only rather than failing loudly.
   docx: "docx",
   xlsx: "xlsx",
+  // The OpenDocument family, read by one parser with three entry points (`lib/odf.ts`).
+  // They were the last office formats with no way to be read in the browser at all, and
+  // each lands in a pane that already existed rather than growing a third one.
+  odt: "odt",
+  ods: "ods",
+  odp: "odp",
 };
 
 /**

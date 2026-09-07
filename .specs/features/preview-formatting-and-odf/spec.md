@@ -1,6 +1,6 @@
 # preview-formatting-and-odf — Specification
 
-**Status:** Specified (2026-09-06)
+**Status:** Implemented (2026-09-06). See Reconciliation at the end.
 **Size:** Large — two small rendering fixes and one new reader, the last of which adds a
 dependency and a format family.
 **Repo:** `crab-exoskeleton-webapp` only.
@@ -225,3 +225,52 @@ headings, and the OpenDocument formats can be opened at all.
   level, a bold span resolved through the automatic-style table, and a slide boundary.
 - `sanitizeDocxHtml`'s existing suite passes unchanged.
 - `yarn test` green; `yarn build` clean.
+
+---
+
+## Reconciliation
+
+Everything specified was built. What the work changed about the spec:
+
+- **FR-3.5/FR-3.6 were written around a gap that turned out to be larger.** The draft
+  said `FILE_TYPE_GROUPS` "has never heard of `odt` or `odp`". It has never heard of
+  `docx` or `doc` either — no word-processor extension was in that table at all, so a
+  Word file has been drawing the neutral `unknown` glyph since the table was written,
+  long before any of this. The new `document` group therefore fixes a pre-existing defect
+  as well as the new one. `ods` deliberately stays in `sheet`: a Calc file is a
+  spreadsheet before it is a LibreOffice file, and the group is what a member
+  distinguishes at a glance.
+
+- **The kinds did not collapse.** The draft left open whether `.odt` should simply map to
+  the `docx` kind. It does not: the kind is what selects the READER (mammoth, exceljs or
+  the ODF walk), so collapsing them would have moved that decision out of `PREVIEW_KINDS`
+  and into the component. `isDocumentKind`/`isSheetKind` express "which pane paints it"
+  instead, and the component branches on those.
+
+- **DEC-8 was added during implementation, not during specification.** The first draft of
+  the reader mapped tags only, and a bolded ODF run has no tag — emphasis is a reference
+  into `office:automatic-styles`. That is the single detail separating a readable `.odt`
+  from one that looks worse than the `.docx` beside it, so it became a decision rather
+  than an implementation note.
+
+- **Two padding defects were found by the fixtures, not by reasoning.** An `.ods` row is
+  stored out to the sheet's full width and the sheet out to its full height, so a file
+  with one used cell arrives as `table:number-columns-repeated="1020"` inside
+  `table:number-rows-repeated="1048570"`. Trailing empties are trimmed and empty rows are
+  buffered rather than emitted, which is what keeps a blank row BETWEEN two real ones
+  while dropping the million after the last one.
+
+- **`text:tracked-changes` had to be dropped explicitly.** The walk recurses into unknown
+  elements by default (the same choice `sanitizeDocxHtml` documents for unknown
+  wrappers), and that default would have pasted a reviewer's DELETED sentences back into
+  the document. It is in `DROP` with a test naming the reason.
+
+**Verified:** `yarn test` — 114 files, 1452 tests, green. `yarn build` clean.
+`npx tsc --noEmit` reports no error in any file this feature touched (four pre-existing
+errors remain in unrelated test files). JSZip's chunks appear in no page entry of
+`.next/app-build-manifest.json`, so FR-3.4 holds: a conversation that opens no
+OpenDocument file downloads neither the reader nor the zip library.
+
+**Not done, and deliberately:** `yarn lint` cannot run in this repository — `next lint`
+has no ESLint config and drops into an interactive setup prompt. That predates this work
+and was left alone.
