@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   PREVIEW_TEXT_MAX,
+  BINARY_SNIFF_BYTES,
   fileTypeGroup,
   isDocumentKind,
   isSheetKind,
+  looksBinary,
   mediaUrl,
   previewBlobType,
   previewKind,
@@ -79,6 +81,34 @@ describe("previewKind", () => {
     expect(previewKind("archive.tar.gz")).toBeNull();
   });
 
+  // preview-plain-text-fallback FR-1. The default inverted: an extension nobody here has
+  // heard of reads as PLAIN TEXT rather than losing the menu entry. It costs nothing of
+  // the origin's posture — text renders escaped inside a `<pre>`, exactly as `.txt`
+  // always has — because what the old refusal actually bought was protection from
+  // mojibake, not from injection.
+  it("reads an unrecognised extension as plain text", () => {
+    for (const n of ["notes.rst", "data.ndjson", "app.conf2", "thing.xyzzy", "f.qwerty"]) {
+      expect(previewKind(n), n).toBe("text");
+    }
+  });
+
+  it("still refuses the formats that would only be mojibake", () => {
+    for (const n of [
+      "bundle.zip",
+      "clip.mp4",
+      "song.mp3",
+      "font.woff2",
+      "lib.so",
+      "app.exe",
+      "photo.heic",
+      "store.sqlite",
+      "legacy.doc",
+      "slides.key",
+    ]) {
+      expect(previewKind(n), n).toBeNull();
+    }
+  });
+
   // file-preview-in-pane FR-1.1. The agent writes scripts and configs constantly and
   // every one of them was download-only, while the chat has highlighted the same
   // languages in code blocks all along. The list is DERIVED from that highlighter's
@@ -114,10 +144,18 @@ describe("previewKind", () => {
     expect(previewKind("notes.txt")).toBe("text");
   });
 
-  it("handles names with no usable extension", () => {
-    expect(previewKind("README")).toBeNull();
-    expect(previewKind(".gitignore")).toBeNull();
+  // preview-plain-text-fallback FR-1. These used to be null, and the refusal was
+  // incidental rather than intended: the check keyed on a SUFFIX, so a file whose whole
+  // name is its name lost the menu entry. `README` and `.gitignore` are text a member
+  // opens constantly.
+  it("reads a name with no usable extension as plain text", () => {
+    expect(previewKind("README")).toBe("text");
+    expect(previewKind("CHANGELOG")).toBe("text");
+    expect(previewKind(".gitignore")).toBe("text");
+    expect(previewKind(".prettierrc")).toBe("text");
+    // Nothing to preview at all, which is still an answer of its own.
     expect(previewKind("")).toBeNull();
+    expect(previewKind("uploads/")).toBeNull();
   });
 
   // A folder in the path must not be mistaken for the extension: only the leaf's
@@ -218,6 +256,41 @@ describe("previewBlobType", () => {
 // every line, so it carried nothing while costing the name its width (the reasoning is
 // recorded in uploads-sidebar.tsx). A TYPE icon is a different proposition — it only
 // earns that width by varying, which is what these assertions are really about.
+// preview-plain-text-fallback FR-2. The half of the fallback that does not guess: an
+// extension table only speaks for names it has seen, and the point of a fallback is the
+// names it has not, so the bytes get the last word.
+describe("looksBinary", () => {
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+
+  it("calls ordinary text text", () => {
+    expect(looksBinary(new TextEncoder().encode("key: value\n  - one\n").buffer)).toBe(false);
+  });
+
+  it("calls a NUL binary", () => {
+    expect(looksBinary(bytes(0x50, 0x4b, 0x03, 0x04, 0x00, 0x00))).toBe(true);
+  });
+
+  it("reads an empty file as text rather than as an error", () => {
+    expect(looksBinary(new ArrayBuffer(0))).toBe(false);
+  });
+
+  it("keeps UTF-8 above the ASCII range as text", () => {
+    // The failure this guards: treating a high byte as binary would refuse every
+    // accented file the agent writes.
+    expect(looksBinary(new TextEncoder().encode("ação — ü ß 日本語").buffer)).toBe(false);
+  });
+
+  it("only inspects the head, so a NUL past the window is not searched for", () => {
+    const buf = new Uint8Array(BINARY_SNIFF_BYTES + 16).fill(0x61);
+    buf[BINARY_SNIFF_BYTES + 4] = 0;
+    expect(looksBinary(buf.buffer)).toBe(false);
+    // ...and one inside it is found.
+    const near = new Uint8Array(BINARY_SNIFF_BYTES + 16).fill(0x61);
+    near[10] = 0;
+    expect(looksBinary(near.buffer)).toBe(true);
+  });
+});
+
 describe("fileTypeGroup", () => {
   it("separates the groups a member actually distinguishes at a glance", () => {
     expect(fileTypeGroup("report.pdf")).toBe("pdf");

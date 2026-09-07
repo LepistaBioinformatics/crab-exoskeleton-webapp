@@ -1,3 +1,13 @@
+# Patterns here are matched against the CONTEXT ROOT and are not recursive on their own,
+# so the `**/` forms are what actually keep a nested copy out. That is not theoretical:
+# a git worktree under `.claude/worktrees/` carries its own `node_modules` symlink and
+# `.next` build, and sent ~500 MB to the daemon on every build until it was named here.
 node_modules
+**/node_modules
 .next
+**/.next
 .git
+**/.git
+
+# Tooling scratch: worktrees, session state. Never part of an image.
+.claude

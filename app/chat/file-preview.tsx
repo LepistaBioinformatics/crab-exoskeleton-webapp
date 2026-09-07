@@ -12,6 +12,7 @@ import {
   previewBlobType,
   isDocumentKind,
   isSheetKind,
+  looksBinary,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import MessageContent, { MarkdownImageContext, codeText } from "@/app/chat/message-content";
@@ -117,18 +118,37 @@ export default function FilePreview({
   const [sheetIndex, setSheetIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Set when the bytes turn out to be binary after the NAME said they were text. Its own
+  // state rather than an error, because it is an ordinary answer about the file.
+  const [binary, setBinary] = useState(false);
 
   const needsBody = kind === "markdown" || kind === "text" || kind === "code";
   // Resolved from the NAME, like previewKind itself: the grammar and the decision to
   // preview at all come from the same table, so they cannot disagree.
   const language = kind === "code" ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
+  // The body the code pane paints and the gutter that counts it, derived TOGETHER so the
+  // two cannot disagree about how many lines there are.
+  //
+  // A trailing newline terminates the last line rather than opening an empty one, so it
+  // is dropped — keeping it would number a row that paints nothing. Counted by scanning
+  // rather than by `split`, because a 2 MB file is 50k lines and the array would exist
+  // only to have its length read.
+  const { codeBody, lineNumbers } = useMemo(() => {
+    if (kind !== "code" || text === null) return { codeBody: "", lineNumbers: "" };
+    const body = text.replace(/\n$/, "");
+    let lines = 1;
+    for (let i = 0; i < body.length; i++) if (body.charCodeAt(i) === 10) lines++;
+    let gutter = "1";
+    for (let n = 2; n <= lines; n++) gutter += `\n${n}`;
+    return { codeBody: body, lineNumbers: gutter };
+  }, [kind, text]);
   // Read out here, so the effect below depends on a STRING rather than on the copy
   // object — the same reason its other dependencies are `workspace`'s primitives.
   const slideLabel = t.preview.slide;
   // An <img> streams from the route itself, so only the frame and the text bodies
   // are actually loading here.
-  const loading = !error && !tooLarge &&
+  const loading = !error && !tooLarge && !binary &&
     ((needsBody && text === null) ||
       (kind === "pdf" && frameUrl === null) ||
       (isDocumentKind(kind) && docHtml === null) ||
@@ -136,6 +156,10 @@ export default function FilePreview({
 
   useEffect(() => {
     if (tooLarge) return;
+    // Reset, because this pane is not keyed by path: opening a second file reuses the
+    // instance, and a sticky `binary` would refuse a text file on the strength of the
+    // one opened before it.
+    setBinary(false);
     let cancelled = false;
     // The one object URL this component creates. Held in the closure as well as in
     // state so the cleanup can revoke it even when the fetch resolves after unmount.
@@ -149,10 +173,23 @@ export default function FilePreview({
           // failure this cap exists to prevent (a huge CSV freezing the tab) does not
           // care which surface opened the file.
           if (blob.size > PREVIEW_TEXT_MAX) throw new Error("too_large");
-          return blob.text();
+          return blob.arrayBuffer();
         })
-        .then((body) => {
-          if (!cancelled) setText(body);
+        .then((bytes) => {
+          if (cancelled) return;
+          // Read as BYTES rather than through `blob.text()`, because the plain-text
+          // fallback means an unrecognised extension arrives here on trust: the name
+          // said nothing, so the file is asked directly. A binary caught at this point
+          // is not an error — it is an answer, and it gets the same quiet notice the
+          // size cap gets rather than a red alert.
+          if (looksBinary(bytes)) {
+            setBinary(true);
+            return;
+          }
+          // Newlines are normalised on the way in, which the line gutter depends on: a
+          // CRLF file would otherwise number correctly and paint a stray glyph at the
+          // end of every line.
+          setText(new TextDecoder().decode(bytes).replace(/\r\n?/g, "\n"));
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
@@ -282,6 +319,16 @@ export default function FilePreview({
           {tooLarge && (
             <div className="p-4">
               <Alert severity="info">{t.preview.tooLarge}</Alert>
+            </div>
+          )}
+
+          {binary && (
+            // The other half of the plain-text fallback. An unrecognised extension is
+            // now opened on trust, so the file that turns out to be binary is refused
+            // HERE, after its bytes said so — and it is a notice, not an error, because
+            // nothing went wrong.
+            <div className="p-4">
+              <Alert severity="info">{t.preview.binary}</Alert>
             </div>
           )}
 
@@ -425,13 +472,37 @@ export default function FilePreview({
         // It SCROLLS rather than wraps (DEC-2), unlike the `text` kind above: a log is
         // prose whose line breaks are incidental, a YAML is a structure whose columns
         // carry meaning, and wrapping the second destroys what was opened to be seen.
-        <pre className="m-3 overflow-x-auto rounded-lg bg-current/10 p-3 leading-relaxed text-fg">
-          <CodeBlock
-            code={text}
-            className={`${codeText({ block: true })}${language ? ` language-${language}` : ""}`}
-            streaming={false}
-          />
-        </pre>
+        // Numbered, because this is a FILE rather than a fenced block in a message: the
+        // number is how a member says where something is, to a colleague or back to the
+        // agent, and a code pane without one makes them count. The chat's blocks are
+        // deliberately left unnumbered — a four-line snippet has no line to refer to.
+        //
+        // The gutter is a sibling `<pre>` rather than a per-line wrapper because
+        // highlight.js hands back spans that cross newlines: splitting its output into
+        // lines would mean re-opening those spans, which is a source of subtly wrong
+        // colouring. Two `<pre>` elements sharing one font size and one line-height stay
+        // aligned by construction instead.
+        //
+        // `sticky left-0` keeps the numbers in place when a long line scrolls the pane
+        // sideways, which is the whole reason the scroll container is the OUTER element
+        // and not the code column.
+        <div className="m-3 overflow-x-auto rounded-lg bg-elevated text-fg">
+          <div className="flex min-w-max">
+            <pre
+              aria-hidden
+              className="sticky left-0 z-10 shrink-0 select-none border-r border-brand/20 bg-elevated px-3 py-3 text-right font-mono text-[0.85em] leading-relaxed text-fg-muted"
+            >
+              {lineNumbers}
+            </pre>
+            <pre className="px-3 py-3 leading-relaxed">
+              <CodeBlock
+                code={codeBody}
+                className={`${codeText({ block: true })}${language ? ` language-${language}` : ""}`}
+                streaming={false}
+              />
+            </pre>
+          </div>
+        </div>
       )}
     </div>
   );

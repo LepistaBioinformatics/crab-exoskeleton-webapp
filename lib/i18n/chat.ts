@@ -115,6 +115,9 @@ const en = {
     // the file (preview-formatting-and-odf FR-3.3).
     slidesPartial: "Text extracted from the slides. Download the file to see the deck itself.",
     slide: "Slide {n}",
+    // An unrecognised extension is opened on trust now, so the file that turns out to be
+    // binary says so once its bytes have arrived. A notice, not an error.
+    binary: "This file isn't text. Download it to open it.",
   },
   markdownEditor: {
     aria: "Markdown editor",
@@ -866,6 +869,7 @@ const pt: ChatDict = {
     sheetTruncated: "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
     slidesPartial: "Texto extraído dos slides. Baixe o arquivo para ver a apresentação.",
     slide: "Slide {n}",
+    binary: "Este arquivo não é texto. Baixe-o para abrir.",
   },
   markdownEditor: {
     aria: "Editor markdown",
