@@ -12,7 +12,7 @@ import {
   previewBlobType,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
-import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
+import MessageContent, { MarkdownImageContext, codeText } from "@/app/chat/message-content";
 import CodeBlock from "@/app/chat/code-block";
 import { languageForFile } from "@/lib/code-highlight";
 import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
@@ -22,6 +22,55 @@ import { Spinner } from "@/components/ui/spinner";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
+
+/**
+ * The word-processor pane's typography, derived token for token from the markdown
+ * renderer's `COMPONENTS` table (`message-content.tsx`) rather than invented — DEC-3.
+ *
+ * `docx-body` used to be a class name NOTHING defined. mammoth maps Word's structure
+ * correctly (its default style map covers Heading 1-6, lists to five levels and Strong)
+ * and `sanitizeDocxHtml` keeps every one of those tags, so the markup reaching the DOM
+ * was always a real document — it was then painted by a rule that did not exist, and
+ * under Tailwind's preflight `h1`-`h6` inherit their parent's size and weight while
+ * `ul`/`ol` lose their markers entirely. A structured report arrived as a flat wall of
+ * text, visibly worse than the same content as markdown.
+ *
+ * Derived, not invented, because the complaint was comparative: the target is the
+ * markdown renderer's scale, and two independently authored scales would drift the first
+ * time either was touched. Kept as arbitrary variants here rather than as a class in
+ * `globals.css` for the same reason — this way the two sit in files one change can reach.
+ *
+ * Tables are the one deliberate departure. The markdown table's rounded outer corners
+ * come from `border-separate` plus `:first-child`/`:last-child` edge rules that assume a
+ * `<thead>`; a .docx table frequently has none, so the same border TOKENS are applied
+ * over `border-collapse`, which degrades to a plain grid instead of a broken one.
+ */
+const DOCX_BODY = [
+  "text-base leading-relaxed [&>*:last-child]:mb-0",
+  "[&_p]:mb-2",
+  "[&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:font-display [&_h1]:text-lg [&_h1]:font-bold",
+  "[&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:font-display [&_h2]:text-base [&_h2]:font-bold",
+  "[&_h3]:mb-1 [&_h3]:mt-1 [&_h3]:font-display [&_h3]:text-sm [&_h3]:font-bold",
+  "[&_h4]:mb-1 [&_h4]:font-display [&_h4]:text-sm [&_h4]:font-semibold",
+  "[&_h5]:mb-1 [&_h5]:font-display [&_h5]:text-xs [&_h5]:font-semibold [&_h5]:uppercase [&_h5]:tracking-wide",
+  "[&_h6]:mb-1 [&_h6]:font-display [&_h6]:text-xs [&_h6]:font-semibold [&_h6]:uppercase [&_h6]:tracking-wide [&_h6]:text-current/70",
+  "[&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-current/60",
+  "[&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-current/60",
+  "[&_ul_ul]:mb-0 [&_ul_ol]:mb-0 [&_ol_ol]:mb-0 [&_ol_ul]:mb-0",
+  "[&_li]:mb-0.5",
+  "[&_strong]:font-semibold [&_b]:font-semibold [&_em]:italic [&_i]:italic [&_u]:underline",
+  "[&_a]:underline [&_a]:underline-offset-2",
+  "[&_hr]:my-3 [&_hr]:border-current/20",
+  "[&_blockquote]:mb-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:opacity-90",
+  "[&_pre]:mb-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-current/10 [&_pre]:p-3",
+  "[&_code]:font-mono [&_code]:text-[0.85em]",
+  "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  "[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-current/10 [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
+  "[&_table]:mb-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[0.9em]",
+  "[&_th]:border [&_th]:border-current/15 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:align-top [&_th]:font-semibold",
+  "[&_td]:border [&_td]:border-current/15 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+  "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg",
+].join(" ");
 
 /**
  * SHOWS a workspace file instead of handing it to the operating system.
@@ -268,7 +317,7 @@ export default function FilePreview({
         // acceptable is the line above it: what goes in has been through
         // sanitizeDocxHtml, which is an allowlist and has its own suite.
         <div
-          className="mx-auto max-w-[820px] px-6 py-5 text-fg docx-body"
+          className={`mx-auto max-w-[820px] px-6 py-5 text-fg ${DOCX_BODY}`}
           dangerouslySetInnerHTML={{ __html: docHtml }}
         />
       )}
@@ -324,13 +373,24 @@ export default function FilePreview({
           what makes widening the format list free of the "member bytes never render
           from this origin" posture — `page.html` arrives here as source. */}
       {!error && kind === "code" && text !== null && (
-        <div className="p-3">
+        // The `<pre>` is HERE and not inside CodeBlock, which is the whole of DEC-1.
+        // CodeBlock renders a bare `<code>` because in the chat its wrapper comes from
+        // the markdown renderer (`message-content.tsx`, the `pre` component); moving the
+        // wrapper inward would nest `<pre>` in every message. This pane has no markdown
+        // renderer, so it had no wrapper at all — and a `<code>` keeps
+        // `white-space: normal` under Tailwind's preflight, which is why every .yaml,
+        // .json and .ts arrived as a single line.
+        //
+        // It SCROLLS rather than wraps (DEC-2), unlike the `text` kind above: a log is
+        // prose whose line breaks are incidental, a YAML is a structure whose columns
+        // carry meaning, and wrapping the second destroys what was opened to be seen.
+        <pre className="m-3 overflow-x-auto rounded-lg bg-current/10 p-3 leading-relaxed text-fg">
           <CodeBlock
             code={text}
-            className={language ? `language-${language}` : undefined}
+            className={`${codeText({ block: true })}${language ? ` language-${language}` : ""}`}
             streaming={false}
           />
-        </div>
+        </pre>
       )}
     </div>
   );
