@@ -265,7 +265,16 @@ Everything specified was built. What the work changed about the spec:
   wrappers), and that default would have pasted a reviewer's DELETED sentences back into
   the document. It is in `DROP` with a test naming the reason.
 
-**Verified:** `yarn test` — 114 files, 1452 tests, green. `yarn build` clean.
+- **The second filter almost went unwatched.** FR-4.1 puts the ODF walk's output through
+  `sanitizeDocxHtml` as well, and the first test written for that asserted
+  `sanitize(html) === html` on a plain-text fixture — which passes without ever
+  exercising a table or a nested span, so formatting eaten there would have been
+  invisible. Replaced with a survival assertion over headings, all three emphases at
+  once, a list, a `<th>` and a `colspan`. It also documents the one difference the second
+  filter is allowed to make: it parses as `text/html`, and the HTML parser INSERTS a
+  `<tbody>` into a table that lacks one.
+
+**Verified:** `yarn test` — 114 files, 1454 tests, green. `yarn build` clean.
 `npx tsc --noEmit` reports no error in any file this feature touched (four pre-existing
 errors remain in unrelated test files). JSZip's chunks appear in no page entry of
 `.next/app-build-manifest.json`, so FR-3.4 holds: a conversation that opens no

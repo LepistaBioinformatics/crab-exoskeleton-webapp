@@ -165,15 +165,23 @@ export default function FilePreview({
       fetchMediaBlob(workspace, path)
         .then(async (blob) => {
           const bytes = await blob.arrayBuffer();
-          const { sanitizeDocxHtml } = await import("@/lib/docx-html");
           if (kind === "docx") {
-            const { convertToHtml } = await import("mammoth/mammoth.browser");
+            // The reader and the sanitizer are fetched TOGETHER, not one after the
+            // other: they are independent chunks, and awaiting them in sequence would
+            // add a round trip to the first paint of the commonest document format.
+            const [{ convertToHtml }, { sanitizeDocxHtml }] = await Promise.all([
+              import("mammoth/mammoth.browser"),
+              import("@/lib/docx-html"),
+            ]);
             const { value } = await convertToHtml({ arrayBuffer: bytes });
             // Sanitized before it is ever handed to the DOM — mammoth's output is derived
             // from the member's own file, which makes it untrusted markup (DEC-4).
             return sanitizeDocxHtml(value);
           }
-          const odf = await import("@/lib/odf");
+          const [odf, { sanitizeDocxHtml }] = await Promise.all([
+            import("@/lib/odf"),
+            import("@/lib/docx-html"),
+          ]);
           const xml = await odf.readOdfContent(bytes);
           // Filtered too, even though the ODF walk emits only tags it chose itself and
           // escapes every text node. Two filters is the point: this is the one with the

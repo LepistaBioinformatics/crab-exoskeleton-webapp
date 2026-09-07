@@ -177,11 +177,55 @@ describe("textDocumentHtml", () => {
     expect(html).toContain("body");
   });
 
-  // FR-4.1 — safe by construction here, filtered again at the call site anyway.
-  it("emits nothing the docx sanitizer has to strip", () => {
-    const xml = textDoc("<text:p>&lt;script&gt;alert(1)&lt;/script&gt;</text:p>");
-    const html = textDocumentHtml(xml);
+  // FR-4.1 — safe by construction here, and filtered AGAIN at the call site. Two filters
+  // is the point, but it only works if the second one passes this one's output through:
+  // formatting silently eaten there would be invisible, because the walk's own tests
+  // never see it.
+  //
+  // Asserted as survival rather than as byte-equality on purpose. `sanitizeDocxHtml`
+  // parses with `text/html`, and the HTML parser INSERTS a `<tbody>` into any table that
+  // lacks one — so a byte-comparison would fail on a detail that changes nothing, while
+  // a plain-text fixture (which is what this test used to be) would pass without
+  // exercising a table or a nested span at all.
+  it("survives the sanitizer the call site puts it through", () => {
+    const styles =
+      '<style:style style:name="T1" style:family="text"><style:text-properties ' +
+      'fo:font-weight="bold" fo:font-style="italic" style:text-underline-style="solid"/></style:style>';
+    const html = textDocumentHtml(
+      textDoc(
+        '<text:h text:outline-level="2">Head</text:h>' +
+          '<text:p><text:span text:style-name="T1">all three</text:span></text:p>' +
+          "<text:list><text:list-item><text:p>item</text:p></text:list-item></text:list>" +
+          "<table:table><table:table-header-rows><table:table-row>" +
+          "<table:table-cell><text:p>H</text:p></table:table-cell></table:table-row>" +
+          "</table:table-header-rows><table:table-row>" +
+          '<table:table-cell table:number-columns-spanned="2"><text:p>wide</text:p></table:table-cell>' +
+          "</table:table-row></table:table>",
+        styles,
+      ),
+    );
+    const clean = sanitizeDocxHtml(html);
+    for (const kept of [
+      "<h2>Head</h2>",
+      "<strong>",
+      "<em>",
+      "<u>",
+      "all three",
+      "<li>item</li>",
+      "<th>H</th>",
+      'colspan="2"',
+      "wide",
+    ]) {
+      expect(clean, `${kept} did not survive the sanitizer`).toContain(kept);
+    }
+    // The only difference the second filter is allowed to make.
+    expect(clean.replace(/<\/?tbody>/g, "")).toBe(html);
+  });
+
+  it("emits no markup of the member's own", () => {
+    const html = textDocumentHtml(textDoc("<text:p>&lt;script&gt;alert(1)&lt;/script&gt;</text:p>"));
     expect(html).not.toContain("<script");
+    expect(html).toContain("&lt;script&gt;");
     expect(sanitizeDocxHtml(html)).toBe(html);
   });
 
@@ -336,6 +380,22 @@ describe("spreadsheetSheets", () => {
     const sheets = spreadsheetSheets(book(`<table:table table:name="S">${rows}</table:table>`), 5);
     expect(sheets[0].rows).toHaveLength(5);
     expect(sheets[0].truncated).toBe(true);
+  });
+
+  // Rows are not always direct children: ODS wraps them in header-row and row-group
+  // elements. The HTML walk handles those explicitly; this one reads DESCENDANTS, which
+  // is what makes it agree without a second wrapper list to keep in sync.
+  it("reads rows out of the group wrappers ODS puts them in", () => {
+    const sheets = spreadsheetSheets(
+      book(
+        '<table:table table:name="S">' +
+          `<table:table-header-rows><table:table-row>${cell("Header")}</table:table-row></table:table-header-rows>` +
+          `<table:table-row-group><table:table-row>${cell("grouped")}</table:table-row></table:table-row-group>` +
+          `<table:table-row>${cell("plain")}</table:table-row>` +
+          "</table:table>",
+      ),
+    );
+    expect(sheets[0].rows).toEqual([["Header"], ["grouped"], ["plain"]]);
   });
 
   it("returns every sheet in the book", () => {
