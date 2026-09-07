@@ -71,7 +71,9 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
 // Inline code gets a tinted chip; fenced/block code is bare (its <pre> wrapper
 // carries the surface). `bg-current/*` tints toward the text color so it reads
 // on both the neutral assistant bubble and the accent-filled user bubble.
-const codeText = cva("font-mono text-[0.85em]", {
+// Exported because the file preview's code pane is the SAME block-code surface and must
+// not grow a second recipe for it (preview-formatting-and-odf FR-1.3).
+export const codeText = cva("font-mono text-[0.85em]", {
   variants: {
     block: { true: "", false: "rounded bg-current/10 px-1 py-0.5" },
   },

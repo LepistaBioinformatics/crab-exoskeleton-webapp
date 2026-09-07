@@ -22,9 +22,16 @@ vi.mock("@/lib/media", async (importOriginal) => {
 });
 
 // jsdom's Blob has no `text()`, so the real thing cannot stand in for one here. The
-// preview reads exactly two members off what `fetchMediaBlob` resolves — `size` and
+// preview reads a few members off what `fetchMediaBlob` resolves — `size` and
 // `text()` — and this is those two.
-const blobOf = (body: string) => ({ size: body.length, text: async () => body });
+const blobOf = (body: string) => ({
+  size: body.length,
+  text: async () => body,
+  // `arrayBuffer`, because the text path reads BYTES now: the plain-text fallback opens
+  // an unrecognised extension on trust, so the file is sniffed for NUL before it is
+  // decoded (preview-plain-text-fallback FR-1).
+  arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+});
 
 const UploadsSidebar = (await import("./uploads-sidebar")).default;
 const { chatCopy } = await import("@/lib/i18n/chat");
@@ -152,5 +159,57 @@ describe("opening a document from the files tree", () => {
     await act(async () => byLabel(host, `${t.preview.action} run.py`).click());
 
     expect(host.textContent).toContain("print(os.getcwd())");
+  });
+
+  // preview-line-numbers FR-1. A file is not a fenced block in a message: the line number
+  // is how a member says WHERE something is, to a colleague or back to the agent.
+  it("numbers the lines of a script", async () => {
+    fetchMediaBlob.mockResolvedValue(blobOf("import os\nprint(os.getcwd())\n"));
+    const host = await openFiles();
+
+    await act(async () => byLabel(host, `${t.preview.action} run.py`).click());
+
+    // The trailing newline TERMINATES the second line rather than opening a third, so it
+    // must not be counted — that is the off-by-one this asserts.
+    expect(host.querySelector("pre[aria-hidden]")?.textContent).toBe("1\n2");
+  });
+
+  it("counts CRLF lines once, not twice", async () => {
+    fetchMediaBlob.mockResolvedValue(blobOf("a = 1\r\nb = 2\r\nc = 3\r\n"));
+    const host = await openFiles();
+
+    await act(async () => byLabel(host, `${t.preview.action} run.py`).click());
+
+    expect(host.querySelector("pre[aria-hidden]")?.textContent).toBe("1\n2\n3");
+    // And the stray carriage returns do not survive into the body.
+    expect(host.textContent).not.toContain("\r");
+  });
+
+  // Prose, not structure: a .md has no lines worth pointing at, and numbering it would be
+  // noise. Only the `code` kind is numbered.
+  it("does not number a markdown document", async () => {
+    fetchMediaBlob.mockResolvedValue(blobOf("# Q2\n\nrevenue up"));
+    const host = await openFiles();
+
+    await act(async () => byLabel(host, `${t.preview.action} report.md`).click());
+
+    expect(host.querySelector("pre[aria-hidden]")).toBeNull();
+  });
+
+  // preview-plain-text-fallback FR-2. The name said text; the bytes disagreed. That is an
+  // answer about the file, so it is a notice rather than a red alert.
+  it("says so when a file the name called text turns out to be binary", async () => {
+    fetchMediaBlob.mockResolvedValue({
+      size: 8,
+      text: async () => "",
+      arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x1a, 0x0a, 0x00]).buffer,
+    });
+    const host = await openFiles();
+
+    await act(async () => byLabel(host, `${t.preview.action} run.py`).click());
+
+    expect(host.textContent).toContain(t.preview.binary);
+    // And it is not left spinning, which is what a missing loading guard would do.
+    expect(host.querySelector('[role="status"]')).toBeNull();
   });
 });

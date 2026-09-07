@@ -41,6 +41,8 @@ const SHARED = new Set([
   "chat.sections.workspace",
   "chat.uploads.workspace",
   "chat.markdownEditor.tools.link",
+  // "Slide" is the word Portuguese uses, and the rest is an interpolation.
+  "chat.preview.slide",
   "chat.search.tag",
   "chat.enrichment.tagsOne",
   "chat.enrichment.tagsOther",

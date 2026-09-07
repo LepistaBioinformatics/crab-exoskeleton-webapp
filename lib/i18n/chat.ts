@@ -110,6 +110,14 @@ const en = {
     // Said rather than silently shown: a preview that cut a sheet off without saying so
     // would misrepresent the file.
     sheetTruncated: "Showing the first {n} rows. Download the file for all of them.",
+    // A presentation is a visual medium and this shows its text. Said out loud for the
+    // same reason the row cap is: a partial view that does not admit it misrepresents
+    // the file (preview-formatting-and-odf FR-3.3).
+    slidesPartial: "Text extracted from the slides. Download the file to see the deck itself.",
+    slide: "Slide {n}",
+    // An unrecognised extension is opened on trust now, so the file that turns out to be
+    // binary says so once its bytes have arrived. A notice, not an error.
+    binary: "This file isn't text. Download it to open it.",
   },
   markdownEditor: {
     aria: "Markdown editor",
@@ -859,6 +867,9 @@ const pt: ChatDict = {
     tooLarge: "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
     pdfFallback: "Este navegador não consegue exibir o PDF aqui — baixe o arquivo.",
     sheetTruncated: "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
+    slidesPartial: "Texto extraído dos slides. Baixe o arquivo para ver a apresentação.",
+    slide: "Slide {n}",
+    binary: "Este arquivo não é texto. Baixe-o para abrir.",
   },
   markdownEditor: {
     aria: "Editor markdown",

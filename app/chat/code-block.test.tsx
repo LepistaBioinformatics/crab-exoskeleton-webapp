@@ -82,4 +82,13 @@ describe("CodeBlock", () => {
   it("renders an empty block without throwing", () => {
     expect(() => render({ code: "", className: "language-go" })).not.toThrow();
   });
+
+  // preview-formatting-and-odf DEC-1. Every caller supplies its own `<pre>`: the chat
+  // through `message-content.tsx`'s `pre` component, the file preview at its own call
+  // site. Growing one HERE would nest `<pre>` inside `<pre>` in every message — which is
+  // the tempting wrong fix for the preview rendering code as a single line, so it is
+  // pinned rather than left to judgement.
+  it("supplies no <pre> of its own", () => {
+    expect(render({ code: "a\nb", className: "language-go" })).not.toContain("<pre");
+  });
 });

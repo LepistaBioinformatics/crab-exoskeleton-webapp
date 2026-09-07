@@ -10,9 +10,12 @@ import {
   resolveMediaRef,
   type PreviewKind,
   previewBlobType,
+  isDocumentKind,
+  isSheetKind,
+  looksBinary,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
-import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
+import MessageContent, { MarkdownImageContext, codeText } from "@/app/chat/message-content";
 import CodeBlock from "@/app/chat/code-block";
 import { languageForFile } from "@/lib/code-highlight";
 import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
@@ -22,6 +25,55 @@ import { Spinner } from "@/components/ui/spinner";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
+
+/**
+ * The word-processor pane's typography, derived token for token from the markdown
+ * renderer's `COMPONENTS` table (`message-content.tsx`) rather than invented — DEC-3.
+ *
+ * `docx-body` used to be a class name NOTHING defined. mammoth maps Word's structure
+ * correctly (its default style map covers Heading 1-6, lists to five levels and Strong)
+ * and `sanitizeDocxHtml` keeps every one of those tags, so the markup reaching the DOM
+ * was always a real document — it was then painted by a rule that did not exist, and
+ * under Tailwind's preflight `h1`-`h6` inherit their parent's size and weight while
+ * `ul`/`ol` lose their markers entirely. A structured report arrived as a flat wall of
+ * text, visibly worse than the same content as markdown.
+ *
+ * Derived, not invented, because the complaint was comparative: the target is the
+ * markdown renderer's scale, and two independently authored scales would drift the first
+ * time either was touched. Kept as arbitrary variants here rather than as a class in
+ * `globals.css` for the same reason — this way the two sit in files one change can reach.
+ *
+ * Tables are the one deliberate departure. The markdown table's rounded outer corners
+ * come from `border-separate` plus `:first-child`/`:last-child` edge rules that assume a
+ * `<thead>`; a .docx table frequently has none, so the same border TOKENS are applied
+ * over `border-collapse`, which degrades to a plain grid instead of a broken one.
+ */
+const DOCX_BODY = [
+  "text-base leading-relaxed [&>*:last-child]:mb-0",
+  "[&_p]:mb-2",
+  "[&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:font-display [&_h1]:text-lg [&_h1]:font-bold",
+  "[&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:font-display [&_h2]:text-base [&_h2]:font-bold",
+  "[&_h3]:mb-1 [&_h3]:mt-1 [&_h3]:font-display [&_h3]:text-sm [&_h3]:font-bold",
+  "[&_h4]:mb-1 [&_h4]:font-display [&_h4]:text-sm [&_h4]:font-semibold",
+  "[&_h5]:mb-1 [&_h5]:font-display [&_h5]:text-xs [&_h5]:font-semibold [&_h5]:uppercase [&_h5]:tracking-wide",
+  "[&_h6]:mb-1 [&_h6]:font-display [&_h6]:text-xs [&_h6]:font-semibold [&_h6]:uppercase [&_h6]:tracking-wide [&_h6]:text-current/70",
+  "[&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:marker:text-current/60",
+  "[&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:marker:text-current/60",
+  "[&_ul_ul]:mb-0 [&_ul_ol]:mb-0 [&_ol_ol]:mb-0 [&_ol_ul]:mb-0",
+  "[&_li]:mb-0.5",
+  "[&_strong]:font-semibold [&_b]:font-semibold [&_em]:italic [&_i]:italic [&_u]:underline",
+  "[&_a]:underline [&_a]:underline-offset-2",
+  "[&_hr]:my-3 [&_hr]:border-current/20",
+  "[&_blockquote]:mb-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:opacity-90",
+  "[&_pre]:mb-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-current/10 [&_pre]:p-3",
+  "[&_code]:font-mono [&_code]:text-[0.85em]",
+  "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  "[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-current/10 [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
+  "[&_table]:mb-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[0.9em]",
+  "[&_th]:border [&_th]:border-current/15 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:align-top [&_th]:font-semibold",
+  "[&_td]:border [&_td]:border-current/15 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+  "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg",
+].join(" ");
 
 /**
  * SHOWS a workspace file instead of handing it to the operating system.
@@ -66,22 +118,48 @@ export default function FilePreview({
   const [sheetIndex, setSheetIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Set when the bytes turn out to be binary after the NAME said they were text. Its own
+  // state rather than an error, because it is an ordinary answer about the file.
+  const [binary, setBinary] = useState(false);
 
   const needsBody = kind === "markdown" || kind === "text" || kind === "code";
   // Resolved from the NAME, like previewKind itself: the grammar and the decision to
   // preview at all come from the same table, so they cannot disagree.
   const language = kind === "code" ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
+  // The body the code pane paints and the gutter that counts it, derived TOGETHER so the
+  // two cannot disagree about how many lines there are.
+  //
+  // A trailing newline terminates the last line rather than opening an empty one, so it
+  // is dropped — keeping it would number a row that paints nothing. Counted by scanning
+  // rather than by `split`, because a 2 MB file is 50k lines and the array would exist
+  // only to have its length read.
+  const { codeBody, lineNumbers } = useMemo(() => {
+    if (kind !== "code" || text === null) return { codeBody: "", lineNumbers: "" };
+    const body = text.replace(/\n$/, "");
+    let lines = 1;
+    for (let i = 0; i < body.length; i++) if (body.charCodeAt(i) === 10) lines++;
+    let gutter = "1";
+    for (let n = 2; n <= lines; n++) gutter += `\n${n}`;
+    return { codeBody: body, lineNumbers: gutter };
+  }, [kind, text]);
+  // Read out here, so the effect below depends on a STRING rather than on the copy
+  // object — the same reason its other dependencies are `workspace`'s primitives.
+  const slideLabel = t.preview.slide;
   // An <img> streams from the route itself, so only the frame and the text bodies
   // are actually loading here.
-  const loading = !error && !tooLarge &&
+  const loading = !error && !tooLarge && !binary &&
     ((needsBody && text === null) ||
       (kind === "pdf" && frameUrl === null) ||
-      (kind === "docx" && docHtml === null) ||
-      (kind === "xlsx" && sheets === null));
+      (isDocumentKind(kind) && docHtml === null) ||
+      (isSheetKind(kind) && sheets === null));
 
   useEffect(() => {
     if (tooLarge) return;
+    // Reset, because this pane is not keyed by path: opening a second file reuses the
+    // instance, and a sticky `binary` would refuse a text file on the strength of the
+    // one opened before it.
+    setBinary(false);
     let cancelled = false;
     // The one object URL this component creates. Held in the closure as well as in
     // state so the cleanup can revoke it even when the fetch resolves after unmount.
@@ -95,27 +173,61 @@ export default function FilePreview({
           // failure this cap exists to prevent (a huge CSV freezing the tab) does not
           // care which surface opened the file.
           if (blob.size > PREVIEW_TEXT_MAX) throw new Error("too_large");
-          return blob.text();
+          return blob.arrayBuffer();
         })
-        .then((body) => {
-          if (!cancelled) setText(body);
+        .then((bytes) => {
+          if (cancelled) return;
+          // Read as BYTES rather than through `blob.text()`, because the plain-text
+          // fallback means an unrecognised extension arrives here on trust: the name
+          // said nothing, so the file is asked directly. A binary caught at this point
+          // is not an error — it is an answer, and it gets the same quiet notice the
+          // size cap gets rather than a red alert.
+          if (looksBinary(bytes)) {
+            setBinary(true);
+            return;
+          }
+          // Newlines are normalised on the way in, which the line gutter depends on: a
+          // CRLF file would otherwise number correctly and paint a stray glyph at the
+          // end of every line.
+          setText(new TextDecoder().decode(bytes).replace(/\r\n?/g, "\n"));
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
         });
-    } else if (kind === "docx") {
-      // mammoth and the sanitizer arrive together and only here: a conversation that
-      // never opens a .docx pays for neither (FR-4.4).
+    } else if (isDocumentKind(kind)) {
+      // The reader and the sanitizer arrive together and only here: a conversation that
+      // never opens a document pays for neither (file-preview-in-pane FR-4.4). Which
+      // reader is decided by the KIND, which is why `.odt` and `.odp` are kinds of their
+      // own rather than sharing `docx` — the format table stays the one place that knows.
       fetchMediaBlob(workspace, path)
         .then(async (blob) => {
-          const [{ convertToHtml }, { sanitizeDocxHtml }] = await Promise.all([
-            import("mammoth/mammoth.browser"),
+          const bytes = await blob.arrayBuffer();
+          if (kind === "docx") {
+            // The reader and the sanitizer are fetched TOGETHER, not one after the
+            // other: they are independent chunks, and awaiting them in sequence would
+            // add a round trip to the first paint of the commonest document format.
+            const [{ convertToHtml }, { sanitizeDocxHtml }] = await Promise.all([
+              import("mammoth/mammoth.browser"),
+              import("@/lib/docx-html"),
+            ]);
+            const { value } = await convertToHtml({ arrayBuffer: bytes });
+            // Sanitized before it is ever handed to the DOM — mammoth's output is derived
+            // from the member's own file, which makes it untrusted markup (DEC-4).
+            return sanitizeDocxHtml(value);
+          }
+          const [odf, { sanitizeDocxHtml }] = await Promise.all([
+            import("@/lib/odf"),
             import("@/lib/docx-html"),
           ]);
-          const { value } = await convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
-          // Sanitized before it is ever handed to the DOM — mammoth's output is derived
-          // from the member's own file, which makes it untrusted markup (DEC-4).
-          return sanitizeDocxHtml(value);
+          const xml = await odf.readOdfContent(bytes);
+          // Filtered too, even though the ODF walk emits only tags it chose itself and
+          // escapes every text node. Two filters is the point: this is the one with the
+          // suite and the stated posture behind it (preview-formatting-and-odf FR-4.1).
+          return sanitizeDocxHtml(
+            kind === "odp"
+              ? odf.presentationHtml(xml, (n) => slideLabel.replace("{n}", String(n)))
+              : odf.textDocumentHtml(xml),
+          );
         })
         .then((html) => {
           if (!cancelled) setDocHtml(html);
@@ -123,11 +235,19 @@ export default function FilePreview({
         .catch((e: Error) => {
           if (!cancelled) setError(e.message);
         });
-    } else if (kind === "xlsx") {
+    } else if (isSheetKind(kind)) {
       fetchMediaBlob(workspace, path)
         .then(async (blob) => {
+          const bytes = await blob.arrayBuffer();
+          if (kind === "ods") {
+            const { readOdfContent, spreadsheetSheets } = await import("@/lib/odf");
+            // Returns the shape the spreadsheet pane already consumes, so `.ods` inherits
+            // the sheet tabs, the row cap and the truncation notice without a line of
+            // UI (DEC-5).
+            return spreadsheetSheets(await readOdfContent(bytes));
+          }
           const { readWorkbook } = await import("@/lib/sheet-preview");
-          return readWorkbook(await blob.arrayBuffer());
+          return readWorkbook(bytes);
         })
         .then((read) => {
           if (cancelled) return;
@@ -159,7 +279,7 @@ export default function FilePreview({
     // Primitives, not the `workspace` object — the caller rebuilds it per render, and
     // depending on the object would refetch (and re-revoke) on every one. Same idiom
     // uploads-sidebar's listing effect uses.
-  }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge]);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge, slideLabel]);
 
   // Relative refs inside the previewed markdown resolve against ITS folder and load
   // through the media route. Memoised because it is a context value read by a
@@ -199,6 +319,16 @@ export default function FilePreview({
           {tooLarge && (
             <div className="p-4">
               <Alert severity="info">{t.preview.tooLarge}</Alert>
+            </div>
+          )}
+
+          {binary && (
+            // The other half of the plain-text fallback. An unrecognised extension is
+            // now opened on trust, so the file that turns out to be binary is refused
+            // HERE, after its bytes said so — and it is a notice, not an error, because
+            // nothing went wrong.
+            <div className="p-4">
+              <Alert severity="info">{t.preview.binary}</Alert>
             </div>
           )}
 
@@ -263,17 +393,24 @@ export default function FilePreview({
         </pre>
       )}
 
-      {!error && kind === "docx" && docHtml !== null && (
-        // The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
-        // acceptable is the line above it: what goes in has been through
-        // sanitizeDocxHtml, which is an allowlist and has its own suite.
-        <div
-          className="mx-auto max-w-[820px] px-6 py-5 text-fg docx-body"
-          dangerouslySetInnerHTML={{ __html: docHtml }}
-        />
+      {!error && isDocumentKind(kind) && docHtml !== null && (
+        <div className="mx-auto max-w-[820px] px-6 py-5">
+          {kind === "odp" && (
+            // Said out loud for the same reason the sheet's row cap is: this shows the
+            // deck's TEXT, and a partial view that does not admit it misrepresents the
+            // file (FR-3.3).
+            <div className="mb-4">
+              <Alert severity="info">{t.preview.slidesPartial}</Alert>
+            </div>
+          )}
+          {/* The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
+              acceptable is the line above it: what goes in has been through
+              sanitizeDocxHtml, which is an allowlist and has its own suite. */}
+          <div className={`text-fg ${DOCX_BODY}`} dangerouslySetInnerHTML={{ __html: docHtml }} />
+        </div>
       )}
 
-      {!error && kind === "xlsx" && sheets !== null && (
+      {!error && isSheetKind(kind) && sheets !== null && (
         <div className="flex h-full min-h-0 flex-col">
           {sheets.length > 1 && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-brand/20 px-2 py-1.5">
@@ -324,12 +461,47 @@ export default function FilePreview({
           what makes widening the format list free of the "member bytes never render
           from this origin" posture — `page.html` arrives here as source. */}
       {!error && kind === "code" && text !== null && (
-        <div className="p-3">
-          <CodeBlock
-            code={text}
-            className={language ? `language-${language}` : undefined}
-            streaming={false}
-          />
+        // The `<pre>` is HERE and not inside CodeBlock, which is the whole of DEC-1.
+        // CodeBlock renders a bare `<code>` because in the chat its wrapper comes from
+        // the markdown renderer (`message-content.tsx`, the `pre` component); moving the
+        // wrapper inward would nest `<pre>` in every message. This pane has no markdown
+        // renderer, so it had no wrapper at all — and a `<code>` keeps
+        // `white-space: normal` under Tailwind's preflight, which is why every .yaml,
+        // .json and .ts arrived as a single line.
+        //
+        // It SCROLLS rather than wraps (DEC-2), unlike the `text` kind above: a log is
+        // prose whose line breaks are incidental, a YAML is a structure whose columns
+        // carry meaning, and wrapping the second destroys what was opened to be seen.
+        // Numbered, because this is a FILE rather than a fenced block in a message: the
+        // number is how a member says where something is, to a colleague or back to the
+        // agent, and a code pane without one makes them count. The chat's blocks are
+        // deliberately left unnumbered — a four-line snippet has no line to refer to.
+        //
+        // The gutter is a sibling `<pre>` rather than a per-line wrapper because
+        // highlight.js hands back spans that cross newlines: splitting its output into
+        // lines would mean re-opening those spans, which is a source of subtly wrong
+        // colouring. Two `<pre>` elements sharing one font size and one line-height stay
+        // aligned by construction instead.
+        //
+        // `sticky left-0` keeps the numbers in place when a long line scrolls the pane
+        // sideways, which is the whole reason the scroll container is the OUTER element
+        // and not the code column.
+        <div className="m-3 overflow-x-auto rounded-lg bg-elevated text-fg">
+          <div className="flex min-w-max">
+            <pre
+              aria-hidden
+              className="sticky left-0 z-10 shrink-0 select-none border-r border-brand/20 bg-elevated px-3 py-3 text-right font-mono text-[0.85em] leading-relaxed text-fg-muted"
+            >
+              {lineNumbers}
+            </pre>
+            <pre className="px-3 py-3 leading-relaxed">
+              <CodeBlock
+                code={codeBody}
+                className={`${codeText({ block: true })}${language ? ` language-${language}` : ""}`}
+                streaming={false}
+              />
+            </pre>
+          </div>
         </div>
       )}
     </div>

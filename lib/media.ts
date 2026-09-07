@@ -249,6 +249,12 @@ export type FileTypeGroup =
   | "markdown"
   | "text"
   | "sheet"
+  // A word-processor document. Added late, and the gap it closes was visible before the
+  // OpenDocument work: `docx` and `doc` were not in the table at all, so a Word file has
+  // been carrying the neutral `unknown` glyph the whole time. It earns its own group by
+  // the rule below — "document" is a distinction a member makes at a glance, and it is
+  // now also a distinction the preview acts on.
+  | "document"
   | "archive"
   | "code"
   | "audio"
@@ -261,6 +267,7 @@ const FILE_TYPE_GROUPS: Record<string, FileTypeGroup> = {
   md: "markdown",
   txt: "text", log: "text", json: "text", yml: "text", yaml: "text",
   csv: "sheet", tsv: "sheet", xlsx: "sheet", xls: "sheet", ods: "sheet",
+  doc: "document", docx: "document", odt: "document", odp: "document", rtf: "document",
   zip: "archive", gz: "archive", tar: "archive", tgz: "archive", rar: "archive", "7z": "archive",
   py: "code", js: "code", ts: "code", tsx: "code", jsx: "code", go: "code",
   rs: "code", sh: "code", sql: "code", html: "code", css: "code",
@@ -343,7 +350,32 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
 // member's file never renders from this origin. Widening this list is what would
 // spend that.
 
-export type PreviewKind = "image" | "markdown" | "text" | "pdf" | "code" | "docx" | "xlsx";
+export type PreviewKind =
+  | "image"
+  | "markdown"
+  | "text"
+  | "pdf"
+  | "code"
+  // The office families. `docx`/`odt`/`odp` all land in the word-processor pane and
+  // `xlsx`/`ods` in the spreadsheet pane, but the KIND stays per-format because it is
+  // what selects the reader — mammoth, exceljs or the ODF walk — and a kind that meant
+  // "some document" would put that decision back into the component, away from the
+  // table that decided the file was previewable at all.
+  | "docx"
+  | "odt"
+  | "odp"
+  | "xlsx"
+  | "ods";
+
+/** True for the kinds the word-processor pane paints. */
+export function isDocumentKind(kind: PreviewKind): boolean {
+  return kind === "docx" || kind === "odt" || kind === "odp";
+}
+
+/** True for the kinds the spreadsheet pane paints. */
+export function isSheetKind(kind: PreviewKind): boolean {
+  return kind === "xlsx" || kind === "ods";
+}
 
 const PREVIEW_KINDS: Record<string, PreviewKind> = {
   png: "image",
@@ -364,25 +396,110 @@ const PREVIEW_KINDS: Record<string, PreviewKind> = {
   // which neither library reads — they stay download-only rather than failing loudly.
   docx: "docx",
   xlsx: "xlsx",
+  // The OpenDocument family, read by one parser with three entry points (`lib/odf.ts`).
+  // They were the last office formats with no way to be read in the browser at all, and
+  // each lands in a pane that already existed rather than growing a third one.
+  odt: "odt",
+  ods: "ods",
+  odp: "odp",
 };
+
+/**
+ * Extensions that must NOT fall through to the plain-text reading below.
+ *
+ * The list names BINARY formats, and it exists because the fallback inverted the old
+ * default: an unrecognised extension now previews as text, so what needs naming is what
+ * would become mojibake rather than what would read. Decoding a `.zip` as UTF-8 paints a
+ * screen of replacement characters, which is worse than the honest download-only menu it
+ * used to get.
+ *
+ * Deliberately conservative — only formats that are unambiguously binary. Anything
+ * arguable (`.dat`, `.bak`, an extension nobody here has seen) is left to the byte sniff
+ * in `looksBinary`, which answers from the file itself rather than from a guess about
+ * its name.
+ */
+const NEVER_TEXT = new Set([
+  // Archives and disk images.
+  "zip", "gz", "tgz", "tar", "rar", "7z", "bz2", "xz", "zst", "lz", "lzma", "cab", "iso", "dmg",
+  // Audio and video.
+  "mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "wma", "opus",
+  "mp4", "webm", "mov", "mkv", "avi", "wmv", "flv", "m4v", "mpg", "mpeg",
+  // Images this pane does not render. They keep the download-only menu they already had
+  // rather than becoming a screenful of replacement characters.
+  "bmp", "tif", "tiff", "ico", "icns", "heic", "heif", "avif", "psd", "ai", "eps",
+  "cr2", "nef", "arw",
+  // Executables, libraries and compiled output.
+  "exe", "dll", "so", "dylib", "bin", "o", "obj", "lib", "class", "jar", "war",
+  "pyc", "pyo", "wasm", "msi", "deb", "rpm", "apk",
+  // Fonts.
+  "ttf", "otf", "woff", "woff2", "eot",
+  // The office formats no reader here opens: the pre-2007 binaries, and the ones with no
+  // parser. They were download-only before this fallback and stay that way.
+  "doc", "xls", "ppt", "pptx", "odg", "pages", "numbers", "key",
+  // Opaque stores.
+  "sqlite", "sqlite3", "db", "mdb", "accdb", "pack", "idx",
+]);
 
 /**
  * How a file can be previewed, or null when it cannot be.
  *
  * Case-insensitive: the agent writes `REPORT.MD` as readily as `report.md`, and an
  * extension check that missed one would look like a broken menu rather than a rule.
+ *
+ * **An unrecognised extension reads as PLAIN TEXT rather than refusing.** That inverts
+ * the default this table shipped with, and it spends nothing of the posture the table
+ * documents: text renders ESCAPED, inside a `<pre>`, exactly as `.txt` always has, so a
+ * member's bytes still cannot become markup from this origin. What the old default
+ * actually bought was protection from MOJIBAKE, not from injection — and `NEVER_TEXT`
+ * plus the byte sniff buy that more precisely, while the formats that genuinely cannot
+ * be read still say so.
+ *
+ * A file with no extension reads as text too (`LICENSE`, `CHANGELOG`), and so does a
+ * dotfile (`.gitignore`, `.prettierrc`). Both are text a member opens constantly, and
+ * both were refused for the incidental reason that the old check keyed on a suffix.
  */
 export function previewKind(nameOrPath: string): PreviewKind | null {
   const leaf = nameOrPath.slice(nameOrPath.lastIndexOf("/") + 1);
+  if (!leaf) return null;
   const dot = leaf.lastIndexOf(".");
-  if (dot <= 0) return null; // no extension, or a dotfile with none
-  const explicit = PREVIEW_KINDS[leaf.slice(dot + 1).toLowerCase()];
+  // `dot > 0`, so a dotfile is not read as a suffix of itself: `.gitignore` is a whole
+  // name, not a `gitignore` extension.
+  const ext = dot > 0 ? leaf.slice(dot + 1).toLowerCase() : "";
+
+  const explicit = PREVIEW_KINDS[ext];
   if (explicit) return explicit;
+
   // Anything the chat could already highlight is readable here too, and the alias
   // table over there is the single list of what that means (DEC-1). It renders as
   // ESCAPED text, so widening the set this way costs nothing of the posture above:
   // `html` resolves to the xml grammar and is shown as source.
-  return languageForFile(leaf) ? "code" : null;
+  if (languageForFile(leaf)) return "code";
+
+  // Everything left reads as PLAIN TEXT rather than refusing — see the note above.
+  return NEVER_TEXT.has(ext) ? null : "text";
+}
+
+/** How much of a file is inspected before it is believed to be text. */
+export const BINARY_SNIFF_BYTES = 8192;
+
+/**
+ * Whether these bytes are binary, answered the way `git` answers it: a NUL byte near the
+ * start of the file.
+ *
+ * The second half of the plain-text fallback, and the half that does not guess. An
+ * extension table can only speak for the names it has seen, and the whole point of a
+ * fallback is the names it has not — so the file itself gets the last word. A `.pack`, a
+ * `.dat`, or an extensionless blob that turns out to be an executable is refused HERE,
+ * once its bytes have arrived, instead of being painted as a screen of U+FFFD.
+ *
+ * Cheap by construction: a fixed 8 KB window rather than the whole file. Text with a NUL
+ * in its first 8 KB does not occur in practice, and a binary without one there is rare
+ * enough that the cost of being wrong is a garbled pane with a download button in it —
+ * which is exactly where the file started.
+ */
+export function looksBinary(bytes: ArrayBuffer): boolean {
+  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, BINARY_SNIFF_BYTES));
+  return head.includes(0);
 }
 
 /**

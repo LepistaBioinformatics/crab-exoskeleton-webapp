@@ -1,4 +1,7 @@
-node_modules/
+# No trailing slash, deliberately: `node_modules/` matches a DIRECTORY only, and a
+# worktree that reaches the shared install through a symlink puts a non-directory of
+# that name at the root. One got committed that way.
+node_modules
 .next/
 next-env.d.ts
 

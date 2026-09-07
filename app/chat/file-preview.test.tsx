@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 
 import FilePreview from "./file-preview";
 import MessageContent, { MarkdownImageContext } from "./message-content";
+import CodeBlock from "./code-block";
 import { chatCopy } from "@/lib/i18n/chat";
 import { mediaUrl, resolveMediaRef } from "@/lib/media";
 import type { Workspace } from "./fragment";
@@ -156,5 +157,80 @@ describe("markdown preview table overflow", () => {
     // 50cqw - 360px is zero below a 720px column. A column allowed to grow past
     // that is what makes any breakout happen at all, so the two belong together.
     expect(src).toContain("max-w-[820px]");
+  });
+});
+
+// preview-formatting-and-odf FR-1. The `code` pane rendered a bare `<code>`, which keeps
+// `white-space: normal` under Tailwind's preflight — so every newline in a .yaml, .json
+// or .ts collapsed and the file arrived as one unreadable line. A `<pre>` restores them,
+// and it belongs at THIS call site (DEC-1): CodeBlock is shared with the chat, where
+// `message-content.tsx` already supplies one, so wrapping inside CodeBlock would nest
+// `<pre>` in every message instead.
+//
+// Source-based for the same reason the suite above is: the code column only exists once
+// the fetched body is in state, and effects never fire under `environment: "node"`.
+describe("code preview keeps its lines", () => {
+  const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
+  const branch = src.slice(src.indexOf('kind === "code" && text !== null'));
+  const opening = branch.slice(branch.indexOf("<pre"), branch.indexOf("<CodeBlock"));
+
+  it("wraps the code pane in a <pre>", () => {
+    expect(branch.slice(0, branch.indexOf("<CodeBlock"))).toContain("<pre");
+  });
+
+  it("scrolls the code pane rather than wrapping it", () => {
+    // DEC-2: the `text` kind wraps because a log's line breaks are incidental; code
+    // scrolls because its columns carry meaning.
+    expect(opening).toContain("overflow-x-auto");
+    expect(opening).not.toContain("whitespace-pre-wrap");
+  });
+
+  it("carries the newlines through the highlighter into the markup", () => {
+    const code = "root:\n  key: value\n  list:\n    - one\n";
+    const html = renderToStaticMarkup(
+      <pre>
+        <CodeBlock code={code} className="language-yaml" streaming={false} />
+      </pre>,
+    );
+    expect(html).toContain(code.trimEnd());
+  });
+});
+
+// preview-formatting-and-odf FR-2. `docx-body` was a class name nothing in the
+// repository defined, so a Word report — whose structure mammoth maps correctly and
+// `sanitizeDocxHtml` keeps intact — painted as a flat wall of text under preflight.
+describe("docx typography", () => {
+  const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
+  const md = readFileSync(new URL("./message-content.tsx", import.meta.url), "utf8");
+
+  it("no longer leans on a class nothing defines", () => {
+    // The container's own className, not the file: the prose above it names the old
+    // class while explaining why it was a defect.
+    const branch = src.slice(src.indexOf("isDocumentKind(kind) && docHtml !== null"));
+    const className = /className=\{`([^`]+)`\}/.exec(branch)?.[1] ?? "";
+    expect(className).not.toContain("docx-body");
+    expect(className).toContain("DOCX_BODY");
+  });
+
+  it("restores the structure preflight strips", () => {
+    for (const rule of [
+      "[&_h1]:",
+      "[&_h2]:",
+      "[&_ul]:list-disc",
+      "[&_ol]:list-decimal",
+      "[&_td]:border",
+    ]) {
+      expect(src).toContain(rule);
+    }
+  });
+
+  // DEC-3: derived from the markdown renderer's table rather than invented. Read out of
+  // THAT file, so a change to the markdown scale that is not mirrored here fails here.
+  it("uses the markdown renderer's own scale", () => {
+    for (const tag of ["p", "h1", "h2", "h3", "h4"]) {
+      const tokens = new RegExp(`<${tag} className="([^"]+)"`).exec(md)?.[1].split(/\s+/) ?? [];
+      expect(tokens.length).toBeGreaterThan(0);
+      for (const token of tokens) expect(src).toContain(`[&_${tag}]:${token}`);
+    }
   });
 });

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   PREVIEW_TEXT_MAX,
+  BINARY_SNIFF_BYTES,
   fileTypeGroup,
+  isDocumentKind,
+  isSheetKind,
+  looksBinary,
   mediaUrl,
   previewBlobType,
   previewKind,
@@ -43,10 +47,66 @@ describe("previewKind", () => {
     expect(previewKind("legacy.xls")).toBeNull();
   });
 
+  // preview-formatting-and-odf FR-3. The OpenDocument family were the last office
+  // formats with no way to be read in the browser at all. Each keeps a kind of its OWN
+  // even though `.odt` shares the word-processor pane with `.docx` and `.ods` shares the
+  // spreadsheet pane with `.xlsx`: the kind is what selects the READER, so collapsing
+  // them would move that decision out of this table and into the component.
+  it("previews the OpenDocument family", () => {
+    expect(previewKind("report.odt")).toBe("odt");
+    expect(previewKind("budget.ods")).toBe("ods");
+    expect(previewKind("deck.odp")).toBe("odp");
+    expect(previewKind("REPORT.ODT")).toBe("odt");
+  });
+
+  it("routes each office kind to the pane that paints it", () => {
+    for (const n of ["report.docx", "report.odt", "deck.odp"]) {
+      expect(isDocumentKind(previewKind(n)!)).toBe(true);
+      expect(isSheetKind(previewKind(n)!)).toBe(false);
+    }
+    for (const n of ["sheet.xlsx", "budget.ods"]) {
+      expect(isSheetKind(previewKind(n)!)).toBe(true);
+      expect(isDocumentKind(previewKind(n)!)).toBe(false);
+    }
+    // The text kinds belong to neither, which is what keeps the `<pre>` paths separate.
+    for (const n of ["notes.txt", "run.py", "report.md"]) {
+      expect(isDocumentKind(previewKind(n)!)).toBe(false);
+      expect(isSheetKind(previewKind(n)!)).toBe(false);
+    }
+  });
+
   it("refuses what it cannot render, so the menu stays download-only", () => {
     expect(previewKind("slides.pptx")).toBeNull();
     expect(previewKind("bundle.zip")).toBeNull();
     expect(previewKind("archive.tar.gz")).toBeNull();
+  });
+
+  // preview-plain-text-fallback FR-1. The default inverted: an extension nobody here has
+  // heard of reads as PLAIN TEXT rather than losing the menu entry. It costs nothing of
+  // the origin's posture — text renders escaped inside a `<pre>`, exactly as `.txt`
+  // always has — because what the old refusal actually bought was protection from
+  // mojibake, not from injection.
+  it("reads an unrecognised extension as plain text", () => {
+    for (const n of ["notes.rst", "data.ndjson", "app.conf2", "thing.xyzzy", "f.qwerty"]) {
+      expect(previewKind(n), n).toBe("text");
+    }
+  });
+
+  it("still refuses the formats that would only be mojibake", () => {
+    for (const n of [
+      "bundle.zip",
+      "clip.mp4",
+      "song.mp3",
+      "font.woff2",
+      "lib.so",
+      "app.exe",
+      "photo.heic",
+      "store.sqlite",
+      "legacy.doc",
+      "slides.key",
+    ]) {
+      expect(previewKind(n), n).toBeNull();
+    }
   });
 
   // file-preview-in-pane FR-1.1. The agent writes scripts and configs constantly and
@@ -84,10 +144,18 @@ describe("previewKind", () => {
     expect(previewKind("notes.txt")).toBe("text");
   });
 
-  it("handles names with no usable extension", () => {
-    expect(previewKind("README")).toBeNull();
-    expect(previewKind(".gitignore")).toBeNull();
+  // preview-plain-text-fallback FR-1. These used to be null, and the refusal was
+  // incidental rather than intended: the check keyed on a SUFFIX, so a file whose whole
+  // name is its name lost the menu entry. `README` and `.gitignore` are text a member
+  // opens constantly.
+  it("reads a name with no usable extension as plain text", () => {
+    expect(previewKind("README")).toBe("text");
+    expect(previewKind("CHANGELOG")).toBe("text");
+    expect(previewKind(".gitignore")).toBe("text");
+    expect(previewKind(".prettierrc")).toBe("text");
+    // Nothing to preview at all, which is still an answer of its own.
     expect(previewKind("")).toBeNull();
+    expect(previewKind("uploads/")).toBeNull();
   });
 
   // A folder in the path must not be mistaken for the extension: only the leaf's
@@ -188,6 +256,41 @@ describe("previewBlobType", () => {
 // every line, so it carried nothing while costing the name its width (the reasoning is
 // recorded in uploads-sidebar.tsx). A TYPE icon is a different proposition — it only
 // earns that width by varying, which is what these assertions are really about.
+// preview-plain-text-fallback FR-2. The half of the fallback that does not guess: an
+// extension table only speaks for names it has seen, and the point of a fallback is the
+// names it has not, so the bytes get the last word.
+describe("looksBinary", () => {
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+
+  it("calls ordinary text text", () => {
+    expect(looksBinary(new TextEncoder().encode("key: value\n  - one\n").buffer)).toBe(false);
+  });
+
+  it("calls a NUL binary", () => {
+    expect(looksBinary(bytes(0x50, 0x4b, 0x03, 0x04, 0x00, 0x00))).toBe(true);
+  });
+
+  it("reads an empty file as text rather than as an error", () => {
+    expect(looksBinary(new ArrayBuffer(0))).toBe(false);
+  });
+
+  it("keeps UTF-8 above the ASCII range as text", () => {
+    // The failure this guards: treating a high byte as binary would refuse every
+    // accented file the agent writes.
+    expect(looksBinary(new TextEncoder().encode("ação — ü ß 日本語").buffer)).toBe(false);
+  });
+
+  it("only inspects the head, so a NUL past the window is not searched for", () => {
+    const buf = new Uint8Array(BINARY_SNIFF_BYTES + 16).fill(0x61);
+    buf[BINARY_SNIFF_BYTES + 4] = 0;
+    expect(looksBinary(buf.buffer)).toBe(false);
+    // ...and one inside it is found.
+    const near = new Uint8Array(BINARY_SNIFF_BYTES + 16).fill(0x61);
+    near[10] = 0;
+    expect(looksBinary(near.buffer)).toBe(true);
+  });
+});
+
 describe("fileTypeGroup", () => {
   it("separates the groups a member actually distinguishes at a glance", () => {
     expect(fileTypeGroup("report.pdf")).toBe("pdf");
@@ -200,6 +303,19 @@ describe("fileTypeGroup", () => {
     expect(fileTypeGroup("voice.mp3")).toBe("audio");
     expect(fileTypeGroup("clip.mp4")).toBe("video");
     expect(fileTypeGroup("readme.txt")).toBe("text");
+  });
+
+  // preview-formatting-and-odf FR-3.5. `docx` and `doc` were never in this table at all,
+  // so a Word file has been drawing the neutral `unknown` glyph since it was written —
+  // a gap that predates the OpenDocument work and was found by it.
+  it("gives a word-processor document a group of its own", () => {
+    expect(fileTypeGroup("q2.docx")).toBe("document");
+    expect(fileTypeGroup("legacy.doc")).toBe("document");
+    expect(fileTypeGroup("q2.odt")).toBe("document");
+    expect(fileTypeGroup("deck.odp")).toBe("document");
+    // A Calc file is a spreadsheet before it is a LibreOffice file: the group is what a
+    // member distinguishes at a glance, and "spreadsheet" is that distinction.
+    expect(fileTypeGroup("budget.ods")).toBe("sheet");
   });
 
   it("falls back to a neutral group rather than guessing", () => {
