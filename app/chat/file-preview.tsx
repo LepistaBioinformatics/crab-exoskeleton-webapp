@@ -15,7 +15,7 @@ import {
   looksBinary,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
-import MessageContent, { MarkdownImageContext, codeText } from "@/app/chat/message-content";
+import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
 import CodeBlock from "@/app/chat/code-block";
 import { languageForFile } from "@/lib/code-highlight";
 import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
@@ -25,6 +25,32 @@ import { Spinner } from "@/components/ui/spinner";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
+
+/**
+ * The typography of the code pane, applied to BOTH of its columns.
+ *
+ * One constant on two elements, and that is the whole of the fix it exists for. The
+ * gutter and the code used to be styled separately — `text-[0.85em]` on the gutter's own
+ * `<pre>`, and the same `0.85em` on the `<code>` INSIDE the other one — which reads like
+ * the same size and is not. A block's line boxes are at least as tall as its strut, and
+ * the strut is computed from the block's OWN font-size: the code column's `<pre>` carried
+ * no size of its own, so its strut stayed at `1.625 × 1em` while the gutter's was
+ * `1.625 × 0.85em`. Every code line was ~15% taller than its number, the two drifted
+ * apart down the file, and the numbers ran out before the code did.
+ *
+ * Both values are ABSOLUTE for the same reason. A relative `em` resolves against whatever
+ * each column inherits, and an unitless line-height re-multiplies per element — so the
+ * two columns can agree on the tokens and still disagree on the pixels. A fixed
+ * line-height makes every line exactly 20px in both columns regardless of what the
+ * `<code>` inside one of them does.
+ *
+ * This is also why nothing was added from outside for it: every ready-made line-number
+ * plugin (`highlightjs-line-numbers`, `react-syntax-highlighter`'s `showLineNumbers`,
+ * Prism's plugin) aligns the two columns the same way, by giving them identical type. The
+ * ones that would come as a package deal replace the highlighter as well, and with it the
+ * per-grammar lazy loading `code-highlight.ts` accounts for.
+ */
+const CODE_TYPE = "font-mono text-[13px] leading-[20px]";
 
 /**
  * The word-processor pane's typography, derived token for token from the markdown
@@ -490,14 +516,14 @@ export default function FilePreview({
           <div className="flex min-w-max">
             <pre
               aria-hidden
-              className="sticky left-0 z-10 shrink-0 select-none border-r border-brand/20 bg-elevated px-3 py-3 text-right font-mono text-[0.85em] leading-relaxed text-fg-muted"
+              className={`sticky left-0 z-10 shrink-0 select-none border-r border-brand/20 bg-elevated px-3 py-3 text-right text-fg-muted ${CODE_TYPE}`}
             >
               {lineNumbers}
             </pre>
-            <pre className="px-3 py-3 leading-relaxed">
+            <pre className={`px-3 py-3 ${CODE_TYPE}`}>
               <CodeBlock
                 code={codeBody}
-                className={`${codeText({ block: true })}${language ? ` language-${language}` : ""}`}
+                className={language ? `language-${language}` : undefined}
                 streaming={false}
               />
             </pre>

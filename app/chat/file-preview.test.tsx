@@ -171,8 +171,17 @@ describe("markdown preview table overflow", () => {
 // the fetched body is in state, and effects never fire under `environment: "node"`.
 describe("code preview keeps its lines", () => {
   const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
-  const branch = src.slice(src.indexOf('kind === "code" && text !== null'));
-  const opening = branch.slice(branch.indexOf("<pre"), branch.indexOf("<CodeBlock"));
+  // The JSX only, with the explanatory comments stripped. The previous version of this
+  // suite sliced from the first `<pre` in the branch and found one inside a COMMENT that
+  // happens to mention `<pre>` — so it was asserting against prose, and kept passing
+  // while the markup it meant to describe changed underneath it.
+  // The code branch is the LAST one the component renders, so it runs to the end of the
+  // file. (An earlier attempt bounded it with the docx branch and got an empty string:
+  // `kind === "docx"` appears in the effect too, well above this.)
+  const branch = src
+    .slice(src.indexOf('kind === "code" && text !== null'))
+    .replace(/\/\/[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("wraps the code pane in a <pre>", () => {
     expect(branch.slice(0, branch.indexOf("<CodeBlock"))).toContain("<pre");
@@ -181,8 +190,32 @@ describe("code preview keeps its lines", () => {
   it("scrolls the code pane rather than wrapping it", () => {
     // DEC-2: the `text` kind wraps because a log's line breaks are incidental; code
     // scrolls because its columns carry meaning.
-    expect(opening).toContain("overflow-x-auto");
-    expect(opening).not.toContain("whitespace-pre-wrap");
+    expect(branch).toContain("overflow-x-auto");
+    expect(branch).not.toContain("whitespace-pre-wrap");
+  });
+
+  // preview-line-numbers DEC-5, and the defect it was written for: the gutter and the
+  // code were sized SEPARATELY, one at `0.85em` on its own `<pre>` and one at `0.85em`
+  // on the `<code>` inside the other. A block's line boxes are at least as tall as its
+  // strut, and the strut follows the block's own font-size — so the code column's lines
+  // stayed 15% taller than its numbers and the two drifted apart down the file.
+  it("gives both columns of the code pane the same type", () => {
+    const pres = branch.match(/<pre[\s\S]*?>/g) ?? [];
+    expect(pres).toHaveLength(2);
+    for (const pre of pres) expect(pre).toContain("CODE_TYPE");
+  });
+
+  it("sizes that type absolutely, so neither column can inherit a different one", () => {
+    const decl = /const CODE_TYPE = "([^"]+)"/.exec(src)?.[1] ?? "";
+    expect(decl).toMatch(/text-\[\d+px\]/);
+    expect(decl).toMatch(/leading-\[\d+px\]/);
+    expect(decl).not.toContain("em]");
+  });
+
+  it("leaves the <code> unsized, so the <pre> is the only thing that decides", () => {
+    // A size on the inner `<code>` is exactly what desynchronised the columns before.
+    const codeBlock = branch.slice(branch.indexOf("<CodeBlock"));
+    expect(codeBlock.slice(0, codeBlock.indexOf("/>"))).not.toContain("text-[");
   });
 
   it("carries the newlines through the highlighter into the markup", () => {

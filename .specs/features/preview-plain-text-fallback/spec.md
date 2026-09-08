@@ -77,13 +77,21 @@ Open the file unless there is a reason not to, and make a code file addressable.
 
 - **FR-3.1** The `code` pane paints a line-number gutter. The `text`, `markdown` and
   document panes do not.
-- **FR-3.2** The gutter is `aria-hidden` and `select-none`: copying the pane must yield
-  the code, not the code interleaved with numbers.
+- **FR-3.2** The gutter is `aria-hidden`, so a screen reader is not read a column of bare
+  integers, and `select-none`, which is the standard way to ask a browser to leave the
+  numbers out of a copied selection.
+  **Stated as the declaration, not as the outcome:** what is asserted is that the
+  attributes are there. Whether a copy actually excludes the numbers is a per-browser
+  behaviour — `user-select: none` has historically not been honoured for copy in Firefox
+  — and nothing here tests it. If numbers turn up in a paste, this line is where to start,
+  and the fix is a different mechanism rather than a different value. — DEC-7
 - **FR-3.3** It stays put when a long line scrolls the pane sideways (`sticky left-0`),
   which is why the scroll container is the outer element rather than the code column.
 - **FR-3.4** A trailing newline terminates the last line rather than opening an empty
   one, so it is not counted. — DEC-4
-- **FR-3.5** Numbers and code stay aligned by construction, not by tuning. — DEC-2
+- **FR-3.5** Numbers and code stay aligned by construction, not by tuning. — DEC-2, DEC-5
+- **FR-3.6** Both columns take their font-size and line-height from **one constant**, in
+  absolute units. Neither the gutter nor the `<code>` may carry a size of its own. — DEC-5
 
 ## FR-4 — Two repository defects found on the way
 
@@ -121,6 +129,41 @@ Open the file unless there is a reason not to, and make a code file addressable.
   Body and count are derived in one `useMemo` from one string. Deriving them separately
   is how a gutter comes to be one line longer than its file.
 
+- **DEC-5 — One type constant on both columns, in absolute units.**
+  Added after the first attempt shipped visibly broken: the numbers ran out before the
+  code did. The two columns were sized separately — `text-[0.85em]` on the gutter's own
+  `<pre>`, the same `0.85em` on the `<code>` inside the other — which reads like the same
+  size and is not. **A block's line boxes are at least as tall as its strut, and the
+  strut follows the block's own font-size.** The code column's `<pre>` carried no size,
+  so its strut stayed at `1.625 × 1em` while the gutter's was `1.625 × 0.85em`; every
+  code line was ~15% taller than its number and the error accumulated down the file.
+
+  Absolute units, not just a shared token, because a relative `em` resolves against
+  whatever each column inherits and a unitless line-height re-multiplies per element —
+  two columns can agree on the tokens and still disagree on the pixels. A fixed
+  `leading-[20px]` makes a line exactly 20px in both, whatever the `<code>` does.
+
+- **DEC-6 — No line-number library.**
+  Checked before fixing, because the defect looked like a reason to adopt one.
+  `highlight.js`, which is already here, has no built-in numbering.
+  `highlightjs-line-numbers.js` is third-party, rewrites the highlighted block into a
+  `<table>` by imperative DOM manipulation after the fact — which fights React — and is
+  not actively maintained. `react-syntax-highlighter` has `showLineNumbers` ready-made,
+  and `shiki` and Prism have equivalents, but each arrives with its own highlighter and
+  its own grammars: adopting one would replace the per-grammar lazy loading
+  `code-highlight.ts` accounts for byte by byte.
+
+  Decisive point: **all of them align the columns the same way this does**, by giving the
+  numbers and the code identical type. There was no missing library, only a CSS defect.
+
+- **DEC-7 — A requirement is written at the level it was actually checked.**
+  FR-3.2 first read "copying the pane must yield the code, not the code interleaved with
+  numbers", and the only thing behind it was a test asserting the class was present.
+  Those are different claims, and the gap is the one this feature has already been caught
+  by twice: a style that resolves differently than it reads. Where a spec line cannot be
+  verified from here, it now says what WAS verified and names the browser behaviour it is
+  relying on, so nobody later reads it as a settled guarantee.
+
 ---
 
 ## Verification
@@ -132,4 +175,16 @@ Open the file unless there is a reason not to, and make a code file addressable.
 - Rendered in jsdom, a real script shows `1\n2` for a two-line file with a trailing
   newline, a CRLF file counts once, a markdown document has no gutter, and a binary body
   shows the notice and stops the spinner.
-- `yarn test` — 114 files, 1465 tests, green. `yarn build` clean.
+- Both columns of the code pane carry one type constant, sized in px, with nothing on the
+  `<code>`; and no `.hljs-*` rule in `globals.css` sets a metric — those rules set only
+  `color`, `font-style` and `font-weight`, so nothing re-sizes the highlighted spans
+  inside one column and not the other.
+- `yarn test` — 114 files, 1468 tests, green. `yarn build` clean. `npx tsc --noEmit`
+  reports nothing in any file this feature touches.
+
+**Verified on screen, by the user, not by this suite.** The gutter alignment shipped
+broken once and the whole suite was green for it — line boxes are a layout property and
+jsdom computes no layout, so *every* assertion here is about markup and none is about
+pixels. The alignment was confirmed by opening a real file in the running app. Anything
+in this feature that depends on layout should be treated the same way: green tests are
+not evidence of it.
