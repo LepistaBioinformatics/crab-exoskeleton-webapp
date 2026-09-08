@@ -77,8 +77,14 @@ Open the file unless there is a reason not to, and make a code file addressable.
 
 - **FR-3.1** The `code` pane paints a line-number gutter. The `text`, `markdown` and
   document panes do not.
-- **FR-3.2** The gutter is `aria-hidden` and `select-none`: copying the pane must yield
-  the code, not the code interleaved with numbers.
+- **FR-3.2** The gutter is `aria-hidden`, so a screen reader is not read a column of bare
+  integers, and `select-none`, which is the standard way to ask a browser to leave the
+  numbers out of a copied selection.
+  **Stated as the declaration, not as the outcome:** what is asserted is that the
+  attributes are there. Whether a copy actually excludes the numbers is a per-browser
+  behaviour — `user-select: none` has historically not been honoured for copy in Firefox
+  — and nothing here tests it. If numbers turn up in a paste, this line is where to start,
+  and the fix is a different mechanism rather than a different value. — DEC-7
 - **FR-3.3** It stays put when a long line scrolls the pane sideways (`sticky left-0`),
   which is why the scroll container is the outer element rather than the code column.
 - **FR-3.4** A trailing newline terminates the last line rather than opening an empty
@@ -150,6 +156,14 @@ Open the file unless there is a reason not to, and make a code file addressable.
   Decisive point: **all of them align the columns the same way this does**, by giving the
   numbers and the code identical type. There was no missing library, only a CSS defect.
 
+- **DEC-7 — A requirement is written at the level it was actually checked.**
+  FR-3.2 first read "copying the pane must yield the code, not the code interleaved with
+  numbers", and the only thing behind it was a test asserting the class was present.
+  Those are different claims, and the gap is the one this feature has already been caught
+  by twice: a style that resolves differently than it reads. Where a spec line cannot be
+  verified from here, it now says what WAS verified and names the browser behaviour it is
+  relying on, so nobody later reads it as a settled guarantee.
+
 ---
 
 ## Verification
@@ -161,4 +175,16 @@ Open the file unless there is a reason not to, and make a code file addressable.
 - Rendered in jsdom, a real script shows `1\n2` for a two-line file with a trailing
   newline, a CRLF file counts once, a markdown document has no gutter, and a binary body
   shows the notice and stops the spinner.
-- `yarn test` — 114 files, 1465 tests, green. `yarn build` clean.
+- Both columns of the code pane carry one type constant, sized in px, with nothing on the
+  `<code>`; and no `.hljs-*` rule in `globals.css` sets a metric — those rules set only
+  `color`, `font-style` and `font-weight`, so nothing re-sizes the highlighted spans
+  inside one column and not the other.
+- `yarn test` — 114 files, 1468 tests, green. `yarn build` clean. `npx tsc --noEmit`
+  reports nothing in any file this feature touches.
+
+**Verified on screen, by the user, not by this suite.** The gutter alignment shipped
+broken once and the whole suite was green for it — line boxes are a layout property and
+jsdom computes no layout, so *every* assertion here is about markup and none is about
+pixels. The alignment was confirmed by opening a real file in the running app. Anything
+in this feature that depends on layout should be treated the same way: green tests are
+not evidence of it.
