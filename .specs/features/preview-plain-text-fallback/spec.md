@@ -83,7 +83,9 @@ Open the file unless there is a reason not to, and make a code file addressable.
   which is why the scroll container is the outer element rather than the code column.
 - **FR-3.4** A trailing newline terminates the last line rather than opening an empty
   one, so it is not counted. — DEC-4
-- **FR-3.5** Numbers and code stay aligned by construction, not by tuning. — DEC-2
+- **FR-3.5** Numbers and code stay aligned by construction, not by tuning. — DEC-2, DEC-5
+- **FR-3.6** Both columns take their font-size and line-height from **one constant**, in
+  absolute units. Neither the gutter nor the `<code>` may carry a size of its own. — DEC-5
 
 ## FR-4 — Two repository defects found on the way
 
@@ -120,6 +122,33 @@ Open the file unless there is a reason not to, and make a code file addressable.
 - **DEC-4 — The trailing newline is dropped from the body the gutter measures.**
   Body and count are derived in one `useMemo` from one string. Deriving them separately
   is how a gutter comes to be one line longer than its file.
+
+- **DEC-5 — One type constant on both columns, in absolute units.**
+  Added after the first attempt shipped visibly broken: the numbers ran out before the
+  code did. The two columns were sized separately — `text-[0.85em]` on the gutter's own
+  `<pre>`, the same `0.85em` on the `<code>` inside the other — which reads like the same
+  size and is not. **A block's line boxes are at least as tall as its strut, and the
+  strut follows the block's own font-size.** The code column's `<pre>` carried no size,
+  so its strut stayed at `1.625 × 1em` while the gutter's was `1.625 × 0.85em`; every
+  code line was ~15% taller than its number and the error accumulated down the file.
+
+  Absolute units, not just a shared token, because a relative `em` resolves against
+  whatever each column inherits and a unitless line-height re-multiplies per element —
+  two columns can agree on the tokens and still disagree on the pixels. A fixed
+  `leading-[20px]` makes a line exactly 20px in both, whatever the `<code>` does.
+
+- **DEC-6 — No line-number library.**
+  Checked before fixing, because the defect looked like a reason to adopt one.
+  `highlight.js`, which is already here, has no built-in numbering.
+  `highlightjs-line-numbers.js` is third-party, rewrites the highlighted block into a
+  `<table>` by imperative DOM manipulation after the fact — which fights React — and is
+  not actively maintained. `react-syntax-highlighter` has `showLineNumbers` ready-made,
+  and `shiki` and Prism have equivalents, but each arrives with its own highlighter and
+  its own grammars: adopting one would replace the per-grammar lazy loading
+  `code-highlight.ts` accounts for byte by byte.
+
+  Decisive point: **all of them align the columns the same way this does**, by giving the
+  numbers and the code identical type. There was no missing library, only a CSS defect.
 
 ---
 
