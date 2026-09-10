@@ -732,3 +732,77 @@ describe("a folded message is marked as steering", () => {
     expect(getTurn("s1").steering).toBe(true);
   });
 });
+
+// A harness that streams natively must not be re-animated by the reveal
+// driver.
+//
+// The driver exists only because picoclaw returns the whole answer in one
+// frame. Run over real deltas it does not merely double-pace them, it
+// corrupts them: it deletes its plan on drain (stopReveal), and because more
+// deltas keep arriving afterwards, startReveal finds no plan, resets the
+// cursor to 0, and the next tick redraws the reply from its first word. That
+// is the reported "it rewrites everything from the beginning".
+describe("native streaming bypasses the reveal driver", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function streamOf(parts: string[]): string {
+    return parts
+      .map((p) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: p } }] })}\n\n`)
+      .join("");
+  }
+
+  function stub(streamingHeader: string | null) {
+    const body = streamOf(["Um ", "dois ", "tres"]);
+    vi.stubGlobal("window", {
+      dispatchEvent: () => true,
+      matchMedia: () => ({ matches: false }),
+    });
+    vi.stubGlobal("fetch", (url: string) => {
+      const u = String(url);
+      if (u.includes("/history?")) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ messages: [] }) });
+      }
+      if (u.startsWith("/api/chat/")) {
+        const encoder = new TextEncoder();
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: (k: string) => (k === "X-Crab-Streaming" ? streamingHeader : null) },
+          body: new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(encoder.encode(body));
+              c.close();
+            },
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+  }
+
+  it("shows deltas immediately and leaves nothing buffered", async () => {
+    stub("native");
+    enqueue("s-native", "oi", ctx);
+    await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const turn = getTurn("s-native");
+    expect(turn.revealed).toBe("Um dois tres");
+    // Nothing waiting to be animated: the reveal driver never ran.
+    expect(turn.buffered).toBe("");
+  });
+
+  it("still animates a terminal harness, which is why the driver exists", async () => {
+    stub(null); // absent header == terminal, the pre-existing behaviour
+    enqueue("s-terminal", "oi", ctx);
+    await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const turn = getTurn("s-terminal");
+    // Buffered and revealed together hold the whole answer; the split between
+    // them is the driver's business and is not asserted here.
+    expect(turn.revealed + turn.buffered).toBe("Um dois tres");
+  });
+});

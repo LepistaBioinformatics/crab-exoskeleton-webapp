@@ -80,9 +80,18 @@ export async function POST(
   // From here on, pipe the proxy's own SSE bytes straight through -- the
   // client parses `data: {...}` frames itself, same OpenAI chat-completion-
   // chunk shape the proxy already emits (see server.js's `stream` branch).
+  // How content arrives on this stream, straight from the proxy. Forwarded
+  // rather than recomputed: only the proxy knows which harness answered, and
+  // duplicating that here would be a second place to get it wrong.
+  //
+  // Absent means "terminal" -- the safe default, and what every build before
+  // crab-shell-proxy grew this header behaves as.
+  const streaming = res.headers.get("x-crab-streaming") ?? "terminal";
+
   return new Response(res.body, {
     status: 200,
     headers: {
+      "X-Crab-Streaming": streaming,
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",

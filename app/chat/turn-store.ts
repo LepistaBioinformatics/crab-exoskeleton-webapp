@@ -749,6 +749,9 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     });
 
     let stream: ReadableStream<Uint8Array> | null = null;
+    // Whether the harness answering this turn streams for real. Set from the
+    // response header; see the reveal driver for why it matters.
+    let nativeStreaming = false;
     let terminal = false;
     for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS && !terminal; attempt++) {
       try {
@@ -763,6 +766,13 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
         }
         if (r.ok && r.body) {
           stream = r.body;
+          // A harness that streams natively must NOT be re-animated by the
+          // reveal driver below. Absent means "terminal", which is how every
+          // build before this header behaved.
+          // Optional-chained: a real Response always carries headers, but the
+          // suite's fetch mocks are minimal, and throwing here would be caught
+          // by the retry wrapper below and misreported as a transport error.
+          nativeStreaming = r.headers?.get("X-Crab-Streaming") === "native";
           break;
         }
         if (r.status < 500) {
@@ -801,6 +811,18 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
           // "Task stopped." reply, which arrives on this very stream.
           if (stopped.has(sid)) return;
           const cur = getTurn(sid);
+          if (nativeStreaming) {
+            // Real deltas: show them. Running the reveal driver over a stream
+            // that already arrives progressively does not just double-pace it
+            // -- it CORRUPTS it. The driver deletes its plan when it drains
+            // (stopReveal), and with picoclaw that only happens once, at the
+            // end. Here more deltas arrive afterwards, startReveal finds no
+            // existing plan, resets the cursor to 0, and the next tick redraws
+            // the reply from its first word. That is the "it rewrites
+            // everything from the beginning" report.
+            patch(sid, { revealed: cur.revealed + delta, lastEventAt: Date.now() });
+            return;
+          }
           patch(sid, { buffered: cur.buffered + delta, lastEventAt: Date.now() });
           startReveal(sid);
         },
