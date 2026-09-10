@@ -95,6 +95,20 @@ export interface CronOrphanGroup {
 export interface CronTasks {
   tasks: CronTask[];
   orphans: CronOrphanGroup[];
+  /**
+   * Whether these schedules can actually run.
+   *
+   * A schedule lives in the container's in-process timers, so an instance that
+   * stops when idle fires nothing: the tasks are real, listed, and inert. The
+   * member has to be told, because the assumption they would otherwise make is
+   * that the task ran.
+   *
+   * OPTIONAL on purpose. A proxy older than this field sends nothing, and
+   * `undefined` must render as "no claim either way" -- never as "disabled",
+   * which would warn every user of an older deployment about a problem they do
+   * not have. Only an explicit `false` shows the notice.
+   */
+  fires?: boolean;
 }
 
 /** One transcript entry, tool activity included. */
