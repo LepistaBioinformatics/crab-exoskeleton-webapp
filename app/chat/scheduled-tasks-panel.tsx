@@ -371,6 +371,22 @@ export default function ScheduledTasksPanel({
         </div>
       )}
 
+      {/* Above the list and above the empty state, because it describes the
+          WHOLE panel: with no tasks yet, a member scheduling one still needs to
+          know it will not fire. Only an explicit `false` shows it -- an older
+          proxy sends no field at all, and warning everyone on it about a
+          problem they do not have would be worse than saying nothing. */}
+      {data?.fires === false && (
+        <div className="border-b border-brand/30 px-3 py-2">
+          <Alert severity="warning">
+            <p className="font-medium">{t.scheduledTasks.inert}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-fg-muted">
+              {t.scheduledTasks.inertHint}
+            </p>
+          </Alert>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && (
           <div className="px-3 py-2">

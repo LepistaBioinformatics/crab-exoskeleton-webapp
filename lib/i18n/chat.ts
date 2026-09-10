@@ -163,6 +163,11 @@ const en = {
       unknown: "Schedule: {kind}",
     },
     disabled: "Disabled",
+    // Shown when the proxy reports fires:false -- the instance stops when idle,
+    // so its timers do not exist most of the time.
+    inert: "These tasks are not running",
+    inertHint:
+      "This instance shuts down when idle, and a schedule only fires while it is up. The tasks below are still recorded — an administrator has to switch this instance to continuous for them to run.",
     nextRun: "Next run",
     lastRun: "Last run",
     neverRan: "Has not run yet",
@@ -910,6 +915,9 @@ const pt: ChatDict = {
       unknown: "Agendamento: {kind}",
     },
     disabled: "Desabilitada",
+    inert: "Estas tarefas não estão sendo executadas",
+    inertHint:
+      "Esta instância é desligada quando fica ociosa, e um agendamento só dispara enquanto ela está no ar. As tarefas abaixo continuam registradas — um administrador precisa mudar esta instância para contínua para que voltem a rodar.",
     nextRun: "Próxima execução",
     lastRun: "Última execução",
     neverRan: "Ainda não executou",

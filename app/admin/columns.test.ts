@@ -173,9 +173,19 @@ describe("buildColumns — the sections column", () => {
     expect(rows.every((r) => !r.branch)).toBe(true);
   });
 
-  it("withholds the picoclaw-only sections from another harness", () => {
+  // `persona` is NOT withheld: another harness still mounts AGENT.md, SOUL.md and
+  // HEARTBEAT.md over its workspace and reads AGENT.md as its system prompt, so the
+  // section that edits them has to be reachable. `model` and `config` are the two
+  // that address picoclaw's own files.
+  it("withholds the picoclaw-only sections from another harness, but not persona", () => {
     const rows = col(build({ agent: "hermes", tenantId: "t1", scope: SCOPE_A }), "sections").rows;
-    expect(rows.map((r) => r.textKey)).toEqual(["files", "secrets", "skills", "members"]);
+    expect(rows.map((r) => r.textKey)).toEqual([
+      "files",
+      "secrets",
+      "skills",
+      "persona",
+      "members",
+    ]);
   });
 
   // No guest role is ever named for the all-agents store, so a roster there would be a

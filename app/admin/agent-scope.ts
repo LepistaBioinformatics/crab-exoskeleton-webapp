@@ -19,20 +19,31 @@ import { SECTION_TABS, type Tab } from "./tabs";
 // wire format are untouched.
 export const LEGACY_AGENT = ALL_AGENTS;
 
-// Sections only a PICOCLAW agent offers. Picoclaw is currently the only harness, so
-// every agent gets all of them today; the split is kept because each of these three
-// is defined by picoclaw's own file layout, not by the admin UI.
+// Sections only a PICOCLAW agent offers, because each is defined by picoclaw's own
+// file layout rather than by the admin UI.
 //
-// `model`: the registry governs picoclaw agents — the proxy rejects an assignment
-// for an agent it does not govern.
+// `model`: the registry materializes into `.security.yml` and `config.json`, and the
+// proxy REFUSES an assignment for any other harness (`rejectNonPicoclawAgent`) —
+// naming the reason, that such an agent reads its model from the proxy
+// configuration. A form here would post a write the proxy 400s.
 //
-// `persona`: the read-only identity files (AGENT.md, SOUL.md, HEARTBEAT.md and the
-// USER.md seed) are picoclaw's workspace layout, delivered on the picoclaw create
-// path.
+// `config`: `config.json` is picoclaw's file. A ganglion agent has none at all —
+// `provisionGanglion` writes no config, the harness reads its whole configuration
+// from the environment — so a key edited here would mean nothing to it.
 //
-// `config`: `config.json` is picoclaw's file, so a key edited in bulk here only
-// means anything to an agent that reads it.
-const PICOCLAW_ONLY: Tab[] = ["persona", "model", "config"];
+// `persona` IS NOT ON THIS LIST, and used to be.
+//
+// The comment justifying that said the identity files were "delivered on the picoclaw
+// create path". That was true when it was written and stopped being true when
+// `createGanglion` grew `personaBindStrings`: a ganglion container mounts AGENT.md,
+// SOUL.md and HEARTBEAT.md read-only over its workspace, and `GANGLION_SYSTEM_FILE`
+// points the harness at AGENT.md, re-read every turn. The proxy's persona routes are
+// not harness-gated either — `picoclawOnly` in harness_gate.go lists projects,
+// personal models and the memory graph, never persona.
+//
+// So hiding the tab left the ONE screen that edits a ganglion agent's identity
+// unreachable, for agents whose identity the cascade was wired up to deliver.
+const PICOCLAW_ONLY: Tab[] = ["model", "config"];
 
 // The sections every REAL agent has, whatever harness runs it: the shared content
 // stores and its roster. Derived from the full section list rather than spelled out
@@ -42,13 +53,22 @@ const AGENT_TABS: Tab[] = SECTION_TABS.filter((s) => !PICOCLAW_ONLY.includes(s))
 
 // What the LEGACY all-agents entry offers: the content stores alone.
 //
-// `members` is withheld, and not for the reason the picoclaw sections are. An
-// invitation is a mycelium guest role, and a guest role's NAME IS THE AGENT KEY
-// (`lib/invitations.ts`) — the gateway declares `protectedByRoles = [{ name = "alpha" }]`
-// and mycelium creates those roles at boot. `ALL_AGENTS` is a store address, not an
-// agent, so no role is ever named for it and an invitation through it could not be
-// constructed. A roster shown there would be a list nobody could add to.
-const LEGACY_TABS: Tab[] = AGENT_TABS.filter((s) => s !== "members");
+// Two sections are withheld here rather than through PICOCLAW_ONLY, because
+// neither argument is about the harness — both are about the ADDRESS.
+//
+// `members`: an invitation is a mycelium guest role, and a guest role's NAME IS THE
+// AGENT KEY (`lib/invitations.ts`) — the gateway declares
+// `protectedByRoles = [{ name = "alpha" }]` and mycelium creates those roles at boot.
+// `ALL_AGENTS` is a store address, not an agent, so no role is ever named for it and
+// an invitation through it could not be constructed. A roster shown there would be a
+// list nobody could add to.
+//
+// `persona`: the proxy refuses an agent-less persona write outright, so an all-agents
+// address was never a place that record could live. It used to fall out of
+// PICOCLAW_ONLY for free; now that persona is offered to every harness, the reason it
+// is absent HERE has to be stated where it actually applies. A caught regression, not
+// a rewrite: `agentTabs` still returns the content stores alone for the legacy entry.
+const LEGACY_TABS: Tab[] = AGENT_TABS.filter((s) => s !== "members" && s !== "persona");
 
 // `?agent=` is user-editable, so this has to resolve to something. An unknown key
 // yields null — the agent list, never an empty working view whose header names an
@@ -63,11 +83,8 @@ export function resolveAgent(raw: string | null | undefined, agents: AgentRef[])
 //
 // A tab a given agent cannot use is ABSENT rather than present-and-explaining-itself.
 //
-// The legacy store gets neither picoclaw-only section, and for its own reason: both
-// are addressed PER AGENT — the model registry is stored under `agent/<agent>`, and
-// the proxy rejects an agent-less persona write outright — so an all-agents address
-// was never a place either record could live. It gets no `members` either; see
-// LEGACY_TABS for why that one is a different argument.
+// The legacy all-agents store gets less than any real agent does, and for reasons of
+// its own rather than the harness ones: see LEGACY_TABS.
 export function agentTabs(agent: string, agents: AgentRef[]): Tab[] {
   if (agent === LEGACY_AGENT) return LEGACY_TABS;
   return picoclawAgentKeys(agents).includes(agent) ? [...SECTION_TABS] : AGENT_TABS;
