@@ -56,24 +56,37 @@ describe("agentTabs", () => {
 
   it("counts an agent with no reported harness as picoclaw", () => {
     expect(agentTabs("legacy-shaped", agents)).toContain("model");
-    expect(agentTabs("legacy-shaped", agents)).toContain("persona");
+    expect(agentTabs("legacy-shaped", agents)).toContain("config");
   });
 
-  // The model registry and the persona cascade are both addressed through picoclaw's
-  // own file layout, so for an agent the proxy does not report as picoclaw they would
-  // be forms whose writes reach nothing. Absent beats present-and-explaining-itself.
-  it("withholds both picoclaw-only sections from a non-picoclaw agent", () => {
+  // The model registry writes picoclaw's own files and the proxy 400s an assignment
+  // for any other harness; config.json is a file a ganglion agent does not have.
+  // Both would be forms whose writes reach nothing. Absent beats
+  // present-and-explaining-itself.
+  it("withholds the picoclaw-only sections from a non-picoclaw agent", () => {
     expect(agentTabs("other-harness", agents)).toEqual([
       "files",
       "secrets",
       "skills",
+      "persona",
       "members",
     ]);
   });
 
-  // Both are addressed PER AGENT — the registry is stored under `agent/<agent>`, and
-  // the proxy refuses an agent-less persona write outright — so an all-agents
-  // address was never a place either record could live.
+  // Reported in use: "quando entro na area de admin do gamma não vejo a aba de
+  // config, só no picoclaw". config was right to be missing. Persona was not --
+  // a ganglion container mounts AGENT.md, SOUL.md and HEARTBEAT.md and the harness
+  // reads AGENT.md as its system prompt every turn, so hiding the tab left the one
+  // screen that edits its identity unreachable.
+  it("offers persona to a non-picoclaw agent, whose harness reads AGENT.md", () => {
+    expect(agentTabs("other-harness", agents)).toContain("persona");
+  });
+
+  // The legacy all-agents store keeps losing persona as well, and for its own
+  // reason: the proxy refuses an agent-less persona write outright, so an all-agents
+  // address was never a place that record could live. That argument is about the
+  // ADDRESS, not about the harness, which is why it survives persona leaving
+  // PICOCLAW_ONLY.
   it("withholds them from the legacy store too", () => {
     expect(agentTabs(LEGACY_AGENT, agents)).toEqual(["files", "secrets", "skills"]);
   });
