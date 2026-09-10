@@ -329,14 +329,30 @@ same workspace and section.
   level in full, and the invitation is sent only on confirmation. Revoking already
   confirms; inviting — the action reported as going wrong — did not.
 - **FR-6.5** The per-member instance rows keep addressing `InstanceRef`
-  (`{tenantId, subsAccId, userAccId, agent}`). The context's agent is the default
-  instance acted on; a member holding workspaces under other agents still shows them, so
-  an admin can repair a config outside the current context, and each row states its own
-  agent.
-- **FR-6.5.1** A row whose agent DIFFERS from the context's is visually marked as
-  out-of-context, and the editor opened from it names that agent. Listing other agents'
-  instances re-introduces a second agent on the Members surface — the exact shape DEC-2
-  removed from the invite form — so it may never be mistaken for the current context.
+  (`{tenantId, subsAccId, userAccId, agent}`), and list **only the context's agent**.
+  A member holding workspaces under other agents shows none of them here; a member with
+  no workspace under the context's agent gets the empty state, which is the truthful
+  answer for the agent selected rather than a list of others.
+- **FR-6.5.1** ~~A row whose agent DIFFERS from the context's is visually marked as
+  out-of-context~~ — **REVERSED**, see FR-6.5.
+
+  The original pair listed every agent's instance so a broken `config.json` could be
+  repaired without changing context, marking each row in- or out-of-context so none
+  could be mistaken for the current selection.
+
+  Reported in use as an error: *"na aba de membros eu consigo editar configurações de
+  agentes diferente, porém o agente já é selecionado antes de chegar nessa aba"*. The
+  reasoning that failed is the assumption that **marking a row makes it safe to act
+  on**. It does not — the agent is chosen before this tab is ever reached, so any
+  control here that acts on a different one contradicts the selection the admin just
+  made. The badge described the contradiction instead of removing it.
+
+  This grew worse than it started: `per-instance-lifecycle-mode` added a lifecycle
+  control to these rows, so an out-of-context row could stop or pin another agent's
+  container — a heavier action than editing a file, on a row the admin never selected.
+
+  The cost is accepted: repairing another agent's instance now means selecting that
+  agent first, which is one step in a console built to be entered agent-first anyway.
 - **FR-6.6** The roster itself is NOT filtered by the agent. It is subscription-scoped,
   and the context bar says so (FR-4.5). `agent-first-admin` R1.3's reasoning is
   preserved: what merged is the selection flow, not the scoping rules.

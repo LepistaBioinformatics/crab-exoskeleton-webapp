@@ -17,6 +17,16 @@ vi.mock("@/lib/admin", async () => {
       { accId: "u1", role: "alpha", email: "person@example.com" },
     ],
     listUserFiles: async () => [],
+    // The lifecycle control fetches per row. Stubbed so these tests assert the
+    // instance LIST rather than the network noise of a control that happens to
+    // live on it.
+    readInstanceMode: async () => ({
+      effective: "continuous",
+      override: "",
+      agentDefault: "continuous",
+      scaleToZeroAllowed: true,
+      fires: true,
+    }),
   };
 });
 vi.mock("@/lib/invitations", async () => {
@@ -86,30 +96,35 @@ async function mountAndExpand() {
   return host!;
 }
 
+// The instance rows, told from the roster's own <li> by the member's address: the outer
+// row wraps these and therefore contains the button's text too.
+function instanceRows(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll("li"))
+    .map((li) => li.textContent ?? "")
+    .filter((text) => text.includes(t.editConfig) && !text.includes("person@example.com"));
+}
+
 describe("MembersPanel — instance rows", () => {
-  // Listing the other agents' workspaces puts a second agent back on a surface this
-  // feature just removed one from. It is worth it -- a broken config.json may be why its
-  // member cannot reach anything, and forcing a whole context change to repair one file
-  // would be a worse screen -- but no row may be mistakable for "the agent I chose".
-  it("marks which row is the context's agent and which is not", async () => {
+  // Reported in use: "na aba de membros eu consigo editar configurações de agentes
+  // diferente, porém o agente já é selecionado antes de chegar nessa aba".
+  //
+  // This reverses backoffice-admin-shell FR-6.5/FR-6.5.1, which had every agent's
+  // instance listed and merely MARKED as in- or out-of-context so a broken config.json
+  // could be repaired without changing context. Marking a row is not the same as it
+  // being safe to act on, and the agent is chosen before this tab is ever reached.
+  //
+  // The feed here returns beta first and the panel sits inside alpha, so a filter that
+  // is really a sort would still pass the first assertion. Both are made.
+  it("lists the context's agent and no other", async () => {
     const el = await mountAndExpand();
-    expect(el.textContent).toContain(t.instanceInContext);
-    expect(el.textContent).toContain(t.instanceOtherAgent);
+    const rows = instanceRows(el);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("alpha");
   });
 
-  // The feed happens to list beta first. The context's agent is what the admin came for,
-  // and a list that buries it invites clicking the nearest row instead.
-  it("puts the context's agent first, whatever order the feed returned", async () => {
+  it("does not offer an edit control for another agent's instance", async () => {
     const el = await mountAndExpand();
-    // The roster's own <li> wraps these, so it also contains the button's text; the
-    // member's address is what tells the outer row from the inner ones.
-    const rows = Array.from(el.querySelectorAll("li"))
-      .map((li) => li.textContent ?? "")
-      .filter((text) => text.includes(t.editConfig) && !text.includes("person@example.com"));
-    expect(rows[0]).toContain("alpha");
-    expect(rows[0]).toContain(t.instanceInContext);
-    expect(rows[1]).toContain("beta");
-    expect(rows[1]).toContain(t.instanceOtherAgent);
+    expect(instanceRows(el).join("")).not.toContain("beta");
   });
 
   // A guest role's name IS the agent key, so this person carries a grant per agent. The
