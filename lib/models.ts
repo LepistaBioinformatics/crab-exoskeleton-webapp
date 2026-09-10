@@ -1,7 +1,30 @@
-import { DEFAULT_POLICY, withPolicy, type RestartPolicy } from "@/lib/restartPolicy";
+import {
+  DEFAULT_POLICY,
+  withPolicy,
+  type RestartPolicy,
+} from "@/lib/restartPolicy";
 import type { Instance } from "@/lib/mycelium";
 
 export type ModelStatus = "active" | "disabled" | "deprecated";
+
+// picoclaw's `model_list[].thinking_level` vocabulary, exactly. The proxy
+// validates against the same six and rejects anything else, so this list is a
+// contract rather than a convenience -- a seventh entry here would produce a
+// form that posts a 400.
+//
+// EMPTY IS NOT "off". Omitting the key means the provider's own default and no
+// depth field on the wire; `off` is a value that gets SENT. The two look the
+// same in a dropdown and are not the same thing, which is why the empty option
+// says so in words.
+export const THINKING_LEVELS = [
+  "off",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "adaptive",
+] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 // InventoryModel mirrors the proxy's PublicModel. There is deliberately no
 // api_key field: the API never returns one.
@@ -12,6 +35,7 @@ export interface InventoryModel {
   api_base?: string;
   auth_method?: string;
   extra_body?: unknown;
+  thinking_level?: ThinkingLevel;
   status: ModelStatus;
   replaced_by?: string;
   fallbacks: string[];
@@ -54,6 +78,7 @@ export interface ModelDraft {
   api_key: string;
   fallbacks: string[];
   extra_body?: unknown;
+  thinking_level: ThinkingLevel | "";
 }
 
 // A factory, not a shared const: a shared object would hand every draft the SAME
@@ -67,6 +92,7 @@ export function emptyDraft(): ModelDraft {
     auth_method: "",
     api_key: "",
     fallbacks: [],
+    thinking_level: "",
   };
 }
 
@@ -77,7 +103,9 @@ export function splitInventory(models: InventoryModel[]): {
   active: InventoryModel[];
   inactive: InventoryModel[];
 } {
-  const active = models.filter((m) => m.status === "active").sort((a, b) => a.position - b.position);
+  const active = models
+    .filter((m) => m.status === "active")
+    .sort((a, b) => a.position - b.position);
   const inactive = models
     .filter((m) => m.status !== "active")
     .sort((a, b) => a.position - b.position);
@@ -126,6 +154,7 @@ export function draftFromDuplicate(m: InventoryModel): ModelDraft {
     api_key: "",
     fallbacks: [...m.fallbacks],
     extra_body: m.extra_body,
+    thinking_level: m.thinking_level ?? "",
   };
 }
 
@@ -142,7 +171,9 @@ export interface ModelsError {
 // detach. A generic conflict code would leave the admin with no next action.
 export async function modelsApiError(res: Response): Promise<ModelsError> {
   const data = await res.json().catch(() => null);
-  const referrers: Referrer[] = Array.isArray(data?.referrers) ? data.referrers : [];
+  const referrers: Referrer[] = Array.isArray(data?.referrers)
+    ? data.referrers
+    : [];
   const versionConflict = data?.version_conflict === true;
   const e = data?.error;
   let code = "unknown";
@@ -196,16 +227,23 @@ const q = (agent: Instance, extra: Record<string, string> = {}) =>
   new URLSearchParams({ agent, ...extra }).toString();
 
 export async function listModels(agent: Instance): Promise<InventoryModel[]> {
-  const data = (await request(`/api/admin/models?${q(agent)}`)) as { models?: InventoryModel[] };
+  const data = (await request(`/api/admin/models?${q(agent)}`)) as {
+    models?: InventoryModel[];
+  };
   return Array.isArray(data.models) ? data.models : [];
 }
 
 export async function modelCatalog(agent: Instance): Promise<CatalogEntry[]> {
-  const data = (await request(`/api/admin/model-catalog?${q(agent)}`)) as { entries?: CatalogEntry[] };
+  const data = (await request(`/api/admin/model-catalog?${q(agent)}`)) as {
+    entries?: CatalogEntry[];
+  };
   return Array.isArray(data.entries) ? data.entries : [];
 }
 
-export async function createModel(agent: Instance, draft: ModelDraft): Promise<void> {
+export async function createModel(
+  agent: Instance,
+  draft: ModelDraft,
+): Promise<void> {
   await request("/api/admin/models", json({ agent, ...serializeDraft(draft) }));
 }
 
@@ -234,6 +272,11 @@ export function serializeDraft(draft: ModelDraft): Record<string, unknown> {
     api_base: draft.api_base,
     auth_method: draft.auth_method,
     fallbacks: draft.fallbacks,
+    // Always sent, empty included: the update handler full-replaces this field,
+    // so omitting it on an edit that did not touch it would clear a level the
+    // admin set earlier. api_key is the one field with keep-on-absent
+    // semantics, and it says so where it is written.
+    thinking_level: draft.thinking_level,
   };
   if (draft.api_key) {
     body.api_key = draft.api_key;
@@ -244,8 +287,13 @@ export function serializeDraft(draft: ModelDraft): Record<string, unknown> {
   return body;
 }
 
-export async function deleteModel(agent: Instance, name: string): Promise<void> {
-  await request(`/api/admin/models?${q(agent, { name })}`, { method: "DELETE" });
+export async function deleteModel(
+  agent: Instance,
+  name: string,
+): Promise<void> {
+  await request(`/api/admin/models?${q(agent, { name })}`, {
+    method: "DELETE",
+  });
 }
 
 export async function setModelStatus(
@@ -266,15 +314,29 @@ export async function deprecateModel(
   version: number,
   replacedBy: string,
 ): Promise<void> {
-  await request("/api/admin/models/deprecate", json({ agent, name, version, replaced_by: replacedBy }));
+  await request(
+    "/api/admin/models/deprecate",
+    json({ agent, name, version, replaced_by: replacedBy }),
+  );
 }
 
-export async function reorderModels(agent: Instance, order: string[]): Promise<void> {
-  await request("/api/admin/models/order", { ...json({ agent, order }), method: "PUT" });
+export async function reorderModels(
+  agent: Instance,
+  order: string[],
+): Promise<void> {
+  await request("/api/admin/models/order", {
+    ...json({ agent, order }),
+    method: "PUT",
+  });
 }
 
-export async function modelUsage(agent: Instance, name: string): Promise<Referrer[]> {
-  const data = (await request(`/api/admin/models/usage?${q(agent, { name })}`)) as {
+export async function modelUsage(
+  agent: Instance,
+  name: string,
+): Promise<Referrer[]> {
+  const data = (await request(
+    `/api/admin/models/usage?${q(agent, { name })}`,
+  )) as {
     referrers?: Referrer[];
   };
   return Array.isArray(data.referrers) ? data.referrers : [];
@@ -297,8 +359,13 @@ function defaultScopeQuery(agent: Instance, scope: DefaultScope): string {
   return q(agent, extra);
 }
 
-export async function getModelDefault(agent: Instance, scope: DefaultScope): Promise<ScopeDefault | null> {
-  const data = (await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`)) as {
+export async function getModelDefault(
+  agent: Instance,
+  scope: DefaultScope,
+): Promise<ScopeDefault | null> {
+  const data = (await request(
+    `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`,
+  )) as {
     default?: ScopeDefault | null;
   };
   return data.default ?? null;
@@ -310,10 +377,16 @@ export async function setModelDefault(
   modelName: string,
   policy: RestartPolicy = DEFAULT_POLICY,
 ): Promise<void> {
-  await request(withPolicy(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, policy), {
-    ...json({ agent, model_name: modelName }),
-    method: "PUT",
-  });
+  await request(
+    withPolicy(
+      `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`,
+      policy,
+    ),
+    {
+      ...json({ agent, model_name: modelName }),
+      method: "PUT",
+    },
+  );
 }
 
 export async function clearModelDefault(
@@ -321,9 +394,15 @@ export async function clearModelDefault(
   scope: DefaultScope,
   policy: RestartPolicy = DEFAULT_POLICY,
 ): Promise<void> {
-  await request(withPolicy(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, policy), {
-    method: "DELETE",
-  });
+  await request(
+    withPolicy(
+      `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`,
+      policy,
+    ),
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export interface AssignmentTarget {
@@ -374,14 +453,18 @@ export async function listModelAssignments(
       subs_acc_id: target.subsAccId,
     })}`,
   )) as { assignments?: ModelAssignment[] };
-  return assignmentIndex(Array.isArray(data.assignments) ? data.assignments : []);
+  return assignmentIndex(
+    Array.isArray(data.assignments) ? data.assignments : [],
+  );
 }
 
 export function assignmentKey(agent: string, userAccId: string): string {
   return `${agent}|${userAccId}`;
 }
 
-export function assignmentIndex(list: ModelAssignment[]): Record<string, ModelAssignment> {
+export function assignmentIndex(
+  list: ModelAssignment[],
+): Record<string, ModelAssignment> {
   const out: Record<string, ModelAssignment> = {};
   for (const a of list) {
     out[assignmentKey(a.agent, a.user_acc_id)] = a;
@@ -442,7 +525,8 @@ export async function clearModelAssignment(
 // most specific first. Pure so the precedence logic is testable without mounting
 // the panel.
 
-export type LadderLevel = "user" | "subscription" | "tenant" | "agent" | "global";
+export type LadderLevel =
+  "user" | "subscription" | "tenant" | "agent" | "global";
 
 export interface LadderRung {
   level: LadderLevel;
@@ -519,7 +603,9 @@ export interface LadderInput {
 // Pins stay editable for a subscription because they are per person WITHIN it —
 // already inside the rail's scope. With a tenant selected they are out of scope
 // anyway, since a pin needs a subscription.
-export function editableLevels(scopeKind: "tenant" | "subscription"): LadderLevel[] {
+export function editableLevels(
+  scopeKind: "tenant" | "subscription",
+): LadderLevel[] {
   return scopeKind === "subscription" ? ["subscription", "user"] : ["tenant"];
 }
 
@@ -605,7 +691,9 @@ export function buildLadder(input: LadderInput): LadderRung[] {
     },
     {
       level: "tenant",
-      label: input.names.tenant ? c.tenantNamed.replace("{name}", input.names.tenant) : c.tenant,
+      label: input.names.tenant
+        ? c.tenantNamed.replace("{name}", input.names.tenant)
+        : c.tenant,
       d: input.tenant,
     },
     {
@@ -615,7 +703,12 @@ export function buildLadder(input: LadderInput): LadderRung[] {
       // agentDetail, not instanceWide — see the LadderCopy field's note.
       detail: c.agentDetail.replace("{name}", agentName),
     },
-    { level: "global", label: c.everythingElse, d: input.global, detail: c.instanceWide },
+    {
+      level: "global",
+      label: c.everythingElse,
+      d: input.global,
+      detail: c.instanceWide,
+    },
   ];
 
   // Decided in specificity order — most specific first — because that is the
@@ -632,7 +725,8 @@ export function buildLadder(input: LadderInput): LadderRung[] {
     // even if the caller happened to pass one, because a value shown on that rung
     // would be some OTHER subscription's.
     const modelName = outOfScope ? null : (r.d?.model_name ?? null);
-    const inEffect = !decided && !unreadable && !outOfScope && modelName !== null;
+    const inEffect =
+      !decided && !unreadable && !outOfScope && modelName !== null;
     if (inEffect) decided = true;
     return {
       level: r.level,

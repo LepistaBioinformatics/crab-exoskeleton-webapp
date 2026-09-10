@@ -1,4 +1,5 @@
 import { errorCode } from "@/lib/i18n/errors";
+import type { ThinkingLevel } from "@/lib/models";
 import type { Workspace } from "@/app/chat/fragment";
 
 // The member's own models: register one, prove it answers, and choose between it
@@ -27,6 +28,7 @@ export interface UserModel {
   model: string;
   api_base: string;
   extra_body?: unknown;
+  thinking_level?: ThinkingLevel;
   enabled: boolean;
   has_key: boolean;
   last_test?: ModelTestResult;
@@ -79,12 +81,22 @@ export interface UserModelDraft {
   api_base: string;
   api_key: string;
   extra_body: string;
+  thinking_level: ThinkingLevel | "";
 }
 
 // A factory, not a shared const — a shared object would hand every form the same
 // instance to mutate.
 export function emptyUserDraft(): UserModelDraft {
-  return { slug: "", label: "", provider: "", model: "", api_base: "", api_key: "", extra_body: "" };
+  return {
+    slug: "",
+    label: "",
+    provider: "",
+    model: "",
+    api_base: "",
+    api_key: "",
+    extra_body: "",
+    thinking_level: "",
+  };
 }
 
 export function draftFromUserModel(m: UserModel): UserModelDraft {
@@ -97,7 +109,9 @@ export function draftFromUserModel(m: UserModel): UserModelDraft {
     // Never populated: the API does not return it, and an edit that leaves it
     // blank keeps the stored one.
     api_key: "",
-    extra_body: m.extra_body === undefined ? "" : JSON.stringify(m.extra_body, null, 2),
+    extra_body:
+      m.extra_body === undefined ? "" : JSON.stringify(m.extra_body, null, 2),
+    thinking_level: m.thinking_level ?? "",
   };
 }
 
@@ -123,6 +137,11 @@ export function draftFingerprint(d: UserModelDraft): string {
     // state, two fields over.
     d.api_key,
     d.extra_body.trim(),
+    // thinking_level is deliberately ABSENT, for the reason label is: the probe
+    // does not send it, so changing it cannot change the verdict, and re-arming
+    // the gate would make an admin re-test a model to alter a setting the test
+    // never exercised. If the endpoint refuses the field, the harness drops it
+    // and retries rather than failing the turn.
   ]);
 }
 
@@ -134,7 +153,8 @@ export function saveGate(
   draft: UserModelDraft,
   tested: { fingerprint: string; ok: boolean } | null,
 ): SaveGate {
-  if (!tested || tested.fingerprint !== draftFingerprint(draft)) return "untested";
+  if (!tested || tested.fingerprint !== draftFingerprint(draft))
+    return "untested";
   return tested.ok ? "tested-ok" : "tested-failed";
 }
 
@@ -150,10 +170,15 @@ export function applyProvider(
   next: string,
 ): UserModelDraft {
   const current = draft.api_base.trim();
-  const previous = providers.find((p) => p.provider === draft.provider)?.api_base ?? "";
+  const previous =
+    providers.find((p) => p.provider === draft.provider)?.api_base ?? "";
   const suggestion = providers.find((p) => p.provider === next)?.api_base ?? "";
   const keep = current !== "" && current !== previous;
-  return { ...draft, provider: next, api_base: keep ? draft.api_base : suggestion };
+  return {
+    ...draft,
+    provider: next,
+    api_base: keep ? draft.api_base : suggestion,
+  };
 }
 
 // registerableProviders is what the picker offers.
@@ -172,15 +197,22 @@ export function registerableProviders(
 
 // The models the catalog knows for a provider, offered as suggestions rather than
 // a closed list: a provider's real model set changes faster than this catalog.
-export function providerModels(providers: ProviderOption[], provider: string): string[] {
+export function providerModels(
+  providers: ProviderOption[],
+  provider: string,
+): string[] {
   return providers.find((p) => p.provider === provider)?.models ?? [];
 }
 
 // Whether a draft is complete enough to be worth probing. Deliberately NOT the
 // full validation — the proxy owns that — just enough to keep the button from
 // firing a request that cannot succeed.
-export function canTest(draft: UserModelDraft, editingExisting: boolean): boolean {
-  const filled = draft.provider.trim() && draft.model.trim() && draft.api_base.trim();
+export function canTest(
+  draft: UserModelDraft,
+  editingExisting: boolean,
+): boolean {
+  const filled =
+    draft.provider.trim() && draft.model.trim() && draft.api_base.trim();
   if (!filled) return false;
   // Editing an existing model may reuse the stored key; a new one may not.
   return editingExisting || draft.api_key.trim().length > 0;
@@ -188,7 +220,10 @@ export function canTest(draft: UserModelDraft, editingExisting: boolean): boolea
 
 // extra_body is free-text JSON in the form. Returning the parse ERROR rather than
 // throwing keeps the caller's error handling in one place.
-export function parseExtraBody(raw: string): { value?: unknown; error?: string } {
+export function parseExtraBody(raw: string): {
+  value?: unknown;
+  error?: string;
+} {
   const text = raw.trim();
   if (!text) return {};
   try {
@@ -211,11 +246,17 @@ export type EffectiveSource =
   // the organisation's model is answering DESPITE the selection. This state
   // exists precisely so the screen can say so instead of showing a switch that
   // silently does nothing.
-  | { kind: "own-blocked"; model: UserModel | null; blockedBy: string; organisation: string };
+  | {
+      kind: "own-blocked";
+      model: UserModel | null;
+      blockedBy: string;
+      organisation: string;
+    };
 
 export function effectiveSource(state: UserModelsState): EffectiveSource {
   const selected = state.models.find((m) => m.slug === state.selected) ?? null;
-  if (!state.selected) return { kind: "organisation", model: state.organisationModel };
+  if (!state.selected)
+    return { kind: "organisation", model: state.organisationModel };
   if (!state.allowed || !selected || !selected.enabled) {
     return {
       kind: "own-blocked",
@@ -254,8 +295,12 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function listUserModels(workspace: Workspace): Promise<UserModelsState> {
-  const res = await fetch(`/api/models/mine?${workspaceQuery(workspace).toString()}`);
+export async function listUserModels(
+  workspace: Workspace,
+): Promise<UserModelsState> {
+  const res = await fetch(
+    `/api/models/mine?${workspaceQuery(workspace).toString()}`,
+  );
   const data = await json<{
     models?: UserModel[];
     selected?: string;
@@ -275,12 +320,19 @@ export async function listUserModels(workspace: Workspace): Promise<UserModelsSt
     // Defaulting to false: an answer we could not read must not put a free-text
     // endpoint field on screen that the proxy will refuse on submit.
     customEndpointAllowed: data.custom_endpoint_allowed === true,
-    organisationModel: typeof data.organisation_model === "string" ? data.organisation_model : "",
+    organisationModel:
+      typeof data.organisation_model === "string"
+        ? data.organisation_model
+        : "",
     providers: Array.isArray(data.providers) ? data.providers : [],
   };
 }
 
-function body(workspace: Workspace, draft: UserModelDraft, extra: unknown): Record<string, unknown> {
+function body(
+  workspace: Workspace,
+  draft: UserModelDraft,
+  extra: unknown,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {
     tenant_id: workspace.t,
     subs_acc_id: workspace.s,
@@ -295,6 +347,9 @@ function body(workspace: Workspace, draft: UserModelDraft, extra: unknown): Reco
   // one instead of clearing it.
   if (draft.api_key) out.api_key = draft.api_key;
   if (extra !== undefined) out.extra_body = extra;
+  // Always sent, empty included: the update handler full-replaces it, unlike
+  // api_key just above.
+  out.thinking_level = draft.thinking_level;
   return out;
 }
 
@@ -309,7 +364,9 @@ export async function createUserModel(
   draft: UserModelDraft,
   extra: unknown,
 ): Promise<void> {
-  await json(await fetch("/api/models/mine", post(body(workspace, draft, extra))));
+  await json(
+    await fetch("/api/models/mine", post(body(workspace, draft, extra))),
+  );
 }
 
 // version carries the record the form was opened on, so the proxy's optimistic
@@ -331,10 +388,15 @@ export async function updateUserModel(
   );
 }
 
-export async function deleteUserModel(workspace: Workspace, slug: string): Promise<void> {
+export async function deleteUserModel(
+  workspace: Workspace,
+  slug: string,
+): Promise<void> {
   const query = workspaceQuery(workspace);
   query.set("slug", slug);
-  await json(await fetch(`/api/models/mine?${query.toString()}`, { method: "DELETE" }));
+  await json(
+    await fetch(`/api/models/mine?${query.toString()}`, { method: "DELETE" }),
+  );
 }
 
 export interface TestOutcome {
@@ -349,21 +411,41 @@ export async function testUserModel(
   draft: UserModelDraft,
   extra: unknown,
 ): Promise<TestOutcome> {
-  const res = await fetch("/api/models/mine/test", post(body(workspace, draft, extra)));
+  const res = await fetch(
+    "/api/models/mine/test",
+    post(body(workspace, draft, extra)),
+  );
   return json<TestOutcome>(res);
 }
 
-export async function selectUserModel(workspace: Workspace, slug: string): Promise<void> {
+export async function selectUserModel(
+  workspace: Workspace,
+  slug: string,
+): Promise<void> {
   const query = workspaceQuery(workspace);
   await json(
     await fetch(
       `/api/models/mine/selection?${query.toString()}`,
-      post({ tenant_id: workspace.t, subs_acc_id: workspace.s, role: workspace.r, slug }, "PUT"),
+      post(
+        {
+          tenant_id: workspace.t,
+          subs_acc_id: workspace.s,
+          role: workspace.r,
+          slug,
+        },
+        "PUT",
+      ),
     ),
   );
 }
 
-export async function useOrganisationModel(workspace: Workspace): Promise<void> {
+export async function useOrganisationModel(
+  workspace: Workspace,
+): Promise<void> {
   const query = workspaceQuery(workspace);
-  await json(await fetch(`/api/models/mine/selection?${query.toString()}`, { method: "DELETE" }));
+  await json(
+    await fetch(`/api/models/mine/selection?${query.toString()}`, {
+      method: "DELETE",
+    }),
+  );
 }

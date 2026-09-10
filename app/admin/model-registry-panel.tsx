@@ -18,6 +18,7 @@ import {
   draftFromDuplicate,
   emptyDraft,
   describeError,
+  THINKING_LEVELS,
   type CatalogEntry,
   type DisplayError,
   type InventoryModel,
@@ -81,7 +82,10 @@ export default function ModelRegistryPanel({
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ModelDraft>(emptyDraft());
   // editing holds the model_name + version being edited; null means "create".
-  const [editing, setEditing] = useState<{ name: string; version: number } | null>(null);
+  const [editing, setEditing] = useState<{
+    name: string;
+    version: number;
+  } | null>(null);
   // deprecating holds the model being retired while the admin picks its
   // replacement. An inline picker rather than window.prompt: the replacement must
   // be an existing ACTIVE model, and a free-text prompt cannot offer that list —
@@ -152,6 +156,8 @@ export default function ModelRegistryPanel({
       // draft that dropped extra_body would silently clear it on an unrelated
       // edit — the MiniMax catalog entry's reasoning_split is a real instance.
       extra_body: m.extra_body,
+      // The same argument, and the same trap: PUT full-replaces this too.
+      thinking_level: m.thinking_level ?? "",
     });
     setEditing({ name: m.model_name, version: m.version });
     setShowForm(true);
@@ -171,13 +177,23 @@ export default function ModelRegistryPanel({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
+    if (
+      !draft.model_name.trim() ||
+      !draft.provider.trim() ||
+      !draft.model.trim()
+    ) {
       setError({ code: "models_incomplete", referrers: [] });
       return;
     }
     await run(async () => {
       if (editing) {
-        await updateModel(routed, editing.name, editing.version, draft, restartPolicy);
+        await updateModel(
+          routed,
+          editing.name,
+          editing.version,
+          draft,
+          restartPolicy,
+        );
       } else {
         await createModel(routed, draft);
       }
@@ -190,14 +206,25 @@ export default function ModelRegistryPanel({
 
   function onCatalogPick(value: string) {
     if (value === CUSTOM) {
-      setDraft((d) => ({ ...d, provider: "", model: "", api_base: "", auth_method: "" }));
+      setDraft((d) => ({
+        ...d,
+        provider: "",
+        model: "",
+        api_base: "",
+        auth_method: "",
+      }));
       return;
     }
     const entry = catalog[Number(value)];
     if (!entry) return;
     // Keep whatever name and key the admin already typed; only the definition
     // fields are prefilled.
-    setDraft((d) => ({ ...draftFromCatalog(entry), model_name: d.model_name, api_key: d.api_key, fallbacks: d.fallbacks }));
+    setDraft((d) => ({
+      ...draftFromCatalog(entry),
+      model_name: d.model_name,
+      api_key: d.api_key,
+      fallbacks: d.fallbacks,
+    }));
   }
 
   const { active, inactive } = splitInventory(models ?? []);
@@ -228,9 +255,7 @@ export default function ModelRegistryPanel({
         </Alert>
       )}
 
-      {!routed && (
-        <Alert severity="info">{t.models.noAgents}</Alert>
-      )}
+      {!routed && <Alert severity="info">{t.models.noAgents}</Alert>}
 
       {/* Every section of this tab starts closed. Each header states its own
           state — how many models are in service, which one the scope resolves to,
@@ -251,14 +276,23 @@ export default function ModelRegistryPanel({
         hint={t.models.inventoryHint}
       >
         <div className="flex justify-end">
-          <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
+          <Button
+            variant="text"
+            size="sm"
+            className="gap-1.5 px-1 text-accent"
+            disabled={!routed}
+            onClick={openCreate}
+          >
             <Plus size={16} />
             {t.models.register}
           </Button>
         </div>
 
         {showForm && (
-          <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4">
+          <form
+            onSubmit={onSubmit}
+            className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4"
+          >
             <Field
               label={t.models.startFrom}
               job={t.models.startFromJob}
@@ -300,10 +334,15 @@ export default function ModelRegistryPanel({
                   placeholder="team-gpt"
                   value={draft.model_name}
                   disabled={!!editing}
-                  onChange={(e) => setDraft({ ...draft, model_name: e.target.value })}
+                  onChange={(e) =>
+                    setDraft({ ...draft, model_name: e.target.value })
+                  }
                 />
               </Field>
-              <span aria-hidden className="hidden self-center pt-5 text-center text-fg-muted sm:block">
+              <span
+                aria-hidden
+                className="hidden self-center pt-5 text-center text-fg-muted sm:block"
+              >
                 →
               </span>
               <Field
@@ -316,7 +355,9 @@ export default function ModelRegistryPanel({
                   className={fieldControlClass(true)}
                   placeholder="gpt-5.4"
                   value={draft.model}
-                  onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                  onChange={(e) =>
+                    setDraft({ ...draft, model: e.target.value })
+                  }
                 />
               </Field>
 
@@ -328,7 +369,7 @@ export default function ModelRegistryPanel({
                   <span className="text-[11px] text-fg-muted">config.json</span>
                 </div>
                 <pre className="overflow-x-auto rounded-md border border-brand/25 bg-bg p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
-  {`"model_name": ${JSON.stringify(draft.model_name || "…")},
+                  {`"model_name": ${JSON.stringify(draft.model_name || "…")},
   "provider":   ${JSON.stringify(draft.provider || "…")},
   "model":      ${JSON.stringify(draft.model || "…")}`}
                 </pre>
@@ -353,7 +394,9 @@ export default function ModelRegistryPanel({
                 className={fieldControlClass(true)}
                 placeholder="openai"
                 value={draft.provider}
-                onChange={(e) => setDraft({ ...draft, provider: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, provider: e.target.value })
+                }
               />
             </Field>
 
@@ -367,7 +410,9 @@ export default function ModelRegistryPanel({
                 className={fieldControlClass(true)}
                 placeholder="https://api.openai.com/v1"
                 value={draft.api_base}
-                onChange={(e) => setDraft({ ...draft, api_base: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, api_base: e.target.value })
+                }
               />
             </Field>
 
@@ -381,8 +426,39 @@ export default function ModelRegistryPanel({
                 className={fieldControlClass(true)}
                 placeholder="oauth"
                 value={draft.auth_method}
-                onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, auth_method: e.target.value })
+                }
               />
+            </Field>
+
+            <Field
+              label={t.models.thinkingLevel}
+              job={t.models.thinkingLevelJob}
+              htmlFor="m-thinking"
+            >
+              <select
+                id="m-thinking"
+                className={fieldControlClass(true)}
+                value={draft.thinking_level}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    thinking_level: e.target
+                      .value as ModelDraft["thinking_level"],
+                  })
+                }
+              >
+                {/* Empty first, and it says what it means. An empty value and
+                    "off" look interchangeable in a dropdown and are not: one
+                    sends no field at all, the other sends one. */}
+                <option value="">{t.models.thinkingLevelDefault}</option>
+                {THINKING_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <Field
@@ -406,17 +482,31 @@ export default function ModelRegistryPanel({
                 autoComplete="off"
                 placeholder={editing ? "unchanged" : "paste the key"}
                 value={draft.api_key}
-                onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, api_key: e.target.value })
+                }
               />
             </Field>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="text" size="sm"
-                onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
+              <Button
+                type="button"
+                variant="text"
+                size="sm"
+                onClick={() => {
+                  setShowForm(false);
+                  setDraft(emptyDraft());
+                  setEditing(null);
+                }}
+              >
                 {c.actions.cancel}
               </Button>
               <Button type="submit" variant="filled" size="sm" disabled={busy}>
-                {busy ? t.models.saving : editing ? t.models.saveChanges : t.models.addModel}
+                {busy
+                  ? t.models.saving
+                  : editing
+                    ? t.models.saveChanges
+                    : t.models.addModel}
               </Button>
             </div>
           </form>
@@ -430,24 +520,47 @@ export default function ModelRegistryPanel({
           <>
             <Section title={t.models.inService}>
               {active.length === 0 ? (
-                <p className="py-2 text-sm text-fg-muted">{t.models.noneActive}</p>
+                <p className="py-2 text-sm text-fg-muted">
+                  {t.models.noneActive}
+                </p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {active.map((m, i) => (
-                    <ModelRow key={m.model_name} model={m} busy={busy}
+                    <ModelRow
+                      key={m.model_name}
+                      model={m}
+                      busy={busy}
                       onMoveUp={i === 0 ? undefined : () => move(active, i, -1)}
-                      onMoveDown={i === active.length - 1 ? undefined : () => move(active, i, 1)}
-                      onEdit={openEdit} onDuplicate={openDuplicate}
-                      onToggle={(mm) => run(async () => {
-                        await setModelStatus(routed, mm.model_name, mm.version, "disabled");
-                        await refresh();
-                      })}
-                      onDeprecate={(mm) => { setDeprecating(mm); setReplacement(""); }}
-                      onDelete={(mm) => run(async () => {
-                        await deleteModel(routed, mm.model_name);
-                        await refresh();
-                      })}
-                      onEditChain={openChain} />
+                      onMoveDown={
+                        i === active.length - 1
+                          ? undefined
+                          : () => move(active, i, 1)
+                      }
+                      onEdit={openEdit}
+                      onDuplicate={openDuplicate}
+                      onToggle={(mm) =>
+                        run(async () => {
+                          await setModelStatus(
+                            routed,
+                            mm.model_name,
+                            mm.version,
+                            "disabled",
+                          );
+                          await refresh();
+                        })
+                      }
+                      onDeprecate={(mm) => {
+                        setDeprecating(mm);
+                        setReplacement("");
+                      }}
+                      onDelete={(mm) =>
+                        run(async () => {
+                          await deleteModel(routed, mm.model_name);
+                          await refresh();
+                        })
+                      }
+                      onEditChain={openChain}
+                    />
                   ))}
                 </ul>
               )}
@@ -460,13 +573,17 @@ export default function ModelRegistryPanel({
               {deprecating && (
                 <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
                   <span className="text-xs font-medium text-fg-muted">
-                    {t.models.retirePrefix} <span className="font-mono">{deprecating.model_name}</span>
+                    {t.models.retirePrefix}{" "}
+                    <span className="font-mono">{deprecating.model_name}</span>
                   </span>
                   <p className="text-[11px] text-fg-muted">
                     {t.models.retireExplain}
                   </p>
-                  <select className={selectClass} value={replacement}
-                    onChange={(e) => setReplacement(e.target.value)}>
+                  <select
+                    className={selectClass}
+                    value={replacement}
+                    onChange={(e) => setReplacement(e.target.value)}
+                  >
                     <option value="" disabled>
                       {t.models.replacementPlaceholder}
                     </option>
@@ -479,19 +596,35 @@ export default function ModelRegistryPanel({
                       ))}
                   </select>
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="text" size="sm"
-                      onClick={() => { setDeprecating(null); setReplacement(""); }}>
+                    <Button
+                      type="button"
+                      variant="text"
+                      size="sm"
+                      onClick={() => {
+                        setDeprecating(null);
+                        setReplacement("");
+                      }}
+                    >
                       {c.actions.cancel}
                     </Button>
-                    <Button variant="filled" size="sm" disabled={busy || !replacement}
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      disabled={busy || !replacement}
                       onClick={() =>
                         run(async () => {
-                          await deprecateModel(routed, deprecating.model_name, deprecating.version, replacement);
+                          await deprecateModel(
+                            routed,
+                            deprecating.model_name,
+                            deprecating.version,
+                            replacement,
+                          );
                           setDeprecating(null);
                           setReplacement("");
                           await refresh();
                         })
-                      }>
+                      }
+                    >
                       {t.models.deprecate}
                     </Button>
                   </div>
@@ -501,21 +634,37 @@ export default function ModelRegistryPanel({
 
             <Section title={t.models.retiredOrHeld}>
               {inactive.length === 0 ? (
-                <p className="py-2 text-sm text-fg-muted">{t.models.noneInactive}</p>
+                <p className="py-2 text-sm text-fg-muted">
+                  {t.models.noneInactive}
+                </p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {inactive.map((m) => (
-                    <ModelRow key={m.model_name} model={m} busy={busy}
-                      onEdit={openEdit} onDuplicate={openDuplicate}
-                      onToggle={(mm) => run(async () => {
-                        await setModelStatus(routed, mm.model_name, mm.version, "active");
-                        await refresh();
-                      })}
+                    <ModelRow
+                      key={m.model_name}
+                      model={m}
+                      busy={busy}
+                      onEdit={openEdit}
+                      onDuplicate={openDuplicate}
+                      onToggle={(mm) =>
+                        run(async () => {
+                          await setModelStatus(
+                            routed,
+                            mm.model_name,
+                            mm.version,
+                            "active",
+                          );
+                          await refresh();
+                        })
+                      }
                       onDeprecate={() => {}}
-                      onDelete={(mm) => run(async () => {
-                        await deleteModel(routed, mm.model_name);
-                        await refresh();
-                      })} />
+                      onDelete={(mm) =>
+                        run(async () => {
+                          await deleteModel(routed, mm.model_name);
+                          await refresh();
+                        })
+                      }
+                    />
                   ))}
                 </ul>
               )}
@@ -536,16 +685,27 @@ export default function ModelRegistryPanel({
             busy={busy}
             onSave={(chain) =>
               run(async () => {
-                await updateModel(routed, chainFor.model_name, chainFor.version, {
-                  model_name: chainFor.model_name,
-                  provider: chainFor.provider,
-                  model: chainFor.model,
-                  api_base: chainFor.api_base ?? "",
-                  auth_method: chainFor.auth_method ?? "",
-                  api_key: "",
-                  fallbacks: chain,
-                  extra_body: chainFor.extra_body,
-                }, restartPolicy);
+                await updateModel(
+                  routed,
+                  chainFor.model_name,
+                  chainFor.version,
+                  {
+                    model_name: chainFor.model_name,
+                    provider: chainFor.provider,
+                    model: chainFor.model,
+                    api_base: chainFor.api_base ?? "",
+                    auth_method: chainFor.auth_method ?? "",
+                    api_key: "",
+                    fallbacks: chain,
+                    extra_body: chainFor.extra_body,
+                    // Carried for the reason the comment in openEdit gives, and
+                    // this is the site where forgetting it actually bites:
+                    // reordering a fallback chain would clear a thinking_level
+                    // nobody was editing.
+                    thinking_level: chainFor.thinking_level ?? "",
+                  },
+                  restartPolicy,
+                );
                 setChainFor(null);
                 await refresh();
               })
@@ -572,10 +732,18 @@ export default function ModelRegistryPanel({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</span>
+      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        {title}
+      </span>
       {children}
     </div>
   );

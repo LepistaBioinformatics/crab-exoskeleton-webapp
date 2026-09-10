@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
+import {
+  fetchMycelium,
+  isInstance,
+  MyceliumConnectivityError,
+  upstreamError,
+} from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 
 // Shared plumbing for the three /api/models/mine routes. One place, because the
@@ -71,19 +76,34 @@ type ParsedBody =
 export async function userModelBody(req: NextRequest): Promise<ParsedBody> {
   const body = await req.json().catch(() => null);
   const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : null;
-  const subsAccId = typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
+  const subsAccId =
+    typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
   const role = typeof body?.role === "string" ? body.role : null;
   if (!tenantId || !subsAccId || !role || !isInstance(role)) {
-    return { error: NextResponse.json({ error: "invalid_request" }, { status: 400 }) };
+    return {
+      error: NextResponse.json({ error: "invalid_request" }, { status: 400 }),
+    };
   }
 
   const out: Record<string, unknown> = {};
-  for (const field of ["slug", "label", "provider", "model", "api_base"] as const) {
+  // thinking_level is in this list rather than behind a truthiness check: an
+  // empty string is a real value here ("send no depth field"), and the proxy
+  // full-replaces the field, so dropping the empty case would make clearing a
+  // level impossible from the drawer that sets it.
+  for (const field of [
+    "slug",
+    "label",
+    "provider",
+    "model",
+    "api_base",
+    "thinking_level",
+  ] as const) {
     if (typeof body?.[field] === "string") out[field] = body[field];
   }
   // Absent means "keep the stored key"; the proxy owns that rule, so the BFF
   // must not invent an empty string here.
-  if (typeof body?.api_key === "string" && body.api_key !== "") out.api_key = body.api_key;
+  if (typeof body?.api_key === "string" && body.api_key !== "")
+    out.api_key = body.api_key;
   if (body?.extra_body !== undefined) out.extra_body = body.extra_body;
   // The optimistic version the form was opened on. Forwarded as a number or not
   // at all — the proxy reads 0 as "no check", so a malformed one must not

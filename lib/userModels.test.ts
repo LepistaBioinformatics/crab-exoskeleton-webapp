@@ -53,7 +53,9 @@ describe("the test gate", () => {
 
   it("arms save once a probe covers this exact draft", () => {
     const d = draft();
-    expect(saveGate(d, { fingerprint: draftFingerprint(d), ok: true })).toBe("tested-ok");
+    expect(saveGate(d, { fingerprint: draftFingerprint(d), ok: true })).toBe(
+      "tested-ok",
+    );
   });
 
   it("re-arms when ANY field the probe sends changes", () => {
@@ -82,7 +84,9 @@ describe("the test gate", () => {
 
   it("lets a failed probe through as a deliberate second click, not as untested", () => {
     const d = draft();
-    expect(saveGate(d, { fingerprint: draftFingerprint(d), ok: false })).toBe("tested-failed");
+    expect(saveGate(d, { fingerprint: draftFingerprint(d), ok: false })).toBe(
+      "tested-failed",
+    );
   });
 
   it("catches a same-length key swap, which a length-based fingerprint would not", () => {
@@ -92,9 +96,9 @@ describe("the test gate", () => {
   });
 
   it("ignores a trailing slash on the endpoint, which changes no request", () => {
-    expect(draftFingerprint(draft({ api_base: "https://api.openai.com/v1/" }))).toBe(
-      draftFingerprint(draft({ api_base: "https://api.openai.com/v1" })),
-    );
+    expect(
+      draftFingerprint(draft({ api_base: "https://api.openai.com/v1/" })),
+    ).toBe(draftFingerprint(draft({ api_base: "https://api.openai.com/v1" })));
   });
 });
 
@@ -125,7 +129,10 @@ describe("effectiveSource", () => {
   };
 
   it("reports the organisation's model when nothing is selected", () => {
-    expect(effectiveSource(base)).toEqual({ kind: "organisation", model: "org-gpt" });
+    expect(effectiveSource(base)).toEqual({
+      kind: "organisation",
+      model: "org-gpt",
+    });
   });
 
   it("reports the member's own when it is selected and usable", () => {
@@ -137,8 +144,17 @@ describe("effectiveSource", () => {
   // stored but not in effect. Reporting it as "own" would show a switch that
   // silently does nothing.
   it("distinguishes a selection blocked by a scope lock", () => {
-    const s = effectiveSource({ ...base, selected: "mine", allowed: false, blockedBy: "tenant" });
-    expect(s).toMatchObject({ kind: "own-blocked", blockedBy: "tenant", organisation: "org-gpt" });
+    const s = effectiveSource({
+      ...base,
+      selected: "mine",
+      allowed: false,
+      blockedBy: "tenant",
+    });
+    expect(s).toMatchObject({
+      kind: "own-blocked",
+      blockedBy: "tenant",
+      organisation: "org-gpt",
+    });
   });
 
   it("distinguishes a selection whose model an administrator disabled", () => {
@@ -158,20 +174,36 @@ describe("effectiveSource", () => {
 
 describe("applyProvider", () => {
   const providers: ProviderOption[] = [
-    { provider: "openai", api_base: "https://api.openai.com/v1", models: ["gpt-5.4"] },
-    { provider: "nvidia", api_base: "https://integrate.api.nvidia.com/v1", models: ["nemotron"] },
+    {
+      provider: "openai",
+      api_base: "https://api.openai.com/v1",
+      models: ["gpt-5.4"],
+    },
+    {
+      provider: "nvidia",
+      api_base: "https://integrate.api.nvidia.com/v1",
+      models: ["nemotron"],
+    },
     { provider: "litellm" },
   ];
 
   it("carries the provider's endpoint into an empty field", () => {
-    const d = applyProvider(draft({ provider: "", api_base: "" }), providers, "nvidia");
+    const d = applyProvider(
+      draft({ provider: "", api_base: "" }),
+      providers,
+      "nvidia",
+    );
     // The whole point: a member cannot be expected to know this address, and a
     // base missing its version path 404s against a real host.
     expect(d.api_base).toBe("https://integrate.api.nvidia.com/v1");
   });
 
   it("replaces the previous provider's suggestion when switching", () => {
-    const d = applyProvider(draft({ provider: "openai", api_base: "https://api.openai.com/v1" }), providers, "nvidia");
+    const d = applyProvider(
+      draft({ provider: "openai", api_base: "https://api.openai.com/v1" }),
+      providers,
+      "nvidia",
+    );
     expect(d.api_base).toBe("https://integrate.api.nvidia.com/v1");
   });
 
@@ -179,25 +211,40 @@ describe("applyProvider", () => {
     // A self-hosted gateway or a corporate proxy. Replacing it on a provider
     // change would be the same class of bug as a stale test verdict.
     const own = "https://llm.internal.example.com/v1";
-    const d = applyProvider(draft({ provider: "openai", api_base: own }), providers, "nvidia");
+    const d = applyProvider(
+      draft({ provider: "openai", api_base: own }),
+      providers,
+      "nvidia",
+    );
     expect(d.api_base).toBe(own);
   });
 
   it("leaves the field alone for a provider the catalog does not know", () => {
-    const d = applyProvider(draft({ provider: "", api_base: "" }), providers, "litellm");
+    const d = applyProvider(
+      draft({ provider: "", api_base: "" }),
+      providers,
+      "litellm",
+    );
     expect(d.api_base).toBe("");
   });
 
   it("re-arms the test gate, because the endpoint changed", () => {
-    const before = draft({ provider: "openai", api_base: "https://api.openai.com/v1" });
+    const before = draft({
+      provider: "openai",
+      api_base: "https://api.openai.com/v1",
+    });
     const tested = { fingerprint: draftFingerprint(before), ok: true };
-    expect(saveGate(applyProvider(before, providers, "nvidia"), tested)).toBe("untested");
+    expect(saveGate(applyProvider(before, providers, "nvidia"), tested)).toBe(
+      "untested",
+    );
   });
 });
 
 describe("providerModels", () => {
   it("offers the catalog's models, and nothing for an unknown provider", () => {
-    const providers: ProviderOption[] = [{ provider: "nvidia", models: ["nemotron"] }];
+    const providers: ProviderOption[] = [
+      { provider: "nvidia", models: ["nemotron"] },
+    ];
     expect(providerModels(providers, "nvidia")).toEqual(["nemotron"]);
     expect(providerModels(providers, "groq")).toEqual([]);
   });
@@ -212,7 +259,9 @@ describe("registerableProviders", () => {
 
   it("hides a provider it cannot fill an endpoint for, when typing one is refused", () => {
     // Offering it would be a choice that can only end in a refusal on submit.
-    expect(registerableProviders(providers, false).map((p) => p.provider)).toEqual(["openai"]);
+    expect(
+      registerableProviders(providers, false).map((p) => p.provider),
+    ).toEqual(["openai"]);
   });
 
   it("offers everything once an administrator allows custom endpoints", () => {
@@ -238,7 +287,9 @@ describe("parseExtraBody", () => {
 
 describe("slugFromLabel", () => {
   it("produces the charset the store key allows", () => {
-    expect(slugFromLabel("Minha chave da OpenAI")).toBe("minha-chave-da-openai");
+    expect(slugFromLabel("Minha chave da OpenAI")).toBe(
+      "minha-chave-da-openai",
+    );
     expect(slugFromLabel("Açaí — GPT/5.4")).toBe("acai-gpt-5-4");
   });
 
@@ -254,7 +305,37 @@ describe("draftFromUserModel", () => {
   });
 
   it("round-trips extra_body as editable JSON", () => {
-    const d = draftFromUserModel(model({ extra_body: { reasoning: { effort: "high" } } }));
-    expect(parseExtraBody(d.extra_body)).toEqual({ value: { reasoning: { effort: "high" } } });
+    const d = draftFromUserModel(
+      model({ extra_body: { reasoning: { effort: "high" } } }),
+    );
+    expect(parseExtraBody(d.extra_body)).toEqual({
+      value: { reasoning: { effort: "high" } },
+    });
+  });
+});
+
+// thinking_level is a member-visible setting on a member's own model, and it is
+// the case that most wants one: someone who brought their own reasoning key.
+describe("thinking_level on a personal model", () => {
+  it("does NOT re-arm the test gate", () => {
+    // The probe never sends it, so changing it cannot change the verdict.
+    // Re-arming would make a member re-test a model to alter a setting the test
+    // did not exercise -- and if the endpoint refuses the field, the harness
+    // drops it and retries rather than failing the turn.
+    const d = draft({ thinking_level: "high" });
+    const tested = {
+      fingerprint: draftFingerprint(draft({ thinking_level: "" })),
+      ok: true,
+    };
+    expect(saveGate(d, tested)).toBe("tested-ok");
+  });
+
+  it("comes back into the form when editing an existing model", () => {
+    // The trap this guards: an edit form that dropped the field would clear a
+    // level the member set earlier, because the update full-replaces it.
+    expect(
+      draftFromUserModel(model({ thinking_level: "xhigh" })).thinking_level,
+    ).toBe("xhigh");
+    expect(draftFromUserModel(model()).thinking_level).toBe("");
   });
 });
