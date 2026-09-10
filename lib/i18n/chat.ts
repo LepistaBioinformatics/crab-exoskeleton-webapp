@@ -106,14 +106,17 @@ const en = {
     aria: "File preview",
     action: "Preview",
     tooLarge: "This file is too large to preview. Download it to open it.",
-    pdfFallback: "This browser cannot display the PDF here — download it instead.",
+    pdfFallback:
+      "This browser cannot display the PDF here — download it instead.",
     // Said rather than silently shown: a preview that cut a sheet off without saying so
     // would misrepresent the file.
-    sheetTruncated: "Showing the first {n} rows. Download the file for all of them.",
+    sheetTruncated:
+      "Showing the first {n} rows. Download the file for all of them.",
     // A presentation is a visual medium and this shows its text. Said out loud for the
     // same reason the row cap is: a partial view that does not admit it misrepresents
     // the file (preview-formatting-and-odf FR-3.3).
-    slidesPartial: "Text extracted from the slides. Download the file to see the deck itself.",
+    slidesPartial:
+      "Text extracted from the slides. Download the file to see the deck itself.",
     slide: "Slide {n}",
     // An unrecognised extension is opened on trust now, so the file that turns out to be
     // binary says so once its bytes have arrived. A notice, not an error.
@@ -154,7 +157,8 @@ const en = {
     hint: "What the agent runs on a schedule, and what each run produced. Read-only: ask the agent to create or change a task.",
     // The store carries no per-run outcome, so the list never claims one. This
     // sentence is why there are no success ticks next to the executions.
-    noOutcomeHint: "Only the most recent run of a live task records a status — earlier runs show how long they took and how much they logged.",
+    noOutcomeHint:
+      "Only the most recent run of a live task records a status — earlier runs show how long they took and how much they logged.",
     schedule: {
       cron: "Cron {expr}",
       every: "Every {interval}",
@@ -181,7 +185,8 @@ const en = {
     // A run whose task is gone from the store — the normal end state of a
     // one-shot task, so it is labelled rather than hidden.
     removedTask: "Removed task",
-    removedTaskHint: "The task is no longer scheduled, but this run is still on record.",
+    removedTaskHint:
+      "The task is no longer scheduled, but this run is still on record.",
     transcriptMissing: "The transcript for this run is no longer available.",
     backToTasks: "Back to tasks",
     toolCall: "{name}",
@@ -207,7 +212,8 @@ const en = {
     hideFinishedTitle: "Hide tasks that already ran and will not run again",
     finishedHidden: "{count} hidden",
     allFinished: "Everything here has finished.",
-    allFinishedHint: "Turn off “Hide finished” to see past tasks and their results.",
+    allFinishedHint:
+      "Turn off “Hide finished” to see past tasks and their results.",
     showMoreRuns: "Show {count} older run(s)",
     showFewerRuns: "Show fewer runs",
   },
@@ -244,7 +250,8 @@ const en = {
     // the node count and would freeze the tab. Filter to reach the rest.
     mapTruncated: "{count} more not shown — filter to narrow",
     searchPlaceholder: "Search the graph…",
-    searchHint: "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
+    searchHint:
+      "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
     // The Search tab before a query has been typed. It used to render NOTHING at all —
     // a blank pane that read as a broken tab rather than as a tab waiting for input.
     searchIdle: {
@@ -254,12 +261,14 @@ const en = {
     observations: "observations",
     relations: "relations",
     noResults: "Nothing matched that search.",
-    noResultsHint: "Ranking is by term relevance, not by meaning — try the wording the agent would have stored.",
+    noResultsHint:
+      "Ranking is by term relevance, not by meaning — try the wording the agent would have stored.",
     // The MAP's own empty result. Deliberately not `noResults`: that tab runs a BM25
     // search over everything, this one is a substring filter over names, and telling a
     // member their search failed when their filter did sends them to the wrong fix.
     mapNoMatch: "No entity matches that filter.",
-    mapNoMatchHint: "The map filter matches names only. Clear it to see the whole graph.",
+    mapNoMatchHint:
+      "The map filter matches names only. Clear it to see the whole graph.",
     noObservations: "No observations recorded yet.",
     confidence: "confidence",
     archived: "Archived — hidden from the agent's own browsing.",
@@ -271,7 +280,8 @@ const en = {
     resizeDetail: "Resize the details panel",
     sources: "Where this came from",
     sourcesHint: "Click a conversation to open it.",
-    noSources: "No conversation recorded. The agent writes without a source when a scheduled job saved it, or when two chats were open at once.",
+    noSources:
+      "No conversation recorded. The agent writes without a source when a scheduled job saved it, or when two chats were open at once.",
     goneConversation: "Conversation no longer available",
     mergedInto: "Merged into",
     // Referencing an entity in the chat. The marker carries the NAME, not the facts: the agent
@@ -288,7 +298,8 @@ const en = {
       newEntities: "New entities",
       newRelations: "New relations",
       nothing: "Nothing new in the last 24 hours.",
-      nothingHint: "The agent adds to the graph as you talk to it — the Entities tab shows everything it already knows.",
+      nothingHint:
+        "The agent adds to the graph as you talk to it — the Entities tab shows everything it already knows.",
     },
     // The map's discovery tools. Grouped under one key rather than scattered across
     // memoryGraph.* because they belong to one surface — the disclosure panel over the stage —
@@ -299,7 +310,8 @@ const en = {
       filters: "Filters",
       relationTypes: "Relation types",
       relationTypesAll: "All relations",
-      relationTypesNone: "No relation types selected — the entities are drawn without their connections.",
+      relationTypesNone:
+        "No relation types selected — the entities are drawn without their connections.",
       noRelationTypes: "The agent has not recorded any relations yet.",
       minObservations: "At least {count} observations",
       minObservationsAny: "Any number of observations",
@@ -324,13 +336,17 @@ const en = {
       // tells a member nothing about what the bigger circles mean.
       sizePagerank: "Influence",
       sizeBetweenness: "Bridging",
-      sizePagerankHint: "How much of the graph flows through an entity, counting its neighbours' importance too.",
-      sizeBetweennessHint: "How often an entity sits on the only route between two others. Computed on demand — it is the slow one.",
+      sizePagerankHint:
+        "How much of the graph flows through an entity, counting its neighbours' importance too.",
+      sizeBetweennessHint:
+        "How often an entity sits on the only route between two others. Computed on demand — it is the slow one.",
       colorType: "Entity type",
       colorCommunity: "Cluster",
       colorComponent: "Connected group",
-      colorCommunityHint: "Groups the agent never labelled, inferred from how densely entities relate.",
-      colorComponentHint: "Entities reachable from each other. Separate colours never connect at all.",
+      colorCommunityHint:
+        "Groups the agent never labelled, inferred from how densely entities relate.",
+      colorComponentHint:
+        "Entities reachable from each other. Separate colours never connect at all.",
       insights: "Insights",
       insightsTop: "Strongest by {metric}",
       // The whole point of GD-B4: scores are whole-graph, the map is capped and filtered, so a
@@ -338,7 +354,8 @@ const en = {
       insightsOffMap: "not on the map",
       insightsIsolated: "{count} isolated — known but never connected",
       insightsIsolatedOne: "1 isolated — known but never connected",
-      insightsIsolatedNone: "Everything the agent knows connects to something else.",
+      insightsIsolatedNone:
+        "Everything the agent knows connects to something else.",
       insightsScope: "Measured across the whole graph, not just what is drawn.",
       path: "Path",
       pathEnable: "Trace a path",
@@ -350,12 +367,15 @@ const en = {
       // Undirected on purpose — the agent writes relations with no direction convention, so a
       // directed search would answer "no path" for most real questions. Said out loud because a
       // member looking at arrowheads will reasonably assume otherwise.
-      pathUndirectedHint: "Follows relations in either direction, whichever way the arrows point.",
+      pathUndirectedHint:
+        "Follows relations in either direction, whichever way the arrows point.",
       pathUnreachable: "Nothing on the map connects these two.",
-      pathUnreachableHint: "They may still be related through an entity the filter or the node limit left out.",
+      pathUnreachableHint:
+        "They may still be related through an entity the filter or the node limit left out.",
       // A different fact from 'unreachable', with a different fix.
       pathMissing: "{names} is not on the map right now.",
-      pathMissingHint: "Clear the filter, or raise what the map is showing, then trace again.",
+      pathMissingHint:
+        "Clear the filter, or raise what the map is showing, then trace again.",
       pathSame: "That is the same entity twice.",
       scopeNames: "Names",
       scopeContents: "Contents",
@@ -363,21 +383,24 @@ const en = {
       scopeNamesHint: "Instant, and only matches the entity's name.",
       // The reason this scope exists: the map could not find an entity by anything only its
       // observations said.
-      scopeContentsHint: "Asks the server, and also reads what the agent observed about each entity.",
+      scopeContentsHint:
+        "Asks the server, and also reads what the agent observed about each entity.",
       scopeSearching: "Searching…",
       scopeFailed: "That search could not be completed.",
       scopeCapped: "Showing the {count} best matches — there may be more.",
       reset: "Reset everything",
       // Names what it clears, because it reaches past this panel: the entity-type filter is shared
       // with the Entities tab, so a member who does not know that would find that list changed too.
-      resetHint: "Clears the filters, the encodings, the focus radius and the entity-type filter shared with the Entities tab.",
+      resetHint:
+        "Clears the filters, the encodings, the focus radius and the entity-type filter shared with the Entities tab.",
       resetNothing: "Nothing to reset — everything is at its default.",
     },
     // The no-match state has to say the right thing about WHICH filter matched nothing: the
     // names-only wording sent members looking for a spelling mistake when they had actually
     // searched observation text.
     mapNoMatchContents: "Nothing the agent observed matches that.",
-    mapNoMatchContentsHint: "This searched names, types and observation text. Try the wording the agent would have stored.",
+    mapNoMatchContentsHint:
+      "This searched names, types and observation text. Try the wording the agent would have stored.",
   },
   view: {
     // Attribution inside the blockquote a reply inserts into the message.
@@ -392,13 +415,15 @@ const en = {
     resumeHeading: "Continue where you left off",
     // Was hardcoded English in the JSX, so it stayed English in pt and the parity
     // test could not see it -- that check only compares strings that reach a dict.
-    resumeBody: "Jump back into your most recent conversation with agent {agent}.",
+    resumeBody:
+      "Jump back into your most recent conversation with agent {agent}.",
     // Inside a project the card offers a conversation from THAT project, so naming
     // the parent agent would describe the wrong scope. The project's own name is
     // deliberately absent: it is already the sidebar's header and the collapsed
     // rail's initials, and interpolating it here would need the projects list to
     // have loaded -- which means a frame of the wrong copy while it has not.
-    resumeBodyProject: "Jump back into your most recent conversation in this project.",
+    resumeBodyProject:
+      "Jump back into your most recent conversation in this project.",
     startHeading: "Start a new chat",
     startBody: "Ask agent {agent} anything to get going.",
     // Same scope correction as resumeBodyProject: a chat started here is answered
@@ -414,17 +439,20 @@ const en = {
     // the transcript. Said plainly rather than disguised as ordinary progress: the
     // member is now waiting on a different thing, and the honest line is also the
     // reassuring one.
-    recovering: "Connection dropped — the agent is still working. Fetching the reply…",
+    recovering:
+      "Connection dropped — the agent is still working. Fetching the reply…",
     // turn-stream-continuity FR-22: the member's OWN device has no connection.
     // Distinct from `recovering`, which says we lost the stream but can still reach
     // the gateway — different problem, different action. Reading them as the same
     // thing is what makes a tunnel feel like a broken app.
-    offline: "You're offline — the agent is still working. Reconnecting when your connection returns…",
+    offline:
+      "You're offline — the agent is still working. Reconnecting when your connection returns…",
     // steering-messages: this message was folded into a turn that was already
     // running, so it gets no reply of its own and what streams below belongs to that
     // turn. Said plainly because the alternative reading — "the chat is slow to
     // send" — is the one the member arrives at on their own, and it is wrong.
-    steering: "Added to the turn already in progress — the agent will take it into account. The reply below belongs to that turn.",
+    steering:
+      "Added to the turn already in progress — the agent will take it into account. The reply below belongs to that turn.",
     // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
@@ -494,7 +522,8 @@ const en = {
     treeAria: "Conversation tree",
     tree: "Tree",
     noMatches: "No conversation matches your filter.",
-    noMatchesHint: "Clear the filter, or narrow it with tag: alias: text: date:.",
+    noMatchesHint:
+      "Clear the filter, or narrow it with tag: alias: text: date:.",
     noneYet: "No conversations yet.",
     noneYetHint: "Start one with New chat above and it will show up here.",
     newChat: "New chat",
@@ -593,7 +622,8 @@ const en = {
     emptyHint:
       "Register one to use your own provider account. It is yours alone — nobody else can select it.",
     // The switch is inert here, and saying why is the whole point of the state.
-    lockedScope: "Your administrator does not allow personal models on this agent.",
+    lockedScope:
+      "Your administrator does not allow personal models on this agent.",
     lockedSelected:
       "You selected your own model, but your administrator has blocked personal models — {name} is answering instead.",
     disabledSelected:
@@ -609,7 +639,8 @@ const en = {
     apiBasePlaceholder: "https://api.openai.com/v1",
     // The mistake this prevents: a base without its version path reaches a real
     // host and answers 404, which reads as "wrong provider".
-    apiBaseHint: "Filled in when you pick a provider. Keep the version path (e.g. /v1) if you change it.",
+    apiBaseHint:
+      "Filled in when you pick a provider. Keep the version path (e.g. /v1) if you change it.",
     apiBaseFixed:
       "Set by the provider you picked. Your administrator decides whether members may point at an endpoint of their own.",
     apiKeyLabel: "API key",
@@ -617,7 +648,12 @@ const en = {
     apiKeyKept: "Leave blank to keep the stored key",
     advanced: "Advanced",
     extraBodyLabel: "extra_body (JSON)",
-    extraBodyHint: "Merged into every request. Leave empty unless your provider requires it.",
+    extraBodyHint:
+      "Merged into every request. Leave empty unless your provider requires it.",
+    thinkingLabel: "Reasoning depth",
+    thinkingHint:
+      "How hard this model thinks. The provider default sends nothing \u2014 which is not \u201coff\u201d, a value that gets sent.",
+    thinkingDefault: "Provider default",
     test: "Test",
     testing: "Testing…",
     retest: "Test again",
@@ -626,19 +662,23 @@ const en = {
     saving: "Saving…",
     edit: "Edit",
     delete: "Delete",
-    deleteConfirm: 'Delete "{name}"? If it is in use, this agent goes back to your organisation\'s model.',
+    deleteConfirm:
+      'Delete "{name}"? If it is in use, this agent goes back to your organisation\'s model.',
     // Why Save is disabled. Not a warning — an instruction.
     testFirst: "Test the model before saving it.",
     testOk: "It answered in {ms} ms.",
     // Deliberately not a promise: the container sends tools, streaming and a much
     // larger context than this one short message.
-    testOkHint: "That proves the endpoint and the key work — not that every answer will.",
+    testOkHint:
+      "That proves the endpoint and the key work — not that every answer will.",
     testFailed: "It did not answer.",
-    testFailedHint: "You can still save it: your organisation's model keeps answering until it works.",
+    testFailedHint:
+      "You can still save it: your organisation's model keeps answering until it works.",
     lastTestOk: "Answered in {ms} ms",
     lastTestFailed: "Last test failed",
     neverTested: "Never tested",
-    restartNote: "Changes here apply when you restart the agent — the banner at the top of the chat has the button.",
+    restartNote:
+      "Changes here apply when you restart the agent — the banner at the top of the chat has the button.",
   },
   secrets: {
     title: "Agent secrets",
@@ -709,9 +749,11 @@ const en = {
     renameAria: "Rename",
     deleteFolder: "Delete folder",
     deleteFolderAria: "Delete folder",
-    organiseHint: "Drag files and folders to reorganise. The agent references these paths in its memory and skills — renaming or moving something it mentioned breaks that reference.",
+    organiseHint:
+      "Drag files and folders to reorganise. The agent references these paths in its memory and skills — renaming or moving something it mentioned breaks that reference.",
     deleteFolderTitle: "Delete this folder?",
-    deleteFolderMessage: "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
+    deleteFolderMessage:
+      "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
     // One-line blurbs under each workspace section, so the menu says what each is
     // for instead of making the member click to find out.
     sections: {
@@ -731,7 +773,8 @@ const en = {
     noMatches: "No files match your filter.",
     noMatchesHint: "Clear the filter to see everything in this workspace.",
     noneYet: "No files yet.",
-    noneYetHint: "Attach a file in the chat and it lands here, alongside anything the agent writes.",
+    noneYetHint:
+      "Attach a file in the chat and it lands here, alongside anything the agent writes.",
     deletePrefix: "Delete",
     deleteTitle: "Delete file?",
     deleteMessage:
@@ -745,13 +788,15 @@ const en = {
     iosShare: "Share",
     iosHelpMiddle: " in Safari, then ",
     iosAddToHome: "Add to Home Screen",
-    iosHelpAfter: ". Safari has no install button of its own — that flow is the install.",
+    iosHelpAfter:
+      ". Safari has no install button of its own — that flow is the install.",
   },
   projects: {
     title: "Projects",
     hint: "A project keeps its own files, memory and instructions, and inherits this agent's model, skills and credentials.",
     none: "No projects yet.",
-    noneHint: "Create one to keep a subject's chats, files and instructions apart from the rest.",
+    noneHint:
+      "Create one to keep a subject's chats, files and instructions apart from the rest.",
     mainAgent: "No project",
     mainAgentHint: "Chats in the agent's own workspace.",
     create: "New project",
@@ -760,8 +805,10 @@ const en = {
     nameLabel: "Name",
     namePlaceholder: "e.g. Seed trial 2026",
     instructionsLabel: "Instructions",
-    instructionsHint: "Added to what the agent already knows about itself. Say what this project is and how it should behave here.",
-    instructionsPlaceholder: "e.g. Always cite the trial protocol and answer with the plot number first.",
+    instructionsHint:
+      "Added to what the agent already knows about itself. Say what this project is and how it should behave here.",
+    instructionsPlaceholder:
+      "e.g. Always cite the trial protocol and answer with the plot number first.",
     save: "Save",
     saving: "Saving…",
     cancel: "Cancel",
@@ -769,7 +816,8 @@ const en = {
     delete: "Delete project",
     // Deleting takes the workspace with it, so the confirmation names what goes.
     deleteConfirmTitle: "Delete this project?",
-    deleteConfirmBody: "Its files, memory and every conversation in it are removed. This cannot be undone.",
+    deleteConfirmBody:
+      "Its files, memory and every conversation in it are removed. This cannot be undone.",
     deleteConfirm: "Delete",
     // Creating or deleting a project changes the container's mounts, so the
     // agent is rebuilt on the next message. Said plainly rather than letting a
@@ -852,7 +900,8 @@ const pt: ChatDict = {
     slashCommands: "Comandos de barra",
     mentionFiles: "Arquivos do workspace",
     placeholder: "Escreva para o seu agente…",
-    placeholderHint: "Escreva para o seu agente…  (Shift+Enter para nova linha)",
+    placeholderHint:
+      "Escreva para o seu agente…  (Shift+Enter para nova linha)",
     attach: "Anexar arquivo",
     uploading: "Enviando…",
     anyFile: "Qualquer arquivo",
@@ -869,10 +918,14 @@ const pt: ChatDict = {
   preview: {
     aria: "Pré-visualização do arquivo",
     action: "Visualizar",
-    tooLarge: "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
-    pdfFallback: "Este navegador não consegue exibir o PDF aqui — baixe o arquivo.",
-    sheetTruncated: "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
-    slidesPartial: "Texto extraído dos slides. Baixe o arquivo para ver a apresentação.",
+    tooLarge:
+      "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
+    pdfFallback:
+      "Este navegador não consegue exibir o PDF aqui — baixe o arquivo.",
+    sheetTruncated:
+      "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
+    slidesPartial:
+      "Texto extraído dos slides. Baixe o arquivo para ver a apresentação.",
     slide: "Slide {n}",
     binary: "Este arquivo não é texto. Baixe-o para abrir.",
   },
@@ -884,7 +937,8 @@ const pt: ChatDict = {
     hidePreview: "Ocultar prévia",
     showPreview: "Mostrar prévia",
     closeTitle: "Fechar (Esc)",
-    placeholder: "Escreva em markdown…  (Ctrl/⌘+Enter para enviar, Esc para fechar)",
+    placeholder:
+      "Escreva em markdown…  (Ctrl/⌘+Enter para enviar, Esc para fechar)",
     tools: {
       heading: "Título",
       bold: "Negrito",
@@ -902,12 +956,14 @@ const pt: ChatDict = {
     title: "Memória do workspace",
     hint: "Salvo em MEMORY_CUSTOM.md — o agente lê a cada mensagem.",
     saved: "Salvo",
-    placeholder: "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
+    placeholder:
+      "ex.: Sempre responda em português. Nossa stack é Next.js + Go…",
   },
   scheduledTasks: {
     title: "Tarefas agendadas",
     hint: "O que o agente executa em horários programados, e o que cada execução produziu. Somente leitura: peça ao agente para criar ou alterar uma tarefa.",
-    noOutcomeHint: "Só a execução mais recente de uma tarefa ativa registra status — as anteriores mostram quanto tempo levaram e quanto registraram.",
+    noOutcomeHint:
+      "Só a execução mais recente de uma tarefa ativa registra status — as anteriores mostram quanto tempo levaram e quanto registraram.",
     schedule: {
       cron: "Cron {expr}",
       every: "A cada {interval}",
@@ -929,7 +985,8 @@ const pt: ChatDict = {
     noRuns: "Nenhuma execução registrada.",
     entries: "{count} entradas",
     removedTask: "Tarefa removida",
-    removedTaskHint: "A tarefa não está mais agendada, mas esta execução continua registrada.",
+    removedTaskHint:
+      "A tarefa não está mais agendada, mas esta execução continua registrada.",
     transcriptMissing: "O transcript desta execução não está mais disponível.",
     backToTasks: "Voltar às tarefas",
     toolCall: "{name}",
@@ -949,10 +1006,12 @@ const pt: ChatDict = {
     refresh: "Buscar novas tarefas",
     refreshAria: "Atualizar tarefas agendadas",
     hideFinished: "Ocultar concluídas",
-    hideFinishedTitle: "Ocultar tarefas que já executaram e não executarão de novo",
+    hideFinishedTitle:
+      "Ocultar tarefas que já executaram e não executarão de novo",
     finishedHidden: "{count} oculta(s)",
     allFinished: "Tudo aqui já foi concluído.",
-    allFinishedHint: "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
+    allFinishedHint:
+      "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
     showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
     showFewerRuns: "Mostrar menos execuções",
   },
@@ -977,7 +1036,8 @@ const pt: ChatDict = {
     mapFilterPlaceholder: "Filtrar entidades por nome",
     mapTruncated: "{count} não exibidos — filtre para reduzir",
     searchPlaceholder: "Buscar no grafo…",
-    searchHint: "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
+    searchHint:
+      "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
     searchIdle: {
       title: "Busque no grafo",
       body: "Digite um termo e aperte Enter para procurar em todas as entidades e observações que o agente guardou.",
@@ -985,9 +1045,11 @@ const pt: ChatDict = {
     observations: "observações",
     relations: "relações",
     noResults: "Nada corresponde a essa busca.",
-    noResultsHint: "O ranqueamento é por relevância de termos, não por significado — tente as palavras que o agente teria guardado.",
+    noResultsHint:
+      "O ranqueamento é por relevância de termos, não por significado — tente as palavras que o agente teria guardado.",
     mapNoMatch: "Nenhuma entidade corresponde ao filtro.",
-    mapNoMatchHint: "O filtro do mapa compara só nomes. Limpe o campo para ver o grafo inteiro.",
+    mapNoMatchHint:
+      "O filtro do mapa compara só nomes. Limpe o campo para ver o grafo inteiro.",
     noObservations: "Nenhuma observação registrada ainda.",
     confidence: "confiança",
     archived: "Arquivada — oculta da navegação do próprio agente.",
@@ -998,7 +1060,8 @@ const pt: ChatDict = {
     resizeDetail: "Redimensionar o painel de detalhes",
     sources: "De onde isso veio",
     sourcesHint: "Clique numa conversa para abri-la.",
-    noSources: "Nenhuma conversa registrada. O agente grava sem origem quando foi uma tarefa agendada, ou quando havia dois chats abertos ao mesmo tempo.",
+    noSources:
+      "Nenhuma conversa registrada. O agente grava sem origem quando foi uma tarefa agendada, ou quando havia dois chats abertos ao mesmo tempo.",
     goneConversation: "Conversa não está mais disponível",
     mergedInto: "Fundida em",
     referenceEntity: "Referenciar esta entidade no chat",
@@ -1013,7 +1076,8 @@ const pt: ChatDict = {
       newEntities: "Novas entidades",
       newRelations: "Novas relações",
       nothing: "Nada novo nas últimas 24 horas.",
-      nothingHint: "O agente alimenta o grafo conforme vocês conversam — a aba Entidades mostra tudo o que ele já sabe.",
+      nothingHint:
+        "O agente alimenta o grafo conforme vocês conversam — a aba Entidades mostra tudo o que ele já sabe.",
     },
     mapTools: {
       open: "Ferramentas de descoberta",
@@ -1021,14 +1085,16 @@ const pt: ChatDict = {
       filters: "Filtros",
       relationTypes: "Tipos de relação",
       relationTypesAll: "Todas as relações",
-      relationTypesNone: "Nenhum tipo de relação selecionado — as entidades aparecem sem suas conexões.",
+      relationTypesNone:
+        "Nenhum tipo de relação selecionado — as entidades aparecem sem suas conexões.",
       noRelationTypes: "O agente ainda não registrou nenhuma relação.",
       minObservations: "Pelo menos {count} observações",
       minObservationsAny: "Qualquer número de observações",
       focus: "Foco",
       focusHops: "{count} salto",
       focusHopsPlural: "{count} saltos",
-      focusHint: "Até onde, a partir da entidade selecionada, o grafo permanece aceso.",
+      focusHint:
+        "Até onde, a partir da entidade selecionada, o grafo permanece aceso.",
       legend: "Legenda",
       legendHiddenByFilter: "escondido pelo filtro atual",
       legendClear: "Mostrar todos os tipos de novo",
@@ -1040,20 +1106,25 @@ const pt: ChatDict = {
       sizeDegree: "Conexões",
       sizePagerank: "Influência",
       sizeBetweenness: "Ponte",
-      sizePagerankHint: "Quanto do grafo passa por uma entidade, contando também a importância de suas vizinhas.",
-      sizeBetweennessHint: "Com que frequência uma entidade está no único caminho entre duas outras. Calculado sob demanda — é o pesado.",
+      sizePagerankHint:
+        "Quanto do grafo passa por uma entidade, contando também a importância de suas vizinhas.",
+      sizeBetweennessHint:
+        "Com que frequência uma entidade está no único caminho entre duas outras. Calculado sob demanda — é o pesado.",
       colorType: "Tipo de entidade",
       colorCommunity: "Agrupamento",
       colorComponent: "Grupo conectado",
-      colorCommunityHint: "Grupos que o agente nunca rotulou, inferidos de quão densamente as entidades se relacionam.",
-      colorComponentHint: "Entidades alcançáveis entre si. Cores diferentes nunca se conectam.",
+      colorCommunityHint:
+        "Grupos que o agente nunca rotulou, inferidos de quão densamente as entidades se relacionam.",
+      colorComponentHint:
+        "Entidades alcançáveis entre si. Cores diferentes nunca se conectam.",
       insights: "Descobertas",
       insightsTop: "Mais fortes por {metric}",
       insightsOffMap: "fora do mapa",
       insightsIsolated: "{count} isoladas — conhecidas mas nunca conectadas",
       insightsIsolatedOne: "1 isolada — conhecida mas nunca conectada",
       insightsIsolatedNone: "Tudo o que o agente sabe se conecta a algo.",
-      insightsScope: "Medido no grafo inteiro, não apenas no que está desenhado.",
+      insightsScope:
+        "Medido no grafo inteiro, não apenas no que está desenhado.",
       path: "Caminho",
       pathEnable: "Traçar um caminho",
       pathDisable: "Parar de traçar",
@@ -1061,26 +1132,33 @@ const pt: ChatDict = {
       pathPickSecond: "Agora escolha a segunda.",
       pathFrom: "De",
       pathClear: "Começar de novo",
-      pathUndirectedHint: "Segue as relações em qualquer direção, independente de para onde as setas apontam.",
+      pathUndirectedHint:
+        "Segue as relações em qualquer direção, independente de para onde as setas apontam.",
       pathUnreachable: "Nada no mapa conecta essas duas.",
-      pathUnreachableHint: "Elas ainda podem se relacionar por uma entidade que o filtro ou o limite de nós deixou de fora.",
+      pathUnreachableHint:
+        "Elas ainda podem se relacionar por uma entidade que o filtro ou o limite de nós deixou de fora.",
       pathMissing: "{names} não está no mapa agora.",
-      pathMissingHint: "Limpe o filtro, ou aumente o que o mapa mostra, e trace de novo.",
+      pathMissingHint:
+        "Limpe o filtro, ou aumente o que o mapa mostra, e trace de novo.",
       pathSame: "Essa é a mesma entidade duas vezes.",
       scopeNames: "Nomes",
       scopeContents: "Conteúdo",
       scopeLabel: "O filtro busca em",
       scopeNamesHint: "Instantâneo, e só casa com o nome da entidade.",
-      scopeContentsHint: "Consulta o servidor e também lê o que o agente observou sobre cada entidade.",
+      scopeContentsHint:
+        "Consulta o servidor e também lê o que o agente observou sobre cada entidade.",
       scopeSearching: "Buscando…",
       scopeFailed: "Não foi possível concluir essa busca.",
-      scopeCapped: "Mostrando as {count} melhores correspondências — pode haver mais.",
+      scopeCapped:
+        "Mostrando as {count} melhores correspondências — pode haver mais.",
       reset: "Restaurar tudo",
-      resetHint: "Limpa os filtros, as codificações, o raio de foco e o filtro de tipo compartilhado com a aba Entidades.",
+      resetHint:
+        "Limpa os filtros, as codificações, o raio de foco e o filtro de tipo compartilhado com a aba Entidades.",
       resetNothing: "Nada para restaurar — tudo está no padrão.",
     },
     mapNoMatchContents: "Nada que o agente observou corresponde a isso.",
-    mapNoMatchContentsHint: "Esta busca cobriu nomes, tipos e o texto das observações. Tente as palavras que o agente teria guardado.",
+    mapNoMatchContentsHint:
+      "Esta busca cobriu nomes, tipos e o texto das observações. Tente as palavras que o agente teria guardado.",
   },
   view: {
     quoteUser: "Você",
@@ -1088,7 +1166,8 @@ const pt: ChatDict = {
     replyAria: "Responder a esta mensagem",
     reply: "Responder",
     agentPrefix: "agente",
-    retrying: "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
+    retrying:
+      "Não foi possível falar com o gateway — tentando de novo… (tentativa {n} de {total})",
     settling: "Estamos guardando o arquivo para você…",
     resumeHeading: "Continue de onde parou",
     resumeBody: "Volte para sua conversa mais recente com o agente {agent}.",
@@ -1099,9 +1178,12 @@ const pt: ChatDict = {
     agentPulse: "Pulso do agente",
     thinking: "Pensando…",
     working: "Ainda trabalhando…",
-    recovering: "A conexão caiu — o agente continua trabalhando. Buscando a resposta…",
-    offline: "Você está sem conexão — o agente continua trabalhando. Reconectando assim que a internet voltar…",
-    steering: "Enviada para o turno que já estava em andamento — o agente vai levá-la em conta. O que vem abaixo é a resposta desse turno.",
+    recovering:
+      "A conexão caiu — o agente continua trabalhando. Buscando a resposta…",
+    offline:
+      "Você está sem conexão — o agente continua trabalhando. Reconectando assim que a internet voltar…",
+    steering:
+      "Enviada para o turno que já estava em andamento — o agente vai levá-la em conta. O que vem abaixo é a resposta desse turno.",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
     stepOne: "1 passo",
@@ -1189,11 +1271,13 @@ const pt: ChatDict = {
       "shared-skills": "Um administrador alterou as skills compartilhadas.",
       "shared-files": "Um administrador alterou os arquivos compartilhados.",
       model: "O modelo por trás do seu assistente mudou.",
-      "own-secret": "Você salvou um segredo. Ele passa a valer após um reinício.",
+      "own-secret":
+        "Você salvou um segredo. Ele passa a valer após um reinício.",
       "admin-request": "Um administrador pediu um reinício.",
       config: "Um administrador alterou a configuração do seu assistente.",
     },
-    reasonUnknown: "Seu assistente precisa reiniciar para aplicar uma alteração recente.",
+    reasonUnknown:
+      "Seu assistente precisa reiniciar para aplicar uma alteração recente.",
     scheduled: "Seu assistente vai reiniciar em {when}.",
     now: "Reiniciar agora",
     restarting: "Reiniciando…",
@@ -1210,7 +1294,8 @@ const pt: ChatDict = {
     summaryUnknown: "Não foi possível ler",
     inEffectOrg: "Respondendo com o modelo da sua organização",
     inEffectOwn: "Respondendo com o seu próprio modelo",
-    fallbackNote: "Se ele falhar no meio de uma resposta, {name} assume automaticamente.",
+    fallbackNote:
+      "Se ele falhar no meio de uma resposta, {name} assume automaticamente.",
     noOrgModel: "Sua organização não definiu um modelo para este agente.",
     unnamedOrgModel: "o modelo da sua organização",
     useOrg: "Usar o modelo da minha organização",
@@ -1235,7 +1320,8 @@ const pt: ChatDict = {
     modelPlaceholder: "ex.: gpt-5.4",
     apiBaseLabel: "URL do endpoint",
     apiBasePlaceholder: "https://api.openai.com/v1",
-    apiBaseHint: "Preenchida ao escolher o provedor. Se você trocar, mantenha o caminho da versão (ex.: /v1).",
+    apiBaseHint:
+      "Preenchida ao escolher o provedor. Se você trocar, mantenha o caminho da versão (ex.: /v1).",
     apiBaseFixed:
       "Definida pelo provedor escolhido. Seu administrador decide se membros podem apontar para um endpoint próprio.",
     apiKeyLabel: "Chave de API",
@@ -1243,7 +1329,12 @@ const pt: ChatDict = {
     apiKeyKept: "Deixe em branco para manter a chave já salva",
     advanced: "Avançado",
     extraBodyLabel: "extra_body (JSON)",
-    extraBodyHint: "Mesclado em toda requisição. Deixe vazio, a não ser que seu provedor exija.",
+    extraBodyHint:
+      "Mesclado em toda requisição. Deixe vazio, a não ser que seu provedor exija.",
+    thinkingLabel: "Profundidade de raciocínio",
+    thinkingHint:
+      "Quanto este modelo pensa. O padrão do provedor não envia nada \u2014 o que não é \u201coff\u201d, que é um valor enviado.",
+    thinkingDefault: "Padrão do provedor",
     test: "Testar",
     testing: "Testando…",
     retest: "Testar de novo",
@@ -1252,16 +1343,20 @@ const pt: ChatDict = {
     saving: "Salvando…",
     edit: "Editar",
     delete: "Excluir",
-    deleteConfirm: 'Excluir "{name}"? Se estiver em uso, este agente volta para o modelo da sua organização.',
+    deleteConfirm:
+      'Excluir "{name}"? Se estiver em uso, este agente volta para o modelo da sua organização.',
     testFirst: "Teste o modelo antes de salvar.",
     testOk: "Respondeu em {ms} ms.",
-    testOkHint: "Isso prova que o endpoint e a chave funcionam — não que toda resposta vai funcionar.",
+    testOkHint:
+      "Isso prova que o endpoint e a chave funcionam — não que toda resposta vai funcionar.",
     testFailed: "Não respondeu.",
-    testFailedHint: "Você ainda pode salvar: o modelo da sua organização continua respondendo até funcionar.",
+    testFailedHint:
+      "Você ainda pode salvar: o modelo da sua organização continua respondendo até funcionar.",
     lastTestOk: "Respondeu em {ms} ms",
     lastTestFailed: "Último teste falhou",
     neverTested: "Nunca testado",
-    restartNote: "As mudanças aqui passam a valer quando você reiniciar o agente — o botão está no aviso do topo do chat.",
+    restartNote:
+      "As mudanças aqui passam a valer quando você reiniciar o agente — o botão está no aviso do topo do chat.",
   },
   secrets: {
     title: "Segredos do agente",
@@ -1271,10 +1366,12 @@ const pt: ChatDict = {
     savedForAfter:
       " — mantido entre as assinaturas deste agente e sessões futuras, não por conversa. Os valores são somente escrita: nunca são exibidos nem recuperados. Um segredo salvo ou excluído ",
     restartsAgent: "passa a valer quando você reiniciar o agente",
-    restartsAfter: " — você escolhe a hora, então um turno em andamento nunca é cortado.",
+    restartsAfter:
+      " — você escolhe a hora, então um turno em andamento nunca é cortado.",
     savedNeedsRestart:
       "Salvo. Passa a valer após um reinício — use o aviso no topo do chat quando quiser.",
-    deleteConfirm: 'Excluir "{name}"? Passa a valer quando você reiniciar o agente.',
+    deleteConfirm:
+      'Excluir "{name}"? Passa a valer quando você reiniciar o agente.',
     nameLabel: "Nome",
     namePlaceholder: "ex.: OPENAI_API_KEY",
     valueLabel: "Valor",
@@ -1321,9 +1418,11 @@ const pt: ChatDict = {
     renameAria: "Renomear",
     deleteFolder: "Excluir pasta",
     deleteFolderAria: "Excluir pasta",
-    organiseHint: "Arraste arquivos e pastas para reorganizar. O agente referencia esses caminhos na memória e nas skills — renomear ou mover algo que ele citou quebra a referência.",
+    organiseHint:
+      "Arraste arquivos e pastas para reorganizar. O agente referencia esses caminhos na memória e nas skills — renomear ou mover algo que ele citou quebra a referência.",
     deleteFolderTitle: "Excluir esta pasta?",
-    deleteFolderMessage: "{name} e {count} arquivo(s) dentro dela serão excluídos. O agente pode referenciá-los.",
+    deleteFolderMessage:
+      "{name} e {count} arquivo(s) dentro dela serão excluídos. O agente pode referenciá-los.",
     sections: {
       memory: "Notas fixas que você escreve para o agente.",
       graph: "O que o agente aprendeu por conta própria.",
@@ -1341,11 +1440,11 @@ const pt: ChatDict = {
     noMatches: "Nenhum arquivo corresponde ao filtro.",
     noMatchesHint: "Limpe o filtro para ver tudo o que há neste workspace.",
     noneYet: "Nenhum arquivo ainda.",
-    noneYetHint: "Anexe um arquivo no chat e ele aparece aqui, junto com o que o agente escrever.",
+    noneYetHint:
+      "Anexe um arquivo no chat e ele aparece aqui, junto com o que o agente escrever.",
     deletePrefix: "Excluir",
     deleteTitle: "Excluir arquivo?",
-    deleteMessage:
-      "“{name}” sai do workspace. O agente não poderá mais lê-lo.",
+    deleteMessage: "“{name}” sai do workspace. O agente não poderá mais lê-lo.",
     deleteFallbackName: "Este arquivo",
   },
   install: {
@@ -1354,13 +1453,15 @@ const pt: ChatDict = {
     iosShare: "Compartilhar",
     iosHelpMiddle: " no Safari e depois em ",
     iosAddToHome: "Adicionar à Tela de Início",
-    iosHelpAfter: ". O Safari não tem um botão de instalar próprio — esse é o fluxo de instalação.",
+    iosHelpAfter:
+      ". O Safari não tem um botão de instalar próprio — esse é o fluxo de instalação.",
   },
   projects: {
     title: "Projetos",
     hint: "Um projeto guarda arquivos, memória e instruções próprios, e herda o modelo, as skills e as credenciais deste agente.",
     none: "Nenhum projeto ainda.",
-    noneHint: "Crie um para manter as conversas, os arquivos e as instruções de um assunto separados do resto.",
+    noneHint:
+      "Crie um para manter as conversas, os arquivos e as instruções de um assunto separados do resto.",
     mainAgent: "Sem projeto",
     mainAgentHint: "Conversas no workspace do próprio agente.",
     create: "Novo projeto",
@@ -1369,15 +1470,18 @@ const pt: ChatDict = {
     nameLabel: "Nome",
     namePlaceholder: "ex.: Ensaio de sementes 2026",
     instructionsLabel: "Instruções",
-    instructionsHint: "Somadas ao que o agente já sabe sobre si. Diga o que é este projeto e como ele deve se comportar aqui.",
-    instructionsPlaceholder: "ex.: Sempre cite o protocolo do ensaio e responda começando pelo número da parcela.",
+    instructionsHint:
+      "Somadas ao que o agente já sabe sobre si. Diga o que é este projeto e como ele deve se comportar aqui.",
+    instructionsPlaceholder:
+      "ex.: Sempre cite o protocolo do ensaio e responda começando pelo número da parcela.",
     save: "Salvar",
     saving: "Salvando…",
     cancel: "Cancelar",
     edit: "Editar projeto",
     delete: "Excluir projeto",
     deleteConfirmTitle: "Excluir este projeto?",
-    deleteConfirmBody: "Os arquivos, a memória e todas as conversas dele são removidos. Não dá para desfazer.",
+    deleteConfirmBody:
+      "Os arquivos, a memória e todas as conversas dele são removidos. Não dá para desfazer.",
     deleteConfirm: "Excluir",
     restartNotice: "O agente reinicia na sua próxima mensagem.",
     backToProjects: "Voltar aos projetos",

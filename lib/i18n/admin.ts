@@ -48,13 +48,13 @@ const en = {
     throughAfter: " only.",
     period: ".",
 
-
     // The Members sentence. The roster is the SUBSCRIPTION's whatever agents it
     // runs, and the agent still decides what an invitation grants — saying only one
     // of those would reproduce the confusion this screen was rebuilt to remove.
     membersRosterBefore: "The roster belongs to ",
     membersRosterAfter: " whatever agents it runs. ",
-    membersAgentBefore: "Invitations, workspace configuration and instance restarts apply to ",
+    membersAgentBefore:
+      "Invitations, workspace configuration and instance restarts apply to ",
     membersAgentAfter: ".",
   },
   // The two questions the merged menu asks, named the same way in the rail and in the
@@ -107,8 +107,10 @@ const en = {
     change: "Change",
     done: "Done",
     notNeeded: "This section needs no restart.",
-    notNeededFiles: "Shared files reach every container through a live read-only mount.",
-    notNeededMembers: "A member's workspace carries its own restart control, on its row.",
+    notNeededFiles:
+      "Shared files reach every container through a live read-only mount.",
+    notNeededMembers:
+      "A member's workspace carries its own restart control, on its row.",
   },
   legacyStore: {
     groupLabel: "Legacy",
@@ -138,8 +140,10 @@ const en = {
     // editor preloads what the agent actually runs, so an admin edits an identity
     // instead of replacing one they never saw — but it has to be obvious that
     // saving is what makes it this scope's.
-    fromTemplate: "Loaded from the agent template. Saving sets it at this scope.",
-    fromTenant: "Loaded from the tenant's file. Saving sets it at this subscription.",
+    fromTemplate:
+      "Loaded from the agent template. Saving sets it at this scope.",
+    fromTenant:
+      "Loaded from the tenant's file. Saving sets it at this subscription.",
     emptyNothingResolves:
       "Nothing provides this file yet — not this scope, not a broader one, not the agent template. Saving creates it here.",
   },
@@ -194,22 +198,33 @@ const en = {
     inService: "In service",
     deprecate: "Deprecate",
     retiredOrHeld: "Retired or held back",
-    noAgents: "No agents reported by the gateway, so the inventory cannot be reached.",
+    noAgents:
+      "No agents reported by the gateway, so the inventory cannot be reached.",
     startFrom: "Start from a known model",
-    startFromJob: "Fills the provider fields below. Choose the last option to type them yourself.",
+    startFromJob:
+      "Fills the provider fields below. Choose the last option to type them yourself.",
     custom: "Something else — fill it in by hand",
     yourName: "What you call it here",
-    yourNameJob: "Your name for it, used everywhere in this screen. Must be unique.",
+    yourNameJob:
+      "Your name for it, used everywhere in this screen. Must be unique.",
     providerName: "What the provider calls it",
-    providerNameJob: "The exact id the provider expects. It often differs from your name.",
+    providerNameJob:
+      "The exact id the provider expects. It often differs from your name.",
     provider: "Provider",
-    providerJob: "Who serves the model. Picoclaw uses it to choose how to talk to them.",
+    providerJob:
+      "Who serves the model. Picoclaw uses it to choose how to talk to them.",
     apiBase: "Where to send requests",
     apiBaseJob: "The provider's API address. Leave empty to use their default.",
     authMethod: "Sign-in method",
-    authMethodJob: "Only for providers that use OAuth instead of a key. Leave empty otherwise.",
+    authMethodJob:
+      "Only for providers that use OAuth instead of a key. Leave empty otherwise.",
+    thinkingLevel: "Reasoning depth",
+    thinkingLevelJob:
+      "How hard this model thinks. Leave it on the provider default and nothing is sent \u2014 which is not the same as \u201coff\u201d, a value that gets sent. The agent can raise or lower it during a turn, but only for a model that has a depth set here.",
+    thinkingLevelDefault: "Provider default (send nothing)",
     apiKey: "API key",
-    apiKeyJob: "Write-only. Stored once here and reused by every scope that points at this model.",
+    apiKeyJob:
+      "Write-only. Stored once here and reused by every scope that points at this model.",
     saving: "Saving…",
     saveChanges: "Save changes",
     addModel: "Add model",
@@ -227,14 +242,18 @@ const en = {
     leaveBlankBold: "keep the key already stored",
     leaveBlankAfter:
       ". This screen never shows a key back, so it cannot be re-typed from what you see.",
-    readingOrderBefore: "This order is for reading only. A model's fallback chain is the ",
+    readingOrderBefore:
+      "This order is for reading only. A model's fallback chain is the ",
     readingOrderAfter: " list on the model itself.",
     retirePrefix: "Retire",
-    retireExplain: "Everyone already using it keeps it. New users get the replacement instead.",
+    retireExplain:
+      "Everyone already using it keeps it. New users get the replacement instead.",
     replacementPlaceholder: "replacement for new users…",
     chainFor: "Fallback chain for",
-    chainExplainBefore: "This ordered list — not the inventory listing order — becomes ",
-    chainExplainMiddle: ". Every model here also gets its key written into each workspace that uses ",
+    chainExplainBefore:
+      "This ordered list — not the inventory listing order — becomes ",
+    chainExplainMiddle:
+      ". Every model here also gets its key written into each workspace that uses ",
     chainExplainAfter: ".",
     noOtherActive: "no other active models",
     addFallback: "add a fallback…",
@@ -264,7 +283,8 @@ const en = {
     fallbackChainPrefix: "Edit fallback chain for",
     fallbackChain: "Fallback chain",
     retirePrefix: "Retire",
-    retireTitle: "Retire — people already on it keep it, new ones get the replacement",
+    retireTitle:
+      "Retire — people already on it keep it, new ones get the replacement",
     deletePrefix: "Delete",
     cannotDisable: "Cannot disable while {reason} — retire it instead",
     cannotDelete: "Cannot delete while {reason}",
@@ -277,18 +297,21 @@ const en = {
     thisScope: "this scope",
     readingLevels: "Reading every level…",
     summaryFrom: " — from ",
-    nothingReadable: "Nothing you can read resolves — an instance-wide level may still cover it",
+    nothingReadable:
+      "Nothing you can read resolves — an instance-wide level may still cover it",
     nothingResolves: "Nothing resolves yet, so new workspaces here are refused",
     hintLoading:
       "Read the ladder downwards: each level covers fewer people than the one above and overrides it.",
     // "Most specific wins: <model> decides because <level> is the first level…"
-    hintInEffectBefore: "Read downwards — the narrowest level with a model wins, so ",
+    hintInEffectBefore:
+      "Read downwards — the narrowest level with a model wins, so ",
     hintInEffectMiddle: " decides, from ",
     hintInEffectAfter:
       ". Select any rung to edit that level: the one whose reach matches who you want to move, or the pin rung at the bottom for a single person.",
     hintHidden:
       "None of the levels you can read names a model. An instance-wide level may still cover this scope — reading those needs instance-admin. Set the level for this scope if you need to be certain what new workspaces land on.",
-    hintNoneBold: "Nothing resolves here yet, so a new workspace under this scope is refused.",
+    hintNoneBold:
+      "Nothing resolves here yet, so a new workspace under this scope is refused.",
     hintNoneAfter:
       " Select a rung and choose a model: the instance-wide rungs at the top to cover whatever nothing else claims, the tenant rung for everyone in the tenant, the subscription rung for one team.",
     selectOnLeft: "Select a {level} on the left to set its default.",
@@ -296,12 +319,14 @@ const en = {
     pinsTitle: "People with a model of their own",
     pin: "Pin",
     unpin: "Unpin",
-    pinsSome: "{pinned} of {total} pinned, so the levels above do not reach them",
+    pinsSome:
+      "{pinned} of {total} pinned, so the levels above do not reach them",
     pinsHint:
       "A pin outranks every level above. Use it for one person who needs something different, not to move a whole group — that is what a scope default is for.",
     title: "Which model this scope resolves to",
     selectSubscription: "Select a subscription to pin models to its users.",
-    clearingMovesBefore: "Clearing the level in effect would move its workspaces to ",
+    clearingMovesBefore:
+      "Clearing the level in effect would move its workspaces to ",
     // Split around the bold: "…would leave new workspaces with NO RESOLVABLE
     // MODEL, which refuses to provision."
     clearLeavesHiddenBefore:
@@ -326,7 +351,8 @@ const en = {
     setLevel: "Set the {level} level",
     scopeJob:
       "New workspaces at this level land on this model unless a more specific level or a per-user pin overrides it.",
-    clearWarnBefore: "Nothing is set below this. Clearing it would leave new workspaces with ",
+    clearWarnBefore:
+      "Nothing is set below this. Clearing it would leave new workspaces with ",
     clearWarnBold: "no resolvable model",
     clearWarnAfter: ", which refuses to provision.",
   },
@@ -354,7 +380,8 @@ const en = {
   },
   roster: {
     notYetActive: "not yet active",
-    noneYet: "Nobody has access to this subscription yet. Invite someone above.",
+    noneYet:
+      "Nobody has access to this subscription yet. Invite someone above.",
     revokeAria: "Revoke {role} from {email}",
     revokeTitle: "Revoke access?",
     // Says what revoking does NOT do: the same panel deletes files, so an admin
@@ -390,7 +417,8 @@ const en = {
     now: "Immediately",
     notice: "When each member chooses",
     schedule: "At a time I pick",
-    nowHint: "Applies immediately. Anyone mid-conversation is briefly interrupted.",
+    nowHint:
+      "Applies immediately. Anyone mid-conversation is briefly interrupted.",
     noticeHint: "Applies on disk now; each member restarts when it suits them.",
     scheduleHint:
       "Applies on disk now; every running instance restarts at the time you pick.",
@@ -409,7 +437,8 @@ const en = {
     // The negative claim is where the scoping caveat belongs: the proxy reads ONE
     // slot (this scope + this agent), never the cascade, so "nothing pending" is
     // only ever true about the slot named right here.
-    pendingNone: "Nothing armed for {scope} · {agent}. Another scope or agent may still have one.",
+    pendingNone:
+      "Nothing armed for {scope} · {agent}. Another scope or agent may still have one.",
     everyAgentSlot: "every agent",
     pendingReading: "Checking this scope…",
     pendingSince: "Raised {at}",
@@ -432,7 +461,8 @@ const en = {
     actSchedule: "Schedule the restart",
     withdraw: "Withdraw",
     // Replaces "nothing restarts until you save" once a verb sits right there.
-    ridesAlong: "This choice rides along with the changes you save below. To act on the scope right now, use the button.",
+    ridesAlong:
+      "This choice rides along with the changes you save below. To act on the scope right now, use the button.",
     confirmTitle: "This interrupts people who are working right now",
     // What the proxy actually does: BounceScope stops and starts every RUNNING
     // container under the scope. So the reach is "whoever has a live session",
@@ -501,7 +531,8 @@ const en = {
       "PNG, JPEG, WebP or SVG, up to ~1MB. Served as-is — there is no server-side image processing, so each image has to arrive in the shape it will be shown in.",
     iconNoteBefore: "The ",
     iconNoteAppIcon: "app icon",
-    iconNoteMiddle: " is what an installed PWA and the browser tab use, so it must be a ",
+    iconNoteMiddle:
+      " is what an installed PWA and the browser tab use, so it must be a ",
     iconNoteSquare: "square PNG or WebP, 512×512",
     iconNoteAfter:
       ". Keep the artwork inside the middle ~80% — Android crops icons to a circle. A wide logo here is what stops the app from being installable, which is why it is a separate upload from the wordmark logos.",
@@ -516,7 +547,8 @@ const en = {
     resetSuffix: "to default",
     resetToDefault: "Reset to default",
     resetNameTitle: "Reset app name?",
-    resetNameMessage: "The app name will fall back to the default (zombie-crab) everywhere.",
+    resetNameMessage:
+      "The app name will fall back to the default (zombie-crab) everywhere.",
     resetLogoTitle: "Reset logo?",
     resetLogoMessage: "This image will fall back to the bundled default.",
     noBrandingPermission: "You don't have permission to edit branding.",
@@ -546,7 +578,8 @@ const en = {
     whichSearchConsequence:
       "Written into every workspace below this scope, on their next start.",
     nameLabel: "Name the agent will read it by",
-    nameJob: "Exactly as the agent's code expects it — case and underscores included.",
+    nameJob:
+      "Exactly as the agent's code expects it — case and underscores included.",
     valueLabel: "Value",
     valueJob: "Write-only. It is never shown or retrieved after you save it.",
     valueConsequence:
@@ -573,18 +606,20 @@ const en = {
     inspect: "See current values",
     inspecting: "Reading…",
     reinspect: "Read again",
-    noInstances: "No provisioned instances of this agent in this subscription yet.",
+    noInstances:
+      "No provisioned instances of this agent in this subscription yet.",
     distribution: "What each member holds now",
     stateAbsent: "key not present",
     statePathConflict: "path blocked",
     stateUnreadable: "config unreadable",
-    excludedNote: "Excluded from a bulk change — repair these one at a time in Members.",
+    excludedNote:
+      "Excluded from a bulk change — repair these one at a time in Members.",
     instancesCount: "{n} member(s)",
     valueLabel: "New value",
-    valueJob: "Written as JSON: true is a boolean, \"true\" is a string.",
+    valueJob: 'Written as JSON: true is a boolean, "true" is a string.',
     valuePlaceholder: "true",
     valueRequired: "Enter a value.",
-    valueInvalidJson: "Not valid JSON. Quote a text value, like \"gpt-4o\".",
+    valueInvalidJson: 'Not valid JSON. Quote a text value, like "gpt-4o".',
     previewWillChange: "{n} will change",
     previewAlreadyMatch: "{n} already match",
     previewExcluded: "{n} excluded",
@@ -598,7 +633,8 @@ const en = {
     futureTemplate: "Also every future member of this agent",
     futureTemplateReach:
       "Writes the agent template, which seeds EVERY subscription running this agent — not only this one.",
-    scopedApplied: "Saved as this subscription's default for members created later.",
+    scopedApplied:
+      "Saved as this subscription's default for members created later.",
     scopedFailed: "The subscription default was not saved:",
     apply: "Apply to this subscription",
     applying: "Applying…",
@@ -611,9 +647,12 @@ const en = {
     outcomeError: "failed",
     stalePrompt:
       "Some instances changed after you read them. Read again before applying, so you are not overwriting a change you have not seen.",
-    reapplyWarning: "Written, but the proxy could not re-resolve this member's model afterwards.",
-    templateApplied: "Template updated — members created later inherit this value.",
-    templateFailed: "The instances above were changed, but the template was not:",
+    reapplyWarning:
+      "Written, but the proxy could not re-resolve this member's model afterwards.",
+    templateApplied:
+      "Template updated — members created later inherit this value.",
+    templateFailed:
+      "The instances above were changed, but the template was not:",
     restartNote: "{n} member(s) will pick this up on restart.",
     restartNoteNone: "Nothing changed, so no container is restarted.",
     noticeOverride:
@@ -673,7 +712,8 @@ const en = {
     // The two end caps. Read as one sentence, top to bottom, they teach the
     // direction the ladder is meant to be read in — the one thing the rungs
     // themselves cannot say.
-    readDown: "Read down. Each level narrows who it covers and overrides the ones above it.",
+    readDown:
+      "Read down. Each level narrows who it covers and overrides the ones above it.",
     winnerNote: "The last level with a model is the one a person ends up with.",
   },
   // The instance-config editor. A repair surface, so the copy leans on saying
@@ -727,7 +767,8 @@ const en = {
     notProvisioned:
       "This member has never started this agent, so there is no configuration to repair yet.",
     discardTitle: "Discard your changes?",
-    discardMessage: "The edits in this editor have not been saved and cannot be recovered.",
+    discardMessage:
+      "The edits in this editor have not been saved and cannot be recovered.",
     discard: "Discard",
   },
 };
@@ -757,7 +798,8 @@ const pt: AdminDict = {
     },
     inventoryProxyWideBefore: "O inventário é ",
     inventoryProxyWide: "global do proxy",
-    inventoryProxyWideAfter: ". Apenas os padrões e pins abaixo dele pertencem a ",
+    inventoryProxyWideAfter:
+      ". Apenas os padrões e pins abaixo dele pertencem a ",
     inventoryAnd: " e ",
     reaches: "Alcança",
     andEverySubscription: " e todas as assinaturas sob ele",
@@ -765,10 +807,10 @@ const pt: AdminDict = {
     throughAfter: " apenas.",
     period: ".",
 
-
     membersRosterBefore: "A lista de pessoas pertence a ",
     membersRosterAfter: ", quaisquer que sejam os agentes que ela roda. ",
-    membersAgentBefore: "Convites, configuração de workspace e restart de instância valem para ",
+    membersAgentBefore:
+      "Convites, configuração de workspace e restart de instância valem para ",
     membersAgentAfter: ".",
   },
   columns: {
@@ -815,7 +857,8 @@ const pt: AdminDict = {
   legacyStore: {
     groupLabel: "Legado",
     entryLabel: "Compartilhado por todos os agentes",
-    entryNote: "Somente leitura. Gravado antes do conteúdo passar a ter escopo por agente.",
+    entryNote:
+      "Somente leitura. Gravado antes do conteúdo passar a ter escopo por agente.",
     readOnlyNote:
       "Este store não pertence a nenhum agente. Nada mais grava nele; o que está aqui pode ser lido e removido, e todos os contêineres sob o escopo continuam lendo.",
   },
@@ -835,8 +878,10 @@ const pt: AdminDict = {
     clearTitle: "Limpar este arquivo?",
     clearMessage:
       "{name} deixa de ser definido neste escopo. Os workspaces passam a usar o escopo mais amplo, ou o template do agente.",
-    fromTemplate: "Carregado do template do agente. Salvar define o arquivo neste escopo.",
-    fromTenant: "Carregado do arquivo do tenant. Salvar define o arquivo nesta assinatura.",
+    fromTemplate:
+      "Carregado do template do agente. Salvar define o arquivo neste escopo.",
+    fromTenant:
+      "Carregado do arquivo do tenant. Salvar define o arquivo nesta assinatura.",
     emptyNothingResolves:
       "Nada fornece este arquivo ainda — nem este escopo, nem um mais amplo, nem o template do agente. Salvar cria o arquivo aqui.",
   },
@@ -860,12 +905,14 @@ const pt: AdminDict = {
     policyHint:
       "Vale o nível mais específico que estiver definido; se nenhum estiver, são permitidos. Bloquear não exclui nada — as seleções continuam guardadas e deixam de valer.",
     endpointLabel: "Endpoints próprios",
-    endpointInherit: "Herdar (bloqueado, a menos que um nível mais amplo libere)",
+    endpointInherit:
+      "Herdar (bloqueado, a menos que um nível mais amplo libere)",
     endpointAllow: "Liberado — o membro pode digitar qualquer endpoint",
     endpointBlock: "Bloqueado — só os provedores listados no app",
     endpointHint:
       "Com isso desligado, o membro escolhe um provedor e o endpoint vem junto. Ligue para um gateway self-hosted ou um provedor que o app não lista — isso deixa o membro apontar a requisição de saída da instância para um endereço à escolha dele.",
-    selectSubscription: "Selecione uma assinatura para ver quem registrou o quê.",
+    selectSubscription:
+      "Selecione uma assinatura para ver quem registrou o quê.",
     empty: "Ninguém aqui registrou um modelo próprio.",
     emptyHint: "Os membros registram pelo painel de segredos do próprio chat.",
     owner: "conta {id}",
@@ -878,29 +925,42 @@ const pt: AdminDict = {
   },
   models: {
     readingInventory: "Lendo o inventário…",
-    inventoryEmpty: "Vazio — nada pode ser servido até que um modelo seja registrado",
+    inventoryEmpty:
+      "Vazio — nada pode ser servido até que um modelo seja registrado",
     inventorySummary: "{active} em serviço · {inactive} aposentados ou retidos",
     inventoryHint:
       "Um inventário para todo o proxy. Um modelo é registrado aqui uma vez, e cada escopo abaixo aponta para este registro em vez de guardar a própria cópia das credenciais.",
     inService: "Em serviço",
     deprecate: "Descontinuar",
     retiredOrHeld: "Aposentados ou retidos",
-    noAgents: "O gateway não reportou nenhum agente, então o inventário não pode ser acessado.",
+    noAgents:
+      "O gateway não reportou nenhum agente, então o inventário não pode ser acessado.",
     startFrom: "Começar de um modelo conhecido",
-    startFromJob: "Preenche os campos do provedor abaixo. Escolha a última opção para digitá-los você mesmo.",
+    startFromJob:
+      "Preenche os campos do provedor abaixo. Escolha a última opção para digitá-los você mesmo.",
     custom: "Outra coisa — preencher à mão",
     yourName: "Como você chama aqui",
-    yourNameJob: "O seu nome para ele, usado em toda esta tela. Precisa ser único.",
+    yourNameJob:
+      "O seu nome para ele, usado em toda esta tela. Precisa ser único.",
     providerName: "Como o provedor chama",
-    providerNameJob: "O id exato que o provedor espera. Costuma ser diferente do seu nome.",
+    providerNameJob:
+      "O id exato que o provedor espera. Costuma ser diferente do seu nome.",
     provider: "Provedor",
-    providerJob: "Quem serve o modelo. O picoclaw usa isso para saber como falar com ele.",
+    providerJob:
+      "Quem serve o modelo. O picoclaw usa isso para saber como falar com ele.",
     apiBase: "Para onde enviar as requisições",
-    apiBaseJob: "O endereço da API do provedor. Deixe vazio para usar o padrão dele.",
+    apiBaseJob:
+      "O endereço da API do provedor. Deixe vazio para usar o padrão dele.",
     authMethod: "Método de autenticação",
-    authMethodJob: "Só para provedores que usam OAuth em vez de chave. Caso contrário, deixe vazio.",
+    authMethodJob:
+      "Só para provedores que usam OAuth em vez de chave. Caso contrário, deixe vazio.",
+    thinkingLevel: "Profundidade de raciocínio",
+    thinkingLevelJob:
+      "Quanto este modelo pensa. Deixando no padrão do provedor nada é enviado \u2014 o que não é a mesma coisa que \u201coff\u201d, que é um valor enviado. O agente pode subir ou descer durante um turno, mas só em modelo que tenha profundidade definida aqui.",
+    thinkingLevelDefault: "Padrão do provedor (não enviar nada)",
     apiKey: "Chave de API",
-    apiKeyJob: "Somente escrita. Guardada uma vez aqui e reutilizada por todo escopo que aponte para este modelo.",
+    apiKeyJob:
+      "Somente escrita. Guardada uma vez aqui e reutilizada por todo escopo que aponte para este modelo.",
     saving: "Salvando…",
     saveChanges: "Salvar alterações",
     addModel: "Adicionar modelo",
@@ -918,14 +978,18 @@ const pt: AdminDict = {
     leaveBlankBold: "manter a chave já guardada",
     leaveBlankAfter:
       ". Esta tela nunca exibe a chave de volta, então ela não pode ser redigitada a partir do que você vê.",
-    readingOrderBefore: "Esta ordem é só para leitura. A cadeia de fallback de um modelo é a lista ",
+    readingOrderBefore:
+      "Esta ordem é só para leitura. A cadeia de fallback de um modelo é a lista ",
     readingOrderAfter: " no próprio modelo.",
     retirePrefix: "Aposentar",
-    retireExplain: "Quem já usa continua com ele. Novos usuários recebem o substituto.",
+    retireExplain:
+      "Quem já usa continua com ele. Novos usuários recebem o substituto.",
     replacementPlaceholder: "substituto para novos usuários…",
     chainFor: "Cadeia de fallback de",
-    chainExplainBefore: "Esta lista ordenada — não a ordem de listagem do inventário — vira ",
-    chainExplainMiddle: ". Todo modelo aqui também tem sua chave escrita em cada workspace que usa ",
+    chainExplainBefore:
+      "Esta lista ordenada — não a ordem de listagem do inventário — vira ",
+    chainExplainMiddle:
+      ". Todo modelo aqui também tem sua chave escrita em cada workspace que usa ",
     chainExplainAfter: ".",
     noOtherActive: "nenhum outro modelo ativo",
     addFallback: "adicionar um fallback…",
@@ -939,7 +1003,8 @@ const pt: AdminDict = {
     retiringTo: "aposentando →",
     imported: "importado",
     fallsBackTo: "recorre a",
-    noFallbacks: "Sem fallbacks — uma requisição que falha não tem para onde ir",
+    noFallbacks:
+      "Sem fallbacks — uma requisição que falha não tem para onde ir",
     inUseOne: "em uso por 1 referência",
     inUseOther: "em uso por {n} referências",
     disable: "Desativar",
@@ -956,7 +1021,8 @@ const pt: AdminDict = {
     retirePrefix: "Aposentar",
     retireTitle: "Aposentar — quem já usa continua; novos recebem o substituto",
     deletePrefix: "Excluir",
-    cannotDisable: "Não dá para desativar enquanto {reason} — aposente-o em vez disso",
+    cannotDisable:
+      "Não dá para desativar enquanto {reason} — aposente-o em vez disso",
     cannotDelete: "Não dá para excluir enquanto {reason}",
   },
   defaults: {
@@ -964,17 +1030,21 @@ const pt: AdminDict = {
     thisScope: "este escopo",
     readingLevels: "Lendo todos os níveis…",
     summaryFrom: " — de ",
-    nothingReadable: "Nada que você pode ler resolve — um nível de instância ainda pode cobrir",
-    nothingResolves: "Nada resolve ainda, então novos workspaces aqui são recusados",
+    nothingReadable:
+      "Nada que você pode ler resolve — um nível de instância ainda pode cobrir",
+    nothingResolves:
+      "Nada resolve ainda, então novos workspaces aqui são recusados",
     hintLoading:
       "Leia a escada de cima para baixo: cada nível cobre menos gente que o de cima e o sobrepõe.",
-    hintInEffectBefore: "Leia de cima para baixo — vence o nível mais específico com um modelo, então ",
+    hintInEffectBefore:
+      "Leia de cima para baixo — vence o nível mais específico com um modelo, então ",
     hintInEffectMiddle: " decide, vindo de ",
     hintInEffectAfter:
       ". Selecione qualquer degrau para editar aquele nível: o que corresponde a quem você quer mover, ou o degrau de pin no fim para uma única pessoa.",
     hintHidden:
       "Nenhum dos níveis que você pode ler nomeia um modelo. Um nível de instância ainda pode cobrir este escopo — lê-los exige admin da instância. Defina o nível deste escopo se precisar ter certeza de onde novos workspaces caem.",
-    hintNoneBold: "Nada resolve aqui ainda, então um novo workspace neste escopo é recusado.",
+    hintNoneBold:
+      "Nada resolve aqui ainda, então um novo workspace neste escopo é recusado.",
     hintNoneAfter:
       " Selecione um degrau e escolha um modelo: os degraus de instância no topo para cobrir o que mais nada reivindicar, o de tenant para todo o tenant, o de assinatura para um time.",
     selectOnLeft: "Selecione um {level} à esquerda para definir o padrão dele.",
@@ -982,12 +1052,15 @@ const pt: AdminDict = {
     pinsTitle: "Pessoas com um modelo próprio",
     pin: "Fixar",
     unpin: "Desafixar",
-    pinsSome: "{pinned} de {total} com pin, então os níveis acima não os alcançam",
+    pinsSome:
+      "{pinned} de {total} com pin, então os níveis acima não os alcançam",
     pinsHint:
       "Um pin supera todos os níveis acima. Use para uma pessoa que precisa de algo diferente, não para mover um grupo inteiro — para isso existe o padrão de escopo.",
     title: "Para qual modelo este escopo resolve",
-    selectSubscription: "Selecione uma assinatura para fixar modelos aos seus usuários.",
-    clearingMovesBefore: "Limpar o nível em vigor moveria os workspaces dele para ",
+    selectSubscription:
+      "Selecione uma assinatura para fixar modelos aos seus usuários.",
+    clearingMovesBefore:
+      "Limpar o nível em vigor moveria os workspaces dele para ",
     clearLeavesHiddenBefore:
       "Nada que você possa ler está definido acima deste, e os níveis de instância estão ocultos para você — limpar pode deixar novos workspaces sem ",
     clearLeavesBefore:
@@ -1010,7 +1083,8 @@ const pt: AdminDict = {
     setLevel: "Definir o nível {level}",
     scopeJob:
       "Novos workspaces neste nível caem neste modelo, a menos que um nível mais específico ou um pin por usuário sobreponha.",
-    clearWarnBefore: "Nada está definido abaixo disto. Limpar deixaria novos workspaces ",
+    clearWarnBefore:
+      "Nada está definido abaixo disto. Limpar deixaria novos workspaces ",
     clearWarnBold: "sem modelo resolvível",
     clearWarnAfter: ", o que impede o provisionamento.",
   },
@@ -1035,7 +1109,8 @@ const pt: AdminDict = {
   },
   roster: {
     notYetActive: "ainda não ativo",
-    noneYet: "Ninguém tem acesso a esta assinatura ainda. Convide alguém acima.",
+    noneYet:
+      "Ninguém tem acesso a esta assinatura ainda. Convide alguém acima.",
     revokeAria: "Revogar {role} de {email}",
     revokeTitle: "Revogar acesso?",
     revokeMessage:
@@ -1054,18 +1129,22 @@ const pt: AdminDict = {
     now: "Imediatamente",
     notice: "Quando cada membro quiser",
     schedule: "Em um horário que eu escolher",
-    nowHint: "Aplica imediatamente. Quem estiver em conversa é interrompido por um instante.",
-    noticeHint: "Aplica em disco agora; cada membro reinicia quando lhe convier.",
+    nowHint:
+      "Aplica imediatamente. Quem estiver em conversa é interrompido por um instante.",
+    noticeHint:
+      "Aplica em disco agora; cada membro reinicia quando lhe convier.",
     scheduleHint:
       "Aplica em disco agora; toda instância em execução reinicia na hora escolhida.",
     advancedTitle: "Avançado — quando as alterações passam a valer",
     summaryNow: "Imediatamente, interrompendo quem estiver em conversa",
     summaryNotice: "Gravado agora; cada membro reinicia quando lhe convier",
     summarySchedule: "Gravado agora; toda instância reinicia em {at}",
-    summaryScheduleUnset: "Gravado agora; escolha o horário antes de fazer alterações",
+    summaryScheduleUnset:
+      "Gravado agora; escolha o horário antes de fazer alterações",
     groupAria: "Quando as alterações passam a valer",
 
-    pendingNone: "Nada armado para {scope} · {agent}. Outro escopo ou agente ainda pode ter.",
+    pendingNone:
+      "Nada armado para {scope} · {agent}. Outro escopo ou agente ainda pode ter.",
     everyAgentSlot: "todos os agentes",
     pendingReading: "Consultando este escopo…",
     pendingSince: "Levantado em {at}",
@@ -1085,7 +1164,8 @@ const pt: AdminDict = {
     actNotice: "Avisar os membros agora",
     actSchedule: "Agendar o reinício",
     withdraw: "Retirar",
-    ridesAlong: "Esta escolha acompanha as alterações que você salvar abaixo. Para agir sobre o escopo agora, use o botão.",
+    ridesAlong:
+      "Esta escolha acompanha as alterações que você salvar abaixo. Para agir sobre o escopo agora, use o botão.",
     confirmTitle: "Isto interrompe quem está trabalhando agora",
     confirmMessage:
       "Toda instância em execução sob {scope} para e sobe de novo. Quem não estiver com uma sessão aberta não percebe nada.",
@@ -1143,7 +1223,8 @@ const pt: AdminDict = {
       "PNG, JPEG, WebP ou SVG, até ~1MB. Servido como está — não há processamento de imagem no servidor, então cada imagem precisa chegar no formato em que será exibida.",
     iconNoteBefore: "O ",
     iconNoteAppIcon: "ícone do app",
-    iconNoteMiddle: " é o que um PWA instalado e a aba do navegador usam, então precisa ser um ",
+    iconNoteMiddle:
+      " é o que um PWA instalado e a aba do navegador usam, então precisa ser um ",
     iconNoteSquare: "PNG ou WebP quadrado, 512×512",
     iconNoteAfter:
       ". Mantenha a arte dentro dos ~80% centrais — o Android recorta ícones em círculo. Um logo largo aqui é o que impede a instalação do app, e é por isso que ele é um upload separado dos logos com marca-texto.",
@@ -1158,7 +1239,8 @@ const pt: AdminDict = {
     resetSuffix: "para o padrão",
     resetToDefault: "Redefinir para o padrão",
     resetNameTitle: "Redefinir o nome do app?",
-    resetNameMessage: "O nome do app volta ao padrão (zombie-crab) em todos os lugares.",
+    resetNameMessage:
+      "O nome do app volta ao padrão (zombie-crab) em todos os lugares.",
     resetLogoTitle: "Redefinir o logo?",
     resetLogoMessage: "Esta imagem volta ao padrão embutido.",
     noBrandingPermission: "Você não tem permissão para editar a marca.",
@@ -1166,7 +1248,8 @@ const pt: AdminDict = {
   sharedFiles: {
     uploading: "Enviando…",
     upload: "Enviar arquivo",
-    cascades: "Cascateia como somente leitura para todo container abaixo deste escopo.",
+    cascades:
+      "Cascateia como somente leitura para todo container abaixo deste escopo.",
     none: "Nenhum arquivo compartilhado neste escopo ainda.",
     downloadPrefix: "Baixar",
     deletePrefix: "Excluir",
@@ -1184,13 +1267,16 @@ const pt: AdminDict = {
     howReceivedJob:
       "Variável de ambiente, entrada JSON, arquivo em disco ou um slot na própria config do picoclaw.",
     whichSearch: "Qual provedor de busca",
-    whichSearchJob: "A ferramenta web do picoclaw usa o provedor que tiver uma chave.",
+    whichSearchJob:
+      "A ferramenta web do picoclaw usa o provedor que tiver uma chave.",
     whichSearchConsequence:
       "Escrito em todos os workspaces abaixo deste escopo, na próxima inicialização.",
     nameLabel: "Nome pelo qual o agente vai lê-lo",
-    nameJob: "Exatamente como o código do agente espera — maiúsculas e sublinhados inclusos.",
+    nameJob:
+      "Exatamente como o código do agente espera — maiúsculas e sublinhados inclusos.",
     valueLabel: "Valor",
-    valueJob: "Somente escrita. Nunca é exibido nem recuperado depois de salvo.",
+    valueJob:
+      "Somente escrita. Nunca é exibido nem recuperado depois de salvo.",
     valueConsequence:
       "Salvar reinicia os containers em execução sob este escopo para que eles peguem o valor.",
     valuePlaceholder: "cole o valor",
@@ -1215,7 +1301,8 @@ const pt: AdminDict = {
     inspect: "Ver valores atuais",
     inspecting: "Lendo…",
     reinspect: "Ler de novo",
-    noInstances: "Nenhuma instância deste agente provisionada nesta subscription ainda.",
+    noInstances:
+      "Nenhuma instância deste agente provisionada nesta subscription ainda.",
     distribution: "O que cada membro tem agora",
     stateAbsent: "chave ausente",
     statePathConflict: "caminho bloqueado",
@@ -1224,10 +1311,11 @@ const pt: AdminDict = {
       "Fora da mudança em massa — conserte estas uma a uma em Membros.",
     instancesCount: "{n} membro(s)",
     valueLabel: "Novo valor",
-    valueJob: "Escrito como JSON: true é booleano, \"true\" é texto.",
+    valueJob: 'Escrito como JSON: true é booleano, "true" é texto.',
     valuePlaceholder: "true",
     valueRequired: "Informe um valor.",
-    valueInvalidJson: "JSON inválido. Coloque texto entre aspas, como \"gpt-4o\".",
+    valueInvalidJson:
+      'JSON inválido. Coloque texto entre aspas, como "gpt-4o".',
     previewWillChange: "{n} vão mudar",
     previewAlreadyMatch: "{n} já estão iguais",
     previewExcluded: "{n} fora",
@@ -1241,7 +1329,8 @@ const pt: AdminDict = {
     futureTemplate: "Também todo membro futuro deste agente",
     futureTemplateReach:
       "Escreve o template do agente, que semeia TODAS as subscriptions que rodam este agente — não só esta.",
-    scopedApplied: "Salvo como padrão desta subscription para membros criados depois.",
+    scopedApplied:
+      "Salvo como padrão desta subscription para membros criados depois.",
     scopedFailed: "O padrão da subscription não foi salvo:",
     apply: "Aplicar nesta subscription",
     applying: "Aplicando…",
@@ -1256,7 +1345,8 @@ const pt: AdminDict = {
       "Algumas instâncias mudaram depois de você ler. Leia de novo antes de aplicar, para não sobrescrever uma mudança que você não viu.",
     reapplyWarning:
       "Gravado, mas o proxy não conseguiu re-resolver o modelo deste membro depois.",
-    templateApplied: "Template atualizado — membros criados depois herdam este valor.",
+    templateApplied:
+      "Template atualizado — membros criados depois herdam este valor.",
     templateFailed: "As instâncias acima foram alteradas, mas o template não:",
     restartNote: "{n} membro(s) vão pegar isso ao reiniciar.",
     restartNoteNone: "Nada mudou, então nenhum container é reiniciado.",
@@ -1296,7 +1386,8 @@ const pt: AdminDict = {
     everythingElse: "Todo o resto",
     instanceWide: "toda a instância",
     selectSubscriptionForPins: "Selecione uma assinatura para ver quem tem pin",
-    selectSubscription: "Selecione uma assinatura na árvore para ver ou definir isto",
+    selectSubscription:
+      "Selecione uma assinatura na árvore para ver ou definir isto",
     selectTenant: "Selecione um tenant na árvore para ver ou definir isto",
     selectAgent: "Selecione um agente acima para ver ou definir isto",
   },
@@ -1310,7 +1401,8 @@ const pt: AdminDict = {
     locked: "fora do seu alcance",
     outOfScope: "fora de escopo",
     notEditable: "definido em outro lugar",
-    readDown: "Leia de cima para baixo. Cada nível restringe quem ele cobre e sobrepõe os de cima.",
+    readDown:
+      "Leia de cima para baixo. Cada nível restringe quem ele cobre e sobrepõe os de cima.",
     winnerNote: "O último nível com um modelo é o que a pessoa recebe.",
   },
   instanceConfig: {
@@ -1361,7 +1453,8 @@ const pt: AdminDict = {
     notProvisioned:
       "Este membro nunca iniciou este agente, então ainda não há configuração para consertar.",
     discardTitle: "Descartar suas alterações?",
-    discardMessage: "As edições deste editor não foram salvas e não podem ser recuperadas.",
+    discardMessage:
+      "As edições deste editor não foram salvas e não podem ser recuperadas.",
     discard: "Descartar",
   },
 };

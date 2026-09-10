@@ -27,6 +27,7 @@ import {
   type UserModelDraft,
   type UserModelsState,
 } from "@/lib/userModels";
+import { THINKING_LEVELS } from "@/lib/models";
 import type { Workspace } from "./fragment";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -88,7 +89,10 @@ export default function OwnModelsSection({
   const [editing, setEditing] = useState<string | null>(null);
   // What the last probe covered. Holding the FINGERPRINT rather than a boolean
   // is what makes the gate re-arm on any edit — see saveGate.
-  const [tested, setTested] = useState<{ fingerprint: string; ok: boolean } | null>(null);
+  const [tested, setTested] = useState<{
+    fingerprint: string;
+    ok: boolean;
+  } | null>(null);
   const [outcome, setOutcome] = useState<TestOutcome | null>(null);
   const [testing, setTesting] = useState(false);
   const [doomed, setDoomed] = useState<UserModel | null>(null);
@@ -183,7 +187,8 @@ export default function OwnModelsSection({
     // A slug the member never types: derived from their label, falling back to
     // the model id when the label is all punctuation. On an edit it is fixed —
     // it is half the store key.
-    const slug = editing ?? (slugFromLabel(draft.label) || slugFromLabel(draft.model));
+    const slug =
+      editing ?? (slugFromLabel(draft.label) || slugFromLabel(draft.model));
     const payload = { ...draft, slug };
     // The version of the record this form was opened on, so a concurrent edit
     // from another tab is rejected rather than overwritten.
@@ -252,10 +257,10 @@ export default function OwnModelsSection({
         {source.kind === "own-blocked" && (
           <div className="mt-2">
             <Alert severity="error">
-              {(source.blockedBy === "disabled" ? t.disabledSelected : t.lockedSelected).replace(
-                "{name}",
-                orgName,
-              )}
+              {(source.blockedBy === "disabled"
+                ? t.disabledSelected
+                : t.lockedSelected
+              ).replace("{name}", orgName)}
             </Alert>
           </div>
         )}
@@ -270,7 +275,9 @@ export default function OwnModelsSection({
             own, because "switch back" is the same kind of act as "switch to". */}
         <li className={row({ state: state.selected ? "idle" : "active" })}>
           <div className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-xs text-fg">{t.useOrg}</span>
+            <span className="min-w-0 flex-1 truncate text-xs text-fg">
+              {t.useOrg}
+            </span>
             {state.selected ? (
               <Button
                 size="sm"
@@ -286,15 +293,25 @@ export default function OwnModelsSection({
               </Badge>
             )}
           </div>
-          <span className="truncate font-mono text-[11px] text-fg-muted">{orgName}</span>
+          <span className="truncate font-mono text-[11px] text-fg-muted">
+            {orgName}
+          </span>
         </li>
 
         {state.models.map((m) => {
-          const active = m.slug === state.selected && m.enabled && state.allowed;
+          const active =
+            m.slug === state.selected && m.enabled && state.allowed;
           return (
-            <li key={m.slug} className={row({ state: active ? "active" : m.enabled ? "idle" : "disabled" })}>
+            <li
+              key={m.slug}
+              className={row({
+                state: active ? "active" : m.enabled ? "idle" : "disabled",
+              })}
+            >
               <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-xs text-fg">{m.label || m.slug}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-fg">
+                  {m.label || m.slug}
+                </span>
                 {active ? (
                   <Badge tone="accent">
                     <Check size={11} aria-hidden /> {t.inUse}
@@ -306,13 +323,20 @@ export default function OwnModelsSection({
                       size="sm"
                       variant="outlined"
                       disabled={busy}
-                      onClick={() => mutate(() => selectUserModel(workspace, m.slug))}
+                      onClick={() =>
+                        mutate(() => selectUserModel(workspace, m.slug))
+                      }
                     >
                       {t.useThis}
                     </Button>
                   )
                 )}
-                <IconButton variant="ghost" size="sm" aria-label={t.edit} onClick={() => openForm(m)}>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t.edit}
+                  onClick={() => openForm(m)}
+                >
                   <Pencil size={14} aria-hidden />
                 </IconButton>
                 <IconButton
@@ -328,14 +352,25 @@ export default function OwnModelsSection({
               <span className="truncate font-mono text-[11px] text-fg-muted">
                 {m.provider} · {m.model}
               </span>
-              {!m.enabled && <span className="text-[11px] text-fg-muted">{t.disabledBadge}</span>}
+              {!m.enabled && (
+                <span className="text-[11px] text-fg-muted">
+                  {t.disabledBadge}
+                </span>
+              )}
               {/* The stored verdict, so the list says what is known without a
                   re-test — and says "never tested" rather than implying success. */}
-              <span className={testLine({ ok: m.last_test ? m.last_test.ok : true })}>
+              <span
+                className={testLine({
+                  ok: m.last_test ? m.last_test.ok : true,
+                })}
+              >
                 {!m.last_test
                   ? t.neverTested
                   : m.last_test.ok
-                    ? t.lastTestOk.replace("{ms}", String(m.last_test.latency_ms))
+                    ? t.lastTestOk.replace(
+                        "{ms}",
+                        String(m.last_test.latency_ms),
+                      )
                     : t.lastTestFailed}
               </span>
             </li>
@@ -350,13 +385,20 @@ export default function OwnModelsSection({
       )}
 
       {!draft ? (
-        <Button variant="tonal" size="sm" className="w-full" onClick={() => openForm(null)}>
+        <Button
+          variant="tonal"
+          size="sm"
+          className="w-full"
+          onClick={() => openForm(null)}
+        >
           <Plus size={14} aria-hidden /> {t.add}
         </Button>
       ) : (
         <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-elevated p-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">{t.labelLabel}</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t.labelLabel}
+            </span>
             <Input
               inputSize="md"
               placeholder={t.labelPlaceholder}
@@ -366,16 +408,23 @@ export default function OwnModelsSection({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">{t.providerLabel}</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t.providerLabel}
+            </span>
             <select
               className={selectClass}
               value={draft.provider}
               // Picking a provider carries its endpoint with it, unless the member
               // typed one of their own — see applyProvider.
-              onChange={(e) => setDraft(applyProvider(draft, state.providers, e.target.value))}
+              onChange={(e) =>
+                setDraft(applyProvider(draft, state.providers, e.target.value))
+              }
             >
               <option value="">{t.providerPlaceholder}</option>
-              {registerableProviders(state.providers, state.customEndpointAllowed).map((p) => (
+              {registerableProviders(
+                state.providers,
+                state.customEndpointAllowed,
+              ).map((p) => (
                 <option key={p.provider} value={p.provider}>
                   {p.provider}
                 </option>
@@ -384,7 +433,9 @@ export default function OwnModelsSection({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">{t.modelLabel}</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t.modelLabel}
+            </span>
             <Input
               inputSize="md"
               // Suggestions, not a closed list: a provider's real model set moves
@@ -402,7 +453,9 @@ export default function OwnModelsSection({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">{t.apiBaseLabel}</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t.apiBaseLabel}
+            </span>
             <Input
               inputSize="md"
               inputMode="url"
@@ -420,7 +473,9 @@ export default function OwnModelsSection({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">{t.apiKeyLabel}</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t.apiKeyLabel}
+            </span>
             <Input
               inputSize="md"
               type="password"
@@ -429,21 +484,60 @@ export default function OwnModelsSection({
               value={draft.api_key}
               onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
             />
-            {editing && <span className="text-[11px] text-fg-muted">{t.apiKeyKept}</span>}
+            {editing && (
+              <span className="text-[11px] text-fg-muted">{t.apiKeyKept}</span>
+            )}
           </label>
 
           <details>
-            <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.advanced}</summary>
+            <summary className="cursor-pointer text-xs font-medium text-fg-muted">
+              {t.advanced}
+            </summary>
             <label className="mt-2 flex flex-col gap-1">
-              <span className="text-xs font-medium text-fg-muted">{t.extraBodyLabel}</span>
+              <span className="text-xs font-medium text-fg-muted">
+                {t.extraBodyLabel}
+              </span>
               <Textarea
                 rows={4}
                 className="rounded-lg border border-brand px-3 py-2 font-mono"
                 placeholder="{}"
                 value={draft.extra_body}
-                onChange={(e) => setDraft({ ...draft, extra_body: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, extra_body: e.target.value })
+                }
               />
-              <span className="text-[11px] text-fg-muted">{t.extraBodyHint}</span>
+              <span className="text-[11px] text-fg-muted">
+                {t.extraBodyHint}
+              </span>
+            </label>
+            <label className="mt-3 flex flex-col gap-1">
+              <span className="text-xs font-medium text-fg-muted">
+                {t.thinkingLabel}
+              </span>
+              <select
+                className="rounded-lg border border-brand bg-transparent px-3 py-2"
+                value={draft.thinking_level}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    thinking_level: e.target
+                      .value as UserModelDraft["thinking_level"],
+                  })
+                }
+              >
+                {/* Empty first, and named for what it does. An empty value and
+                    "off" read the same in a dropdown and are not the same: one
+                    sends no field, the other sends one. */}
+                <option value="">{t.thinkingDefault}</option>
+                {THINKING_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[11px] text-fg-muted">
+                {t.thinkingHint}
+              </span>
             </label>
           </details>
 
@@ -489,27 +583,42 @@ export default function OwnModelsSection({
               disabled={busy || gate === "untested"}
               onClick={onSave}
             >
-              {busy ? t.saving : gate === "tested-failed" ? t.saveAnyway : t.save}
+              {busy
+                ? t.saving
+                : gate === "tested-failed"
+                  ? t.saveAnyway
+                  : t.save}
             </Button>
-            <Button variant="text" size="sm" disabled={busy} onClick={closeForm}>
+            <Button
+              variant="text"
+              size="sm"
+              disabled={busy}
+              onClick={closeForm}
+            >
               {t.cancel}
             </Button>
           </div>
         </div>
       )}
 
-      <p className="text-[11px] leading-relaxed text-fg-muted">{t.restartNote}</p>
+      <p className="text-[11px] leading-relaxed text-fg-muted">
+        {t.restartNote}
+      </p>
 
       <ConfirmDialog
         open={doomed !== null}
         title={t.delete}
-        message={t.deleteConfirm.replace("{name}", doomed?.label || doomed?.slug || "")}
+        message={t.deleteConfirm.replace(
+          "{name}",
+          doomed?.label || doomed?.slug || "",
+        )}
         tone="danger"
         onCancel={() => setDoomed(null)}
         onConfirm={() => {
           const target = doomed;
           setDoomed(null);
-          if (target) void mutate(() => deleteUserModel(workspace, target.slug));
+          if (target)
+            void mutate(() => deleteUserModel(workspace, target.slug));
         }}
       />
     </Accordion>

@@ -16,6 +16,7 @@ import {
   editableLevels,
   rungSelectable,
   fallbackIfCleared,
+  THINKING_LEVELS,
 } from "./models";
 import type { LadderLevel, ScopeDefault } from "./models";
 import type { InventoryModel, ModelAssignment } from "./models";
@@ -44,7 +45,12 @@ describe("splitInventory", () => {
     const { active, inactive } = splitInventory([
       model({ model_name: "a", status: "active", position: 2 }),
       model({ model_name: "b", status: "disabled", position: 1 }),
-      model({ model_name: "c", status: "deprecated", replaced_by: "a", position: 3 }),
+      model({
+        model_name: "c",
+        status: "deprecated",
+        replaced_by: "a",
+        position: 3,
+      }),
     ]);
     expect(active.map((m) => m.model_name)).toEqual(["a"]);
     expect(inactive.map((m) => m.model_name)).toEqual(["b", "c"]);
@@ -71,7 +77,12 @@ describe("reorderPayload", () => {
   ];
   const inactive = [
     model({ model_name: "retired", status: "disabled", position: 4 }),
-    model({ model_name: "gone", status: "deprecated", replaced_by: "first", position: 5 }),
+    model({
+      model_name: "gone",
+      status: "deprecated",
+      replaced_by: "first",
+      position: 5,
+    }),
   ];
 
   it("moves one active entry and appends the active group's new order", () => {
@@ -92,7 +103,9 @@ describe("reorderPayload", () => {
   it("contains every model from both groups, not just the active one being reordered", () => {
     const order = reorderPayload(active, inactive, 0, 1);
     expect(order).not.toBeNull();
-    expect(new Set(order)).toEqual(new Set(["first", "second", "third", "retired", "gone"]));
+    expect(new Set(order)).toEqual(
+      new Set(["first", "second", "third", "retired", "gone"]),
+    );
     expect(order).toHaveLength(active.length + inactive.length);
   });
 });
@@ -114,7 +127,11 @@ describe("draftFromCatalog", () => {
   });
 
   it("carries auth_method for a catalog entry that has no api_base", () => {
-    const draft = draftFromCatalog({ provider: "antigravity", model: "gemini-3-flash", auth_method: "oauth" });
+    const draft = draftFromCatalog({
+      provider: "antigravity",
+      model: "gemini-3-flash",
+      auth_method: "oauth",
+    });
     expect(draft.auth_method).toBe("oauth");
     expect(draft.api_base).toBe("");
   });
@@ -159,14 +176,20 @@ describe("draftFromDuplicate", () => {
 
 describe("modelsApiError", () => {
   it("flags a version conflict so the UI can say reload", async () => {
-    const res = new Response(JSON.stringify({ error: "stale", version_conflict: true }), { status: 409 });
+    const res = new Response(
+      JSON.stringify({ error: "stale", version_conflict: true }),
+      { status: 409 },
+    );
     const err = await modelsApiError(res);
     expect(err.versionConflict).toBe(true);
   });
 
   it("surfaces the referrers of an in-use rejection", async () => {
     const res = new Response(
-      JSON.stringify({ error: "in use", referrers: [{ kind: "fallback", id: "main" }] }),
+      JSON.stringify({
+        error: "in use",
+        referrers: [{ kind: "fallback", id: "main" }],
+      }),
       { status: 409 },
     );
     const err = await modelsApiError(res);
@@ -175,16 +198,22 @@ describe("modelsApiError", () => {
   });
 
   it("maps the stack-wide error shapes", async () => {
-    const conn = await modelsApiError(new Response(JSON.stringify({ error: "connectivity" }), { status: 502 }));
+    const conn = await modelsApiError(
+      new Response(JSON.stringify({ error: "connectivity" }), { status: 502 }),
+    );
     expect(conn.code).toBe("connectivity");
     const expired = await modelsApiError(
-      new Response(JSON.stringify({ error: "session_expired" }), { status: 401 }),
+      new Response(JSON.stringify({ error: "session_expired" }), {
+        status: 401,
+      }),
     );
     expect(expired.code).toBe("session_expired");
   });
 
   it("falls back to a generic message on an unparseable body", async () => {
-    const err = await modelsApiError(new Response("<html>500</html>", { status: 500 }));
+    const err = await modelsApiError(
+      new Response("<html>500</html>", { status: 500 }),
+    );
     expect(err.code).toBe("unknown");
     expect(err.referrers).toEqual([]);
   });
@@ -223,7 +252,12 @@ describe("describeError", () => {
 
 describe("serializeDraft", () => {
   it("omits api_key when blank, so an untouched key is never cleared", () => {
-    const body = serializeDraft({ ...emptyDraft(), model_name: "m", provider: "openai", model: "gpt-5.4" });
+    const body = serializeDraft({
+      ...emptyDraft(),
+      model_name: "m",
+      provider: "openai",
+      model: "gpt-5.4",
+    });
     expect("api_key" in body).toBe(false);
   });
 
@@ -241,6 +275,7 @@ describe("serializeDraft", () => {
       auth_method: "",
       api_key: "",
       fallbacks: ["fb"],
+      thinking_level: "",
     });
     expect(body).toEqual({
       model_name: "m",
@@ -249,6 +284,7 @@ describe("serializeDraft", () => {
       api_base: "",
       auth_method: "",
       fallbacks: ["fb"],
+      thinking_level: "",
     });
   });
 
@@ -257,7 +293,10 @@ describe("serializeDraft", () => {
   // that loaded one but omitted it here would silently null it out on save — the
   // same failure mode as the api_key check above, against a different field.
   it("includes extra_body when the draft carries one", () => {
-    const body = serializeDraft({ ...emptyDraft(), extra_body: { reasoning_split: true } });
+    const body = serializeDraft({
+      ...emptyDraft(),
+      extra_body: { reasoning_split: true },
+    });
     expect(body.extra_body).toEqual({ reasoning_split: true });
   });
 
@@ -297,8 +336,18 @@ describe("assignmentIndex", () => {
   // agent or one agent's pin would render on the other agent's row.
   it("keys by agent and user so one user under two agents does not collide", () => {
     const idx = assignmentIndex([
-      { agent: "alpha", user_acc_id: "u1", model_name: "a", source: "explicit" },
-      { agent: "beta", user_acc_id: "u1", model_name: "b", source: "inherited" },
+      {
+        agent: "alpha",
+        user_acc_id: "u1",
+        model_name: "a",
+        source: "explicit",
+      },
+      {
+        agent: "beta",
+        user_acc_id: "u1",
+        model_name: "b",
+        source: "inherited",
+      },
     ]);
     expect(idx[assignmentKey("alpha", "u1")].model_name).toBe("a");
     expect(idx[assignmentKey("beta", "u1")].model_name).toBe("b");
@@ -312,7 +361,9 @@ describe("defaultOptions", () => {
   ];
 
   it("offers the active models", () => {
-    expect(defaultOptions(models, null)).toEqual([{ name: "live", inactive: false }]);
+    expect(defaultOptions(models, null)).toEqual([
+      { name: "live", inactive: false },
+    ]);
   });
 
   // Filtering the options to active models made a deprecated CURRENT default match
@@ -326,14 +377,22 @@ describe("defaultOptions", () => {
   });
 
   it("does not duplicate a current default that is still active", () => {
-    expect(defaultOptions(models, "live")).toEqual([{ name: "live", inactive: false }]);
+    expect(defaultOptions(models, "live")).toEqual([
+      { name: "live", inactive: false },
+    ]);
   });
 });
 
 // These ladder cases are about the cascade DECISION — which level wins, what is
 // overridden, what is out of scope — not about what this screen may write, so they
 // hand buildLadder the full set. The editable rule has its own tests below.
-const allEditable: LadderLevel[] = ["user", "subscription", "tenant", "agent", "global"];
+const allEditable: LadderLevel[] = [
+  "user",
+  "subscription",
+  "tenant",
+  "agent",
+  "global",
+];
 
 describe("editableLevels", () => {
   // The rail states what is being administered; before this, the ladder let a
@@ -360,7 +419,10 @@ describe("editableLevels", () => {
 
 describe("buildLadder marks what this screen cannot write", () => {
   const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
-  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+  const def = (model_name: string): ScopeDefault => ({
+    model_name,
+    updated_at: "2026-07-26T00:00:00Z",
+  });
   const ladder = (kind: "tenant" | "subscription") =>
     buildLadder({
       pinnedCount: 0,
@@ -380,13 +442,17 @@ describe("buildLadder marks what this screen cannot write", () => {
       .sort();
 
   it("leaves only the tenant rung writable on a tenant", () => {
-    expect(notEditable("tenant")).toEqual(["agent", "global", "subscription", "user"].sort());
+    expect(notEditable("tenant")).toEqual(
+      ["agent", "global", "subscription", "user"].sort(),
+    );
   });
 
   // The case the request named directly: writing the tenant default while the rail
   // sits on a subscription silently reached every other subscription under it.
   it("leaves only the subscription and its pins writable on a subscription", () => {
-    expect(notEditable("subscription")).toEqual(["agent", "global", "tenant"].sort());
+    expect(notEditable("subscription")).toEqual(
+      ["agent", "global", "tenant"].sort(),
+    );
   });
 
   // notEditable is a THIRD state, not a rename of the two that exist. An
@@ -430,14 +496,19 @@ describe("buildLadder marks what this screen cannot write", () => {
   // Which level DECIDES is the ladder's central fact and is computed from the
   // cascade alone. Marking a level unwritable must not change who wins.
   it("does not change which level is in effect", () => {
-    expect(ladder("subscription").find((r) => r.inEffect)?.level).toBe("subscription");
+    expect(ladder("subscription").find((r) => r.inEffect)?.level).toBe(
+      "subscription",
+    );
     expect(ladder("tenant").find((r) => r.inEffect)?.level).toBe("tenant");
   });
 });
 
 describe("buildLadder", () => {
   const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
-  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+  const def = (model_name: string): ScopeDefault => ({
+    model_name,
+    updated_at: "2026-07-26T00:00:00Z",
+  });
 
   it("puts the most specific readable value in effect and marks the rest overridden", () => {
     const rungs = buildLadder({
@@ -451,7 +522,10 @@ describe("buildLadder", () => {
       editable: allEditable,
     });
     expect(rungs.find((r) => r.inEffect)?.level).toBe("subscription");
-    expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual(["agent", "tenant"]);
+    expect(rungs.filter((r) => r.overridden).map((r) => r.level)).toEqual([
+      "agent",
+      "tenant",
+    ]);
   });
 
   // The three-way distinction is the whole point of the type: unset, refused, and
@@ -517,7 +591,13 @@ describe("buildLadder", () => {
       copy: adminCopy.en.ladderRungs,
       editable: allEditable,
     });
-    expect(rungs.map((r) => r.level)).toEqual(["global", "agent", "tenant", "subscription", "user"]);
+    expect(rungs.map((r) => r.level)).toEqual([
+      "global",
+      "agent",
+      "tenant",
+      "subscription",
+      "user",
+    ]);
     expect(rungs.at(-2)?.inEffect).toBe(true);
     expect(rungs.at(-2)?.level).toBe("subscription");
   });
@@ -598,7 +678,10 @@ describe("buildLadder", () => {
 
 describe("fallbackIfCleared", () => {
   const names = { subscription: "Pesquisa", tenant: "Biotrop", agent: "alpha" };
-  const def = (model_name: string): ScopeDefault => ({ model_name, updated_at: "2026-07-26T00:00:00Z" });
+  const def = (model_name: string): ScopeDefault => ({
+    model_name,
+    updated_at: "2026-07-26T00:00:00Z",
+  });
 
   it("names what the workspaces would move to", () => {
     const rungs = buildLadder({
@@ -626,5 +709,36 @@ describe("fallbackIfCleared", () => {
       editable: allEditable,
     });
     expect(fallbackIfCleared(rungs)).toBeNull();
+  });
+});
+
+// thinking_level rides the SAME full-replace rule as every other readable
+// field, and forgetting it has a specific victim: the fallback-chain editor
+// PUTs a whole record built from an InventoryModel, so a level set in the form
+// would be cleared by somebody reordering a chain.
+describe("thinking_level", () => {
+  it("is always sent, empty included, because PUT full-replaces it", () => {
+    const body = serializeDraft({
+      ...emptyDraft(),
+      model_name: "m",
+      thinking_level: "",
+    });
+    expect(body.thinking_level).toBe("");
+  });
+
+  it("survives a duplicate", () => {
+    const d = draftFromDuplicate(model({ thinking_level: "high" }));
+    expect(d.thinking_level).toBe("high");
+  });
+
+  it("offers exactly picoclaw's six values", () => {
+    expect([...THINKING_LEVELS]).toEqual([
+      "off",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "adaptive",
+    ]);
   });
 });
