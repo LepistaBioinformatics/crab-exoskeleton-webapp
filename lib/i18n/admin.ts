@@ -470,6 +470,16 @@ const en = {
       "One instance per agent this member has started. Editing its configuration is not the same as opening their files — see below.",
     editConfig: "Edit configuration",
     noInstances: "No instances yet.",
+    // Lifecycle mode, per instance. The agent's own setting is the default for
+    // all of its instances; this pins an exception for one of them.
+    modeLabel: "Lifecycle",
+    modeInherit: "Follow the agent ({default})",
+    modeContinuous: "Always on",
+    modeScaleToZero: "Shuts down when idle",
+    modeTasksRun: "Scheduled tasks run",
+    modeTasksInert: "Scheduled tasks inert",
+    modeTasksInertHint:
+      "Schedules fire from timers inside the container, so an instance that shuts down when idle runs none of them. Set it to always on if this member depends on a scheduled task.",
     // A roster belongs to a subscription. A tenant is a grouping above that, so there
     // is no single list to show -- but the section stays in the rail rather than
     // vanishing, because an admin who only ever selects tenants would otherwise never
@@ -478,10 +488,6 @@ const en = {
     tenantSelectedBody:
       "You have a tenant selected. Choose one of its subscriptions to see and invite its members.",
     pickSubscription: "Choose a subscription",
-    // The instance rows. One is the agent named in the context bar; the others are
-    // reachable for repair and must never be mistaken for it.
-    instanceInContext: "selected agent",
-    instanceOtherAgent: "another agent",
   },
   branding: {
     lightLogo: "Light logo",
@@ -1112,12 +1118,18 @@ const pt: AdminDict = {
       "Uma instância por agente que este membro já iniciou. Editar a configuração dela não é o mesmo que abrir os arquivos dele — veja abaixo.",
     editConfig: "Editar configuração",
     noInstances: "Nenhuma instância ainda.",
+    modeLabel: "Ciclo de vida",
+    modeInherit: "Seguir o agente ({default})",
+    modeContinuous: "Sempre ligada",
+    modeScaleToZero: "Desliga quando ociosa",
+    modeTasksRun: "Tarefas agendadas rodam",
+    modeTasksInert: "Tarefas agendadas paradas",
+    modeTasksInertHint:
+      "Os agendamentos disparam a partir de timers dentro do contêiner, então uma instância que desliga quando fica ociosa não executa nenhum deles. Deixe-a sempre ligada se este membro depende de uma tarefa agendada.",
     tenantSelected: "A lista de pessoas pertence a uma assinatura",
     tenantSelectedBody:
       "Você está com um tenant selecionado. Escolha uma das assinaturas dele para ver e convidar as pessoas.",
     pickSubscription: "Escolher uma assinatura",
-    instanceInContext: "agente selecionado",
-    instanceOtherAgent: "outro agente",
   },
   branding: {
     lightLogo: "Logo claro",

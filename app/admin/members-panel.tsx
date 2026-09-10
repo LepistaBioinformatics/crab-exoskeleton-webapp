@@ -24,6 +24,7 @@ import {
 } from "@/lib/invitations";
 import InviteMember from "./invite-member";
 import InstanceConfigEditor from "./instance-config-editor";
+import InstanceModeControl from "./instance-mode-control";
 import { formatBytes, formatModified } from "./format";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -336,6 +337,9 @@ export default function MembersPanel({
                     <UserInstances
                       instances={(users ?? []).filter((u) => u.accId === entry.accId)}
                       contextAgent={agent}
+                      tenantId={scope.tenantId}
+                      subsAccId={scope.subsAccId}
+                      userAccId={entry.accId}
                       onEdit={(target) =>
                         setEditing({
                           tenantId: scope.tenantId,
@@ -375,32 +379,45 @@ export default function MembersPanel({
   );
 }
 
-// One row per agent this member has a workspace under -- one container, one
-// config.json. A member with grants on two agents has two instances, and each
-// can be broken independently.
+// The selected agent's instance for this member -- one container, one config.json.
 //
-// The other agents' instances are LISTED, because a broken config.json may be the reason
-// its member cannot reach anything, and making an admin re-select the whole context to
-// repair one file would be a worse screen. But listing them puts a second agent back on
-// a surface this feature just removed one from, so each row says which agent it is and
-// the one in the current context is marked as such. A row must never be mistakable for
-// "the agent I chose".
+// SCOPED TO THE CONTEXT'S AGENT, which reverses backoffice-admin-shell FR-6.5/FR-6.5.1.
+//
+// Those requirements had the other agents' instances listed too, so a broken config.json
+// could be repaired without changing context, with each row marked in- or
+// out-of-context. Reported in use as an error: the agent is chosen before this tab is
+// ever reached, so a control here that acts on a different one contradicts the selection
+// the admin just made -- and marking a row is not the same as it being safe to click.
+//
+// The cost is accepted deliberately: repairing another agent's instance now means
+// selecting that agent first, which is one navigation step in a console built to be
+// entered agent-first anyway.
 function UserInstances({
   instances,
   contextAgent,
+  tenantId,
+  subsAccId,
+  userAccId,
   onEdit,
 }: {
   instances: UserRef[];
   contextAgent: string;
+  // The instance coordinates, needed by the per-instance lifecycle control.
+  // Passed down rather than read off a UserRef: a UserRef carries only accId and
+  // role, and the tenant/subscription are the scope the panel is sitting on.
+  tenantId: string;
+  subsAccId: string;
+  userAccId: string;
   onEdit: (agent: string) => void;
 }) {
   const t = useT(adminCopy);
+  // At most one row now, so there is nothing to order and nothing to mark: every row
+  // IS the context's agent. A member with no workspace under it gets the empty state,
+  // which is the truthful answer for this agent rather than a list of others.
   const agents = instances
     .map((i) => i.role)
     .filter((r): r is string => Boolean(r))
-    // The context's agent first: it is the one the admin came here for, and a list that
-    // buries it under two others invites clicking the nearest row instead.
-    .sort((a, b) => Number(b === contextAgent) - Number(a === contextAgent));
+    .filter((r) => r === contextAgent);
 
   return (
     <div className="border-t border-brand/20 px-3 py-2">
@@ -417,17 +434,22 @@ function UserInstances({
       ) : (
         <ul className="mt-1 flex flex-col gap-1">
           {agents.map((agent) => {
-            const inContext = agent === contextAgent;
             return (
-              <li key={agent} className="flex items-center gap-2 py-0.5">
-                <Boxes size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-xs text-fg">{agent}</span>
-                <Badge tone={inContext ? "accent" : "neutral"}>
-                  {inContext ? t.members.instanceInContext : t.members.instanceOtherAgent}
-                </Badge>
-                <Button variant="text" size="sm" onClick={() => onEdit(agent)}>
-                  {t.members.editConfig}
-                </Button>
+              <li key={agent} className="flex flex-col gap-1 py-0.5">
+                <div className="flex items-center gap-2">
+                  <Boxes size={14} className="shrink-0 text-fg-muted" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-xs text-fg">{agent}</span>
+                  <Button variant="text" size="sm" onClick={() => onEdit(agent)}>
+                    {t.members.editConfig}
+                  </Button>
+                </div>
+                {/* On the row rather than inside the config editor: this is not
+                    part of config.json, it is proxy-owned state, and an admin
+                    following up "my scheduled tasks never run" should not have
+                    to open a JSON editor to find it. */}
+                <div className="pl-5">
+                  <InstanceModeControl instance={{ tenantId, subsAccId, userAccId, agent }} />
+                </div>
               </li>
             );
           })}

@@ -320,6 +320,70 @@ export async function restartInstance(ref: InstanceRef): Promise<"restarted" | "
   return data.status === "noop" ? "noop" : "restarted";
 }
 
+/**
+ * A member instance's lifecycle mode.
+ *
+ * Two layers and no more: `agents.<key>.mode` in the proxy's config.yaml is the
+ * default for every instance of that agent, and an instance may pin an
+ * exception. Clearing the exception hands it back to the default.
+ */
+export type InstanceMode = "continuous" | "scale-to-zero";
+
+export interface InstanceModeView {
+  /** What the instance actually runs as. The only field to branch on. */
+  effective: InstanceMode;
+  /**
+   * The value pinned on this instance, `""` when it follows its agent.
+   *
+   * Apart from `effective` because "continuous, inherited" and "continuous,
+   * pinned here" are identical today and diverge the moment the agent default
+   * moves — an admin choosing between them has to see which one they have.
+   */
+  override: InstanceMode | "";
+  /** What clearing the override would leave. */
+  agentDefault: InstanceMode;
+  /**
+   * False when the agent declares no idleTimeout, which makes scale-to-zero
+   * unrepresentable for its instances. The choice is disabled rather than
+   * offered and then refused.
+   */
+  scaleToZeroAllowed: boolean;
+  /**
+   * Whether this instance's scheduled tasks can run — the same fact the member
+   * sees on their own panel, so an admin acting on "my tasks never run" is
+   * looking at what the member is looking at.
+   */
+  fires: boolean;
+}
+
+export async function readInstanceMode(ref: InstanceRef): Promise<InstanceModeView> {
+  const res = await fetch(`/api/admin/users/mode?${instanceParams(ref).toString()}`);
+  if (!res.ok) throw new Error(await errorCode(res));
+  return (await res.json()) as InstanceModeView;
+}
+
+/**
+ * `""` clears the override.
+ *
+ * The response is the FRESH view rather than an echo: after a clear the
+ * effective mode is the agent default, which is never what the caller sent.
+ *
+ * No restart policy. The proxy's write moves the container's idle timer with it,
+ * so there is nothing left for a bounce to deliver.
+ */
+export async function writeInstanceMode(
+  ref: InstanceRef,
+  mode: InstanceMode | "",
+): Promise<InstanceModeView> {
+  const res = await fetch(`/api/admin/users/mode?${instanceParams(ref).toString()}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!res.ok) throw new Error(await errorCode(res));
+  return (await res.json()) as InstanceModeView;
+}
+
 export async function writeInstanceConfig(
   ref: InstanceRef,
   body: { raw: string; revision: string },
