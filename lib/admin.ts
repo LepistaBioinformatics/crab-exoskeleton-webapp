@@ -50,6 +50,22 @@ export function picoclawAgentKeys(agents: AgentRef[]): string[] {
   return agents.filter((a) => !a.harness || a.harness === "picoclaw").map((a) => a.key);
 }
 
+// The harnesses whose containers actually READ what the model inventory
+// resolves.
+//
+// It mirrors `inventoryGoverned` in the proxy's admin_model_scopes.go, and the
+// mirroring is the point: the proxy is the gate and answers 400 for anything
+// else, so a tab offered here that the proxy refuses is a form whose Save
+// button always fails. An ALLOWLIST for the same reason it is one there — a
+// fourth harness is hidden by default until it has a sink.
+const INVENTORY_GOVERNED = ["picoclaw", "ganglion"];
+
+export function inventoryGovernedAgentKeys(agents: AgentRef[]): string[] {
+  return agents
+    .filter((a) => INVENTORY_GOVERNED.includes(a.harness || "picoclaw"))
+    .map((a) => a.key);
+}
+
 // FileMeta from the proxy -- metadata only, never bytes. Serves both shared
 // files and (in the Members panel) a user's private files.
 export interface FileMeta {

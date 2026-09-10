@@ -10,6 +10,10 @@ const agents: AgentRef[] = [
   { key: "alpha", harness: "picoclaw" },
   { key: "beta", harness: "picoclaw" },
   { key: "other-harness", harness: "some-other-harness" },
+  // A REAL second harness, and the reason the fixture above stopped being the
+  // only non-picoclaw case: ganglion reads what the model inventory resolves
+  // and `some-other-harness` does not, so the two must part company.
+  { key: "zcrab-g", harness: "ganglion" },
   // An older proxy reports no harness at all — version back-compat, not a second
   // runtime. It must still count as picoclaw.
   { key: "legacy-shaped", harness: undefined },
@@ -146,5 +150,47 @@ describe("agentTabs — members", () => {
 
   it("leaves the legacy entry with the content stores alone", () => {
     expect(agentTabs(LEGACY_AGENT, [{ key: "alpha" }])).toEqual(["files", "secrets", "skills"]);
+  });
+});
+
+describe("agentTabs — which harnesses the inventory governs", () => {
+  // ganglion-model-registry. The Model tab was withheld from every non-picoclaw
+  // harness because the proxy answered 400 for the write behind it. A ganglion
+  // container now reads a materialized registry file written from the same
+  // cascade, so the write lands and the tab has to be reachable.
+  it("offers the Model tab to a ganglion agent", () => {
+    expect(agentTabs("zcrab-g", agents)).toContain("model");
+  });
+
+  // The gate mirrors the proxy's `inventoryGoverned` allowlist. A harness the
+  // proxy would refuse must not be offered a form whose Save always fails.
+  it("still withholds it from a harness the proxy would refuse", () => {
+    expect(agentTabs("other-harness", agents)).not.toContain("model");
+  });
+
+  // `config.json` is picoclaw's file and the Config tab edits its whole tree.
+  // A ganglion agent reads a strict subset of that shape, written by the proxy
+  // rather than by hand, so the tab stays withheld — gaining the model
+  // inventory did not make it picoclaw.
+  it("does not hand a ganglion agent the Config tab along with it", () => {
+    expect(agentTabs("zcrab-g", agents)).not.toContain("config");
+    expect(agentTabs("alpha", agents)).toContain("config");
+  });
+
+  // THE REGRESSION THIS FILE HAS NOW CAUGHT TWICE, once for persona and once
+  // for model: a tab leaving PICOCLAW_ONLY reaches the legacy all-agents store
+  // for free unless something stops it. A model assignment is resolved for a
+  // WORKSPACE and materialized into that workspace's files; the legacy entry is
+  // an address for shared content and has no workspace.
+  it("never offers it through the legacy all-agents store", () => {
+    expect(agentTabs(LEGACY_AGENT, agents)).toEqual(["files", "secrets", "skills"]);
+  });
+
+  // The order is one order. A section list that reshuffles when you switch
+  // agents is a list you have to re-read every time.
+  it("keeps the section order identical to picoclaw's, minus what is withheld", () => {
+    const pico = agentTabs("alpha", agents);
+    const gang = agentTabs("zcrab-g", agents);
+    expect(gang).toEqual(pico.filter((s) => s !== "config"));
   });
 });
