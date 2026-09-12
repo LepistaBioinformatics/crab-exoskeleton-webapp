@@ -120,6 +120,16 @@ const DOCX_BODY = [
  * the file instead of rendering it. The PDF frame therefore goes through a blob, which
  * carries no headers.
  */
+/**
+ * Which reading of a file with two of them is on screen.
+ *
+ * Two kinds have two readings: markdown, which is a document and the marks that
+ * produce it, and html, which is a page and the markup that produces it. Each used to
+ * offer exactly one, and they offered OPPOSITE ones -- markdown rendered with no way to
+ * see the source, html as source with no way to see the page.
+ */
+type PreviewView = "rendered" | "source";
+
 export default function FilePreview({
   workspace,
   path,
@@ -148,10 +158,29 @@ export default function FilePreview({
   // state rather than an error, because it is an ordinary answer about the file.
   const [binary, setBinary] = useState(false);
 
-  const needsBody = kind === "markdown" || kind === "text" || kind === "code";
+  // Which way a file with TWO readings is being read. See the toggle below.
+  const [view, setView] = useState<PreviewView>("rendered");
+  // Back to the rendered reading whenever the FILE changes. The choice belongs to the
+  // document being read, not to the pane: a member who looked at one file's markup
+  // does not mean "show me markup from now on", and carrying it would open the next
+  // report as source.
+  useEffect(() => setView("rendered"), [path]);
+
+  // The kinds that can be read two ways, and therefore the only ones that offer the
+  // choice. Everything else has one reading and a toggle would be a control that does
+  // nothing.
+  const dual = kind === "markdown" || kind === "html";
+  const asSource = dual && view === "source";
+
+  const needsBody =
+    kind === "markdown" || kind === "html" || kind === "text" || kind === "code";
   // Resolved from the NAME, like previewKind itself: the grammar and the decision to
   // preview at all come from the same table, so they cannot disagree.
-  const language = kind === "code" ? languageForFile(name) : null;
+  //
+  // Asked for the source reading too: a markdown read as source is highlighted with
+  // the markdown grammar and an html with xml, which is what the alias table already
+  // says those extensions mean.
+  const language = kind === "code" || asSource ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
   // The body the code pane paints and the gutter that counts it, derived TOGETHER so the
   // two cannot disagree about how many lines there are.
@@ -161,14 +190,14 @@ export default function FilePreview({
   // rather than by `split`, because a 2 MB file is 50k lines and the array would exist
   // only to have its length read.
   const { codeBody, lineNumbers } = useMemo(() => {
-    if (kind !== "code" || text === null) return { codeBody: "", lineNumbers: "" };
+    if ((kind !== "code" && !asSource) || text === null) return { codeBody: "", lineNumbers: "" };
     const body = text.replace(/\n$/, "");
     let lines = 1;
     for (let i = 0; i < body.length; i++) if (body.charCodeAt(i) === 10) lines++;
     let gutter = "1";
     for (let n = 2; n <= lines; n++) gutter += `\n${n}`;
     return { codeBody: body, lineNumbers: gutter };
-  }, [kind, text]);
+  }, [kind, asSource, text]);
   // Read out here, so the effect below depends on a STRING rather than on the copy
   // object — the same reason its other dependencies are `workspace`'s primitives.
   const slideLabel = t.preview.slide;
@@ -336,6 +365,33 @@ export default function FilePreview({
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-bg" aria-label={t.preview.aria}>
+          {dual && !error && !tooLarge && (
+            // Pinned above the content rather than put in the panel header, because the
+            // header belongs to the panel and this belongs to the FILE: it appears for
+            // the two kinds that have two readings and for nothing else.
+            <div
+              role="group"
+              aria-label={t.preview.viewLabel}
+              className="sticky top-0 z-10 flex gap-1 border-b border-brand/20 bg-bg/95 px-3 py-2 backdrop-blur"
+            >
+              {(["rendered", "source"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  onClick={() => setView(v)}
+                  className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
+                    view === v
+                      ? "bg-accent text-accent-fg"
+                      : "text-fg-muted hover:bg-elevated"
+                  }`}
+                >
+                  {v === "rendered" ? t.preview.viewRendered : t.preview.viewSource}
+                </button>
+              ))}
+            </div>
+          )}
+
           {error && (
             <div className="p-4">
               <Alert severity="error">{errorText(err, error)}</Alert>
@@ -392,7 +448,7 @@ export default function FilePreview({
             </object>
           )}
 
-          {!error && kind === "markdown" && text !== null && (
+          {!error && kind === "markdown" && !asSource && text !== null && (
             // `container-type: inline-size` is load-bearing, not styling.
             //
             // MessageContent breaks wide tables out past the text column using
@@ -412,6 +468,33 @@ export default function FilePreview({
               </MarkdownImageContext.Provider>
             </div>
           )}
+
+      {!error && kind === "html" && !asSource && text !== null && (
+        // A FRAME, and the sandbox is the whole reason this is allowed to exist.
+        //
+        // The bytes were written by an agent that reads untrusted material -- web pages,
+        // uploaded files, a member's own paste -- so rendering them in THIS origin would
+        // turn a prompt injection into script running with the member's session. The
+        // pane showed html as source for exactly that reason, and the reason has not
+        // changed; what changed is that a frame can render a page without being this
+        // origin.
+        //
+        // `sandbox` with NO tokens is the most restrictive value there is: no scripts,
+        // no same-origin, no forms, no navigation, no popups. The document lays out --
+        // CSS and images work, which is what "rendered" has to mean -- and can do
+        // nothing else. `allow-scripts` is deliberately absent, and adding it beside
+        // `allow-same-origin` would undo the sandbox entirely, which is the mistake this
+        // comment exists to stop.
+        //
+        // srcdoc, not a blob URL: the bytes are already here, and a blob would be an
+        // object to revoke and a second way for the frame to have an origin.
+        <iframe
+          title={name}
+          sandbox=""
+          srcDoc={text}
+          className="h-full w-full border-0 bg-white"
+        />
+      )}
 
       {!error && kind === "text" && text !== null && (
         <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-fg">
@@ -486,7 +569,7 @@ export default function FilePreview({
           grammar resolved from the file's own name. Escaped by highlight.js, which is
           what makes widening the format list free of the "member bytes never render
           from this origin" posture — `page.html` arrives here as source. */}
-      {!error && kind === "code" && text !== null && (
+      {!error && (kind === "code" || asSource) && text !== null && (
         // The `<pre>` is HERE and not inside CodeBlock, which is the whole of DEC-1.
         // CodeBlock renders a bare `<code>` because in the chat its wrapper comes from
         // the markdown renderer (`message-content.tsx`, the `pre` component); moving the

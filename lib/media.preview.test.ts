@@ -130,12 +130,24 @@ describe("previewKind", () => {
     }
   });
 
-  // FR-1.3, and the line that keeps this expansion honest: `html` maps to the xml
-  // grammar, so it is shown as SOURCE. Nothing a member uploads renders as markup
-  // from this origin — which is the invariant that let the old list stay short.
-  it("shows markup as source, never as markup", () => {
-    expect(previewKind("page.html")).toBe("code");
+  // The invariant this used to assert was "nothing a member uploads renders as markup
+  // FROM THIS ORIGIN", and `html` resolving to `code` was how it was kept.
+  //
+  // The invariant is unchanged; the mechanism moved. html has its own kind now, which
+  // is what lets the pane offer the rendered reading — and the rendering happens in a
+  // frame with no script execution and no `allow-same-origin`, so it is still not this
+  // origin. The kind is the OPTION; the sandbox is the posture.
+  it("gives html its own kind, so the pane can offer both readings", () => {
+    expect(previewKind("page.html")).toBe("html");
+    expect(previewKind("page.HTM")).toBe("html");
+  });
+
+  // And nothing else got the promotion. xml is markup a member reads, not a page a
+  // browser lays out, so it stays source-only -- widening this to "anything the xml
+  // grammar matches" would render an RSS feed as a blank rectangle.
+  it("leaves other markup as source", () => {
     expect(previewKind("feed.xml")).toBe("code");
+    expect(previewKind("icon.svg")).toBe("code");
   });
 
   // FR-1.2: plain text with no grammar to colour.
