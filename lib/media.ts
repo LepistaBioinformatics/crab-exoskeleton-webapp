@@ -353,6 +353,11 @@ export async function deleteMedia(workspace: Workspace, path: string): Promise<v
 export type PreviewKind =
   | "image"
   | "markdown"
+  // HTML is its own kind rather than falling through to `code`, because it is the
+  // second kind with TWO readings: the page and the markup that produced it. `code`
+  // means "there is one way to read this", and html stopped meaning that the moment
+  // rendering it became an option the member can choose.
+  | "html"
   | "text"
   | "pdf"
   | "code"
@@ -384,6 +389,12 @@ const PREVIEW_KINDS: Record<string, PreviewKind> = {
   webp: "image",
   gif: "image",
   md: "markdown",
+  markdown: "markdown",
+  // Named HERE rather than left to the highlighter's alias table, which resolves both
+  // to the xml grammar and would make them `code`. The kind is what decides whether
+  // the pane offers to RENDER the file, and only a kind the table names can.
+  html: "html",
+  htm: "html",
   txt: "text",
   csv: "text",
   pdf: "pdf",
@@ -471,8 +482,12 @@ export function previewKind(nameOrPath: string): PreviewKind | null {
 
   // Anything the chat could already highlight is readable here too, and the alias
   // table over there is the single list of what that means (DEC-1). It renders as
-  // ESCAPED text, so widening the set this way costs nothing of the posture above:
-  // `html` resolves to the xml grammar and is shown as source.
+  // ESCAPED text, so widening the set this way costs nothing of the posture above.
+  //
+  // `html` used to arrive here and be shown as source for exactly that reason. It has
+  // its own kind now and is named in the table above, because the pane can render it
+  // safely -- in a frame with no script execution and no access to this origin -- and
+  // "shown as source" became the default rather than the only reading.
   if (languageForFile(leaf)) return "code";
 
   // Everything left reads as PLAIN TEXT rather than refusing — see the note above.

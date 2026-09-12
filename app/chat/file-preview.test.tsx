@@ -148,7 +148,9 @@ describe("markdown preview table overflow", () => {
   const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
 
   it("declares a query container on the markdown column", () => {
-    const column = src.slice(src.indexOf('kind === "markdown" && text !== null'));
+    // The anchor carries `!asSource` because the branch does: markdown has two
+    // readings now, and this one is the rendered column.
+    const column = src.slice(src.indexOf('kind === "markdown" && !asSource && text !== null'));
     const openingDiv = column.slice(0, column.indexOf(">"));
     expect(openingDiv).toContain("container-type:inline-size");
   });
@@ -179,7 +181,9 @@ describe("code preview keeps its lines", () => {
   // file. (An earlier attempt bounded it with the docx branch and got an empty string:
   // `kind === "docx"` appears in the effect too, well above this.)
   const branch = src
-    .slice(src.indexOf('kind === "code" && text !== null'))
+    // `|| asSource`: the code pane paints the source reading of markdown and html as
+    // well as the `code` kind, so the branch that owns the `<pre>` is this one.
+    .slice(src.indexOf('(kind === "code" || asSource) && text !== null'))
     .replace(/\/\/[^\n]*/g, "")
     .replace(/\/\*[\s\S]*?\*\//g, "");
 

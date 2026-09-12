@@ -105,6 +105,12 @@ const en = {
   preview: {
     aria: "File preview",
     action: "Preview",
+    // Two kinds have two readings -- markdown is a document and the marks that make
+    // it, html is a page and the markup that makes it -- and each used to offer only
+    // one, in opposite directions.
+    viewLabel: "How to read this file",
+    viewRendered: "Rendered",
+    viewSource: "Source",
     tooLarge: "This file is too large to preview. Download it to open it.",
     pdfFallback:
       "This browser cannot display the PDF here — download it instead.",
@@ -918,6 +924,9 @@ const pt: ChatDict = {
   preview: {
     aria: "Pré-visualização do arquivo",
     action: "Visualizar",
+    viewLabel: "Como ler este arquivo",
+    viewRendered: "Renderizado",
+    viewSource: "Código-fonte",
     tooLarge:
       "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
     pdfFallback:
