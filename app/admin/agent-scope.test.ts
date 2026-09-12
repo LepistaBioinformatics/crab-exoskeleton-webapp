@@ -168,13 +168,29 @@ describe("agentTabs — which harnesses the inventory governs", () => {
     expect(agentTabs("other-harness", agents)).not.toContain("model");
   });
 
-  // `config.json` is picoclaw's file and the Config tab edits its whole tree.
-  // A ganglion agent reads a strict subset of that shape, written by the proxy
-  // rather than by hand, so the tab stays withheld — gaining the model
-  // inventory did not make it picoclaw.
-  it("does not hand a ganglion agent the Config tab along with it", () => {
-    expect(agentTabs("zcrab-g", agents)).not.toContain("config");
+  // THIS ASSERTED THE OPPOSITE, and the reason it gave was true when written: the
+  // Config tab edited `config.json`, picoclaw's file, which a ganglion container
+  // never opens. An admin would have edited a dead file and been told it worked.
+  //
+  // Both halves moved. The proxy resolves the file from the agent's HARNESS, and a
+  // ganglion edit is recorded in a per-instance overlay that every render
+  // re-applies — without which it would be discarded by the next turn, because
+  // that configuration is rendered whole rather than edited in place.
+  //
+  // The proxy still refuses the keys IT owns (ManagedConfigPaths), so the editable
+  // set for a ganglion agent is narrower than picoclaw's. Narrower is not absent,
+  // and the tab is how an admin reaches what is left.
+  it("hands a ganglion agent the Config tab too", () => {
+    expect(agentTabs("zcrab-g", agents)).toContain("config");
     expect(agentTabs("alpha", agents)).toContain("config");
+  });
+
+  // And it did NOT become free for everyone. AGENT_TABS is derived by subtracting
+  // these lists, so `config` moved to INVENTORY_ONLY rather than off them: a
+  // harness the proxy would refuse must not be offered a form whose Save always
+  // fails, and the legacy store has no workspace to configure.
+  it("still withholds the Config tab from a harness the proxy would refuse", () => {
+    expect(agentTabs("other-harness", agents)).not.toContain("config");
   });
 
   // THE REGRESSION THIS FILE HAS NOW CAUGHT TWICE, once for persona and once
@@ -188,9 +204,15 @@ describe("agentTabs — which harnesses the inventory governs", () => {
 
   // The order is one order. A section list that reshuffles when you switch
   // agents is a list you have to re-read every time.
+  //
+  // Nothing is withheld from a ganglion agent any more -- persona went first,
+  // config now -- so this is the strongest form of the assertion: the two lists
+  // are identical. It stays written as a subtraction so that withholding
+  // something again is one edit here rather than a rewrite.
   it("keeps the section order identical to picoclaw's, minus what is withheld", () => {
     const pico = agentTabs("alpha", agents);
     const gang = agentTabs("zcrab-g", agents);
-    expect(gang).toEqual(pico.filter((s) => s !== "config"));
+    const withheld: string[] = [];
+    expect(gang).toEqual(pico.filter((s) => !withheld.includes(s)));
   });
 });

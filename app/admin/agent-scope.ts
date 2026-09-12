@@ -60,7 +60,22 @@ export const LEGACY_AGENT = ALL_AGENTS;
 //
 // So hiding the tab left the ONE screen that edits a ganglion agent's identity
 // unreachable, for agents whose identity the cascade was wired up to deliver.
-const PICOCLAW_ONLY: Tab[] = ["config"];
+// `config` IS NOT ON THIS LIST EITHER, and used to be — the same story as
+// `persona` above, one capability later.
+//
+// It was hidden because the editors behind it wrote `config.json` unconditionally,
+// which a ganglion container never opens: an admin would have edited a dead file
+// and been told it worked. Both halves are fixed now. The proxy resolves the file
+// from the agent's harness, and a ganglion edit is recorded in a per-instance
+// overlay that every render re-applies — without which the edit would be discarded
+// by the next turn, because that configuration is rendered whole rather than
+// edited in place.
+//
+// It moved to INVENTORY_ONLY rather than off the lists entirely, and the
+// difference matters: AGENT_TABS is derived by SUBTRACTING these lists, so an
+// empty PICOCLAW_ONLY would hand `config` to the legacy all-agents store and to
+// any harness nobody has built yet. An allowlist has to fail closed.
+const PICOCLAW_ONLY: Tab[] = [];
 
 // The sections every REAL agent has, whatever harness runs it: the shared content
 // stores and its roster. Derived from the full section list rather than spelled out
@@ -74,7 +89,12 @@ const PICOCLAW_ONLY: Tab[] = ["config"];
 // asks "does this agent's harness read what the inventory resolves". Picoclaw
 // and ganglion both do; anything else does not, until it grows a sink and is
 // declared in `INVENTORY_GOVERNED`.
-const INVENTORY_ONLY: Tab[] = ["model"];
+// Sections an INVENTORY-GOVERNED agent offers: picoclaw and the ganglion, and
+// nothing else until somebody builds the sink.
+//
+// `config` is here because both harnesses now have a configuration file the proxy
+// writes and their container reads -- which is the same test `model` passes.
+const INVENTORY_ONLY: Tab[] = ["model", "config"];
 
 // The sections every REAL agent has, whatever harness runs it.
 const AGENT_TABS: Tab[] = SECTION_TABS.filter(
