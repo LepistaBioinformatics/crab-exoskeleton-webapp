@@ -302,6 +302,30 @@ export default function UploadsSidebar({
   // only one can ever be open.
   const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
 
+  // Changing workspace CLOSES the open document.
+  //
+  // A preview holds a path, and a path belongs to one workspace directory. Left open
+  // across a switch it pointed at a file the new workspace does not have: the pane
+  // showed an error and stayed on it, so the way back to the file list was a control
+  // the member had to find while looking at a failure.
+  //
+  // Clearing this one piece of state is the whole fix, because the panel is derived —
+  // `openDoc` comes from `previewFile`, and `section === "files" && !openDoc` is the
+  // tree. There is no pane to navigate.
+  //
+  // `workspace.p` counts as a workspace change for the reason the file listing says it
+  // does: it selects WHICH directory is being listed, so entering or leaving a project
+  // invalidates a path exactly as switching agents does.
+  //
+  // DECLARED BEFORE the request effect below, so a preview arriving in the same commit
+  // as a workspace change wins rather than being cleared by it.
+  useEffect(() => {
+    setPreviewFile(null);
+    // The delete error goes with it: it names a path in the workspace being left, so
+    // it is the same staleness one line further on.
+    setDeleteError(null);
+  }, [workspace.t, workspace.s, workspace.r, workspace.p]);
+
   // The document showing in the detail slot, or null for the tree.
   //
   // DERIVED, never stored as a second piece of state: the kind is a pure function of
