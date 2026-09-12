@@ -39,16 +39,16 @@
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.19",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.11"
   },
   "resolutions": {
     "postcss": "^8.5.19",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "license": "MIT OR Apache-2.0"
 }
