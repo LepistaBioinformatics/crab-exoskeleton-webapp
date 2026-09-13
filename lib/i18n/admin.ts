@@ -601,10 +601,21 @@ const en = {
     keyJob: "A dotted path to one value, e.g. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(owned by the proxy)",
-    // Which runtime's configuration document a suggestion came from. The two
-    // harnesses share key names while meaning different files, so the key alone
-    // does not say which list is on screen.
-    keyHarness: "(from the {h} config)",
+    // Said ONCE, over the list. The two harnesses share key names while meaning
+    // different files, so the list alone does not say which document is on screen —
+    // but the proxy resolves one harness per catalog, so every row would carry the
+    // same word.
+    catalogHarness: "Keys the {h} configuration document carries.",
+    keyNoMatch: "No key here contains “{q}”.",
+    // The row that offers the typed path itself. The catalog is a suggestion list,
+    // not a whitelist, and this is the only way that stays true once the picker is a
+    // list instead of a text field.
+    keyUseTyped: "Use “{k}”",
+    keyUseTypedJob: "Not in the document the proxy read — which does not make it invalid.",
+    detailEmptyTitle: "Pick a key",
+    detailEmptyBody:
+      "Choose a key on the left to see what each member of this subscription holds now, and to change it.",
+    backToKeys: "All keys",
     generatedDoc:
       "This agent has no configuration template: the proxy generates its config file for each member and rewrites it whenever the agent is started. Your change is stored beside that file and re-applied every time it is rewritten, so it survives — but keys the proxy owns are regenerated and cannot be changed here.",
     managedPicked:
@@ -1304,7 +1315,14 @@ const pt: AdminDict = {
     keyJob: "Um caminho pontilhado até um valor, ex. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(pertence ao proxy)",
-    keyHarness: "(da config do {h})",
+    catalogHarness: "Chaves que o documento de configuração do {h} carrega.",
+    keyNoMatch: "Nenhuma chave aqui contém “{q}”.",
+    keyUseTyped: "Usar “{k}”",
+    keyUseTypedJob: "Não está no documento que o proxy leu — o que não a torna inválida.",
+    detailEmptyTitle: "Escolha uma chave",
+    detailEmptyBody:
+      "Escolha uma chave à esquerda para ver o que cada membro desta assinatura tem agora, e para alterar.",
+    backToKeys: "Todas as chaves",
     generatedDoc:
       "Este agente não tem template de configuração: o proxy gera o arquivo de config dele para cada membro e o reescreve sempre que o agente é iniciado. Sua alteração fica guardada ao lado desse arquivo e é reaplicada a cada reescrita, então ela sobrevive — mas as chaves que pertencem ao proxy são regeradas e não podem ser alteradas aqui.",
     managedPicked:

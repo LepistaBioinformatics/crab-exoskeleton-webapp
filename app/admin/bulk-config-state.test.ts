@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   canonicalJson,
+  catalogHarness,
   isManagedKey,
+  keyListRows,
   prettyJson,
   displayBuckets,
   groupOutcomes,
@@ -404,5 +406,98 @@ describe("inspectionKey", () => {
     expect(inspectionKey(scope, "alpha", key)).not.toBe(
       inspectionKey({ ...scope, subsAccId: "s-1", tenantId: "t-1" }, "alpha:s-1", key),
     );
+  });
+});
+
+describe("keyListRows", () => {
+  const catalog = {
+    template: "alpha-tpl",
+    templateRevision: "sha256:a",
+    templateWritable: true,
+    keys: [
+      { key: "model_list", value: [], managed: true, harness: "picoclaw" },
+      { key: "tools.web.brave.enabled", value: false, managed: false, harness: "picoclaw" },
+    ],
+  };
+
+  it("lists the whole catalog when nothing is typed", () => {
+    expect(keyListRows(catalog, "").map((r) => r.key)).toEqual([
+      "model_list",
+      "tools.web.brave.enabled",
+    ]);
+    expect(keyListRows(catalog, "").some((r) => r.free)).toBe(false);
+  });
+
+  it("carries the managed flag through to the row", () => {
+    const rows = keyListRows(catalog, "");
+    expect(rows.find((r) => r.key === "model_list")!.managed).toBe(true);
+    expect(rows.find((r) => r.key === "tools.web.brave.enabled")!.managed).toBe(false);
+  });
+
+  it("matches anywhere in the path, in either case", () => {
+    expect(keyListRows(catalog, "BRAVE").map((r) => r.key)).toEqual([
+      "tools.web.brave.enabled",
+      "BRAVE",
+    ]);
+  });
+
+  // The contract this whole helper exists for: the catalog is a suggestion list, not a
+  // whitelist. agents.defaults.max_tool_iterations is the live case — the ganglion reads
+  // it and the document it generates does not carry it.
+  it("offers the typed path as the last row when the catalog lacks it", () => {
+    const rows = keyListRows(catalog, "agents.defaults.max_tool_iterations");
+    expect(rows).toEqual([
+      { key: "agents.defaults.max_tool_iterations", managed: false, free: true },
+    ]);
+  });
+
+  // Otherwise a key would be on screen twice, once as itself and once as the thing
+  // being typed.
+  it("does not offer a path the catalog already carries", () => {
+    expect(keyListRows(catalog, "model_list")).toEqual([
+      { key: "model_list", managed: true, free: false },
+    ]);
+  });
+
+  // The exactness test is against the WHOLE catalog, not the filtered rows: a filter
+  // that matched nothing while naming a real key would otherwise duplicate it.
+  it("trims before deciding, so a padded exact match is not offered twice", () => {
+    expect(keyListRows(catalog, "  model_list  ")).toEqual([
+      { key: "model_list", managed: true, free: false },
+    ]);
+  });
+
+  it("offers nothing extra for a catalog that has not loaded and no filter", () => {
+    expect(keyListRows(null, "")).toEqual([]);
+  });
+
+  // A key typed before the catalog arrives is still a key. Refusing it here would make
+  // the affordance depend on a race.
+  it("still offers a typed path with no catalog", () => {
+    expect(keyListRows(null, "tools.x")).toEqual([
+      { key: "tools.x", managed: false, free: true },
+    ]);
+  });
+});
+
+describe("catalogHarness", () => {
+  it("names the runtime the keys came from", () => {
+    expect(
+      catalogHarness({
+        template: "",
+        templateRevision: "",
+        templateWritable: false,
+        keys: [{ key: "model_list", managed: true, harness: "ganglion" }],
+      }),
+    ).toBe("ganglion");
+  });
+
+  // Nothing to name rather than a wrong guess: an empty catalog says nothing about
+  // which harness produced it, and the panel draws no line at all for "".
+  it("names nothing for an empty or absent catalog", () => {
+    expect(catalogHarness(null)).toBe("");
+    expect(
+      catalogHarness({ template: "", templateRevision: "", templateWritable: true, keys: [] }),
+    ).toBe("");
   });
 });

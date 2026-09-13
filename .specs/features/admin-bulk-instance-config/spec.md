@@ -307,6 +307,13 @@ hand-typed path the template lacks is legitimate.
 Orphans removed with their cause: `selectClass` and `bulkConfig.fromTemplate` (both
 locales; `persona.fromTemplate` is a different key and stays).
 
+**Superseded.** The datalist is gone: the picker is a master-detail list, specified
+in `config-key-master-detail/spec.md`. What survived the second swap is everything the
+paragraph above was written to protect — `isManagedKey` still answers the narrow
+question, the managed key is still listed and still explained rather than hidden, and a
+path the document does not carry is still reachable (as the list's last row, rather than
+by typing into a field the list replaced).
+
 **Post-ship refinement (asked for after W9): the distribution renders indented,
 highlighted JSON.** The first version printed `canonicalJson` — the compact
 comparison form — which is one unreadable line for anything but a scalar, so "what
