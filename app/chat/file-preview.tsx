@@ -105,11 +105,11 @@ const DOCX_BODY = [
  * SHOWS a workspace file instead of handing it to the operating system.
  *
  * A PANE, not a modal. It used to be an overlay, for a reason that has since expired:
- * "the sidebar is a two-slot track whose default width is 280px, so a third
- * destination would mean reworking its geometry to arrive at a column too narrow to
- * read a document in anyway". The panel now opens at a third of the viewport, and the
- * document does not need a third slot — it takes the detail slot the tree was using,
- * which is what lets a member read a document with the conversation still beside it.
+ * "the sidebar is a two-slot track whose default width is 280px, so a third slot would
+ * mean reworking its geometry to arrive at a column too narrow to read a document in
+ * anyway". The pane opens at a third of the viewport now, and the document needs no slot
+ * of its own — it takes the detail slot the tree was using, which is what lets a member
+ * read a document with the conversation still beside it.
  *
  * Body only: the panel's own header carries the file name, the back control and the
  * download button, so this renders content and nothing else.
@@ -333,7 +333,7 @@ export default function FilePreview({
     };
     // Primitives, not the `workspace` object — the caller rebuilds it per render, and
     // depending on the object would refetch (and re-revoke) on every one. Same idiom
-    // uploads-sidebar's listing effect uses.
+    // the files screen's listing effect uses.
   }, [workspace.t, workspace.s, workspace.r, workspace.p, path, kind, needsBody, tooLarge, slideLabel]);
 
   // Relative refs inside the previewed markdown resolve against ITS folder and load
@@ -372,7 +372,7 @@ export default function FilePreview({
             <div
               role="group"
               aria-label={t.preview.viewLabel}
-              className="sticky top-0 z-10 flex gap-1 border-b border-brand/20 bg-bg/95 px-3 py-2 backdrop-blur"
+              className="sticky top-0 z-10 flex gap-1 border-b border-rule bg-bg/95 px-3 py-2 backdrop-blur"
             >
               {(["rendered", "source"] as const).map((v) => (
                 <button
@@ -522,7 +522,7 @@ export default function FilePreview({
       {!error && isSheetKind(kind) && sheets !== null && (
         <div className="flex h-full min-h-0 flex-col">
           {sheets.length > 1 && (
-            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-brand/20 px-2 py-1.5">
+            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-rule px-2 py-1.5">
               {sheets.map((sheet, i) => (
                 <button
                   key={sheet.name}
@@ -546,7 +546,7 @@ export default function FilePreview({
                     {row.map((cell, c) => (
                       <td
                         key={c}
-                        className="max-w-[320px] truncate border border-brand/20 px-2 py-1 text-fg"
+                        className="max-w-[320px] truncate border border-rule px-2 py-1 text-fg"
                         title={cell}
                       >
                         {cell}
@@ -558,7 +558,7 @@ export default function FilePreview({
             </table>
           </div>
           {sheets[sheetIndex]?.truncated && (
-            <div className="shrink-0 border-t border-brand/20 px-3 py-1.5 text-[11px] text-fg-muted">
+            <div className="shrink-0 border-t border-rule px-3 py-1.5 text-[11px] text-fg-muted">
               {t.preview.sheetTruncated.replace("{n}", String(SHEET_ROW_CAP))}
             </div>
           )}
@@ -599,7 +599,7 @@ export default function FilePreview({
           <div className="flex min-w-max">
             <pre
               aria-hidden
-              className={`sticky left-0 z-10 shrink-0 select-none border-r border-brand/20 bg-elevated px-3 py-3 text-right text-fg-muted ${CODE_TYPE}`}
+              className={`sticky left-0 z-10 shrink-0 select-none border-r border-rule bg-elevated px-3 py-3 text-right text-fg-muted ${CODE_TYPE}`}
             >
               {lineNumbers}
             </pre>

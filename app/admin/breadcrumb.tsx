@@ -126,7 +126,7 @@ export default function Breadcrumb({
         // bar clipped its own absolutely-positioned menu vertically. Nothing is positioned
         // inside the bar any more, so the scroller costs nothing — and on a narrow screen
         // it is what keeps four segments from being squeezed into illegibility.
-        className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-brand/25 px-3 py-1"
+        className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-rule px-3 py-1"
       >
         <ol className="flex items-center gap-0.5">
           {crumbs.map(({ column, selected }, i) => {
@@ -212,7 +212,7 @@ export default function Breadcrumb({
             ref={pop}
             role="menu"
             style={{ position: "fixed", left: menu.x, top: menu.y }}
-            className="z-[60] max-h-[60vh] w-max min-w-[12rem] max-w-[18rem] overflow-y-auto rounded-lg border border-brand/30 bg-surface p-1 shadow-lg"
+            className="z-[60] max-h-[60vh] w-max min-w-[12rem] max-w-[18rem] overflow-y-auto rounded-lg border border-rule-strong bg-surface p-1 shadow-lg"
           >
             {menuColumn!.rows.map((row) => (
               <button

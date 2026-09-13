@@ -6,7 +6,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
 export function scopeLabel(scope: AdminScope): string {
   if (scope.kind === "tenant") {

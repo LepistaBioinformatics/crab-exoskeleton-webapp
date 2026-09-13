@@ -33,7 +33,7 @@ const blobOf = (body: string) => ({
   arrayBuffer: async () => new TextEncoder().encode(body).buffer,
 });
 
-const UploadsSidebar = (await import("./uploads-sidebar")).default;
+const FilesScreen = (await import("./files-screen")).default;
 const { chatCopy } = await import("@/lib/i18n/chat");
 import type { Workspace } from "./fragment";
 
@@ -70,12 +70,7 @@ async function openFiles() {
   mounted = { host, root };
   await act(async () => {
     root.render(
-      <UploadsSidebar
-        workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
-        section="files"
-      />,
+      <FilesScreen workspace={workspace} />,
     );
   });
   return host;
@@ -103,12 +98,7 @@ describe("opening a document from the files tree", () => {
     mounted = { host, root };
     await act(async () => {
       root.render(
-        <UploadsSidebar
-          workspace={workspace}
-          refreshSignal={0}
-          onClose={() => {}}
-          section="files"
-        />,
+        <FilesScreen workspace={workspace} />,
       );
     });
 

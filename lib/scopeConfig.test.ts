@@ -46,6 +46,11 @@ describe("defensive parsing", () => {
       template: "",
       keys: [],
       templateRevision: "",
+      // TRUE from an absent field, and the direction is the whole point: every proxy
+      // from before this flag existed had a template for every agent, so reading the
+      // omission as "no template" would take the option away from the agents it works
+      // for.
+      templateWritable: true,
     });
   });
 
@@ -440,5 +445,44 @@ describe("listConfigKeys", () => {
     // them disabled and say why instead of hiding a key that is in the file.
     expect(cat.keys.map((k) => k.managed)).toEqual([false, true, false]);
     expect(cat.keys[2].value).toBeNull();
+  });
+
+  // Which runtime's document a key came from. The picker labels it, because the two
+  // harnesses share key names — model_list and agents.defaults.model_name exist in both
+  // — so the key alone does not say which list is on screen.
+  it("keeps the harness each key was labelled with", async () => {
+    stubFetch({
+      keys: [
+        { key: "model_list", managed: true, harness: "ganglion" },
+        { key: "tools.web.brave.enabled", managed: false, harness: "ganglion" },
+      ],
+    });
+    const cat = await listConfigKeys(scope, "gamma");
+    expect(cat.keys.map((k) => k.harness)).toEqual(["ganglion", "ganglion"]);
+  });
+
+  // Back-compat, not harness variety: a proxy from before the field existed served
+  // picoclaw's template and nothing else, so an unlabelled key is a picoclaw key. The
+  // same reading picoclawAgentKeys uses in lib/admin.ts.
+  it("reads a key with no harness as picoclaw", async () => {
+    stubFetch({ keys: [{ key: "heartbeat.interval" }, { key: "version", harness: "" }] });
+    const cat = await listConfigKeys(scope, "alpha");
+    expect(cat.keys.map((k) => k.harness)).toEqual(["picoclaw", "picoclaw"]);
+  });
+
+  // A ganglion agent has no template file, so the "also write the template" apply has
+  // nowhere to land and the option must not be offered.
+  it("reports a catalog with no template to write to", async () => {
+    stubFetch({ template: "", templateRevision: "", templateWritable: false, keys: [] });
+    const cat = await listConfigKeys(scope, "gamma");
+    expect(cat.templateWritable).toBe(false);
+    expect(cat.templateRevision).toBe("");
+  });
+
+  // Only an explicit false takes the option away. An older proxy omits the field
+  // entirely, and every agent it knows about does have a template.
+  it("treats an absent templateWritable as writable", async () => {
+    stubFetch({ template: "alpha-tpl", templateRevision: "sha256:abc", keys: [] });
+    expect((await listConfigKeys(scope, "alpha")).templateWritable).toBe(true);
   });
 });

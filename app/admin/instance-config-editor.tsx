@@ -48,7 +48,7 @@ const tab = cva("flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-sm
   variants: {
     chosen: {
       true: "border-brand bg-accent text-accent-fg",
-      false: "border-brand/40 bg-transparent text-fg hover:bg-accent/10",
+      false: "border-rule-strong bg-transparent text-fg hover:bg-accent/10",
     },
   },
   defaultVariants: { chosen: false },
@@ -262,7 +262,7 @@ export default function InstanceConfigEditor({
                   ariaLabel={t.rawMode}
                 />
               ) : (
-                <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-brand/30 bg-elevated p-2">
+                <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-rule bg-elevated p-2">
                 <JsonTree
                   doc={parsed.value as JsonValue}
                   managed={loaded.managedPaths}

@@ -17,7 +17,7 @@ import { useT } from "@/lib/i18n/context";
 
 type Variant = "light" | "dark" | "icon";
 
-const preview = cva("h-16 w-16 rounded-lg border border-brand/30 object-contain", {
+const preview = cva("h-16 w-16 rounded-lg border border-rule object-contain", {
   variants: {
     tone: {
       light: "bg-white",
@@ -195,7 +195,7 @@ export default function BrandingPanel() {
         {variants.map((v) => (
           <div
             key={v.key}
-            className="flex items-center gap-4 rounded-lg border border-brand/30 bg-elevated px-3 py-3"
+            className="flex items-center gap-4 rounded-lg border border-rule bg-elevated px-3 py-3"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

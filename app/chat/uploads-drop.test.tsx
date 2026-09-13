@@ -29,7 +29,7 @@ vi.mock("@/lib/media", async (importOriginal) => {
   };
 });
 
-const UploadsSidebar = (await import("./uploads-sidebar")).default;
+const FilesScreen = (await import("./files-screen")).default;
 const { chatCopy } = await import("@/lib/i18n/chat");
 const { errorCopy } = await import("@/lib/i18n/errors");
 import type { Workspace } from "./fragment";
@@ -77,12 +77,7 @@ async function mount(): Promise<HTMLElement> {
   mounted = { host, root };
   await act(async () => {
     root.render(
-      <UploadsSidebar
-        workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
-        section="files"
-      />,
+      <FilesScreen workspace={workspace} />,
     );
   });
   return host;

@@ -235,7 +235,7 @@ export function mediaUrl(workspace: Workspace, path: string): string {
  *
  * GROUPS, not extensions, and that is the whole design. The row deliberately carried no
  * icon before: a generic file glyph was identical on every line, so it said nothing
- * while costing the name its width (recorded in uploads-sidebar.tsx). An icon only earns
+ * while costing the name its width (recorded in files-screen.tsx). An icon only earns
  * that width by VARYING, and it only varies usefully along distinctions a member makes
  * at a glance — "spreadsheet" and "archive" are such distinctions, `.xlsx` versus `.xls`
  * is not.

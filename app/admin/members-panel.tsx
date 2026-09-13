@@ -261,7 +261,7 @@ export default function MembersPanel({
             // here is the class of confusion the whole screen was rebuilt around.
             const grants = grantsForAgent(entry.roles, agent);
             return (
-              <li key={entry.email} className="rounded-lg border border-brand/30 bg-elevated">
+              <li key={entry.email} className="rounded-lg border border-rule bg-elevated">
                 <div className="flex items-center gap-2 px-3 py-2">
                   {/* EVERY row expands, including one with no workspace yet. It used to be
                       gated on `accId`, which was fine while revoking lived on the row —
@@ -297,7 +297,7 @@ export default function MembersPanel({
                 </div>
 
                 {open && (
-                  <div className="border-t border-brand/20 px-3 py-2">
+                  <div className="border-t border-rule px-3 py-2">
                     <span className="text-[11px] font-medium text-fg-muted">
                       {t.roster.accessHeading}
                     </span>
@@ -420,7 +420,7 @@ function UserInstances({
     .filter((r) => r === contextAgent);
 
   return (
-    <div className="border-t border-brand/20 px-3 py-2">
+    <div className="border-t border-rule px-3 py-2">
       <span className="text-[11px] font-medium text-fg-muted">{t.members.instancesHeading}</span>
       {/* Says outright that editing an instance's configuration is not opening the
           member's files. The two live in the same expanded row, and the privacy
@@ -510,7 +510,7 @@ function UserFiles({
   }
 
   return (
-    <div className="border-t border-brand/20 px-3 py-2">
+    <div className="border-t border-rule px-3 py-2">
       {error && <Alert severity="error">{error}</Alert>}
       {files === null && !error ? (
         <div className="flex justify-center py-3">

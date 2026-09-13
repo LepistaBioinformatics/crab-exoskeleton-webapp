@@ -24,7 +24,7 @@ export function TagChip({ tag }: { tag: Tag }) {
   const description = typeof tag.metadata.description === "string" ? tag.metadata.description : undefined;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-[4px] border border-brand/40 px-1.5 py-0.5 text-[11px] leading-none text-fg-muted"
+      className="inline-flex items-center gap-1 rounded-[4px] border border-rule-strong px-1.5 py-0.5 text-[11px] leading-none text-fg-muted"
       // Color is per-tag and dynamic, so it rides on `style` (border + faint fill
       // + text) rather than a className; the base classes cover the no-color case.
       style={color ? { borderColor: color, backgroundColor: `${color}1a`, color } : undefined}
@@ -67,7 +67,7 @@ export function TagCluster({
         aria-label={
           tags.length === 1 ? t.enrichment.tagsOne : t.enrichment.tagsOther.replace("{n}", String(tags.length))
         }
-        className="inline-flex items-center gap-0.5 rounded-[4px] border border-brand/40 px-1 py-0.5 text-fg-muted transition-colors hover:border-brand hover:text-fg group-focus-within/tags:border-brand group-focus-within/tags:text-fg"
+        className="inline-flex items-center gap-0.5 rounded-[4px] border border-rule-strong px-1 py-0.5 text-fg-muted transition-colors hover:border-brand hover:text-fg group-focus-within/tags:border-brand group-focus-within/tags:text-fg"
         style={color ? { borderColor: color, backgroundColor: `${color}1a`, color } : undefined}
       >
         <TagIcon size={11} className="shrink-0" aria-hidden />
@@ -82,7 +82,7 @@ export function TagCluster({
           open === "up" ? "bottom-full pb-1" : "top-full pt-1"
         }`}
       >
-        <span className="flex max-w-[240px] flex-wrap justify-end gap-1 rounded-lg border border-brand/30 bg-elevated p-1.5 shadow-lg">
+        <span className="flex max-w-[240px] flex-wrap justify-end gap-1 rounded-lg border border-rule-strong bg-elevated p-1.5 shadow-lg">
           {tags.map((tag) => (
             <TagChip key={tag.name} tag={tag} />
           ))}

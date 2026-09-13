@@ -3,10 +3,14 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 
-// Reported in use: files and scheduled tasks both carry a refresh control in the panel
-// header and the knowledge graph does not — and the graph is the pane most likely to be
-// stale, because the agent writes to it mid-conversation while the member is looking at
-// it. Arriving at the section re-fetches; staying on it never did.
+// Reported in use: files and scheduled tasks both carried a refresh control and the
+// knowledge graph did not — and the graph is the surface most likely to be stale,
+// because the agent writes to it mid-conversation while the member is looking at it.
+// Arriving at the section re-fetches; staying on it never did.
+//
+// The control moved with the section: it was in the right pane's header and it is now in
+// the destination frame's actions slot. The assertion is the same one either way — the
+// button is reachable, and pressing it re-reads.
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 
@@ -25,7 +29,7 @@ vi.mock("@/lib/media", async (importOriginal) => {
   return { ...actual, listWorkspaceMedia: (...args: unknown[]) => listWorkspaceMedia(...args) };
 });
 
-const UploadsSidebar = (await import("./uploads-sidebar")).default;
+const WorkspaceScreen = (await import("./workspace-screen")).default;
 const { chatCopy } = await import("@/lib/i18n/chat");
 import type { Workspace } from "./fragment";
 
@@ -56,11 +60,11 @@ async function mount(section: "graph" | "files") {
   mounted = { host, root };
   await act(async () => {
     root.render(
-      <UploadsSidebar
+      <WorkspaceScreen
         workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
         section={section}
+        onReference={() => {}}
+        onRestartNeeded={() => {}}
       />,
     );
   });
@@ -84,7 +88,7 @@ describe("the knowledge graph's refresh control", () => {
     expect(readGraph).toHaveBeenCalledTimes(2);
   });
 
-  it("is not offered on a section that has its own", async () => {
+  it("is not offered on a section that carries its own", async () => {
     listWorkspaceMedia.mockResolvedValue([]);
     const host = await mount("files");
     expect(host.querySelector(`[aria-label="${t.memoryGraph.refreshAria}"]`)).toBeNull();

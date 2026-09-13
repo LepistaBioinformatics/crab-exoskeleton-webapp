@@ -10,7 +10,7 @@ import { chatCopy } from "@/lib/i18n/chat";
 // whether the control is actually RENDERED, and whether the text it recovers
 // reaches the box.
 //
-// The first is the failure recorded in uploads-sidebar.tsx — a control written
+// The first is the failure recorded in files-screen.tsx — a control written
 // but never rendered, with every existing test still green. The second is the
 // whole point of the feature: picoclaw's abort deletes the member's message, so
 // a Stop that does not put it back destroys what they typed.

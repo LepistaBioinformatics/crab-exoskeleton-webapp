@@ -29,7 +29,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
 const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",
@@ -252,7 +252,7 @@ export default function SharedSecretsPanel({
 
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="font-display text-xs font-medium text-fg-muted">
           {t.sharedSecrets.setSecrets}
         </span>
       </div>
@@ -276,7 +276,7 @@ export default function SharedSecretsPanel({
             {group.names.map((secretName) => (
               <li
                 key={secretName}
-                className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5"
+                className="flex items-center gap-2 rounded-lg border border-rule bg-elevated px-3 py-1.5"
               >
                 <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
                   {secretName}

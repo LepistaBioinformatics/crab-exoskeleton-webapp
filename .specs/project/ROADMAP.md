@@ -69,6 +69,35 @@
 
 ---
 
+## M4: Shell redesign
+
+**Goal:** One place that says where you are, destinations drawn at full width, and
+separation that comes from surface rather than from a hairline under every region.
+
+### Features
+
+**chat-shell-redesign** - SPECIFIED — spec in `.specs/features/chat-shell-redesign/`
+
+- Projects leaves the sidebar and becomes a centre-pane destination named by a new `v`
+  fragment key; the five workspace sections become named rows in the same sidebar and
+  keep opening in the pane beside the conversation (`rs`); a single breadcrumb
+  (`subscription · agent / project / chat`) replaces the chat header; the divider
+  grammar goes tonal across `/chat` and `/admin`. Supersedes `unified-sidebar`'s
+  two-panel track, `chats-sidebar-sections`' splitter, and `right-rail-discoverability`'s
+  icon rail. Ships as three changes — navigation, then the grammar in `/chat`, then the
+  grammar in `/admin` — so the 136 borders and the shell rewrite are never in one diff.
+  One open question left, and it blocks nothing: how much of the destination list the
+  mobile drawer keeps. The light theme's surface scale widens with it, which repaints the
+  landing page too — accepted, and the reason the token change ships on its own.
+
+  **Corrected 2026-09-12, after first use (DEC-14).** Step 1 made all six centre
+  destinations. The owner reversed the five sections back into the pane so the chat can
+  coexist with the files, the graph and the tasks — which also un-does the regression that
+  version had accepted, that a document and the transcript could no longer be read at
+  once.
+
+---
+
 ## Future Considerations
 
 - **Runtime verification / deploy** — bring up gateway + crab-shell-proxy + webapp together to exercise model management and shared-skills cascade end-to-end (endpoints 404 until the proxy is rebuilt and the gateway reloaded).

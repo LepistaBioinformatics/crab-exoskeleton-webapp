@@ -6,8 +6,8 @@ const badge = cva(
   {
     variants: {
       tone: {
-        accent: "border-brand/50 bg-accent/15 text-fg",
-        neutral: "border-brand/40 bg-transparent text-fg-muted",
+        accent: "border-rule-strong bg-accent/15 text-fg",
+        neutral: "border-rule-strong bg-transparent text-fg-muted",
       },
     },
     defaultVariants: { tone: "neutral" },

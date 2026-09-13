@@ -1,6 +1,6 @@
 // The dock's arithmetic, kept out of the component so it can be tested without a DOM.
 //
-// Same split as split-boxes.ts and sidebar-tree.ts: what to show, in what order, and how
+// Same split as sidebar-tree.ts: what to show, in what order, and how
 // long it has been going are decisions with edge cases; rendering them is not.
 
 import type { DockedTurn, DockState } from "@/app/chat/turn-store";

@@ -12,6 +12,7 @@ import {
   type ScopeConfigInspection,
   type ScopeConfigResult,
   type TemplateCatalog,
+  type TemplateKey,
 } from "@/lib/scopeConfig";
 import {
   displayBuckets,
@@ -52,8 +53,8 @@ import { useT } from "@/lib/i18n/context";
 const bucketCard = cva("rounded-lg border px-3 py-2", {
   variants: {
     excluded: {
-      true: "border-dashed border-brand/30 bg-elevated/40",
-      false: "border-brand/30 bg-elevated",
+      true: "border-dashed border-rule bg-elevated/40",
+      false: "border-rule bg-elevated",
     },
   },
   defaultVariants: { excluded: false },
@@ -76,6 +77,21 @@ const bucketCard = cva("rounded-lg border px-3 py-2", {
 function bulkPolicy(policy: RestartPolicy): RestartPolicy {
   if (policy.mode !== "now") return policy;
   return { mode: "notice", note: policy.note };
+}
+
+// What a suggestion says about itself, beyond its own key.
+//
+// The HARNESS comes first because it is the part the key cannot imply: model_list and
+// agents.defaults.model_name exist in both harnesses' documents, so an admin who has
+// just switched agents has nothing else on screen telling them which list this is. The
+// managed note follows it rather than replacing it — a managed key is listed precisely
+// so the admin stops hunting for it, and that is still true of a key from either.
+function optionLabel(
+  copy: { keyHarness: string; managedSuffix: string },
+  key: TemplateKey,
+): string {
+  const harness = copy.keyHarness.replace("{h}", key.harness);
+  return key.managed ? `${harness} ${copy.managedSuffix}` : harness;
 }
 
 export default function BulkConfigPanel({
@@ -128,6 +144,11 @@ export default function BulkConfigPanel({
   useEffect(() => {
     setCatalog(null);
     setCatalogError(null);
+    // The future target belongs to the catalog that was on screen when it was chosen.
+    // Switching agent can switch harness, and a "template" left selected across that
+    // switch would send a template write for an agent whose catalog says there is no
+    // template — with no revision to gate it.
+    setFutureTarget("none");
     if (!isSubscription) return;
     let cancelled = false;
     listConfigKeys(scope, agent)
@@ -182,9 +203,9 @@ export default function BulkConfigPanel({
           key: keyText.trim(),
           value: parsed.value,
           revisions: revisionsFor(live),
-          alsoTemplate: futureTarget === "template",
-          templateRevision: futureTarget === "template" ? catalog?.templateRevision : undefined,
-          alsoSubscription: futureTarget === "subscription",
+          alsoTemplate: futureSend === "template",
+          templateRevision: futureSend === "template" ? catalog?.templateRevision : undefined,
+          alsoSubscription: futureSend === "subscription",
         },
         bulkPolicy(restartPolicy),
       );
@@ -203,6 +224,13 @@ export default function BulkConfigPanel({
   // Derived, not state: the catalog and the typed key are both already here, so a
   // second copy could only disagree with them.
   const managedPicked = isManagedKey(catalog, keyText);
+  // Whether there is a template document to write into at all. Unknown while the
+  // catalog loads, which is the state the option's existing `disabled` already covers.
+  const templateOffered = catalog === null || catalog.templateWritable;
+  // Never send a write the catalog says has no target. The effect above already resets
+  // the choice when the catalog reloads, but the reset and the submit are two different
+  // renders and only one of them reaches the proxy.
+  const futureSend = futureTarget === "template" && !templateOffered ? "none" : futureTarget;
   const parsed = parseValueInput(valueText);
   const preview = live && parsed.ok ? previewCounts(live, parsed.value) : null;
   const grouped = result ? groupOutcomes(result) : null;
@@ -255,9 +283,19 @@ export default function BulkConfigPanel({
       ) : (
         <datalist id="bc-key-options">
           {catalog.keys.map((k) => (
-            <option key={k.key} value={k.key} label={k.managed ? t.bulkConfig.managedSuffix : undefined} />
+            <option key={k.key} value={k.key} label={optionLabel(t.bulkConfig, k)} />
           ))}
         </datalist>
+      )}
+
+      {/* Said once, beside the list it is about. An agent whose configuration has no
+          template file has it GENERATED instead, per member, on every ensure — so a key
+          here is a key the next start may replace, and an admin reading only the row
+          labels would not learn that from a list where most rows are flagged managed
+          and a few are not. Disclosure, like DEC-4 below: it changes what the admin
+          knows, not what the screen lets them do. */}
+      {catalog !== null && !catalog.templateWritable && (
+        <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.generatedDoc}</p>
       )}
 
       <div>
@@ -321,7 +359,7 @@ export default function BulkConfigPanel({
               would read a stale-revision message for what was a load failure. The
               scoped option has no revision, so it stays available. */}
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <legend className="mb-1 font-display text-xs font-medium text-fg-muted">
               {t.bulkConfig.futureLabel}
             </legend>
             {(
@@ -340,14 +378,24 @@ export default function BulkConfigPanel({
                   catalog === null,
                 ],
               ] as const
-            ).map(([value, label, reach, disabled]) => (
+            )
+              // REMOVED rather than disabled when the catalog reports no template, and
+              // that is not a retreat from DEC-4. DEC-4 is about not gating a reachable
+              // write behind a tier — the sentence beside it stays the control for the
+              // write that EXISTS. This one does not exist: there is no document for it
+              // to land in, so a disabled radio would advertise an action the proxy
+              // could only refuse, and the admin would read a stale-revision error for
+              // a write that was never made. The sentence under the fieldset says so
+              // instead, which is the same disclosure the option's own "reach" line is.
+              .filter(([value]) => value !== "template" || templateOffered)
+              .map(([value, label, reach, disabled]) => (
               <label key={value} className="flex items-start gap-2 text-[13px] text-fg">
                 <input
                   type="radio"
                   name="bc-future"
                   className="mt-0.5"
                   value={value}
-                  checked={futureTarget === value}
+                  checked={futureSend === value}
                   disabled={disabled}
                   onChange={() => setFutureTarget(value)}
                 />
@@ -357,6 +405,11 @@ export default function BulkConfigPanel({
                 </span>
               </label>
             ))}
+            {!templateOffered && (
+              <p className="text-xs leading-relaxed text-fg-muted">
+                {t.bulkConfig.futureTemplateAbsent}
+              </p>
+            )}
           </fieldset>
 
           {/* Said out loud, because this is the one place the screen does not obey
@@ -378,7 +431,7 @@ export default function BulkConfigPanel({
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-            <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <span className="font-display text-xs font-medium text-fg-muted">
               {t.bulkConfig.resultTitle}
             </span>
           </div>
@@ -476,7 +529,7 @@ function Distribution({ inspection }: { inspection: ScopeConfigInspection }) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="font-display text-xs font-medium text-fg-muted">
           {t.bulkConfig.distribution}
         </span>
       </div>

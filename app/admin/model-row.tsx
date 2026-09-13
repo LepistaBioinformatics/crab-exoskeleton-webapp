@@ -16,8 +16,8 @@ import { useT } from "@/lib/i18n/context";
 const row = cva("flex items-start gap-2.5 rounded-lg border px-3 py-2", {
   variants: {
     state: {
-      active: "border-brand/30 bg-elevated",
-      inactive: "border-dashed border-brand/30 bg-transparent",
+      active: "border-rule bg-elevated",
+      inactive: "border-dashed border-rule bg-transparent",
     },
   },
   defaultVariants: { state: "active" },

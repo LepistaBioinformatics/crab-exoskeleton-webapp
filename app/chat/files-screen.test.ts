@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allFolderPaths, buildFileTree, type DirNode, type TreeNode } from "./uploads-sidebar";
+import { allFolderPaths, buildFileTree, type DirNode, type TreeNode } from "./files-screen";
 import type { Attachment } from "@/lib/media";
 
 const file = (name: string): Attachment => ({ path: `uploads/${name}`, name, size: 1 });

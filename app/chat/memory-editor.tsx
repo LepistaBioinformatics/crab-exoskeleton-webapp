@@ -17,11 +17,10 @@ import { useT } from "@/lib/i18n/context";
 // for the agent, read at turn time. The load is keyed to the workspace ONLY (never a
 // file-refresh signal), so uploading a file can't clobber an in-progress edit.
 //
-// It used to be a collapsible section stacked in the workspace panel. It is now one
-// destination of that panel's sliding track, so the collapse is gone: the member had
-// to click the section, watch it slide, and then click a second closed header with the
-// same title. Mounting IS opening here — the pane renders only for the chosen section
-// — so the document loads on mount.
+// It used to be a collapsible section stacked in the workspace panel, and the collapse
+// is gone: the member had to click the section, then click a second closed header with
+// the same title. Mounting IS opening now — the pane renders only the chosen section —
+// so the document loads on mount.
 export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
   const t = useT(chatCopy);
   const err = useT(errorCopy);
@@ -95,7 +94,7 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
         </div>
       ) : (
         <>
-          <div className="rounded-lg border border-brand/30 bg-elevated p-2 focus-within:ring-2 focus-within:ring-accent-soft">
+          <div className="rounded-lg border border-rule-strong bg-elevated p-2 focus-within:ring-2 focus-within:ring-accent-soft">
             <Textarea
               value={value}
               onChange={(e) => setValue(e.target.value)}

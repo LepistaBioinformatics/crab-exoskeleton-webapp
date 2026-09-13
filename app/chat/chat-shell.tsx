@@ -1,26 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Boxes, Folders, Menu, MessageSquarePlus, MessagesSquare, X } from "lucide-react";
+import { Menu, MessageSquarePlus, X } from "lucide-react";
 import {
   useFragment,
   toWorkspace,
+  clearWorkspace,
+  setDestination,
+  setRightSidebar,
   setFragmentProject,
   setFragmentProjectSid,
 } from "./fragment";
-import { resolvePanel } from "./sidebar-panel-state";
+import { asDestination, resolveCentre } from "./destination";
+import { asSection, nextSidebarValue } from "./workspace-sections";
+import { DESTINATION_ROWS, rowIcon, rowKey, rowLabel } from "./sidebar-destinations";
+import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
-import { projectInitials } from "@/lib/projects";
+import { useConversations } from "./use-conversations";
 import { createConversation } from "@/lib/chatSession";
 import { restoreDockedTurns } from "./turn-restore";
 import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
 import UnifiedSidebar from "./unified-sidebar";
+import Breadcrumb from "./breadcrumb";
 import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
 import WorkspaceGrid from "./workspace-grid";
+import ProjectsScreen from "./projects-screen";
+import WorkspaceScreen from "./workspace-screen";
 import RestartBanner from "./restart-banner";
 import ResizablePane, { type RailPanel } from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
@@ -38,10 +47,14 @@ const SIDEBAR_DEFAULT = 300;
 // `navWidth` would hand members a narrower sidebar than either of the two they had.
 const LAYOUT_KEY = "chat-sidebar";
 
-// The whole /chat experience on one route: the nav drawer is always present;
-// the history drawer + chat view mount only when the fragment carries a valid
-// workspace. On desktop each sidebar collapses/resizes independently (persisted
-// in localStorage); on mobile they are hamburger-toggled overlay drawers.
+// The whole /chat experience on one route.
+//
+// The shell owns FOUR things its children cannot: where the member is (the fragment),
+// what the centre pane therefore shows, what is open in the pane beside it, and the
+// breadcrumb that names the first of those. The breadcrumb is here rather than inside
+// ChatView deliberately — ChatView is keyed on the workspace and
+// unmounts on a switch, which is exactly why TurnDock is its sibling too. Chrome that
+// says "where am I" must outlive the thing it is describing.
 export default function ChatShell({ email }: { email: string }) {
   const t = useT(chatCopy);
   const fragment = useFragment();
@@ -55,6 +68,12 @@ export default function ChatShell({ email }: { email: string }) {
   const base = fragment ? toWorkspace(fragment) : null;
   const workspace = base ? { ...base, p: project } : null;
   const sessionId = fragment?.sid;
+  // TWO KEYS, TWO RENDER TARGETS, and the shell is where that stops being an abstraction:
+  // `v` decides what fills the CENTRE instead of the conversation, `rs` decides what
+  // opens BESIDE it. Neither is consulted about the other, which is the whole reason
+  // there are two of them (fragment.ts records the reversal that produced the pair).
+  const destination = asDestination(fragment?.v);
+  const openSection = asSection(fragment?.rs);
 
   // Drives the turn dock's layout: it docks differently on a phone.
   const [desktop, setDesktop] = useState(true);
@@ -72,9 +91,7 @@ export default function ChatShell({ email }: { email: string }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [width, setWidth] = useState(SIDEBAR_DEFAULT);
-  // Which group the button that opened the drawer wants in front. Both buttons open
-  // the same pane and the same components; this only decides what is expanded and
-  // scrolled to.
+  const [peeking, setPeeking] = useState(false);
 
   // Restore persisted desktop layout once on mount.
   useEffect(() => {
@@ -99,35 +116,14 @@ export default function ChatShell({ email }: { email: string }) {
 
   const closeDrawer = () => setDrawerOpen(false);
 
-  // ONE mobile button, and it TOGGLES.
-  //
-  // There were two — a hamburger for workspaces and a message icon for conversations —
-  // on the reasoning that losing the direct conversation shortcut would turn the most
-  // frequent action into open-scroll-pick. Unifying the panes removed that reasoning:
-  // both groups are open by default, so the drawer already lands with the conversation
-  // list on screen. The second button differed only for a member who had collapsed
-  // Conversations by hand, which is not worth a permanent second control that looks
-  // like another way to open the same panel.
-  //
-  // And it toggles rather than only opening: pressing the control that opened a panel
-  // is how anyone closes one, and it did nothing.
+  // ONE mobile button, and it TOGGLES. Pressing the control that opened a panel is how
+  // anyone closes one, and it used to do nothing.
   const toggleDrawer = () => setDrawerOpen((v) => !v);
 
-  // WHICH PANEL the sidebar shows, owned here rather than inside it because the
-  // COLLAPSED RAIL has to advertise the same answer. Two copies of `browsing` would be
-  // exactly the drift sidebar-panel-state.ts is shaped to prevent.
-  const [browsing, setBrowsing] = useState(false);
-  // The collapsed sidebar's hover preview, owned here because the PREVIEWED panel
-  // renders its own collapse control. Left inside the pane, that control called
-  // collapse on an already-collapsed pane — a no-op, so the button a member could
-  // plainly see did nothing. Here it can end the preview, which is what it means.
-  const [peeking, setPeeking] = useState(false);
   // The composer's context slot. Owned here rather than in ChatView because ChatView is
   // keyed on the workspace and unmounts on a switch; a reference picked before the
   // switch would go with it.
   const [chatRef, setChatRef] = useState<ChatReference | null>(null);
-  // The tree, for the subscription NAME the chat header leads with. Same hook the
-  // sidebar and the workspace grid use, so all three agree on it and on what a 401 means.
   const router = useRouter();
   const { groups } = useWorkspaceGroups();
 
@@ -149,62 +145,77 @@ export default function ChatShell({ email }: { email: string }) {
     if (workspaces.length === 0) return;
     void restoreDockedTurns(workspaces, () => router.push("/signin"));
   }, [groups, router]);
-  // The same list the sidebar's projects section shows, so the rail cannot offer a
-  // shortcut into a project that was just deleted.
-  const { projects } = useProjects(workspace ?? null);
+
+  // The same three lists the screens themselves read, so the breadcrumb can never name a
+  // project or a conversation that the surface below it has already dropped.
+  const { projects, error: projectsError } = useProjects(workspace ?? null);
+  const { conversations } = useConversations(workspace ?? null);
   const subscription = workspace
     ? accountName(groups, workspace.t, workspace.s)
     : null;
-  const panel = resolvePanel({ workspace: workspace ?? null, browsing });
 
-  // The rail's content hints.
-  //
-  // Chats is OMITTED entirely until a workspace exists, rather than rendered inert.
-  // It was disabled at first, and a disabled button swallows the click — so the icon
-  // was visible, looked like a way in, and did not even open the pane. An icon that is
-  // there always works; one with nothing behind it is not there.
-  const railPanels: RailPanel[] = [
-    {
-      key: "workspaces",
-      Icon: Boxes,
-      label: t.shell.workspaces,
-      active: panel === "workspaces",
-      onSelect: () => setBrowsing(true),
-    },
-    ...(workspace
-      ? [
-          {
-            key: "chats",
-            Icon: MessagesSquare,
-            label: t.shell.conversations,
-            active: panel === "chats",
-            onSelect: () => setBrowsing(false),
-          },
-        ]
-      : []),
-  ];
+  const openProject = projects.find((p) => p.id === project) ?? null;
+  const openConversation = conversations.find((c) => c.id === sessionId) ?? null;
+  // The alias wins where there is one: it is what the member named the conversation,
+  // and the title is what the transcript's first message made of it.
+  const conversationTitle =
+    openConversation?.alias?.trim() || openConversation?.title || null;
 
-  // The projects, as shortcuts. A collapsed rail could not previously say WHICH
-  // project you were in — the one question a 48px column is actually well shaped to
-  // answer — and getting into one meant opening the pane first.
-  //
-  // Initials rather than a folder glyph each: a column of identical folders names
-  // nothing, and the name is the only thing that tells one project from the next.
-  //
-  // These NAVIGATE, unlike the panel entries above them, which is why they are their
-  // own group behind a hairline. Same fragment write the sidebar's list uses, so both
-  // entry points enter a project identically.
-  const railProjects: RailPanel[] = projects.map((p) => ({
-    key: `project-${p.id}`,
-    Icon: Folders,
-    label: p.name,
-    initials: projectInitials(p.name),
-    active: project === p.id,
-    onSelect: () => setFragmentProject(p.id),
-  }));
+  // An agent whose proxy predates projects. The row and the screen go together — a
+  // sidebar row that leads to a screen rendering nothing is worse than no row.
+  const hideProjects = projectsError === "projects_unsupported";
 
-  // Actions, not destinations: a third group because clicking one DOES something
-  // rather than changing what the pane would show.
+  const centre = resolveCentre({ resolved, workspace, destination });
+
+  function newChat() {
+    if (!workspace) return;
+    // Project AND session in one write: the new chat is born in whichever project the
+    // shell is showing, and two separate hash writes would put a half-state into the
+    // history stack.
+    void createConversation(workspace, project).then((c) =>
+      setFragmentProjectSid(project, c.id),
+    );
+    closeDrawer();
+  }
+
+  const crumbs = useMemo(
+    () =>
+      buildCrumbs({
+        workspace,
+        subscription,
+        project: openProject,
+        conversationTitle,
+        destination,
+        t,
+        onWorkspace: clearWorkspace,
+        // Keeps `p`: asking to see the list is not leaving the project you are in
+        // (FR-1.5). The grid marks it as the one you are inside.
+        onProject: () => setDestination("projects"),
+      }),
+    [workspace, subscription, openProject, conversationTitle, destination, t],
+  );
+
+  // The rail's content hints: the SAME rows the open sidebar lists, read off the same
+  // array, plus the one action. Project shortcuts used to live here because a collapsed
+  // rail could not say WHICH project you were in; the breadcrumb says it now, at every
+  // width.
+  //
+  // A row means here exactly what it means there, toggle included: `nextSidebarValue` is
+  // what both call, so clicking the open section on the rail closes the pane rather than
+  // reopening it on itself.
+  const railDestinations: RailPanel[] = workspace
+    ? DESTINATION_ROWS.filter((r) => !(r.kind === "projects" && hideProjects)).map((r) => ({
+        key: rowKey(r),
+        Icon: rowIcon(r),
+        label: rowLabel(r, t),
+        active: r.kind === "projects" ? destination !== null : openSection === r.section,
+        onSelect: () =>
+          r.kind === "projects"
+            ? setDestination("projects")
+            : setRightSidebar(nextSidebarValue(openSection, r.section)),
+      }))
+    : [];
+
   const railActions: RailPanel[] = workspace
     ? [
         {
@@ -213,21 +224,12 @@ export default function ChatShell({ email }: { email: string }) {
           label: t.history.newChat,
           active: false,
           emphasis: true,
-          // Project AND session in one write: the new chat is born in whichever
-          // project the rail is showing, and two separate hash writes would put a
-          // half-state into the history stack.
-          onSelect: () => {
-            void createConversation(workspace, project).then((c) =>
-              setFragmentProjectSid(project, c.id),
-            );
-          },
+          onSelect: newChat,
         },
       ]
     : [];
 
-  const railGroups = [railPanels, railProjects, railActions].filter(
-    (g) => g.length > 0,
-  );
+  const railGroups = [railDestinations, railActions].filter((g) => g.length > 0);
 
   return (
     // `h-dvh`, not `h-screen`: `100vh` is the LARGE viewport, which ignores both the
@@ -236,22 +238,6 @@ export default function ChatShell({ email }: { email: string }) {
     // visible. Paired with `interactiveWidget: "resizes-content"` in app/layout.tsx —
     // neither half works alone.
     <div className="flex h-dvh flex-col overflow-hidden">
-      {/* Mobile top bar */}
-      <div className="flex items-center gap-2 border-b border-brand/30 bg-surface px-3 py-2 md:hidden">
-        <IconButton
-          variant="ghost"
-          size="sm"
-          aria-label={drawerOpen ? t.shell.closeMenu : t.shell.openWorkspaces}
-          aria-expanded={drawerOpen}
-          onClick={toggleDrawer}
-        >
-          {drawerOpen ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
-        </IconButton>
-        <span className="flex-1 truncate font-display text-sm font-semibold text-fg">
-          {workspace ? `${t.shell.agentPrefix} ${workspace.r}` : <BrandName />}
-        </span>
-      </div>
-
       <div className="relative flex min-h-0 flex-1">
         {/* Backdrop for mobile drawers */}
         {drawerOpen && (
@@ -259,7 +245,7 @@ export default function ChatShell({ email }: { email: string }) {
         )}
 
         <ResizablePane
-          ariaLabel={t.shell.workspaces}
+          ariaLabel={t.shell.destinations}
           open={drawerOpen}
           collapsed={collapsed}
           width={width}
@@ -277,19 +263,19 @@ export default function ChatShell({ email }: { email: string }) {
         >
           <UnifiedSidebar
             email={email}
-            resolved={resolved}
             workspace={workspace}
             project={project}
+            projectsOpen={destination !== null}
+            openSection={openSection}
+            hideProjects={hideProjects}
+            onProjects={() => setDestination("projects")}
+            onSection={setRightSidebar}
+            onNewChat={newChat}
             onConversationSelect={closeDrawer}
             // UNDEFINED while collapsed, which OMITS the header's collapse button
-            // entirely (the sidebar guards on this prop).
-            //
-            // That is the fix for the button that did nothing: while collapsed — and the
-            // hover preview shows the panel in exactly that state — "collapse" is a state
-            // the pane is already in, so the control could only ever be a no-op. Two
-            // open/close controls were visible at once, and the one under the cursor was
-            // the dead one. Now there is one control per state: this button while open,
-            // the rail's mirrored one while closed.
+            // entirely: while collapsed — and the hover preview shows the panel in
+            // exactly that state — "collapse" is a state the pane is already in, so the
+            // control could only ever be a no-op.
             onCollapse={
               collapsed
                 ? undefined
@@ -298,18 +284,47 @@ export default function ChatShell({ email }: { email: string }) {
                     setPeeking(false);
                   }
             }
-            browsing={browsing}
-            setBrowsing={setBrowsing}
           />
         </ResizablePane>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          {/* Above the chat: a pending restart is a property
-              of the workspace, not of the view you happen to be in. */}
+          {/* ONE bar across the top, and it is the path. It replaces both the mobile
+              agent strip and the chat view's own header, which named the subscription
+              and agent while the sidebar separately named the project — two opposite
+              corners of the screen for one location. */}
+          <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={drawerOpen ? t.shell.closeMenu : t.shell.openMenu}
+              aria-expanded={drawerOpen}
+              onClick={toggleDrawer}
+              className="md:hidden"
+            >
+              {drawerOpen ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
+            </IconButton>
+            {crumbs.length > 0 ? (
+              <Breadcrumb
+                crumbs={crumbs}
+                // The menu acts on a conversation, so it is offered only while one is
+                // what the breadcrumb's last segment names.
+                sessionId={destination === null && sessionId ? sessionId : null}
+                onChanged={() => {}}
+                onDeleted={() => setFragmentProject(project)}
+              />
+            ) : (
+              <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
+                <BrandName />
+              </span>
+            )}
+          </div>
+
+          {/* Above the centre pane: a pending restart is a property of the workspace,
+              not of the view you happen to be in. */}
           {workspace && (
-            // Keyed by the workspace so switching agents remounts it: without
-            // this the previous workspace's pending status renders for a beat
-            // against the newly selected one.
+            // Keyed by the workspace so switching agents remounts it: without this the
+            // previous workspace's pending status renders for a beat against the newly
+            // selected one.
             <RestartBanner
               key={`${workspace.t}|${workspace.s}|${workspace.r}`}
               workspace={workspace}
@@ -317,40 +332,64 @@ export default function ChatShell({ email }: { email: string }) {
             />
           )}
           <div className="min-h-0 flex-1">
-            {!resolved ? (
+            {centre.kind === "loading" && (
               <div className="flex h-full items-center justify-center">
                 <Spinner size={28} />
               </div>
-            ) : workspace ? (
+            )}
+            {/* No workspace chosen yet: the content pane BECOMES the picker, rather than
+                a welcome note pointing at a sidebar that is collapsed on narrow screens.
+                It is also the only way back in, which is why the breadcrumb's root
+                segment keeps its link however short the path is. */}
+            {centre.kind === "agents" && <WorkspaceGrid />}
+            {centre.kind === "destination" && workspace && (
+              <ProjectsScreen
+                workspace={workspace}
+                browsedProject={project}
+                onBrowse={(id) => setFragmentProject(id)}
+              />
+            )}
+            {centre.kind === "chat" && workspace && (
               <ChatView
                 workspace={workspace}
-                subscription={subscription}
                 sessionId={sessionId}
                 project={project}
                 chatRef={chatRef}
                 onChatRef={setChatRef}
                 onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
               />
-            ) : (
-              // No workspace chosen yet: the content pane BECOMES the picker, rather
-              // than a welcome note pointing at a sidebar that is collapsed on narrow
-              // screens. Falls back to the welcome copy when there is nothing to pick.
-              <WorkspaceGrid />
             )}
           </div>
-          {/* Last child of the chat column, and a SIBLING of ChatView rather than a child:
-              ChatView is keyed on the workspace above and unmounts on a workspace switch,
-              which is exactly the moment the dock has to keep standing.
-
-              SPEC_DEVIATION: spec DEC-11 put the mobile dock ABOVE the composer.
-              Reason: the composer lives inside ChatView, so "above the composer" would
-              mean mounting the dock inside the component it must outlive. DEC-11's actual
-              goal — no collision with the composer or the soft keyboard — is met instead by
-              document order (the bar cannot cover what precedes it, since the shell is
-              `h-dvh` with `interactiveWidget: "resizes-content"`) plus hiding the bar on
-              mobile while a text field has focus. See dock-segments.hidesForKeyboard. */}
+          {/* Last child of the chat column, and a SIBLING of ChatView rather than a
+              child: ChatView is keyed on the workspace above and unmounts on a workspace
+              switch, which is exactly the moment the dock has to keep standing. It now
+              outlives a destination change too, which is the same requirement with a
+              second reason. */}
           <TurnDock currentSid={sessionId} currentWorkspace={workspace} desktop={desktop} />
         </main>
+
+        {/* THE PANE, AND IT IS A SIBLING OF <main>, NOT A CHILD OF IT.
+            The two are peers in the same flex row, exactly as the sidebar is on the other
+            edge, which is what makes "beside the conversation" true at the layout level:
+            the centre column reflows to whatever is left, rather than the pane sliding
+            over the transcript the member opened it to read alongside.
+
+            The height chain the five panels need starts here — this row is
+            `min-h-0 flex-1` under `h-dvh`, so the <aside> stretches to a definite height
+            and workspace-pane.tsx can hand one down. */}
+        {openSection && workspace && (
+          <WorkspaceScreen
+            // Keyed by the workspace AND the project: a section addresses one workspace
+            // directory, so entering a project must rebuild it rather than leave the
+            // agent's own memory or files on screen under the project's name.
+            key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
+            workspace={workspace}
+            section={openSection}
+            onClose={() => setRightSidebar(null)}
+            onReference={setChatRef}
+            onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
+          />
+        )}
       </div>
     </div>
   );

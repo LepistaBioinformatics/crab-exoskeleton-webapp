@@ -23,7 +23,7 @@ const PILLS: { prefix: Prefix; Icon: typeof Tags }[] = [
 const datePresets = (today: string) => [today, "7d", "30d", String(new Date().getFullYear())];
 
 const pill = cva(
-  "inline-flex items-center gap-1 rounded-full border border-brand/40 px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-brand hover:text-fg",
+  "inline-flex items-center gap-1 rounded-full border border-rule-strong px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-brand hover:text-fg",
 );
 
 const suggestionRow = cva("flex w-full cursor-pointer items-center gap-2 px-2 py-1 text-left text-xs", {
@@ -142,7 +142,7 @@ export default function ConversationSearchBar({
           onKeyDown={onKeyDown}
         />
         {searching && (
-          <span className="absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-brand/40 border-t-brand" />
+          <span className="absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-rule-strong border-t-brand" />
         )}
       </div>
 
@@ -156,7 +156,7 @@ export default function ConversationSearchBar({
       </div>
 
       {open && suggestions.length > 0 && (
-        <div className="absolute top-9 z-20 w-full overflow-hidden rounded-lg border border-brand/30 bg-elevated shadow-lg">
+        <div className="absolute top-9 z-20 w-full overflow-hidden rounded-lg border border-rule-strong bg-elevated shadow-lg">
           {suggestions.map((s, i) => (
             <button
               key={s}

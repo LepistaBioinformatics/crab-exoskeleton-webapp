@@ -44,13 +44,32 @@ export interface FragmentState {
   // shared link keeps it. Absent means the default, which is TREE: the tree shows how
   // conversations branch from one another, and a flat list is the reduction of it.
   hv?: string;
-  // Right sidebar: which section is open, or "menu" for the section list. ABSENT means
-  // the sidebar is closed, which is why one key covers what used to be two states (a
-  // boolean in localStorage plus a section that persisted nowhere).
+  // Which screen the centre pane shows INSTEAD of the conversation. Its only value is
+  // "projects". ABSENT means the conversation, which is the shell's resting state and
+  // therefore the one that costs no key.
   //
-  // It replaced `localStorage["chat-files-open"]`, deliberately and not additively:
-  // keeping both would have left two owners of the same state, disagreeing the moment a
-  // second tab was opened. Same migration the history view mode already went through.
+  // It carried the five workspace sections too, for a while, and the owner reversed that
+  // on 2026-09-12 after using it: they open beside the conversation, under `rs`, so the
+  // chat can coexist with them. TWO KEYS RATHER THAN ONE WITH TWO RENDER TARGETS, and
+  // that is what makes every rule below unconditional — a setter either drops `v` or it
+  // does not, with no "unless this one is a pane" clause to get wrong.
+  //
+  // A fragment key and not a route segment, for the reason setFragmentProject records
+  // below: a path change is a pushState, which does not fire `hashchange`, and the shell
+  // paid for that twice over. `hv` and `rs` already live here and already work.
+  v?: string;
+  // Which workspace section is open in the pane BESIDE the conversation, or absent for
+  // no pane. Live, and written by setRightSidebar.
+  //
+  // One key covers what used to be two states — a boolean in localStorage plus a section
+  // that persisted nowhere — because it replaced `localStorage["chat-files-open"]`
+  // deliberately and not additively: keeping both would have left two owners of the same
+  // state, disagreeing the moment a second tab was opened. Same migration the history
+  // view mode already went through.
+  //
+  // It briefly stopped being written, while the sections were centre destinations. The
+  // one value that did not come back is "menu", the pane's own list of the other four:
+  // the sidebar lists them now, so asSection reads it as no section at all.
   rs?: string;
 }
 
@@ -95,6 +114,16 @@ export function setFragmentProject(project: string | null): void {
   else params.delete("p");
   params.delete("sid");
   params.delete("msg");
+  // AND `v`. Entering a project is done FROM the projects screen, so leaving `v` set
+  // meant the screen answered the click by re-rendering itself: `p` changed, the centre
+  // pane still resolved to "projects", and the member was left looking at the list they
+  // had just chosen from with no sign anything had happened.
+  //
+  // `rs` is NOT dropped with it, and that is the asymmetry the two keys exist for. A
+  // pane is not a place you are standing, so entering a project does not leave it —
+  // Files stays open beside the conversation and re-reads itself against the project's
+  // own directory, which is what `workspace.p` in its fetch is for.
+  params.delete("v");
   window.location.hash = params.toString();
 }
 
@@ -108,6 +137,9 @@ export function setFragmentProjectSid(project: string | null, sid: string): void
   else params.delete("p");
   params.set("sid", sid);
   params.delete("msg");
+  // Opening a conversation is asking for the transcript, so the centre pane has to BE
+  // the transcript. See setFragmentSid for the rule, and for why `rs` is untouched.
+  params.delete("v");
   window.location.hash = params.toString();
 }
 
@@ -122,6 +154,7 @@ function readFragment(): FragmentState {
     msg: params.get("msg") ?? undefined,
     hv: params.get("hv") ?? undefined,
     rs: params.get("rs") ?? undefined,
+    v: params.get("v") ?? undefined,
   };
 }
 
@@ -149,6 +182,19 @@ export function setFragmentSid(sid: string, msg?: string): void {
   params.set("sid", sid);
   if (msg) params.set("msg", msg);
   else params.delete("msg");
+  // CHOOSING A CONVERSATION LEAVES THE PROJECTS SCREEN. `v` names what the centre pane
+  // shows, and asking for a conversation is asking for that pane, so a `v` left standing
+  // wins over the very thing the click was for -- the sidebar row highlighted, the URL
+  // carried the new `sid`, and the screen went on showing the project list.
+  //
+  // `v` and `sid` are NOT independent (contrast setDestination, which preserves `sid`
+  // precisely so the way back exists): a destination is somewhere you go while a
+  // conversation waits, a conversation is not somewhere you go while a destination waits.
+  //
+  // `rs` AND `sid` ARE independent, and unconditionally so. The pane sits beside the
+  // transcript rather than in place of it, so switching conversations with Files open
+  // leaves Files open — the coexistence is the point of the second key.
+  params.delete("v");
   window.location.hash = params.toString();
 }
 
@@ -165,13 +211,39 @@ export function setHistoryView(view: "list" | "tree"): void {
 }
 
 
-// Persists the right sidebar in the URL: `null` closes it, "menu" opens it on the
-// section list, and a section name opens it there.
+// Sends the centre pane to a destination, or back to the conversation with `null`. Same
+// assign-`location.hash` mechanism as setHistoryView, and the conversation is written by
+// REMOVING the key.
 //
-// Same assign-`location.hash` mechanism as setHistoryView so a native `hashchange`
-// fires and the address bar updates. Closed is the default, so it is written by
-// REMOVING the key -- which is also what keeps a shared link from carrying a sidebar
-// the recipient did not ask for.
+// IT PRESERVES `sid`, WHICH IS THE EXACT OPPOSITE OF WHAT setFragmentProject DOES WITH
+// IT, and the two are not in disagreement. `p` decides which workspace directory a
+// conversation lives in, so changing it makes the open `sid` name a transcript the new
+// workspace never held — that is why it is dropped there. A destination changes only
+// which screen is being looked at; the conversation is still exactly where it was, so a
+// member who opens the projects screen and presses the chat crumb lands back in it.
+//
+// `p` survives for the same kind of reason. `v=projects` with `p` set is the breadcrumb's
+// project segment, and clearing it would eject a member from their project for asking to
+// see the list.
+export function setDestination(destination: string | null): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (destination) params.set("v", destination);
+  else params.delete("v");
+  window.location.hash = params.toString();
+}
+
+// Opens a workspace section in the pane BESIDE the conversation, or closes the pane with
+// `null`. Same assign-`location.hash` mechanism as setHistoryView, and closed is written
+// by REMOVING the key -- which is also what keeps a shared link from carrying a pane the
+// recipient did not ask for.
+//
+// IT TOUCHES `rs` AND NOTHING ELSE, and that is the whole point of the change that
+// brought it back. Every other setter here decides something about where the member is;
+// this one decides what is open next to them, and a pane that cleared `sid` or `v` on its
+// way open would be the coexistence answering the click by taking the chat away.
+//
+// Typed `string | null` rather than `Section | null`, like setDestination: the fragment
+// is strings, and asSection is the one place that turns one back into a section.
 export function setRightSidebar(section: string | null): void {
   const params = new URLSearchParams(window.location.hash.slice(1));
   if (section) params.set("rs", section);
@@ -207,6 +279,18 @@ export function setWorkspace(workspace: Workspace, sid: string, project?: string
     params.delete("p");
   }
   window.location.hash = params.toString();
+}
+
+// Leaves the workspace entirely: back to the agent grid.
+//
+// Clears the WHOLE selection rather than only `t`/`s`/`r`. Everything else in the
+// fragment is qualified by the workspace that is going away — a `sid` names a transcript
+// under it, a `p` names one of its projects, a `v` and an `rs` name surfaces scoped to
+// both — so a key left behind would describe a workspace nobody is in. The grid then
+// hands back a fresh selection through setWorkspace, which is where those keys come from
+// again.
+export function clearWorkspace(): void {
+  window.location.hash = "";
 }
 
 // `null` means "not read yet" (first client render, before the mount effect

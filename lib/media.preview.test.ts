@@ -266,7 +266,7 @@ describe("previewBlobType", () => {
 
 // The row deliberately had NO icon before this: a generic file glyph was identical on
 // every line, so it carried nothing while costing the name its width (the reasoning is
-// recorded in uploads-sidebar.tsx). A TYPE icon is a different proposition — it only
+// recorded in files-screen.tsx). A TYPE icon is a different proposition — it only
 // earns that width by varying, which is what these assertions are really about.
 // preview-plain-text-fallback FR-2. The half of the fallback that does not guess: an
 // extension table only speaks for names it has seen, and the point of a fallback is the

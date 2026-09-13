@@ -112,9 +112,10 @@ describe("isManagedKey", () => {
   const catalog = {
     template: "alpha-tpl",
     templateRevision: "sha256:a",
+    templateWritable: true,
     keys: [
-      { key: "model_list", value: [], managed: true },
-      { key: "tools.web.brave.enabled", value: false, managed: false },
+      { key: "model_list", value: [], managed: true, harness: "picoclaw" },
+      { key: "tools.web.brave.enabled", value: false, managed: false, harness: "picoclaw" },
     ],
   };
 

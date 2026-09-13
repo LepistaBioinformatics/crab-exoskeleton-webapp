@@ -138,7 +138,7 @@ export default function SharedFilesPanel({
           {files?.map((f) => (
             <li
               key={f.name}
-              className="flex items-center gap-3 rounded-lg border border-brand/30 bg-elevated px-3 py-2"
+              className="flex items-center gap-3 rounded-lg border border-rule bg-elevated px-3 py-2"
             >
               <FileText size={16} className="shrink-0 text-fg-muted" aria-hidden />
               <span className="min-w-0 flex-1 truncate text-sm text-fg" title={f.name}>

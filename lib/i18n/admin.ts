@@ -601,6 +601,12 @@ const en = {
     keyJob: "A dotted path to one value, e.g. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(owned by the proxy)",
+    // Which runtime's configuration document a suggestion came from. The two
+    // harnesses share key names while meaning different files, so the key alone
+    // does not say which list is on screen.
+    keyHarness: "(from the {h} config)",
+    generatedDoc:
+      "This agent has no configuration template: the proxy generates its config file for each member and rewrites it whenever the agent is started. Your change is stored beside that file and re-applied every time it is rewritten, so it survives — but keys the proxy owns are regenerated and cannot be changed here.",
     managedPicked:
       "The proxy owns this key and rewrites it on every materialization, so a bulk change here could not survive. Pick another key.",
     inspect: "See current values",
@@ -633,6 +639,8 @@ const en = {
     futureTemplate: "Also every future member of this agent",
     futureTemplateReach:
       "Writes the agent template, which seeds EVERY subscription running this agent — not only this one.",
+    futureTemplateAbsent:
+      "There is no agent template to write here. This agent's configuration is generated per member rather than seeded from a file, so a member created later gets it generated too — there is no older value left behind to correct.",
     scopedApplied:
       "Saved as this subscription's default for members created later.",
     scopedFailed: "The subscription default was not saved:",
@@ -1296,6 +1304,9 @@ const pt: AdminDict = {
     keyJob: "Um caminho pontilhado até um valor, ex. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(pertence ao proxy)",
+    keyHarness: "(da config do {h})",
+    generatedDoc:
+      "Este agente não tem template de configuração: o proxy gera o arquivo de config dele para cada membro e o reescreve sempre que o agente é iniciado. Sua alteração fica guardada ao lado desse arquivo e é reaplicada a cada reescrita, então ela sobrevive — mas as chaves que pertencem ao proxy são regeradas e não podem ser alteradas aqui.",
     managedPicked:
       "Esta chave pertence ao proxy, que a reescreve em cada materialização — uma mudança em massa aqui não sobreviveria. Escolha outra chave.",
     inspect: "Ver valores atuais",
@@ -1329,6 +1340,8 @@ const pt: AdminDict = {
     futureTemplate: "Também todo membro futuro deste agente",
     futureTemplateReach:
       "Escreve o template do agente, que semeia TODAS as subscriptions que rodam este agente — não só esta.",
+    futureTemplateAbsent:
+      "Não há template de agente para escrever aqui. A configuração deste agente é gerada por membro em vez de semeada a partir de um arquivo, então um membro criado depois também a recebe gerada — não fica nenhum valor antigo para corrigir.",
     scopedApplied:
       "Salvo como padrão desta subscription para membros criados depois.",
     scopedFailed: "O padrão da subscription não foi salvo:",

@@ -55,7 +55,7 @@ const row = cva(
       },
       // The all-agents store is an address, not an agent. Dashed and muted so it can never
       // read as one more thing to choose between.
-      tone: { normal: "", legacy: "border border-dashed border-brand/30" },
+      tone: { normal: "", legacy: "border border-dashed border-rule" },
     },
     defaultVariants: { state: "idle", tone: "normal" },
   },
@@ -120,9 +120,9 @@ export default function ColumnView({
       // is — the panel takes over there, and the two side by side left the panel with no
       // width at all. Which level you are on is then carried by the breadcrumb's
       // mobile-only tail segment.
-      className="flex h-full w-full min-w-0 flex-col border-brand/20 md:w-[14rem] md:shrink-0 md:border-r"
+      className="flex h-full w-full min-w-0 flex-col border-rule md:w-[14rem] md:shrink-0 md:border-r"
     >
-      <h2 className="shrink-0 px-2.5 pb-1.5 pt-3 font-display text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+      <h2 className="shrink-0 px-2.5 pb-1.5 pt-3 font-display text-[11px] font-medium text-fg-muted">
         {heading}
       </h2>
 

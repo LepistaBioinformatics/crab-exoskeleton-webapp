@@ -87,7 +87,7 @@ export default function RestartChrome({
           latched, so a schedule that goes stale on its own — the chosen time simply
           passes — also forces it open. */}
       {(open || !valid) && (
-        <div className="flex flex-col gap-3 rounded-lg border border-brand/25 bg-surface p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-rule bg-surface p-3">
           <RestartPolicySelect policy={policy} onChange={onChange} />
           <RestartNoticeBlock target={target} policy={policy} scopeLabel={scopeLabel} />
         </div>

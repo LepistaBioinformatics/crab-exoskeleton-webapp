@@ -28,7 +28,7 @@ import { useT } from "@/lib/i18n/context";
 // because the member's own panel now says the same thing from the other side and
 // an admin arriving from that report should recognise it.
 
-const selectClass = "h-8 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
+const selectClass = "h-8 rounded-lg border border-rule-strong bg-surface px-2 text-xs text-fg";
 
 // Loaded LAZILY, one request per row and only once the member's row is expanded.
 // The members panel lists every instance a member has, and fetching a mode for

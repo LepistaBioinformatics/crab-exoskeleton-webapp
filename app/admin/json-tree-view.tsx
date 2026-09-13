@@ -246,7 +246,7 @@ function Leaf({
           input alone cannot express it. */}
       <select
         aria-label={`${t.typeLabel} ${key}`}
-        className="shrink-0 rounded-lg border border-brand bg-elevated px-1 py-0.5 text-[11px] text-fg"
+        className="shrink-0 rounded-lg border border-rule-strong bg-elevated px-1 py-0.5 text-[11px] text-fg"
         value={kind}
         onChange={(e) => onEdit(path, coerce(value, e.target.value as JsonType))}
       >

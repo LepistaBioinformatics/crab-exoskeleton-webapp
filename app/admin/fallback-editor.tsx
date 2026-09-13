@@ -10,7 +10,7 @@ import { useT } from "@/lib/i18n/context";
 import { adminCopy } from "@/lib/i18n/admin";
 
 const selectClass =
-  "h-9 w-full rounded-lg border border-brand bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 w-full rounded-lg border border-rule-strong bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
 // fallbackCandidates excludes the model itself and every non-active model: the
 // resolver skips a non-active fallback anyway, so offering one would let an admin
@@ -44,7 +44,7 @@ export function FallbackEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-rule bg-elevated p-3">
       <span className="text-xs font-medium text-fg-muted">
         {t.models.chainFor} <span className="font-mono">{model.model_name}</span>
       </span>
@@ -61,7 +61,7 @@ export function FallbackEditor({
       ) : (
         <ol className="flex flex-col gap-1">
           {chain.map((name, i) => (
-            <li key={name} className="flex items-center gap-2 rounded-lg border border-brand/20 px-2 py-1">
+            <li key={name} className="flex items-center gap-2 rounded-lg border border-rule px-2 py-1">
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
                 {i + 1}. {name}
               </span>
