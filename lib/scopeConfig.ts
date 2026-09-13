@@ -28,13 +28,24 @@ export type Outcome = (typeof CONFIG_OUTCOMES)[number];
 
 export interface TemplateKey {
   key: string;
-  value: unknown;
+  /**
+   * ABSENT for a key whose document is generated per member rather than read from a
+   * file — there is nothing on disk for the proxy to report a default from.
+   */
+  value?: unknown;
   /**
    * Managed keys are INCLUDED and flagged, not filtered: the proxy rewrites them
    * on every materialization, so the picker renders them disabled and explains
    * why rather than leaving the admin hunting for a key that is in the file.
    */
   managed: boolean;
+  /**
+   * Which runtime's configuration document this key came from. The picker says so
+   * beside the key, because the two harnesses' documents share names — model_list and
+   * agents.defaults.model_name exist in both — and an admin who has just switched
+   * agents has no other way to tell which list is on screen.
+   */
+  harness: string;
 }
 
 export interface TemplateCatalog {
@@ -47,6 +58,13 @@ export interface TemplateCatalog {
   keys: TemplateKey[];
   /** Concurrency token over the template bytes as read, sent back on an apply. */
   templateRevision: string;
+  /**
+   * Whether the opt-in "also write the template" apply has a target at all. A ganglion
+   * agent's configuration is generated per member and seeded from no template, so that
+   * apply has nowhere to land and the option is not offered. EMPTY `template` and
+   * `templateRevision` accompany it — neither names anything.
+   */
+  templateWritable: boolean;
 }
 
 /**
@@ -200,8 +218,20 @@ function parseCatalog(raw: unknown): TemplateCatalog {
     keys: entries
       .map(asRecord)
       .filter((e) => typeof e.key === "string" && e.key !== "")
-      .map((e) => ({ key: e.key as string, value: e.value, managed: e.managed === true })),
+      .map((e) => ({
+        key: e.key as string,
+        value: e.value,
+        managed: e.managed === true,
+        // Absent counts as picoclaw, the same back-compat reading picoclawAgentKeys uses
+        // in lib/admin.ts: a proxy from before the field existed served picoclaw's
+        // template and nothing else, so an unlabelled key is a picoclaw key.
+        harness: typeof e.harness === "string" && e.harness !== "" ? e.harness : "picoclaw",
+      })),
     templateRevision: str(r.templateRevision),
+    // Absent counts as TRUE, and the direction is the whole point: every proxy from
+    // before this flag existed had a template for every agent, so reading an omission as
+    // "no template" would take the option away from the agents it works for.
+    templateWritable: r.templateWritable !== false,
   };
 }
 
