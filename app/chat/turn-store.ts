@@ -234,15 +234,21 @@ export interface TurnState {
   /** When the recovery wait began, for the elapsed readout. */
   recoveringSince: number;
   /**
-   * This turn's message was folded into a turn that was ALREADY running on the
-   * conversation, so no answer of its own is coming -- what streams here belongs to
-   * the other turn (`x_crab_steering`, see the proxy's sse.go).
+   * A turn was ALREADY running on this conversation when this one was sent, and
+   * what that means depends on the harness (`x_crab_steering`, see the proxy's
+   * sse.go).
+   *
+   * `"folded"` — picoclaw enqueued the message into the running turn, so no answer
+   * of its own is coming and what streams here belongs to the other turn.
+   *
+   * `"queued"` — the ganglion serializes per conversation: this IS its own turn,
+   * waiting for the one ahead, and this stream will carry its own answer.
    *
    * Reachable after a reload, which wipes the queue that otherwise keeps one turn in
    * flight per conversation. Without this the member reads a four-minute wait as
    * "the chat is slow to send".
    */
-  steering: boolean;
+  steering: "folded" | "queued" | null;
   /** Waiting for picoclaw to reload after an attachment upload. */
   settling: boolean;
   /** A stop was asked for and the request has not answered yet. */
@@ -279,7 +285,7 @@ const EMPTY: TurnState = {
   errorDetail: null,
   recovering: false,
   recoveringSince: 0,
-  steering: false,
+  steering: null,
   settling: false,
   stopping: false,
 };
@@ -724,7 +730,7 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
     buffered: "",
     arrivalDone: false,
     progress: null,
-    steering: false,
+    steering: null,
     lastEventAt: Date.now(),
   });
 
@@ -836,11 +842,13 @@ async function runTurn(sid: string, composed: string, ctx: RunContext) {
           if (stopped.has(sid)) return;
           patch(sid, { error: "harness_error", errorDetail: message });
         },
-        // Folded into a turn that was already running: no reply of its own is
-        // coming, and what follows is the other turn's.
-        () => {
+        // A turn was already running on this conversation. Folded into it
+        // (picoclaw: no reply of its own is coming and what follows is the other
+        // turn's) or queued behind it (the ganglion: this stream carries its own
+        // answer once the one ahead finishes).
+        (mode) => {
           if (stopped.has(sid)) return;
-          patch(sid, { steering: true, lastEventAt: Date.now() });
+          patch(sid, { steering: mode, lastEventAt: Date.now() });
         },
       ));
     } catch {
@@ -1029,7 +1037,7 @@ export async function consumeStream(
   onDelta: (delta: string) => void,
   onProgress?: (progress: Progress) => void,
   onError?: (message: string) => void,
-  onSteering?: () => void,
+  onSteering?: (mode: "folded" | "queued") => void,
 ): Promise<{ completed: boolean }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -1070,11 +1078,22 @@ export async function consumeStream(
         if (failure && typeof failure.message === "string" && onError) {
           onError(failure.message);
         }
-        // steering-messages §6-§7: this POST's message was folded into a turn that
-        // was already running. Everything after it on this stream belongs to that
-        // turn — which is the member's own conversation, so it keeps flowing; only
-        // the reading of it changes.
-        if (parsed?.x_crab_steering?.folded === true && onSteering) onSteering();
+        // steering-messages §6-§7 and §10: a turn was already running on this
+        // conversation, and the two harnesses do different things about it.
+        //
+        // FOLDED is picoclaw: everything after this frame belongs to the other
+        // turn — the member's own conversation, so it keeps flowing; only the
+        // reading of it changes. QUEUED is the ganglion, which serializes per
+        // conversation: this stream goes quiet and then carries this message's
+        // own answer.
+        //
+        // `folded === true` is checked first and explicitly, so a proxy that
+        // predates `queued` still reads as folded rather than as neither.
+        const fold = parsed?.x_crab_steering;
+        if (fold && onSteering) {
+          if (fold.folded === true) onSteering("folded");
+          else if (fold.queued === true) onSteering("queued");
+        }
         if (parsed?.choices?.[0]?.finish_reason === "stop") completed = true;
         const delta: string | undefined = parsed?.choices?.[0]?.delta?.content;
         if (delta) onDelta(delta);

@@ -685,20 +685,20 @@ describe("a resumed turn keeps tracking until the turn ends", () => {
 // steering-messages §6-§7
 // ---------------------------------------------------------------------------
 
-// A message sent while the conversation already has a turn running is folded into
-// that turn by picoclaw, silently, and this stream then carries the OTHER turn's
-// frames. Reachable in production after a reload, which wipes the client-side queue
-// that otherwise prevents it. The member must be told, or "my message took four
-// minutes to send" is the only reading available to them.
-describe("a folded message is marked as steering", () => {
+// A turn was already running on the conversation when this message was sent, and
+// the two harnesses do different things about it. Reachable in production after a
+// reload, which wipes the client-side queue that otherwise prevents it. The member
+// must be told either way, or "my message took four minutes to send" is the only
+// reading available to them.
+describe("a message sent into a live conversation says which it is", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("marks the conversation while the folded turn streams", async () => {
-    const steering = `data: ${JSON.stringify({
+  function stubSteering(payload: Record<string, unknown>) {
+    const frame = `data: ${JSON.stringify({
       choices: [{ index: 0, delta: {} }],
-      x_crab_steering: { folded: true },
+      x_crab_steering: payload,
     })}\n\n`;
     vi.stubGlobal("window", {
       dispatchEvent: () => true,
@@ -716,7 +716,7 @@ describe("a folded message is marked as steering", () => {
           status: 200,
           body: new ReadableStream<Uint8Array>({
             start(c) {
-              c.enqueue(encoder.encode(steering));
+              c.enqueue(encoder.encode(frame));
               c.close();
             },
           }),
@@ -724,12 +724,37 @@ describe("a folded message is marked as steering", () => {
       }
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
     });
+  }
 
-    enqueue("s1", "na verdade, só o Q3", ctx);
+  async function send(sid: string) {
+    enqueue(sid, "na verdade, só o Q3", ctx);
     await vi.advanceTimersByTimeAsync(SEND_DEBOUNCE_MS);
     await vi.advanceTimersByTimeAsync(0);
+  }
 
-    expect(getTurn("s1").steering).toBe(true);
+  // picoclaw enqueues the message into the running turn and tells nobody; what
+  // streams here is that turn's reply, to a question the member did not ask.
+  it("marks the conversation folded while the other turn streams", async () => {
+    stubSteering({ folded: true, queued: false });
+    await send("s1");
+    expect(getTurn("s1").steering).toBe("folded");
+  });
+
+  // The ganglion serializes per conversation: this IS the member's own turn,
+  // waiting, and this stream carries its own answer. Calling that "folded" told
+  // them their correction had reached the running turn when it had not.
+  it("marks the conversation queued when the harness serializes instead", async () => {
+    stubSteering({ folded: false, queued: true });
+    await send("s2");
+    expect(getTurn("s2").steering).toBe("queued");
+  });
+
+  // A proxy that predates `queued` sends `folded` alone. It must keep reading as a
+  // fold rather than as neither.
+  it("reads an older proxy's frame as a fold", async () => {
+    stubSteering({ folded: true });
+    await send("s3");
+    expect(getTurn("s3").steering).toBe("folded");
   });
 });
 

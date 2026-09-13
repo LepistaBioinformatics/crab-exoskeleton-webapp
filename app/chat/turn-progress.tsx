@@ -25,7 +25,7 @@
 
 import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Brain, Loader2, Merge, Wrench } from "lucide-react";
+import { Brain, Clock, Loader2, Merge, Wrench } from "lucide-react";
 import { SILENCE_GRACE_MS, useOnline, type Progress } from "@/app/chat/turn-store";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -206,20 +206,34 @@ export function TurnRecovery({ since }: { since: number }) {
 }
 
 /**
- * This message was folded into a turn that was already running.
+ * A turn was already running on this conversation when this message was sent.
  *
- * No spinner and no elapsed readout, unlike `TurnRecovery`: nothing here is waiting
- * on THIS message. It is a standing explanation of whose reply the member is about to
- * read, and it stays put while the other turn's progress renders beside it.
+ * TWO FACTS, not one, because the two harnesses do different things about it.
+ * `folded` is picoclaw: the message was enqueued into the running turn and what
+ * streams here is that turn's reply, to a question the member did not ask.
+ * `queued` is the ganglion, which serializes per conversation: this is the
+ * member's own turn, waiting, and this stream will carry its own answer.
  *
- * See the project repo's .specs/features/steering-messages/investigation.md §6-§7.
+ * Telling them apart matters. Saying "folded" for a ganglion agent told the member
+ * their correction had reached the running turn when it had not — and before the
+ * harness serialized anything, it had in fact started a second concurrent turn
+ * that was about to overwrite the first's context window.
+ *
+ * No spinner and no elapsed readout, unlike `TurnRecovery`. For a fold, nothing is
+ * waiting on THIS message at all; for a queue, what it is waiting on is the other
+ * turn, whose own progress renders beside this line.
+ *
+ * See the project repo's .specs/features/steering-messages/investigation.md
+ * §6-§7 and §10.
  */
-export function TurnSteering() {
+export function TurnSteering({ mode = "folded" }: { mode?: "folded" | "queued" }) {
   const t = useT(chatCopy);
   return (
     <div className={progressLine({ kind: "steering" })} aria-live="polite">
-      <Merge size={14} aria-hidden />
-      <span className="animate-fade-in motion-reduce:animate-none">{t.view.steering}</span>
+      {mode === "queued" ? <Clock size={14} aria-hidden /> : <Merge size={14} aria-hidden />}
+      <span className="animate-fade-in motion-reduce:animate-none">
+        {mode === "queued" ? t.view.queuedBehind : t.view.steering}
+      </span>
     </div>
   );
 }
