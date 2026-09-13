@@ -212,6 +212,13 @@ function eventKindLabel(kind: string, t: ChatDict): string {
   }
 }
 
+// NOTHING for an absent status, rather than a word saying so.
+//
+// It is not an error and must not read as one. A status is absent on a
+// transcript written before the harness recorded outcomes -- every one of them,
+// every row -- and a sentence repeated down a whole conversation says less each
+// time it appears. The row still names the tool and its arguments, which is what
+// it is there for; the outcome is simply a thing nobody wrote down.
 function eventStatusLabel(status: string | undefined, t: ChatDict): string {
   switch (status) {
     case "ok":
@@ -221,10 +228,7 @@ function eventStatusLabel(status: string | undefined, t: ChatDict): string {
     case "failed":
       return t.view.eventFailed;
     default:
-      // Absent is not an error and must not read as one. A narration frame names
-      // its tools BEFORE they run, and a turn that died inside one never learned
-      // how it ended.
-      return t.view.eventPending;
+      return "";
   }
 }
 
@@ -233,6 +237,7 @@ function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
     <ul className="mt-1 flex flex-col gap-0.5">
       {events.map((e, k) => {
         const Icon = EVENT_ICONS[e.kind] ?? Wrench;
+        const status = eventStatusLabel(e.status, t);
         return (
           <li key={k} className="flex min-w-0 items-baseline gap-1.5 text-xs">
             <Icon size={11} className="shrink-0 translate-y-0.5 opacity-60" aria-hidden />
@@ -248,9 +253,11 @@ function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
                 {e.arguments}
               </span>
             )}
-            <span className={e.arguments ? "shrink-0 opacity-70" : "ml-auto shrink-0 opacity-70"}>
-              {eventStatusLabel(e.status, t)}
-            </span>
+            {status && (
+              <span className={e.arguments ? "shrink-0 opacity-70" : "ml-auto shrink-0 opacity-70"}>
+                {status}
+              </span>
+            )}
           </li>
         );
       })}

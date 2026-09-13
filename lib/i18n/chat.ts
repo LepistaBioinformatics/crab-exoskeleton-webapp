@@ -478,10 +478,6 @@ const en = {
     eventOk: "ok",
     eventDenied: "not approved",
     eventFailed: "failed",
-    // No status at all. It is not an error: a step names the tools it asked for
-    // before they run, and a turn that died inside one never learned how it
-    // ended. Saying "running" would claim it still is.
-    eventPending: "no outcome recorded",
     // The jump-to-end button, which only exists while the newest message is off-screen.
     // Labelled by what it DOES, not by where it goes ("bottom" names a scroll position;
     // the member is looking for the newest thing said).
@@ -1202,7 +1198,6 @@ const pt: ChatDict = {
     eventOk: "ok",
     eventDenied: "não aprovado",
     eventFailed: "falhou",
-    eventPending: "sem desfecho registrado",
     scrollToLatest: "Ir para a mensagem mais recente",
   },
   dock: {
