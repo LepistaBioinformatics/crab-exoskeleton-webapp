@@ -14,10 +14,27 @@ import {
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import { pickResumeCandidate } from "@/app/chat/conversation-filter";
-import { toRows, rowRole, landingIndex, type ChatMessage } from "@/app/chat/message-rows";
+import {
+  toRows,
+  rowRole,
+  landingIndex,
+  type ChatMessage,
+  type StepItem,
+  type TurnEvent,
+} from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { ArrowDown, Bot, ChevronRight, Reply, User } from "lucide-react";
+import {
+  ArrowDown,
+  Bot,
+  Brain,
+  ChevronRight,
+  Cpu,
+  Reply,
+  User,
+  Users,
+  Wrench,
+} from "lucide-react";
 import {
   setFragmentSid,
   setFragmentProjectSid,
@@ -137,7 +154,7 @@ function StepRun({
   registerRef,
   t,
 }: {
-  items: { m: ChatMessage; i: number }[];
+  items: StepItem[];
   changed: boolean;
   registerRef: (el: HTMLDivElement | null) => void;
   t: ChatDict;
@@ -148,11 +165,12 @@ function StepRun({
       <div className="mx-auto w-full max-w-[720px] px-4 py-1">
         <Disclosure label={label}>
           <div className="mt-1 flex flex-col gap-2 border-l border-current/15 pl-3 text-sm text-fg-muted">
-            {items.map(({ m, i }) => {
+            {items.map(({ m, i, events }) => {
               const { text } = parseAnexos(m.content);
               return (
                 <div key={i}>
                   {text && <MessageContent content={text} />}
+                  {events && events.length > 0 && <StepEvents events={events} t={t} />}
                   {m.reasoning && <Reasoning text={m.reasoning} t={t} />}
                 </div>
               );
@@ -161,6 +179,99 @@ function StepRun({
         </Disclosure>
       </div>
     </div>
+  );
+}
+
+// WHAT THE STEP DID, under what it said.
+//
+// The live band shows the latest of these as one line and then forgets it -- it
+// is unmounted the moment the first word of the answer arrives. This is the half
+// that survives, and it is why a turn that ran fourteen tools no longer reads as
+// ten sentences with no evidence under them.
+//
+// Not a Disclosure of its own: a step is already inside one, and a second fold
+// per step would mean two clicks to see one call. They are quiet enough to sit
+// open -- one line each, smaller than the narration above them.
+const EVENT_ICONS: Record<string, typeof Wrench> = {
+  tool: Wrench,
+  subagent: Users,
+  model: Cpu,
+  depth: Brain,
+};
+
+function eventKindLabel(kind: string, t: ChatDict): string {
+  switch (kind) {
+    case "subagent":
+      return t.view.eventSubagent;
+    case "model":
+      return t.view.eventModel;
+    case "depth":
+      return t.view.eventDepth;
+    default:
+      return t.view.eventTool;
+  }
+}
+
+// NOTHING for an absent status, rather than a word saying so.
+//
+// It is not an error and must not read as one. A status is absent on a
+// transcript written before the harness recorded outcomes -- every one of them,
+// every row -- and a sentence repeated down a whole conversation says less each
+// time it appears. The row still names the tool and its arguments, which is what
+// it is there for; the outcome is simply a thing nobody wrote down.
+function eventStatusLabel(status: string | undefined, t: ChatDict): string {
+  switch (status) {
+    case "ok":
+      return t.view.eventOk;
+    case "denied":
+      return t.view.eventDenied;
+    case "failed":
+      return t.view.eventFailed;
+    default:
+      return "";
+  }
+}
+
+function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
+  return (
+    <ul className="mt-1 flex flex-col gap-0.5">
+      {events.map((e, k) => {
+        const Icon = EVENT_ICONS[e.kind] ?? Wrench;
+        const status = eventStatusLabel(e.status, t);
+        return (
+          <li key={k} className="flex min-w-0 items-baseline gap-1.5 text-xs">
+            <Icon size={11} className="shrink-0 translate-y-0.5 opacity-60" aria-hidden />
+            <span className="shrink-0 opacity-70">{eventKindLabel(e.kind, t)}</span>
+            {e.name && <span className="shrink-0 font-mono text-fg">{e.name}</span>}
+            {/* The arguments are what make a step VERIFIABLE -- "ran sh" says
+                nothing anyone can check, "ran sh with ls" says what happened.
+                They are capped in the harness already; this truncates what is
+                left rather than wrapping the block open, with the whole value on
+                the title the way the admin key list does it. */}
+            {e.arguments && (
+              <span className="min-w-0 flex-1 truncate font-mono opacity-60" title={e.arguments}>
+                {e.arguments}
+              </span>
+            )}
+            {status && (
+              <span className={e.arguments ? "shrink-0 opacity-70" : "ml-auto shrink-0 opacity-70"}>
+                {status}
+              </span>
+            )}
+          </li>
+        );
+      })}
+      {/* The failures' own words, beneath the row rather than inside it: a
+          provider's error runs to a paragraph and would push the name and the
+          outcome off a phone entirely. */}
+      {events
+        .filter((e) => e.detail)
+        .map((e, k) => (
+          <li key={`d-${k}`} className="pl-[1.1rem] text-xs italic opacity-60">
+            {e.detail}
+          </li>
+        ))}
+    </ul>
   );
 }
 

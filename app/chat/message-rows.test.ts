@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { toRows, rowRole, landingIndex, type ChatMessage } from "./message-rows";
+import {
+  toRows,
+  rowRole,
+  landingIndex,
+  type ChatMessage,
+  type TurnEvent,
+} from "./message-rows";
 
 const user = (content: string): ChatMessage => ({ role: "user", content });
 const answer = (content: string): ChatMessage => ({ role: "assistant", content });
@@ -79,5 +85,88 @@ describe("rowRole", () => {
   it("reports a message row as its own speaker", () => {
     const rows = toRows([user("q"), answer("a")]);
     expect(rows.map(rowRole)).toEqual(["user", "assistant"]);
+  });
+});
+
+// An ITERATION is one step on screen, and the harness writes it as two entries:
+// the narration before the tools run (so it survives a turn that dies inside
+// one) and the events after (so they can say how each call ended).
+describe("toRows — an iteration's events", () => {
+  const narration = (content: string, events?: TurnEvent[]): ChatMessage => ({
+    role: "assistant",
+    content,
+    kind: "step",
+    ...(events ? { events } : {}),
+  });
+  const eventsOnly = (events: TurnEvent[]): ChatMessage => ({
+    role: "assistant",
+    content: "",
+    kind: "step",
+    events,
+  });
+  const ran = (name: string): TurnEvent => ({ kind: "tool", name, status: "ok" });
+
+  it("folds an events entry into the step it belongs to", () => {
+    const rows = toRows([
+      { role: "user", content: "oi" },
+      narration("vou ver"),
+      eventsOnly([ran("sh")]),
+      { role: "assistant", content: "pronto" },
+    ]);
+    const steps = rows.find((r) => r.row === "steps");
+    if (steps?.row !== "steps") throw new Error("no step run");
+    // ONE item, not two. Otherwise a fourteen-iteration turn reads as "28 steps"
+    // and landingIndex walks back over twice as many rows looking for the answer.
+    expect(steps.items).toHaveLength(1);
+    expect(steps.items[0].m.content).toBe("vou ver");
+    expect(steps.items[0].events).toEqual([ran("sh")]);
+  });
+
+  it("counts one step per iteration, however many entries it took", () => {
+    const rows = toRows([
+      narration("um"),
+      eventsOnly([ran("a")]),
+      narration("dois"),
+      eventsOnly([ran("b")]),
+    ]);
+    const steps = rows[0];
+    if (steps.row !== "steps") throw new Error("no step run");
+    expect(steps.items).toHaveLength(2);
+    expect(steps.items.map((i) => i.m.content)).toEqual(["um", "dois"]);
+  });
+
+  // The silent tool call this whole feature exists to recover: the very first
+  // iteration narrated nothing, so there is no step in front of it to fold into.
+  // Dropping it would hide exactly the work that was invisible before.
+  it("keeps an events entry that has no step before it", () => {
+    const rows = toRows([
+      { role: "user", content: "oi" },
+      eventsOnly([ran("sh")]),
+      { role: "assistant", content: "pronto" },
+    ]);
+    const steps = rows.find((r) => r.row === "steps");
+    if (steps?.row !== "steps") throw new Error("the silent call vanished");
+    expect(steps.items).toHaveLength(1);
+    expect(steps.items[0].events).toEqual([ran("sh")]);
+  });
+
+  // A narration frame names the tools it asked for; its own iteration's events
+  // then arrive with the outcomes. Both belong to the one step.
+  it("appends to events the step already carried", () => {
+    const rows = toRows([narration("vou ver", [{ kind: "tool", name: "sh" }]), eventsOnly([ran("sh")])]);
+    const steps = rows[0];
+    if (steps.row !== "steps") throw new Error("no step run");
+    expect(steps.items[0].events).toEqual([{ kind: "tool", name: "sh" }, ran("sh")]);
+  });
+
+  // The answer is still what a conversation opens on. An events entry is a step,
+  // so it must not become the landing row.
+  it("never lands on an events entry", () => {
+    const messages = [
+      { role: "user" as const, content: "oi" },
+      { role: "assistant" as const, content: "pronto" },
+      eventsOnly([ran("sh")]),
+    ];
+    expect(landingIndex(messages)).toBe(1);
   });
 });

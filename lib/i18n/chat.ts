@@ -467,6 +467,17 @@ const en = {
     // The model's own chain of thought, collapsed. The length is there for the
     // same reason: these run to a couple of thousand characters.
     reasoning: "reasoning ({n} chars)",
+    // WHAT THE LOOP DID, rendered from codes. The harness has no locale -- it
+    // does not know which language the member reads -- so it writes `kind` and
+    // `status` and these are where they become words. The name, the arguments
+    // and the detail are data and are never translated.
+    eventTool: "ran",
+    eventSubagent: "sub-agent",
+    eventModel: "model",
+    eventDepth: "thinking deeper",
+    eventOk: "ok",
+    eventDenied: "not approved",
+    eventFailed: "failed",
     // The jump-to-end button, which only exists while the newest message is off-screen.
     // Labelled by what it DOES, not by where it goes ("bottom" names a scroll position;
     // the member is looking for the newest thing said).
@@ -1180,6 +1191,13 @@ const pt: ChatDict = {
     stepOne: "1 passo",
     stepsOther: "{n} passos",
     reasoning: "raciocínio ({n} chars)",
+    eventTool: "executou",
+    eventSubagent: "subagente",
+    eventModel: "modelo",
+    eventDepth: "pensando mais fundo",
+    eventOk: "ok",
+    eventDenied: "não aprovado",
+    eventFailed: "falhou",
     scrollToLatest: "Ir para a mensagem mais recente",
   },
   dock: {

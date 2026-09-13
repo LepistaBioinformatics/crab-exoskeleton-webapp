@@ -47,6 +47,10 @@ const SHARED = new Set([
   "chat.scheduledTasks.schedule.cron",
   "chat.scheduledTasks.lastStatus",
   "chat.scheduledTasks.toolCall",
+  // "ok" is the word Portuguese uses for this, unchanged. The two outcomes
+  // beside it -- "não aprovado", "falhou" -- are translated, which is what makes
+  // this one a shared string rather than a forgotten one.
+  "chat.view.eventOk",
   "admin.shell.tabs.skills",
   // A dotted config.json path and a JSON literal. Both are what the admin types
   // verbatim into the field, so translating either would be wrong.
