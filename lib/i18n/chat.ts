@@ -457,6 +457,11 @@ const en = {
     steering:
       "Added to the turn already in progress — the agent will take it into account. The reply below belongs to that turn.",
     // "Using web_fetch" -- the fallback when the agent didn't narrate the call.
+    // The ganglion's answer to the same condition: it serializes turns per
+    // conversation, so this message is its OWN turn waiting rather than one folded
+    // into somebody else's. What arrives here is the reply to this message.
+    queuedBehind:
+      "This conversation already had a turn running, so yours is waiting for it. The answer below is to this message.",
     usingTool: "Using {tool}",
     // A message that has left the composer and is waiting for its turn.
     queued: "Waiting to send",
@@ -1186,6 +1191,8 @@ const pt: ChatDict = {
       "Você está sem conexão — o agente continua trabalhando. Reconectando assim que a internet voltar…",
     steering:
       "Enviada para o turno que já estava em andamento — o agente vai levá-la em conta. O que vem abaixo é a resposta desse turno.",
+    queuedBehind:
+      "Esta conversa já tinha um turno em andamento, então o seu está esperando por ele. A resposta abaixo é a desta mensagem.",
     usingTool: "Usando {tool}",
     queued: "Aguardando envio",
     stepOne: "1 passo",

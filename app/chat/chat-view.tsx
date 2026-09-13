@@ -1157,7 +1157,7 @@ export default function ChatView({
                           whatever that turn is doing. */}
                       {steering && (
                         <div className="mb-2">
-                          <TurnSteering />
+                          <TurnSteering mode={steering} />
                         </div>
                       )}
                       {revealed === "" ? (

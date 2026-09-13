@@ -88,9 +88,26 @@ describe("TurnRecovery", () => {
 // wait is as long as someone else's turn.
 describe("TurnSteering", () => {
   it("says the message joined the turn already running", () => {
-    const html = renderToStaticMarkup(<TurnSteering />);
+    const html = renderToStaticMarkup(<TurnSteering mode="folded" />);
     expect(html).toContain(en.steering);
     // Not dressed up as progress: nothing here is the agent working on THIS message.
     expect(html).not.toContain(en.thinking);
+  });
+
+  // THE OTHER FACT. The ganglion serializes per conversation rather than folding,
+  // so this IS the member's own turn waiting and the answer below IS to their
+  // message. Saying "folded" here told them their correction had reached the
+  // running turn when it had not.
+  it("says the turn is waiting, not folded, when the harness queues", () => {
+    const html = renderToStaticMarkup(<TurnSteering mode="queued" />);
+    expect(html).toContain(en.queuedBehind);
+    expect(html).not.toContain(en.steering);
+  });
+
+  // A proxy that predates the distinction sends `folded` alone, and the store
+  // maps that to "folded" -- so the default must be the sentence that was always
+  // right for it, never the new one.
+  it("defaults to the fold", () => {
+    expect(renderToStaticMarkup(<TurnSteering />)).toContain(en.steering);
   });
 });
