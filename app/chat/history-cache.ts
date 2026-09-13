@@ -1,5 +1,6 @@
 import { historyQuery, type Workspace } from "./fragment";
 import type { ConversationSummary } from "@/lib/chatSession";
+import type { TurnEvent } from "./message-rows";
 
 export interface HistoryMessage {
   role: string;
@@ -9,6 +10,12 @@ export interface HistoryMessage {
   kind?: string;
   /** The model's own chain of thought, when it emitted one. */
   reasoning?: string;
+  /**
+   * What the loop DID during this step: the tools it ran and how each ended, the
+   * children it dispatched, the model it fell back to. A message carrying these
+   * carries no content -- it is the step's detail, not a second thing said.
+   */
+  events?: TurnEvent[];
 }
 
 // Module-level cache keyed by conversation id, reused across List<->Tree toggles
