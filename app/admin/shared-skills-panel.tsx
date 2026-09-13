@@ -186,7 +186,7 @@ export default function SharedSkillsPanel({
       {error && <Alert severity="error">{error}</Alert>}
 
       {editor && (
-        <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-rule bg-elevated p-3">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -194,7 +194,7 @@ export default function SharedSkillsPanel({
               readOnly={editor.mode === "preview"}
               placeholder={t.sharedSkills.namePlaceholder}
               onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-              className="min-w-0 flex-1 rounded-lg border border-brand/30 bg-transparent px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-lg border border-rule-strong bg-transparent px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
             />
             <IconButton
               variant="ghost"
@@ -205,7 +205,7 @@ export default function SharedSkillsPanel({
               <X size={15} aria-hidden />
             </IconButton>
           </div>
-          <div className="rounded-lg border border-brand/20 bg-bg p-2">
+          <div className="rounded-lg border border-rule bg-bg p-2">
             <Textarea
               value={editor.body}
               readOnly={editor.mode === "preview"}
@@ -244,7 +244,7 @@ export default function SharedSkillsPanel({
           {skills?.map((s) => (
             <li
               key={s.name}
-              className="flex items-center gap-3 rounded-lg border border-brand/30 bg-elevated px-3 py-2"
+              className="flex items-center gap-3 rounded-lg border border-rule bg-elevated px-3 py-2"
             >
               <BookText size={16} className="shrink-0 text-fg-muted" aria-hidden />
               <div className="min-w-0 flex-1">

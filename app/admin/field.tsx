@@ -18,7 +18,7 @@ import { cva } from "class-variance-authority";
 // which is most of what made the model form hard to read.
 
 const control = cva(
-  "w-full rounded-md border border-brand/40 bg-bg px-2.5 py-2 text-fg placeholder:text-fg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+  "w-full rounded-md border border-rule-strong bg-bg px-2.5 py-2 text-fg placeholder:text-fg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
   {
     variants: {
       identifier: {
@@ -71,9 +71,10 @@ export function Field({
   );
 }
 
-// A group of fields under a heading. The eyebrow is display-face, tracked and
-// uppercase — reserved for group headings and never used on a field label, so the
-// two never compete for the same reading.
+// A group of fields under a heading. The heading dropped the uppercase tracking it
+// used to carry, so display-face and semibold are now the whole difference between it
+// and a field label — which is sans and lighter at a LARGER size. Lowering the weight
+// too would leave the heading subordinate to the labels it introduces.
 export function FieldGroup({
   title,
   intro,
@@ -88,8 +89,8 @@ export function FieldGroup({
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-baseline gap-2.5 border-b border-brand/25 pb-1.5">
-        <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg">
+      <div className="flex items-baseline gap-2.5 border-b border-rule pb-1.5">
+        <span className="font-display text-[11px] font-semibold text-fg">
           {title}
         </span>
         {count && <span className="ml-auto text-[11.5px] text-fg-muted">{count}</span>}

@@ -34,7 +34,7 @@ import { useT } from "@/lib/i18n/context";
 // text for anyone who only wants that.
 
 const rung = cva(
-  "grid grid-cols-[16px_1fr_auto] items-center gap-x-3 gap-y-0.5 border-b border-dashed border-brand/20 py-2 pr-2 text-left last:border-b-0",
+  "grid grid-cols-[16px_1fr_auto] items-center gap-x-3 gap-y-0.5 border-b border-dashed border-rule py-2 pr-2 text-left last:border-b-0",
   {
     variants: {
       tone: {
@@ -55,14 +55,14 @@ const dot = cva("absolute left-[3px] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounde
   variants: {
     tone: {
       effect: "border-accent bg-accent",
-      overridden: "border-brand/50 bg-bg",
-      empty: "border-brand/30 bg-bg",
-      locked: "border-brand/30 bg-bg",
+      overridden: "border-rule-strong bg-bg",
+      empty: "border-rule bg-bg",
+      locked: "border-rule bg-bg",
       // Hollow and dashed: the level exists, but nothing about it is decided here.
-      outOfScope: "border-dashed border-brand/30 bg-bg",
+      outOfScope: "border-dashed border-rule bg-bg",
       // Solid outline, no fill: the level is real and READ — its value is on the
       // rung — it is simply not written from this screen.
-      notEditable: "border-brand/40 bg-bg",
+      notEditable: "border-rule-strong bg-bg",
     },
   },
   defaultVariants: { tone: "empty" },
@@ -86,11 +86,11 @@ const tag = cva("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px
   variants: {
     tone: {
       effect: "bg-accent text-accent-fg",
-      overridden: "border border-brand/30 text-fg-muted",
+      overridden: "border border-rule text-fg-muted",
       empty: "bg-elevated text-fg-muted",
       locked: "bg-elevated text-fg-muted",
-      outOfScope: "border border-dashed border-brand/40 text-fg-muted",
-      notEditable: "border border-brand/30 text-fg-muted",
+      outOfScope: "border border-dashed border-rule-strong text-fg-muted",
+      notEditable: "border border-rule text-fg-muted",
     },
   },
   defaultVariants: { tone: "empty" },

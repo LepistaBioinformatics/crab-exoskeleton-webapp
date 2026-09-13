@@ -43,7 +43,7 @@ export default function PanelHeader({
   return (
     // The rule spans the panel; its contents share the panel's measure, so the header and
     // the section below it line up on a wide screen.
-    <div className="border-b border-brand/25 px-4 py-3">
+    <div className="border-b border-rule px-4 py-3">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
         <h2 className="font-display text-sm font-semibold text-fg">
           {t.shell.tabs[section as keyof typeof t.shell.tabs]}

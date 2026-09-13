@@ -15,7 +15,7 @@ const option = cva("rounded-lg border px-2.5 py-1 text-sm transition-colors", {
   variants: {
     chosen: {
       true: "border-brand bg-accent text-accent-fg",
-      false: "border-brand/40 bg-transparent text-fg hover:bg-accent/10",
+      false: "border-rule-strong bg-transparent text-fg hover:bg-accent/10",
     },
   },
   defaultVariants: { chosen: false },

@@ -21,7 +21,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 
 const selectClass =
-  "h-9 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
 // Invite someone to this subscription. An agent and an access level together resolve to
 // the mycelium guest role id, because permission is a property of the role rather than of
@@ -162,7 +162,7 @@ export default function InviteMember({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-brand/40 bg-elevated px-3 py-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-rule bg-elevated px-3 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <UserPlus size={16} className="shrink-0 text-fg-muted" aria-hidden />
         <span className="text-sm font-semibold text-fg">{t.title}</span>

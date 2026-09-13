@@ -118,7 +118,7 @@ export default function RestartNoticeBlock({
     (t.reasons as Record<string, string | undefined>)[notice?.reason ?? ""] ?? t.reasonUnknown;
 
   return (
-    <div className="flex flex-col gap-2 border-t border-brand/20 pt-3">
+    <div className="flex flex-col gap-2 border-t border-rule pt-3">
       <p className="text-xs text-fg-muted">{t.ridesAlong}</p>
 
       {!loaded ? (
@@ -133,7 +133,7 @@ export default function RestartNoticeBlock({
             .replace("{agent}", target.agent ?? t.everyAgentSlot)}
         </p>
       ) : (
-        <div className="flex flex-col gap-1 rounded-lg border border-brand/30 bg-surface px-3 py-2">
+        <div className="flex flex-col gap-1 rounded-lg border border-rule bg-surface px-3 py-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-fg">
             {notice.scheduledAt ? (
               <AlarmClock size={13} aria-hidden />

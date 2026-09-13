@@ -40,7 +40,7 @@ import { useT } from "@/lib/i18n/context";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
 
 const CUSTOM = "__custom__";
 
@@ -291,7 +291,7 @@ export default function ModelRegistryPanel({
         {showForm && (
           <form
             onSubmit={onSubmit}
-            className="flex flex-col gap-4 rounded-lg border border-brand/30 bg-elevated p-4"
+            className="flex flex-col gap-4 rounded-lg border border-rule bg-elevated p-4"
           >
             <Field
               label={t.models.startFrom}
@@ -322,7 +322,7 @@ export default function ModelRegistryPanel({
                 single worst thing to read in this panel. They are now a pair with
                 the emitted entry underneath, so the relationship is shown rather
                 than left to be inferred. */}
-            <div className="grid gap-3 rounded-lg border border-brand/25 bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
+            <div className="grid gap-3 rounded-lg border border-rule bg-surface p-3 sm:grid-cols-[1fr_14px_1fr]">
               <Field
                 label={t.models.yourName}
                 job={t.models.yourNameJob}
@@ -363,12 +363,12 @@ export default function ModelRegistryPanel({
 
               <div className="sm:col-span-3">
                 <div className="mb-1.5 flex items-baseline gap-2">
-                  <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
+                  <span className="font-display text-[11px] font-medium text-fg-muted">
                     {t.models.writtenAs}
                   </span>
                   <span className="text-[11px] text-fg-muted">config.json</span>
                 </div>
-                <pre className="overflow-x-auto rounded-md border border-brand/25 bg-bg p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
+                <pre className="overflow-x-auto rounded-md border border-rule bg-bg p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
                   {`"model_name": ${JSON.stringify(draft.model_name || "…")},
   "provider":   ${JSON.stringify(draft.provider || "…")},
   "model":      ${JSON.stringify(draft.model || "…")}`}
@@ -571,7 +571,7 @@ export default function ModelRegistryPanel({
               </p>
 
               {deprecating && (
-                <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+                <div className="flex flex-col gap-2 rounded-lg border border-rule bg-elevated p-3">
                   <span className="text-xs font-medium text-fg-muted">
                     {t.models.retirePrefix}{" "}
                     <span className="font-mono">{deprecating.model_name}</span>
@@ -741,7 +741,7 @@ function Section({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+      <span className="font-display text-xs font-medium text-fg-muted">
         {title}
       </span>
       {children}

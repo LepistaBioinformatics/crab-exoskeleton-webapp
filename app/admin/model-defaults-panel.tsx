@@ -34,7 +34,7 @@ import { Field, Ident } from "./field";
 import { Accordion } from "@/components/ui/accordion";
 import { ResolutionLadder } from "./resolution-ladder";
 
-const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
+const selectClass = "h-9 rounded-lg border border-rule-strong bg-surface px-2 text-xs text-fg";
 
 // The levels this screen WRITES. Narrower than DefaultScope["kind"], which keeps
 // `global` and `agent` because the ladder still READS those to draw them — what
@@ -394,7 +394,7 @@ export default function ModelDefaultsPanel({
                         const pinned = pinnedModel(stored);
                         return (
                           <li key={`${u.role}|${u.accId}`}
-                            className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-rule bg-elevated px-3 py-1.5">
                             <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
                               {u.name || u.email || u.accId}
                             </span>

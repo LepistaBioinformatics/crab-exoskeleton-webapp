@@ -251,7 +251,7 @@ export default function AdminScreen() {
     <div className="flex h-dvh flex-col overflow-hidden">
       {/* The console's own bar. It is not navigation — the columns are — so it carries only
           the way out and the things that belong to no column. */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-brand/25 px-3 py-2">
+      <header className="flex shrink-0 items-center gap-3 border-b border-rule px-3 py-2">
         <Link
           href="/chat"
           className="flex min-h-11 items-center gap-1.5 rounded-lg px-1.5 text-sm text-fg-muted transition-colors hover:text-fg"

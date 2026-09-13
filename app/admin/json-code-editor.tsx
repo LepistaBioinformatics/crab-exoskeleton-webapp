@@ -129,10 +129,10 @@ export default function JsonCodeEditor({
   }
 
   return (
-    <div className="flex min-h-0 overflow-hidden rounded-lg border border-brand/30 bg-elevated">
+    <div className="flex min-h-0 overflow-hidden rounded-lg border border-rule bg-elevated">
       {/* Line numbers and fold arrows. Sticky rather than inside the scroller, so
           horizontal scrolling never carries the gutter off screen. */}
-      <div className="relative shrink-0 select-none overflow-hidden border-r border-brand/20 py-2">
+      <div className="relative shrink-0 select-none overflow-hidden border-r border-rule py-2">
         <div ref={gutterRef} className="w-14">
           {rows.map((_, line) => {
             const arrow = arrows.get(line);

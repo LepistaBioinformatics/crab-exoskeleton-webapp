@@ -31,7 +31,7 @@ const option = cva(
     variants: {
       picked: {
         true: "border-accent bg-accent/15 animate-chooser-pick",
-        false: "border-brand/25 bg-elevated hover:border-brand hover:bg-elevated/70",
+        false: "border-rule-strong bg-elevated hover:border-brand hover:bg-elevated/70",
       },
       // The all-agents store is an address, not an agent. Dashed and quiet so it can never
       // read as one more thing to choose between.
@@ -92,7 +92,7 @@ export default function Chooser({
       {column.empty && (
         <PanelEmpty
           icon={Boxes}
-          className="rounded-xl border border-dashed border-brand/25 px-4 py-8 text-left"
+          className="rounded-xl border border-dashed border-rule-strong px-4 py-8 text-left"
           title={t.columns.empty[column.empty]}
         />
       )}

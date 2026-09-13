@@ -34,7 +34,7 @@ import { errorCopy, errorText } from "@/lib/i18n/errors";
 // endpoint or key is not an authority this screen grants, and no response it
 // reads carries a key.
 
-const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
+const selectClass = "h-9 rounded-lg border border-rule-strong bg-surface px-2 text-xs text-fg";
 
 export default function UserModelsPanel({
   scope,
@@ -177,7 +177,7 @@ export default function UserModelsPanel({
             {models.map((m) => (
               <li
                 key={`${m.owner_acc_id}/${m.slug}`}
-                className="flex flex-col gap-1 rounded-lg border border-brand/30 bg-elevated px-3 py-2"
+                className="flex flex-col gap-1 rounded-lg border border-rule bg-elevated px-3 py-2"
               >
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs text-fg">

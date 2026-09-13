@@ -34,10 +34,10 @@ import { useT } from "@/lib/i18n/context";
 const row = cva("flex flex-col gap-2 rounded-lg border px-3.5 py-3 transition-colors", {
   variants: {
     injected: {
-      true: "border-brand/40 bg-elevated",
+      true: "border-rule bg-elevated",
       // Inherited: nothing at this scope, so the next layer up (or the agent
       // template) is what workspaces get. Drawn quieter than an injection.
-      false: "border-dashed border-brand/25 bg-transparent",
+      false: "border-dashed border-rule bg-transparent",
     },
   },
   defaultVariants: { injected: false },
@@ -227,7 +227,7 @@ export default function PersonaPanel({
       )}
 
       {editing && (
-        <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-rule bg-elevated p-3">
           <div className="flex items-center gap-2">
             <FileText size={15} className="shrink-0 text-fg-muted" aria-hidden />
             <span className="min-w-0 flex-1 truncate font-mono text-sm text-fg">{editing.name}</span>
