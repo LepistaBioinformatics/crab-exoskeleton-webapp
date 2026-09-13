@@ -26,11 +26,8 @@ import {
   useFragment,
   type Workspace,
 } from "@/app/chat/fragment";
-import UploadsSidebar from "@/app/chat/uploads-sidebar";
-import RightRail from "@/app/chat/right-rail";
-import SectionMenu from "@/app/chat/section-menu";
-import { subscribeToPreviewRequests, type PreviewRequest } from "@/app/chat/media-preview-bus";
-import { asSection } from "@/app/chat/workspace-sections";
+import { subscribeToPreviewRequests } from "@/app/chat/media-preview-bus";
+import { publishMediaChanged, subscribeToMediaChanged } from "@/app/chat/media-refresh-bus";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
 import { useFileDrop, type DroppedFiles } from "@/app/chat/use-file-drop";
@@ -43,7 +40,6 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
-import { PANEL_HEADER_H } from "./panel-header";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import {
   MAX_SEND_ATTEMPTS,
@@ -191,7 +187,6 @@ function Reasoning({ text, t }: { text: string; t: ChatDict }) {
 
 export default function ChatView({
   workspace,
-  subscription,
   chatRef,
   onChatRef,
   sessionId,
@@ -206,12 +201,6 @@ export default function ChatView({
    * project the transcripts were written under.
    */
   project: string | null;
-  /**
-   * The subscription this workspace belongs to. Null while the tree is loading, and for
-   * a subscription with no name of its own — in which case the agent takes the line
-   * alone rather than being demoted under a uuid.
-   */
-  subscription: string | null;
   /**
    * The composer's context slot, owned by the shell — see chat-shell. This component is
    * keyed on the workspace and unmounts on a switch; a reference held here would go with
@@ -235,22 +224,12 @@ export default function ChatView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
-  // The right sidebar is DERIVED from the URL, not held in state.
-  //
-  // It used to be `useState` seeded from localStorage, which survived a reload but was
-  // per-browser, unshareable, and — the actual complaint — carried no record of WHICH
-  // section was open, so every refresh landed back on the section list. One fragment key
-  // replaces both: absent is closed, "menu" is the section list, anything else is that
-  // section. Deriving rather than mirroring means there is no second owner to disagree
-  // with the URL, which is how the history view mode is handled too.
-  const rightSidebar = fragment?.rs ?? null;
-  const filesOpen = rightSidebar !== null;
-  const openSection = asSection(rightSidebar);
-  // A document asked for from the transcript (an attachment chip). Held here because
-  // the panel is a sibling, and kept as the LAST request rather than a boolean: the
-  // panel opens on whichever file was clicked most recently.
-  const [requestedFile, setRequestedFile] = useState<PreviewRequest | null>(null);
+  // Bumped by the bus, never directly. The upload that changes the workspace's files is
+  // right here in this component, so a plain setState would have worked until the files
+  // panel stopped being a sibling of the conversation — see media-refresh-bus for why a
+  // component that is no longer mounted cannot be reached with a prop.
   const [mediaRefresh, setMediaRefresh] = useState(0);
+  useEffect(() => subscribeToMediaChanged(() => setMediaRefresh((n) => n + 1)), []);
   // What `@` can reference. Held HERE rather than in the composer because both need
   // it and they must not disagree: the composer offers the menu, and compose() below
   // resolves what was actually typed against the same list. Refreshed by the same
@@ -276,14 +255,16 @@ export default function ChatView({
     settling,
   } = turn;
   // The chip is several components below the markdown renderer; see media-preview-bus
-  // for why this is a channel and not a prop. Opening the files section is part of the
-  // request: a document with no panel around it has nowhere to render.
-  useEffect(() => {
-    return subscribeToPreviewRequests((file) => {
-      setRequestedFile(file);
-      setRightSidebar("files");
-    });
-  }, []);
+  // for why this is a channel and not a prop. Opening the PANE is the whole handler now:
+  // the files screen is not a child of this view any more, so it collects the FILE from
+  // the bus itself when it arrives. What survives unchanged is why opening it is part of
+  // the request at all — a document with nothing around it has nowhere to render.
+  //
+  // `rs`, not `v`: the document opens BESIDE this transcript rather than in place of it,
+  // which is the whole of what the member asked for by clicking a chip inside a message.
+  // It was `setDestination("files")` while the sections filled the centre, and that is
+  // the regression the owner reversed on 2026-09-12.
+  useEffect(() => subscribeToPreviewRequests(() => setRightSidebar("files")), []);
 
   // Transient feedback for slash commands (/rename, /tag).
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -607,7 +588,7 @@ export default function ChatView({
       for (const file of Array.from(files)) {
         const attachment = await uploadMedia(workspace, file);
         setAttachments((prev) => [...prev, attachment]);
-        setMediaRefresh((n) => n + 1); // the workspace-files panel picks it up
+        publishMediaChanged(); // the files surface and the `@` list both re-read
         noteUpload(); // arms the store's settle wait for the next turn
       }
     } catch (err) {
@@ -832,11 +813,15 @@ export default function ChatView({
   );
 
   return (
-    <div className="flex h-full">
-      {/* The whole column is the drop target, not the composer: a member aims at the
-          conversation, and a small target means most drops land outside it — where the
-          hook's window guard swallows them silently. */}
-      <div className="relative flex min-w-0 flex-1 flex-col" {...drop.dropProps}>
+    // ONE column, and it is the conversation. The rail that used to flank it is gone,
+    // and the pane that is still there is the SHELL's now, a sibling of <main> rather
+    // than a child of this view — so there is nothing left for this to lay out beside
+    // itself, and the pane outlives a workspace switch that unmounts this.
+    //
+    // The whole column is the drop target, not the composer: a member aims at the
+    // conversation, and a small target means most drops land outside it — where the
+    // hook's window guard swallows them silently.
+    <div className="relative flex h-full min-w-0 flex-1 flex-col" {...drop.dropProps}>
         {drop.over && (
           <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-bg/80">
             <span className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-fg shadow-lg">
@@ -844,40 +829,6 @@ export default function ChatView({
             </span>
           </div>
         )}
-      <div
-        className={`flex items-center gap-2 border-b border-brand/30 px-4 py-2 ${PANEL_HEADER_H}`}
-      >
-        {/* The SUBSCRIPTION leads, the agent sits under it in lighter type — the same
-            treatment the conversations sidebar uses, and for the same reason: the
-            subscription is the membership boundary a member navigates by, and it is what
-            tells two otherwise identical agents apart. The agent is the qualifier. */}
-        {subscription ? (
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span
-              className="truncate font-display text-sm font-semibold text-fg"
-              title={subscription}
-            >
-              {subscription}
-            </span>
-            <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
-              <Bot size={11} className="shrink-0" aria-hidden />
-              <span className="truncate">{workspace.r}</span>
-            </span>
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
-            {t.view.agentPrefix} {workspace.r}
-          </span>
-        )}
-        <div className="flex flex-1 items-center justify-end gap-1">
-          {/* Mobile only. On a desktop the rail down the right edge IS this control,
-              always visible and one click from the pane — which is the whole point of
-              right-rail-discoverability. Keeping a header button there too would put
-              back the second door the feature removes. */}
-          <SectionMenu className="md:hidden" open={rightSidebar} onSelect={setRightSidebar} />
-        </div>
-      </div>
-
       {retrying !== null && (
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs text-fg-muted">
           <Spinner size={12} />
@@ -1250,25 +1201,6 @@ export default function ChatView({
           </div>
         </div>
       )}
-      </div>
-
-      {filesOpen && (
-        <UploadsSidebar
-          workspace={workspace}
-          refreshSignal={mediaRefresh}
-          onClose={() => setRightSidebar(null)}
-          onReference={onChatRef}
-          section={openSection}
-          onSectionChange={(next) => setRightSidebar(next ?? "menu")}
-          openFile={requestedFile}
-          onRestartNeeded={onRestartNeeded}
-        />
-      )}
-
-      {/* LAST, so the sidebar opens to its left and the rail never moves. A control
-          that shifts when you use it is a control you have to find twice. */}
-      <RightRail open={rightSidebar} onSelect={setRightSidebar} />
-
     </div>
   );
 }

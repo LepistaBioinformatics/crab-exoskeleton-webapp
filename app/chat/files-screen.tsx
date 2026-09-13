@@ -1,7 +1,6 @@
 "use client";
 
-import React, { MouseEvent, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useRef, useState } from "react";
 import {
   canDrop,
   createFolder,
@@ -12,23 +11,18 @@ import {
   moveMedia,
 } from "@/lib/media";
 import {
-  Brain,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
   Download,
-  FileText,
   Folder,
   FolderOpen,
   FolderPlus,
   Lock,
   Upload,
-  Network,
   Pencil,
   RefreshCw,
   Search,
   Trash2,
-  X,
 } from "lucide-react";
 import { cva } from "class-variance-authority";
 import {
@@ -44,22 +38,8 @@ import {
 import { FileThumb, formatSize } from "@/app/chat/file-visuals";
 import type { Workspace } from "./fragment";
 import FilePreview from "@/app/chat/file-preview";
-import MemoryEditor from "@/app/chat/memory-editor";
-import MemoryGraphPanel from "@/app/chat/memory-graph-panel";
-import ScheduledTasksPanel from "@/app/chat/scheduled-tasks-panel";
-import SecretsSection from "@/app/chat/secrets-section";
-import type { PreviewRequest } from "@/app/chat/media-preview-bus";
-import {
-  SECTIONS,
-  SECTION_ORDER,
-  type Section,
-} from "@/app/chat/workspace-sections";
-
-// Re-exported because this panel is where a Section used to be defined and callers
-// still import it from here. The list itself moved to workspace-sections.ts, which
-// the right rail and the mobile expander read too.
-export type { Section };
-import type { ChatReference } from "@/lib/chatReference";
+import { subscribeToPreviewRequests, takePendingPreview } from "@/app/chat/media-preview-bus";
+import { subscribeToMediaChanged } from "@/app/chat/media-refresh-bus";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -69,41 +49,8 @@ import { PanelEmpty } from "@/components/ui/panel-empty";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
-import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
-import { PANEL_HEADER_H } from "./panel-header";
+import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
-
-export const MIN_WIDTH = 240;
-// No fixed maximum: the knowledge graph is the reason — a member inspecting it wants
-// the column as wide as their screen. The only ceiling is the viewport itself, so the
-// resize handle (the panel's LEFT edge) can never be dragged off-screen and leave the
-// width unrecoverable. `maxWidth()` is a function, not a constant, because the answer
-// changes when the window does.
-const DEFAULT_WIDTH = 280;
-
-function maxWidth(): number {
-  if (typeof window === "undefined") return Number.MAX_SAFE_INTEGER;
-  return Math.max(MIN_WIDTH, window.innerWidth - 48);
-}
-
-/**
- * How wide the panel opens when the member has never resized it: a THIRD of the
- * viewport.
- *
- * 280px was a width for a file list. What members open this panel for is a document,
- * the knowledge graph or a memory note, and none of those are readable in a column
- * that narrow — the point of the panel is reading something while the chat stays
- * usable beside it.
- *
- * Bounded on both sides: never under what the file tree needs, never wider than the
- * viewport can show (which is also what keeps the resize handle reachable).
- */
-export function defaultPanelWidth(viewport?: number): number {
-  const w = viewport ?? (typeof window === "undefined" ? 0 : window.innerWidth);
-  const max = viewport === undefined ? maxWidth() : Math.max(MIN_WIDTH, viewport - 48);
-  return Math.min(Math.max(Math.round(w / 3), MIN_WIDTH), max);
-}
-const WIDTH_KEY = "chat-files-width";
 
 // The agent organizes its workspace into real folders, so a listing entry's
 // `name` can be a path ("reports/2026/q2.pdf"). Rendering that flat gives a wall
@@ -183,32 +130,6 @@ export function allFolderPaths(nodes: TreeNode[]): string[] {
   return out;
 }
 
-// A permanent, resizable right-hand column (desktop) listing the current
-// workspace's uploads. Not an overlay -- part of the layout, toggled from the
-// chat header. Filter box + per-file delete. Refreshes on `refreshSignal`.
-// The track holds both panes side by side at exactly twice the panel's width and
-// slides by half.
-//
-// It MUST be rendered inside a clipping box — see `viewport` below. A translated
-// 200%-wide track does not stop existing when it moves off the panel: without
-// `overflow-hidden` on an ancestor, the outgoing pane slid left and kept painting on
-// top of the chat. That was the first version of this, and nothing in the type system
-// or the tests noticed.
-const track = cva(
-  "flex h-full w-[200%] transition-transform duration-300 ease-out motion-reduce:transition-none",
-  {
-    variants: { open: { true: "-translate-x-1/2", false: "translate-x-0" } },
-    defaultVariants: { open: false },
-  },
-);
-
-// The clipping box the track slides inside. Same shape unified-sidebar uses.
-const viewport = cva("relative min-h-0 flex-1 overflow-hidden");
-
-const slot = cva(
-  "flex w-1/2 min-h-0 shrink-0 flex-col overflow-hidden outline-none",
-);
-
 // A folder row is both a drag source and a drop target. `over` is set only when the
 // pointer is on a folder the current drag may LEGALLY land in — canDrop decides, so an
 // illegal target never lights up and the member is not invited to try.
@@ -230,71 +151,30 @@ const rootZone = cva("relative min-h-8 rounded-lg transition-colors", {
   defaultVariants: { over: false },
 });
 
-export default function UploadsSidebar({
-  workspace,
-  refreshSignal,
-  onClose,
-  onReference,
-  section = null,
-  onSectionChange,
-  onRestartNeeded,
-  openFile = null,
-}: {
-  workspace: Workspace;
-  refreshSignal: number;
-  onClose: () => void;
-  /**
-   * Carries a scheduled task or one of its executions up to the chat view, which
-   * holds it as a context slot for the next message. The panel's only outbound
-   * value — everything else here flows inward.
-   */
-  onReference?: (ref: ChatReference) => void;
-  /**
-   * Which detail is open, or null for the menu. CONTROLLED — the caller owns it.
-   *
-   * It used to be an initial value the panel copied into state at mount, on the
-   * assumption that the panel's own menu was the only way to change sections. The
-   * right rail broke that assumption: clicking another icon with the panel already
-   * open changed the URL and moved nothing, because nothing re-read the prop. The
-   * fragment is the owner of this now, and the panel renders what it is handed.
-   */
-  section?: Section | null;
-  /**
-   * Forwarded to the secrets pane: saving a secret leaves the container needing a
-   * restart, and the banner that says so lives in the chat view (restart-control
-   * DEC-3). It arrives here rather than in a drawer of its own because secrets is a
-   * section now — right-rail-discoverability FR-3.4.
-   */
-  onRestartNeeded?: () => void;
-  /**
-   * A document the CALLER wants shown — an attachment chip clicked in the transcript.
-   *
-   * A new object per request, and that identity is the signal: two clicks on the same
-   * file must reopen it, so the effect below depends on the object rather than on the
-   * path. Opening from the tree does not go through here; the panel owns that.
-   */
-  openFile?: PreviewRequest | null;
-  /**
-   * Reports every section change so the caller can persist it. The panel keeps owning
-   * the state -- it is the only thing that knows the transitions -- and the caller is
-   * the only thing that knows about the URL.
-   */
-  onSectionChange?: (section: Section | null) => void;
-}) {
+// The workspace's files: the tree, and the document that takes its place while one is
+// open.
+//
+// It was the right-hand pane of the chat view and it renders in a right-hand pane again,
+// but it is no longer the pane: the width it persisted, the drag handle, the mobile
+// drawer and the close button are `workspace-pane.tsx`'s now, one level up. What did NOT
+// come back is the sliding track that used to offer a list of the OTHER four sections —
+// the sidebar lists those, so a copy here would be a second way in to where the member
+// already is.
+//
+// The split is worth the file it costs. This component is a file listing; the pane is a
+// column of the shell. Welded together, every change to either read as a change to a
+// panel that did two jobs — which is how the close button and the section list ended up
+// inside a files tree in the first place.
+//
+// Nothing below the chrome changed through any of it: the tree, the drag-and-drop, the
+// folder operations and the preview are the same code they were.
+export default function FilesScreen({ workspace }: { workspace: Workspace }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
   const err = useT(errorCopy);
   const [files, setFiles] = useState<Attachment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localRefresh, setLocalRefresh] = useState(0);
-  // The tasks panel's own refresh counter, deliberately separate from
-  // localRefresh: sharing one would re-list the files tree on every task refresh,
-  // and the two sections never need refreshing together.
-  const [taskRefresh, setTaskRefresh] = useState(0);
-  // And the graph's own, for the same reason and kept apart for the same reason: the
-  // agent writes to the graph mid-conversation, so the pane goes stale while it is
-  // being read, and re-listing files on a graph refresh would be work nobody asked for.
-  const [graphRefresh, setGraphRefresh] = useState(0);
   const [query, setQuery] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -309,9 +189,13 @@ export default function UploadsSidebar({
   // showed an error and stayed on it, so the way back to the file list was a control
   // the member had to find while looking at a failure.
   //
-  // Clearing this one piece of state is the whole fix, because the panel is derived —
-  // `openDoc` comes from `previewFile`, and `section === "files" && !openDoc` is the
-  // tree. There is no pane to navigate.
+  // Clearing this one piece of state is the whole fix, because the screen is derived —
+  // `openDoc` comes from `previewFile`, and `!openDoc` is the tree. There is no pane to
+  // navigate.
+  //
+  // Kept even though the shell now keys this screen on the workspace, which remounts it:
+  // correctness that depends on a caller's `key` is correctness the next caller can drop
+  // without noticing.
   //
   // `workspace.p` counts as a workspace change for the reason the file listing says it
   // does: it selects WHICH directory is being listed, so entering or leaving a project
@@ -326,17 +210,56 @@ export default function UploadsSidebar({
     setDeleteError(null);
   }, [workspace.t, workspace.s, workspace.r, workspace.p]);
 
+  // A document asked for from the transcript, collected on arrival.
+  //
+  // It used to be a prop, because the panel was a sibling of the view holding the chip
+  // that was clicked. It is not a sibling any more: the click navigates here, so THIS
+  // component does not exist when the request is published and no subscription of its
+  // own could hear it. The bus parks the request and this drains it — see
+  // media-preview-bus for why a parked request is not the remembered "last file" that
+  // module refuses to keep.
+  //
+  // Mount only: this half answers the click that OPENED the pane, and arriving is what
+  // opens the document.
+  useEffect(() => {
+    const requested = takePendingPreview();
+    if (requested) {
+      setPreviewFile({ path: requested.path, name: requested.name, size: requested.size });
+    }
+  }, []);
+
+  // AND THE OTHER HALF, for the click that opens no pane because one is already open.
+  //
+  // This screen used to fill the centre, so a chip click always navigated away from the
+  // transcript the chip was in and a mount was always what collected the request. The
+  // pane sits BESIDE the transcript, which is the whole point of it — so the second chip
+  // a member clicks writes the `rs` that is already there, fires no `hashchange`,
+  // remounts nothing, and the drain above never runs again. The document would simply
+  // not open, and only from the second click on.
+  //
+  // The parked copy is taken as well as the delivered one: `requestPreview` parks before
+  // it fans out, so leaving it would re-open this document the next time the pane is
+  // opened on something else.
+  useEffect(
+    () =>
+      subscribeToPreviewRequests((file) => {
+        takePendingPreview();
+        setPreviewFile({ path: file.path, name: file.name, size: file.size });
+      }),
+    [],
+  );
+
+  // Somebody else changed this workspace's files — an upload from the composer, a drop
+  // on the transcript. A prop carried this while the panel was mounted beside the
+  // composer; a screen that renders INSTEAD of the composer cannot be handed one.
+  useEffect(() => subscribeToMediaChanged(() => setLocalRefresh((n) => n + 1)), []);
+
   // The document showing in the detail slot, or null for the tree.
   //
   // DERIVED, never stored as a second piece of state: the kind is a pure function of
   // the path, and a copy of it could disagree with the row that opened it. A file whose
   // extension is not previewable resolves to null, so a stale request cannot leave the
-  // panel on a blank pane.
-  useEffect(() => {
-    if (!openFile) return;
-    setPreviewFile({ path: openFile.path, name: openFile.name, size: openFile.size });
-  }, [openFile]);
-
+  // screen on a blank pane.
   const openDoc =
     previewFile && previewKind(previewFile.path)
       ? {
@@ -346,14 +269,6 @@ export default function UploadsSidebar({
         }
       : null;
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
-  // The panel is a two-pane sliding track (the idiom unified-sidebar already uses): a
-  // root listing what a workspace holds, and one detail pane that renders whichever
-  // was picked. Two panes rather than five because the animation is identical and the
-  // incoming pane simply renders different content.
-  //
-  // `section` arrives as a prop and every change is reported up; the panel holds no
-  // copy of it. One owner, which is the fragment.
   // Drag state. `dragPath` is the workspace-relative path being dragged (a file's
   // `name` or a folder's `path` — both already live in the same space, without the
   // `uploads/` prefix). `dropFolder` is the folder currently under the pointer, or ""
@@ -441,19 +356,6 @@ export default function UploadsSidebar({
   }
 
   useEffect(() => {
-    const raw = Number(localStorage.getItem(WIDTH_KEY));
-    // Clamped on READ as well as on drag: a width persisted on a wide monitor must not
-    // swallow the whole screen when the same member opens the app on a laptop.
-    //
-    // A stored width WINS over the default: it is the member having dragged the handle,
-    // and a default that overrode that would undo the drag on every open.
-    setWidth(raw >= MIN_WIDTH ? Math.min(raw, maxWidth()) : defaultPanelWidth());
-  }, []);
-  useEffect(() => {
-    localStorage.setItem(WIDTH_KEY, String(width));
-  }, [width]);
-
-  useEffect(() => {
     let cancelled = false;
     setFiles(null);
     setError(null);
@@ -470,28 +372,7 @@ export default function UploadsSidebar({
     // `workspace.p` belongs here as much as t/s/r do: it selects WHICH workspace
     // directory is listed. Omitted, entering a project kept the agent's own files on
     // screen and leaving it kept showing whatever was loaded last.
-  }, [workspace.t, workspace.s, workspace.r, workspace.p, refreshSignal, localRefresh]);
-
-  function startResize(e: MouseEvent) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = width;
-    const onMove = (ev: globalThis.MouseEvent) => {
-      // Right-hand column: dragging the LEFT edge leftward widens it.
-      const next = startWidth + (startX - ev.clientX);
-      setWidth(Math.max(MIN_WIDTH, Math.min(next, maxWidth())));
-    };
-    const cleanup = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", cleanup);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", cleanup);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }
+  }, [workspace.t, workspace.s, workspace.r, workspace.p, localRefresh]);
 
   async function onDelete(path: string) {
     setDeleteError(null);
@@ -866,63 +747,28 @@ export default function UploadsSidebar({
   }
 
   return (
-    <>
-      {/* On mobile the panel is an overlay drawer; the backdrop dismisses it. */}
-      <div
-        className="fixed inset-0 z-40 bg-black/40 md:hidden"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
-        style={{ width }}
-        // pane-open animates width from 0 on mount (see globals.css). It is an
-        // animation rather than a transition precisely because this width is
-        // drag-resizable: a transition would make the drag lag.
-        // `max-md:w-[92vw]!` — the `!` is load-bearing. `width` above is an inline style (it is
-        // drag-resizable on desktop), and an inline style beats an ordinary class, so the mobile
-        // drawer was stuck at the desktop DEFAULT_WIDTH of 280px. On a phone that is a thin column
-        // that squeezes the panel's content, and `max-w-[92vw]` could not help: a max only caps a
-        // width, it never widens one. Tailwind v4 puts the important modifier at the END.
-        className="pane-open relative flex shrink-0 flex-col overflow-hidden border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl"
-      >
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t.uploads.resize}
-          onMouseDown={startResize}
-          className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
-        />
-
-        <div
-          className={`flex shrink-0 items-center gap-1 border-b border-brand/30 px-3 py-2 ${PANEL_HEADER_H}`}
-        >
-          {section === null ? (
-            <h2 className="flex-1 font-display text-sm font-semibold text-fg">
-              {t.uploads.workspace}
-            </h2>
-          ) : (
-            /* A two-step stack once a document is open: document → tree → menu. One
-               control, because there is only ever one way back and a member reads the
-               label to know where it goes (file-preview-in-pane FR-2.2). */
-            <button
-              type="button"
-              onClick={() => {
-                if (openDoc) setPreviewFile(null);
-                else onSectionChange?.(null);
-              }}
-              className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition-colors hover:text-accent"
+    // The same column the pane's detail slot was, and it still needs a parent with a
+    // height — the tree below scrolls in a `flex-1` region, which resolves to nothing
+    // when nothing above it is measured. workspace-screen.tsx is where that height now
+    // comes from, and where the reason is written down.
+    <div className="flex min-h-0 flex-1 flex-col">
+      {openDoc ? (
+        <>
+          {/* The way back, said in a control of its own rather than folded into the
+              heading. The panel had one line for both, because one line was all a narrow
+              column had; here the frame's heading already says FILES — where you are —
+              and this row says which document is standing in for the tree (FR-5.5). */}
+          <div className="flex items-center gap-2 pb-3">
+            <Button size="sm" variant="outlined" onClick={() => setPreviewFile(null)}>
+              <ChevronLeft size={14} aria-hidden />
+              {t.uploads.files}
+            </Button>
+            <span
+              className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg"
+              title={openDoc.leaf}
             >
-              <ChevronLeft
-                size={15}
-                className="shrink-0 text-fg-muted"
-                aria-hidden
-              />
-              <span className="truncate font-display text-sm font-semibold text-fg">
-                {openDoc ? openDoc.leaf : SECTIONS[section].label(t)}
-              </span>
-            </button>
-          )}
-          {openDoc && (
+              {openDoc.leaf}
+            </span>
             <IconButton
               variant="ghost"
               size="sm"
@@ -933,306 +779,198 @@ export default function UploadsSidebar({
             >
               <Download size={15} aria-hidden />
             </IconButton>
-          )}
-          {section === "files" && !openDoc && (
+          </div>
+          {/* The document takes the files slot while it is open (FR-5.5): one detail
+              destination, and the way back is the control above. */}
+          <FilePreview
+            workspace={workspace}
+            path={openDoc.file.path}
+            name={openDoc.leaf}
+            kind={openDoc.kind}
+            size={openDoc.file.size}
+          />
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-1 px-2 pt-2">
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files?.length) void onUpload(e.target.files);
+                // Reset so re-picking the SAME file fires onChange again.
+                e.target.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outlined"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload size={14} aria-hidden />
+              {t.uploads.upload}
+            </Button>
+            <Button
+              size="sm"
+              variant="outlined"
+              disabled={folderBusy}
+              onClick={onNewFolder}
+            >
+              <FolderPlus size={14} aria-hidden />
+              {t.uploads.newFolder}
+            </Button>
+            {(folderBusy || uploading) && <Spinner size={14} />}
+            {/* Last, and pushed to the far end: the agent writes into this same tree
+                between visits, so "look again" is an action on the whole listing rather
+                than one more thing to do to it. It was the panel header's control; the
+                header is gone and the row of listing-wide actions is where it belongs. */}
             <IconButton
               variant="ghost"
               size="sm"
+              className="ml-auto"
               aria-label={t.uploads.refreshAria}
               title={t.uploads.refresh}
               onClick={() => setLocalRefresh((n) => n + 1)}
             >
               <RefreshCw size={15} aria-hidden />
             </IconButton>
-          )}
-          {section === "graph" && (
-            <IconButton
-              variant="ghost"
-              size="sm"
-              aria-label={t.memoryGraph.refreshAria}
-              title={t.memoryGraph.refresh}
-              onClick={() => setGraphRefresh((n) => n + 1)}
-            >
-              <RefreshCw size={15} aria-hidden />
-            </IconButton>
-          )}
-          {/* Same affordance as the files tree, for the same reason: the agent
-              schedules tasks between visits, so the member needs a way to pick up a
-              task they just asked for without leaving the panel. */}
-          {section === "tasks" && (
-            <IconButton
-              variant="ghost"
-              size="sm"
-              aria-label={t.scheduledTasks.refreshAria}
-              title={t.scheduledTasks.refresh}
-              onClick={() => setTaskRefresh((n) => n + 1)}
-            >
-              <RefreshCw size={15} aria-hidden />
-            </IconButton>
-          )}
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label={t.uploads.closePanel}
-            onClick={onClose}
-          >
-            <X size={16} aria-hidden />
-          </IconButton>
-        </div>
+          </div>
 
-        {/* BOTH PANES STAY MOUNTED through the slide — unmounting the outgoing one is how
-          a slide animates to a blank column. Only the off-screen pane leaves the tab
-          order. Same contract as unified-sidebar's track. */}
-        <div className={viewport()}>
-          <div className={track({ open: section !== null })}>
-            <div
-              className={slot()}
-              aria-hidden={section !== null}
-              inert={section !== null || undefined}
-            >
-              <nav aria-label={t.uploads.workspace}>
-                <ul>
-                  {SECTION_ORDER.map((key) => {
-                    const s = SECTIONS[key];
-                    return (
-                      <li key={key}>
-                        <button
-                          type="button"
-                          onClick={() => onSectionChange?.(key)}
-                          className="flex w-full items-center gap-2 border-b border-brand/30 px-3 py-3 text-left transition-colors hover:bg-elevated"
-                        >
-                          <s.Icon
-                            size={16}
-                            className="shrink-0 text-accent"
-                            aria-hidden
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-display text-sm font-semibold text-fg">
-                              {s.label(t)}
-                            </span>
-                            <span className="block text-[11px] leading-snug text-fg-muted">
-                              {s.blurb(t)}
-                            </span>
-                          </span>
-                          <ChevronRight
-                            size={14}
-                            className="shrink-0 text-fg-muted"
-                            aria-hidden
-                          />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
+          {/* Said once, permanently, rather than as a dialog per action: the
+              agent references these paths in its knowledge graph, in MEMORY.md
+              and in skills, so renaming or moving something it mentioned breaks
+              that reference silently. A modal on every drag would be clicked
+              through without reading. */}
+          <p className="px-2 pt-1 text-[10px] leading-snug text-fg-muted">
+            {t.uploads.organiseHint}
+          </p>
+
+          {folderError && (
+            <div className="px-2 pt-1">
+              <Alert severity="error">
+                {errorText(err, folderError)}
+              </Alert>
             </div>
+          )}
 
+          <div className="px-2 pt-2">
+            <div className="relative">
+              <Search
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+              />
+              <Input
+                variant="subtle"
+                inputSize="sm"
+                className="pl-9"
+                placeholder={t.uploads.filterPlaceholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto p-2">
+            {error && <Alert severity="error">{error}</Alert>}
+
+            {!error && files === null && (
+              <div className="flex justify-center py-4">
+                <Spinner size={20} />
+              </div>
+            )}
+
+            {/* A live filter hiding every file is not an empty workspace, and
+                the two states send the member somewhere different — so they
+                stay distinct, sharing only their presentation. */}
+            {files !== null &&
+              visible.length === 0 &&
+              (q ? (
+                <PanelEmpty
+                  icon={Search}
+                  title={t.uploads.noMatches}
+                  body={t.uploads.noMatchesHint}
+                />
+              ) : (
+                <PanelEmpty
+                  icon={FolderOpen}
+                  title={t.uploads.noneYet}
+                  body={t.uploads.noneYetHint}
+                />
+              ))}
+
+            {/* The tree root is a drop target too: dragging something OUT of a
+                folder needs somewhere to land, and without this the only way
+                back to the root would be to re-upload. */}
             <div
-              className={slot()}
-              aria-hidden={section === null}
-              inert={section === null || undefined}
+              className={rootZone({ over: dropFolder === "" })}
+              {...dropProps("")}
             >
-              {section === "memory" && <MemoryEditor workspace={workspace} />}
-              {section === "graph" && (
-                <MemoryGraphPanel
-                  workspace={workspace}
-                  active={section === "graph"}
-                  refreshSignal={graphRefresh}
-                  onReference={onReference}
-                />
+              {/* Absolutely positioned, and `pointer-events-none`, because BOTH
+                  would otherwise feed the flicker this pane had: a hint in the
+                  flow pushes every row down as it appears, which slides the row
+                  out from under the pointer, which hides the hint, which slides
+                  the rows back — a loop that sustains itself at pointer speed.
+                  An element that can receive pointer events would add its own
+                  dragenter/dragleave pair on top of that. */}
+              {externalDrag && dropFolder === "" && (
+                <p className="pointer-events-none absolute inset-x-1 top-1 z-10 rounded-md bg-surface/95 px-2 py-1 text-center text-xs font-semibold text-accent shadow-sm">
+                  {t.uploads.dropToUpload}
+                </p>
               )}
-              {section === "secrets" && (
-                <SecretsSection workspace={workspace} onRestartNeeded={onRestartNeeded} />
-              )}
-              {section === "tasks" && (
-                <ScheduledTasksPanel
-                  workspace={workspace}
-                  refreshSignal={taskRefresh}
-                  onReference={onReference}
-                />
-              )}
-              {/* The document takes the files slot while it is open (FR-2.1): one detail
-                  destination, and the way back is the header's own control. */}
-              {section === "files" && openDoc && (
-                <FilePreview
-                  workspace={workspace}
-                  path={openDoc.file.path}
-                  name={openDoc.leaf}
-                  kind={openDoc.kind}
-                  size={openDoc.file.size}
-                />
-              )}
-              {section === "files" && !openDoc && (
-                <>
-                  <div className="flex items-center gap-1 px-2 pt-2">
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      multiple
-                      hidden
-                      onChange={(e) => {
-                        if (e.target.files?.length) void onUpload(e.target.files);
-                        // Reset so re-picking the SAME file fires onChange again.
-                        e.target.value = "";
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outlined"
-                      disabled={uploading}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      <Upload size={14} aria-hidden />
-                      {t.uploads.upload}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outlined"
-                      disabled={folderBusy}
-                      onClick={onNewFolder}
-                    >
-                      <FolderPlus size={14} aria-hidden />
-                      {t.uploads.newFolder}
-                    </Button>
-                    {(folderBusy || uploading) && <Spinner size={14} />}
-                  </div>
-
-                  {/* Said once, permanently, rather than as a dialog per action: the
-                      agent references these paths in its knowledge graph, in MEMORY.md
-                      and in skills, so renaming or moving something it mentioned breaks
-                      that reference silently. A modal on every drag would be clicked
-                      through without reading. */}
-                  <p className="px-2 pt-1 text-[10px] leading-snug text-fg-muted">
-                    {t.uploads.organiseHint}
-                  </p>
-
-                  {folderError && (
-                    <div className="px-2 pt-1">
-                      <Alert severity="error">
-                        {errorText(err, folderError)}
-                      </Alert>
-                    </div>
-                  )}
-
-                  <div className="px-2 pt-2">
-                    <div className="relative">
-                      <Search
-                        size={16}
-                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-                      />
-                      <Input
-                        variant="subtle"
-                        inputSize="sm"
-                        className="pl-9"
-                        placeholder={t.uploads.filterPlaceholder}
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-auto p-2">
-                    {error && <Alert severity="error">{error}</Alert>}
-
-                    {!error && files === null && (
-                      <div className="flex justify-center py-4">
-                        <Spinner size={20} />
-                      </div>
-                    )}
-
-                    {/* A live filter hiding every file is not an empty workspace, and
-                        the two states send the member somewhere different — so they
-                        stay distinct, sharing only their presentation. */}
-                    {files !== null &&
-                      visible.length === 0 &&
-                      (q ? (
-                        <PanelEmpty
-                          icon={Search}
-                          title={t.uploads.noMatches}
-                          body={t.uploads.noMatchesHint}
-                        />
-                      ) : (
-                        <PanelEmpty
-                          icon={FolderOpen}
-                          title={t.uploads.noneYet}
-                          body={t.uploads.noneYetHint}
-                        />
-                      ))}
-
-                    {/* The tree root is a drop target too: dragging something OUT of a
-                        folder needs somewhere to land, and without this the only way
-                        back to the root would be to re-upload. */}
-                    <div
-                      className={rootZone({ over: dropFolder === "" })}
-                      {...dropProps("")}
-                    >
-                      {/* Absolutely positioned, and `pointer-events-none`, because BOTH
-                          would otherwise feed the flicker this pane had: a hint in the
-                          flow pushes every row down as it appears, which slides the row
-                          out from under the pointer, which hides the hint, which slides
-                          the rows back — a loop that sustains itself at pointer speed.
-                          An element that can receive pointer events would add its own
-                          dragenter/dragleave pair on top of that. */}
-                      {externalDrag && dropFolder === "" && (
-                        <p className="pointer-events-none absolute inset-x-1 top-1 z-10 rounded-md bg-surface/95 px-2 py-1 text-center text-xs font-semibold text-accent shadow-sm">
-                          {t.uploads.dropToUpload}
-                        </p>
-                      )}
-                      {tree.length > 0 && (
-                        <ul
-                          role="tree"
-                          aria-label={t.uploads.files}
-                          className="flex flex-col gap-1"
-                        >
-                          {tree.map((node) => renderNode(node, 0))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </>
+              {tree.length > 0 && (
+                <ul
+                  role="tree"
+                  aria-label={t.uploads.files}
+                  className="flex flex-col gap-1"
+                >
+                  {tree.map((node) => renderNode(node, 0))}
+                </ul>
               )}
             </div>
           </div>
-        </div>
+        </>
+      )}
 
-        {/* Recursive and destructive, so the count is NAMED before the click. It is
-            computed from the listing already in hand; the proxy returns its own count
-            afterwards, and the two disagreeing means the agent wrote something in
-            between. */}
-        <ConfirmDialog
-          open={deletingFolder !== null}
-          title={t.uploads.deleteFolderTitle}
-          message={t.uploads.deleteFolderMessage
-            .replace("{name}", deletingFolder?.path ?? "")
-            .replace("{count}", String(deletingFolder?.files ?? 0))}
-          confirmLabel={c.actions.delete}
-          onConfirm={() => {
-            const target = deletingFolder;
-            setDeletingFolder(null);
-            if (target)
-              void runFolderOp(() => deleteFolder(workspace, target.path));
-          }}
-          onCancel={() => setDeletingFolder(null)}
-        />
+      {/* Recursive and destructive, so the count is NAMED before the click. It is
+          computed from the listing already in hand; the proxy returns its own count
+          afterwards, and the two disagreeing means the agent wrote something in
+          between. */}
+      <ConfirmDialog
+        open={deletingFolder !== null}
+        title={t.uploads.deleteFolderTitle}
+        message={t.uploads.deleteFolderMessage
+          .replace("{name}", deletingFolder?.path ?? "")
+          .replace("{count}", String(deletingFolder?.files ?? 0))}
+        confirmLabel={c.actions.delete}
+        onConfirm={() => {
+          const target = deletingFolder;
+          setDeletingFolder(null);
+          if (target)
+            void runFolderOp(() => deleteFolder(workspace, target.path));
+        }}
+        onCancel={() => setDeletingFolder(null)}
+      />
 
-        <ConfirmDialog
-          open={deletingPath !== null}
-          title={t.uploads.deleteTitle}
-          message={
-            deleteError ??
-            t.uploads.deleteMessage.replace(
-              "{name}",
-              pending?.name ?? t.uploads.deleteFallbackName,
-            )
-          }
-          confirmLabel={c.actions.delete}
-          onConfirm={() => deletingPath && onDelete(deletingPath)}
-          onCancel={() => {
-            setDeletingPath(null);
-            setDeleteError(null);
-          }}
-        />
-      </aside>
-    </>
+      <ConfirmDialog
+        open={deletingPath !== null}
+        title={t.uploads.deleteTitle}
+        message={
+          deleteError ??
+          t.uploads.deleteMessage.replace(
+            "{name}",
+            pending?.name ?? t.uploads.deleteFallbackName,
+          )
+        }
+        confirmLabel={c.actions.delete}
+        onConfirm={() => deletingPath && onDelete(deletingPath)}
+        onCancel={() => {
+          setDeletingPath(null);
+          setDeleteError(null);
+        }}
+      />
+    </div>
   );
 }

@@ -639,7 +639,7 @@ export default function MemoryGraphView({
           aria-label={b.title}
           disabled={b.disabled}
           onClick={b.onClick}
-          className="flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-md border border-rule-strong bg-surface/90 text-sm text-fg-muted transition-colors hover:text-fg disabled:opacity-40"
         >
           {b.label}
         </button>
@@ -650,7 +650,7 @@ export default function MemoryGraphView({
   // The spread group is separate from the icon row because it needs a readout, and a
   // number wedged between two 28px icon buttons reads as an icon rather than a value.
   const spreadControl = (
-    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-brand/30 bg-surface/90 px-1">
+    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-rule-strong bg-surface/90 px-1">
       <button
         type="button"
         title={copy.spreadIn}
@@ -761,7 +761,7 @@ export default function MemoryGraphView({
             {built.truncated > 0 && (
               // Never silent: a capped picture that looks complete is worse than one that says
               // what it left out. Top-LEFT, because the tools own the right side.
-              <p className="absolute left-2 top-2 max-w-[45%] rounded-md border border-brand/30 bg-surface/90 px-2 py-1 text-[10px] text-fg-muted">
+              <p className="absolute left-2 top-2 max-w-[45%] rounded-md border border-rule-strong bg-surface/90 px-2 py-1 text-[10px] text-fg-muted">
                 {copy.mapTruncated.replace("{count}", String(built.truncated))}
               </p>
             )}
@@ -771,7 +771,7 @@ export default function MemoryGraphView({
         {toolsOpen && (
           // `w-60 max-w-[60%]`: a fixed sidebar would leave nothing of the graph in the ~280px
           // sidebar column, so it yields there rather than squeezing the thing it describes.
-          <aside className="w-60 max-w-[60%] shrink-0 overflow-hidden border-l border-brand/30 bg-surface">
+          <aside className="w-60 max-w-[60%] shrink-0 overflow-hidden bg-surface">
             {toolsSidebar}
           </aside>
         )}

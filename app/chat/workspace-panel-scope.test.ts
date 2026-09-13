@@ -8,6 +8,11 @@ import { resolve } from "node:path";
 // without re-fetching: the files tree went on showing the agent's own uploads inside a
 // project, and the project's memory, graph and schedule were never asked for.
 //
+// The files listing moved out of the right-hand pane and into a destination of its own
+// (`files-screen.tsx`, ex `uploads-sidebar.tsx`); the effect and the rule it must obey
+// came with it unchanged. The list below names bodies, never the dispatcher that picks
+// between them — the `scoped.length` guard underneath is what catches that mistake.
+//
 // This reads the SOURCE rather than rendering, deliberately. The suite runs
 // `environment: "node"`, where no effect fires at all, so a render test cannot observe
 // a re-fetch; and the invariant is not really about React's behaviour but about a list
@@ -17,7 +22,7 @@ import { resolve } from "node:path";
 // app/api/media/project-forwarding.test.ts cover that half.
 
 const PANELS = [
-  "uploads-sidebar.tsx",
+  "files-screen.tsx",
   "memory-editor.tsx",
   "memory-graph-panel.tsx",
   "scheduled-tasks-panel.tsx",

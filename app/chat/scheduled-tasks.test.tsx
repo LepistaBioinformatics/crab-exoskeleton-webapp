@@ -1,12 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect, vi } from "vitest";
 
-// Same reason as uploads-sidebar.track.test.tsx: the suite runs `environment: "node"`,
-// so no effect fires and nothing fetches — but the module graph is imported, so
-// anything touched at import time has to exist.
+// The suite runs `environment: "node"`, so no effect fires and nothing fetches — but the
+// module graph is imported, so anything touched at import time has to exist.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 
-import UploadsSidebar from "./uploads-sidebar";
+import WorkspaceScreen from "./workspace-screen";
 import ScheduledTasksPanel, {
   humanDuration,
   RUNS_SHOWN,
@@ -234,28 +233,27 @@ describe("RunList", () => {
   });
 });
 
-describe("scheduled tasks section", () => {
-  it("is offered in the workspace menu", () => {
-    const html = renderToStaticMarkup(
-      <UploadsSidebar workspace={workspace} refreshSignal={0} onClose={() => {}} />,
-    );
-    expect(html).toContain(t.scheduledTasks.title);
-    expect(html).toContain(t.uploads.sections.tasks);
-  });
-
-  // The detail pane's CONTENT is conditional on the chosen section, so at first paint
-  // on the menu there is nothing of this panel to assert — hence initialSection.
-  it("opens to the panel, which says it is read-only", () => {
-    const html = renderToStaticMarkup(
-      <UploadsSidebar
+describe("scheduled tasks as a destination", () => {
+  const screen = () =>
+    renderToStaticMarkup(
+      <WorkspaceScreen
         workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
         section="tasks"
+        onReference={() => {}}
+        onRestartNeeded={() => {}}
       />,
     );
+
+  // The frame names the destination, and the name comes from SECTIONS rather than from
+  // anything written here — that is the whole reason the screen takes a Section instead
+  // of a title.
+  it("is named by the frame it renders inside", () => {
+    expect(screen()).toContain(t.scheduledTasks.title);
+  });
+
+  it("opens to the panel, which says it is read-only", () => {
     expect(
-      html,
+      screen(),
       "the hint is what tells the member to ask the agent instead of looking for an edit button",
     ).toContain(t.scheduledTasks.hint);
   });
@@ -279,14 +277,7 @@ describe("scheduled tasks section", () => {
   // The agent schedules tasks between visits, so without this the member has to
   // leave the panel and come back to see a task they just asked for.
   it("offers a refresh control, labelled for tasks rather than for files", () => {
-    const html = renderToStaticMarkup(
-      <UploadsSidebar
-        workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
-        section="tasks"
-      />,
-    );
+    const html = screen();
     expect(html).toContain(t.scheduledTasks.refreshAria);
     expect(html).toContain(t.scheduledTasks.refresh);
     expect(

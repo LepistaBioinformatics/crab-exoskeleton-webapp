@@ -420,14 +420,14 @@ export default function Composer({
                 type="button"
                 aria-label={`${t.composer.removeAttachment} ${a.name}`}
                 onClick={() => onRemoveAttachment(a.path)}
-                className="absolute right-1 top-1 z-10 rounded-full border border-brand/40 bg-surface/90 p-0.5 text-fg-muted shadow-sm transition-colors hover:text-fg"
+                className="absolute right-1 top-1 z-10 rounded-full border border-rule-strong bg-surface/90 p-0.5 text-fg-muted shadow-sm transition-colors hover:text-fg"
               >
                 <X size={12} aria-hidden />
               </button>
             </span>
           ))}
           {uploading && (
-            <span className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg-muted">
+            <span className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-rule-strong bg-elevated px-2 py-1 text-xs text-fg-muted">
               <Spinner size={12} /> {t.composer.uploading}
             </span>
           )}
@@ -625,7 +625,7 @@ export default function Composer({
                     </button>
                   );
                 })}
-                <div className="my-1 border-t border-brand/20" />
+                <div className="my-1 border-t border-rule" />
                 <button
                   type="button"
                   onClick={() => pick()}

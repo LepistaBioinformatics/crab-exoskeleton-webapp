@@ -1,15 +1,12 @@
 "use client";
 
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Bot,
   Check,
-  ChevronLeft,
   GitBranch,
   List,
   MessageSquare,
-  MessageSquarePlus,
   Pencil,
   Search,
   Tags,
@@ -17,10 +14,7 @@ import {
   X,
 } from "lucide-react";
 import {
-  createConversation,
   deleteConversation,
-  listConversations,
-  onConversationsUpdated,
   renameConversation,
   type ConversationSummary,
 } from "@/lib/chatSession";
@@ -34,22 +28,20 @@ import {
   useFragment,
   setFragmentSid,
   setHistoryView,
-  setFragmentProject,
   type Workspace,
 } from "./fragment";
 import ConversationTree from "./conversation-tree";
 import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
 import SidebarPanel from "./sidebar-panel";
-import { SectionHeader, SectionLabel, SectionSplitter } from "./sidebar-section";
-import { splitBoxStyles } from "./split-boxes";
+import { SectionHeader, SectionLabel } from "./sidebar-section";
 import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
 import { getHistory } from "./history-cache";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
-import ProjectsBar from "@/app/chat/projects-bar";
+import { useConversations } from "./use-conversations";
 
 const conversationRow = cva(
   // Column on mobile (name on top, actions below); row on desktop with the
@@ -76,28 +68,21 @@ const viewToggle = cva(
   },
 );
 
+// The conversation list, and only that.
+//
+// It used to be a three-section panel: the workspace it belonged to, the projects
+// beside it, and the chats. The first two are places now — the workspace is named by
+// the breadcrumb across the top, projects are a screen of their own — so what is left
+// is one list with the two controls that act on it.
 export default function HistorySidebar({
   workspace,
   project,
-  subscription,
   onSelect,
-  onBack,
 }: {
   workspace: Workspace;
   /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
-  /**
-   * The subscription these conversations belong to. Null while the workspace tree is
-   * still loading, and for a subscription with no name of its own.
-   */
-  subscription: string | null;
   onSelect?: () => void;
-  /**
-   * Slides the sidebar back to the workspace tree. It writes NOTHING to the fragment:
-   * the selection stays, so the chat on the right keeps rendering while another
-   * workspace is chosen — and if none is, nothing was lost.
-   */
-  onBack: () => void;
 }) {
   const t = useT(chatCopy);
   const c = useT(commonCopy);
@@ -113,24 +98,14 @@ export default function HistorySidebar({
   // the ROUTE, so it cannot disagree with the page the user is on.
   const browsedProject = project;
 
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  // The list itself is not this panel's to own any more: the shell reads the same one
+  // to name the open conversation in its breadcrumb. See use-conversations.ts.
+  const { conversations, apply: applyToConversations } = useConversations(workspace);
   const [query, setQuery] = useState("");
   // Behind a magnifier, matching the workspaces panel. The search and its filter pills
   // are a four-row block, and they sat permanently above a list whose first rows are
   // what a member came here to click.
   const [searchOpen, setSearchOpen] = useState(false);
-  // The two lower sections' fold. Deliberately NOT persisted: unified-sidebar.tsx
-  // records that this sidebar used to keep per-group collapse in localStorage and that
-  // it was removed on purpose. Both start open, so nothing is hidden from a member who
-  // never touches the control.
-  const [projectsOpen, setProjectsOpen] = useState(true);
-  const [chatsOpen, setChatsOpen] = useState(true);
-  // How the two boxes divide the space below the workspace row: the projects box's
-  // share, 0..1. Equal by default, which is what makes the seam discoverable — an
-  // even split reads as two boxes, where a content-sized projects box would just read
-  // as a header.
-  const [projectsShare, setProjectsShare] = useState(0.5);
-  const splitBox = useRef<HTMLDivElement>(null);
   const [searchResults, setSearchResults] = useState<ConversationSummary[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -144,20 +119,9 @@ export default function HistorySidebar({
   // (optional) search results, mirroring the optimistic updates rename/delete do.
   function applyToLists(id: string, fn: (c: ConversationSummary) => ConversationSummary) {
     const map = (list: ConversationSummary[]) => list.map((c) => (c.id === id ? fn(c) : c));
-    setConversations(map);
+    applyToConversations(map);
     setSearchResults((prev) => (prev ? map(prev) : prev));
   }
-
-  // `workspace.p` IS a dependency. It used not to be, because entering a project was a
-  // route change and the whole panel was remounted — the refetch came for free. Now
-  // that the project is a fragment write there is no remount, so without this the list
-  // would keep showing the previous project's conversations.
-  useEffect(() => {
-    const refresh = () => listConversations(workspace).then(setConversations);
-    refresh();
-    return onConversationsUpdated(refresh);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r, workspace.p]);
 
   // Two-stage filter: a synchronous predicate (tag/alias/date) narrows the set
   // instantly, then an async content stage (text:) runs only over survivors,
@@ -209,14 +173,6 @@ export default function HistorySidebar({
   const inBrowsedProject = (c: ConversationSummary) => (c.project ?? null) === browsedProject;
   const visible = (searchResults ?? conversations).filter(inBrowsedProject);
 
-  async function onNewChat() {
-    // A new chat is born in the project this page IS, so "new chat" inside a
-    // project stays in that project.
-    const conversation = await createConversation(workspace, browsedProject);
-    setFragmentSid(conversation.id);
-    onSelect?.();
-  }
-
   // Every conversation in this list belongs to THIS page's project (the list is
   // filtered on exactly that), so opening one is a plain sid change — no project
   // to restore, and no way for the two to disagree. That is the property the
@@ -248,7 +204,7 @@ export default function HistorySidebar({
       const saved = await renameConversation(id, title);
       const apply = (list: ConversationSummary[]) =>
         list.map((c) => (c.id === id ? { ...c, title: saved } : c));
-      setConversations(apply);
+      applyToConversations(apply);
       setSearchResults((prev) => (prev ? apply(prev) : prev));
       setEditingId(null);
       setRenameError(null);
@@ -262,7 +218,7 @@ export default function HistorySidebar({
     try {
       await deleteConversation(id);
       const drop = (list: ConversationSummary[]) => list.filter((c) => c.id !== id);
-      setConversations(drop);
+      applyToConversations(drop);
       setSearchResults((prev) => (prev ? drop(prev) : prev));
       setDeletingId(null);
     } catch (err) {
@@ -272,168 +228,30 @@ export default function HistorySidebar({
 
   const pendingDelete = deletingId ? visible.find((c) => c.id === deletingId) : null;
 
-  // Names the section AND interpolates into its fold control, so the two never
-  // disagree about what is being folded.
+  // Whose chats these are: the project's while inside one, the agent's own otherwise.
+  // Two separate lists, not one list filtered — a project's transcripts live in that
+  // project's workspace directory.
   const chatsLabel = browsedProject ? t.projects.projectChats : t.history.globalChats;
 
-  // Inside a project the projects box is a fixed context header, not a resizable list:
-  // it does not fold (see ProjectsBar) and there is no list in it to give more room to.
-  // So the seam exists only while browsing the project LIST, and only while both boxes
-  // are open — dragging against a collapsed box would be dragging against its header.
-  // `!= null`, NOT `!== null`: the prop is optional, so "no project" arrives as
-  // undefined as well as null — and `undefined !== null` is true, which made every
-  // ordinary visit look like it was inside a project and hid the way back to the
-  // workspaces. unified-sidebar.test.tsx catches exactly this.
-  const insideProject = browsedProject != null;
-  const splittable = !insideProject && projectsOpen && chatsOpen;
-
-  // Neither box may be dragged below this; the seam stops rather than letting a box
-  // vanish behind its own header.
-  const MIN_BOX_PX = 96;
-
-  function startSplitDrag(e: React.MouseEvent) {
-    e.preventDefault();
-    const box = splitBox.current;
-    if (!box) return;
-    const rect = box.getBoundingClientRect();
-    if (rect.height <= 0) return;
-
-    const onMove = (ev: globalThis.MouseEvent) => {
-      const offset = ev.clientY - rect.top;
-      const min = MIN_BOX_PX / rect.height;
-      // Symmetric clamp: 1 - min is the same floor measured from the other end, so
-      // neither box can be squeezed past the limit the other one respects.
-      setProjectsShare(Math.min(Math.max(offset / rect.height, min), 1 - min));
-    };
-    const cleanup = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", cleanup);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", cleanup);
-    // On the BODY for the duration of the drag: without this the cursor flickers back
-    // to a caret whenever the pointer outruns the 8px seam, and text under it selects.
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-  }
-
-  // See split-boxes.ts for the rule. It is a module rather than two ternaries here
-  // because the version that WAS two ternaries left the non-splittable case
-  // undefined — which reads as "no style needed" and is actually `flex: 0 1 auto`,
-  // so a collapsed box still shrank and its header ended up underneath the box
-  // below it.
-  const { projects: projectsStyle, chats: chatsStyle } = splitBoxStyles({
-    splittable,
-    projectsShare,
-    projectsOpen,
-    chatsOpen,
-  });
-
   return (
-    <SidebarPanel
-      // SECTION 1 of three: the workspace. The back control is the section -- it names
-      // the subscription and agent, and it is the way out -- but it now wears the same
-      // eyebrow as the two below it, because "which of these three am I looking at"
-      // was the thing the panel could not answer.
-      //
-      // It does not fold. It is the panel's own header row, and folding away the only
-      // exit from the panel would be a trap.
-      //
-      // OMITTED ENTIRELY INSIDE A PROJECT (user-directed). It used to stay as static
-      // text, on the reasoning that without it you could not tell whose project you
-      // were in. Two things undercut that: inside a project the row was already
-      // DISABLED, so it was pure identity taking the panel's top row and looking like
-      // a control that had stopped working; and the level above is one click away
-      // through the project's own back arrow, which then brings this row back. What
-      // is left is a project header at the top of the panel, which is what the panel
-      // is showing.
-      scrollBody={false}
-      header={
-        insideProject ? null : (
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-2">
-            <SectionLabel>{t.sections.workspace}</SectionLabel>
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label={t.nav.backToWorkspaces}
-              title={t.nav.backToWorkspaces}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1 text-left transition-colors hover:bg-elevated/60"
-            >
-              <ChevronLeft size={16} className="shrink-0 text-fg-muted" aria-hidden />
-              {/* The SUBSCRIPTION leads and the agent sits under it in lighter type.
-                  Which subscription a workspace belongs to is what a member navigates
-                  by — it is the billing and membership boundary, and it is what
-                  distinguishes two otherwise identical agents. The agent name is the
-                  qualifier within it, not the heading.
+    // NO HEADER. The panel used to lead with the subscription and agent, doubling as
+    // the way back to the workspace list. Both jobs moved: the breadcrumb across the top
+    // of the shell names the workspace, and the way out is its root segment. A header
+    // here would be the same information twice, in the corner furthest from the other
+    // copy — which is the complaint this whole feature answers.
+    <SidebarPanel scrollBody={false}>
+      {/* The magnifier and the List|Tree switch sit at the HEAD OF THE LIST they act
+          on. That placement is the one thing worth carrying over from the three-section
+          version: these controls used to live in the panel's top row, separated from
+          their list by an entire projects section, and moving them down was the fix.
+          Dissolving the sections must not quietly undo it.
 
-                  With no subscription name to show, the agent takes the line alone
-                  rather than being demoted under a uuid. */}
-              {subscription ? (
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-fg" title={subscription}>
-                    {subscription}
-                  </span>
-                  <span className="flex min-w-0 items-center gap-1 text-[11px] capitalize text-fg-muted">
-                    <Bot size={11} className="shrink-0" aria-hidden />
-                    <span className="truncate">{workspace.r}</span>
-                  </span>
-                </span>
-              ) : (
-                <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
-                    {workspace.r}
-                  </span>
-                </span>
-              )}
-            </button>
-          </span>
-        )
-      }
-    >
-      {/* SECTION 2: projects. Everything about PROJECTS first, then the conversations.
-          Each section owns its own create control, and that is the point rather than a
-          duplication: "new" means a different thing in each — a new project, or a new
-          chat — and one shared button at the top could only ever mean one of them.
-          Inside a project the section below is replaced by that project's own chats,
-          because the two lists are separate, not one list filtered. */}
-      <div ref={splitBox} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-col" style={projectsStyle}>
-      <ProjectsBar
-        workspace={workspace}
-        browsedProject={browsedProject}
-        onBrowse={setFragmentProject}
-        open={projectsOpen}
-        onToggle={() => setProjectsOpen((v) => !v)}
-      />
-      </div>
-
-      {splittable && (
-        <SectionSplitter label={t.sections.resize} onDragStart={startSplitDrag} />
-      )}
-
-      <div className="flex min-h-0 flex-col" style={chatsStyle}>
-
-      {/* SECTION 3: the chats. The magnifier and the List|Tree switch live HERE, not in
-          the panel's top row where they used to: both act on the list directly below
-          them, and from the workspace row they were separated from it by the whole
-          projects section. */}
+          The fold is gone with the sections. There is one list here now, and "show me
+          less of the only thing in this column" is not something to want. */}
       <SectionHeader
-        open={chatsOpen}
-        onToggle={() => setChatsOpen((v) => !v)}
-        toggleLabel={(chatsOpen ? t.sections.collapse : t.sections.expand).replace(
-          "{name}",
-          chatsLabel,
-        )}
         label={<SectionLabel>{chatsLabel}</SectionLabel>}
         actions={
-          // Nothing is offered while the list is hidden: searching, switching between
-          // list and tree, and adding to what you cannot see are all no-ops that would
-          // still look clickable.
-          chatsOpen ? (
-            <>
+          <>
               <IconButton
                 variant="ghost"
                 size="sm"
@@ -442,16 +260,14 @@ export default function HistorySidebar({
                 onClick={() => {
                   // Closing clears the query, for the reason the workspace filter does:
                   // a hidden search still narrowing the list is the worst of both, since
-                  // the reason conversations are missing is off screen. Note this is the
-                  // MAGNIFIER closing, not the section folding — folding says nothing
-                  // about the filter and leaves the query alone.
+                  // the reason conversations are missing is off screen.
                   if (searchOpen) setQuery("");
                   setSearchOpen((v) => !v);
                 }}
               >
                 <Search size={16} aria-hidden />
               </IconButton>
-              <div className="flex shrink-0 items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
+              <div className="flex shrink-0 items-center rounded-lg border border-rule-strong bg-elevated p-0.5">
                 <button
                   type="button"
                   onClick={() => setHistoryView("list")}
@@ -473,22 +289,11 @@ export default function HistorySidebar({
                   <GitBranch size={14} aria-hidden />
                 </button>
               </div>
-              <IconButton
-                variant="ghost"
-                size="sm"
-                aria-label={t.history.newChat}
-                title={t.history.newChat}
-                onClick={onNewChat}
-                className="text-accent"
-              >
-                <MessageSquarePlus size={18} aria-hidden />
-              </IconButton>
-            </>
-          ) : null
+          </>
         }
       />
 
-      {chatsOpen && searchOpen && (
+      {searchOpen && (
         <div className="shrink-0 px-2 pb-3 pt-2">
           <ConversationSearchBar
             value={query}
@@ -502,7 +307,6 @@ export default function HistorySidebar({
       {/* Unmounted while folded, not merely hidden: ConversationTree measures its own
           layout in a useLayoutEffect, and `display:none` would have it measure zero and
           come back wrong. Remounting re-measures. */}
-      {chatsOpen && (
       <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
         {view === "tree" ? (
           <ConversationTree
@@ -602,7 +406,7 @@ export default function HistorySidebar({
                   {/* Mobile: an always-visible action row below the name. Desktop:
                       an absolute box on the right, revealed on hover, so it costs
                       the name no width. */}
-                  <div className="flex items-center gap-0.5 border-t border-brand/10 px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                  <div className="flex items-center gap-0.5 border-t border-rule px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
                     <IconButton
                       variant="ghost"
                       size="sm"
@@ -648,9 +452,6 @@ export default function HistorySidebar({
           })}
           </>
         )}
-      </div>
-      )}
-      </div>
       </div>
 
       <ConfirmDialog

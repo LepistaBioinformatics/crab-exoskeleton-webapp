@@ -8,25 +8,32 @@ import type { Locale } from "./config";
 
 const en = {
   shell: {
-    openWorkspaces: "Open workspaces",
+    // The phone's one control over the sidebar. It says "menu", not "workspaces": the
+    // drawer holds the destinations and the conversation list now, and choosing an agent
+    // happens on a screen of its own.
+    openMenu: "Open menu",
     closeMenu: "Close menu",
-    workspaces: "Workspaces",
-    // The collapsed rail's label for the conversations panel.
-    conversations: "Conversations",
-    // Rendered as "<agentPrefix> <role>" in the mobile top bar.
-    agentPrefix: "agent",
+    // The sidebar's list of places. A <nav> needs a name to be told apart from the
+    // conversation list below it, which is also a nav.
+    destinations: "Go to",
+    // The breadcrumb across the top. A second nav needs a second name: "Go to" is the
+    // list of where you could go, this one is where you already are.
+    path: "Path",
+    // The breadcrumb's trailing chevron. It names the conversation's actions rather than
+    // the chevron, because what the menu holds is what a member is looking for.
+    crumbActions: "Conversation actions",
   },
   pane: {
     // Prefixes, completed with the pane's own name: "Expand Conversations".
     expand: "Expand",
     resize: "Resize",
+    // The workspace pane's X. Completed the same way — "Close Files" — because two panes
+    // can be on screen at once and "Close" alone would not say which.
+    close: "Close",
   },
   nav: {
-    collapseWorkspaces: "Collapse Workspaces",
+    collapseSidebar: "Collapse the sidebar",
     collapse: "Collapse",
-    // The chats panel's header control. Its visible text is the agent's name, so the
-    // label is what says where the button goes.
-    backToWorkspaces: "Back to workspaces",
   },
   emptyState: {
     title: "Pick a workspace to start",
@@ -54,16 +61,6 @@ const en = {
   },
   // The chats sidebar's three parts. Shared rather than per-panel: the whole point
   // of the section headers is that they are the same control in three places.
-  sections: {
-    // "Collapse Projects" / "Expand Chats" -- {name} is the section's own label.
-    collapse: "Collapse {name}",
-    expand: "Expand {name}",
-    // The eyebrow over the back control. Singular, unlike shell.workspaces: this
-    // names the ONE workspace you are in, not the list of them.
-    workspace: "Workspace",
-    // The draggable seam between the projects box and the chats box.
-    resize: "Resize the projects and chats boxes",
-  },
   workspaceNav: {
     filterPlaceholder: "Filter workspaces",
     // Every empty state in both sidebars is a TITLE plus a next step, rendered by
@@ -760,18 +757,6 @@ const en = {
     deleteFolderTitle: "Delete this folder?",
     deleteFolderMessage:
       "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
-    // One-line blurbs under each workspace section, so the menu says what each is
-    // for instead of making the member click to find out.
-    sections: {
-      memory: "Standing notes you write for the agent.",
-      graph: "What the agent learned on its own.",
-      tasks: "What runs on a schedule, and its results.",
-      files: "Uploads and files in this workspace.",
-      secrets: "Keys the agent uses, and which model answers.",
-    },
-    resize: "Resize Workspace files",
-    workspace: "Workspace",
-    closePanel: "Close panel",
     files: "Files",
     refreshAria: "Refresh files",
     refresh: "Refresh",
@@ -829,7 +814,10 @@ const en = {
     // agent is rebuilt on the next message. Said plainly rather than letting a
     // first reply just take longer for no visible reason.
     restartNotice: "The agent restarts on your next message.",
-    backToProjects: "Back to projects",
+    // The badge on the card of the project you are already inside. The grid still
+    // renders with a project set, so it has to say which of the cards is where you
+    // are standing rather than look like a list you have not chosen from.
+    current: "Current",
     // The heading over a project's own conversation list.
     projectChats: "Chats in this project",
     selectorLabel: "Project",
@@ -846,20 +834,20 @@ export type ChatDict = typeof en;
 
 const pt: ChatDict = {
   shell: {
-    openWorkspaces: "Abrir workspaces",
+    openMenu: "Abrir menu",
     closeMenu: "Fechar menu",
-    workspaces: "Workspaces",
-    conversations: "Conversas",
-    agentPrefix: "agente",
+    destinations: "Ir para",
+    path: "Caminho",
+    crumbActions: "Ações da conversa",
   },
   pane: {
     expand: "Expandir",
     resize: "Redimensionar",
+    close: "Fechar",
   },
   nav: {
-    collapseWorkspaces: "Recolher Workspaces",
+    collapseSidebar: "Recolher a barra lateral",
     collapse: "Recolher",
-    backToWorkspaces: "Voltar aos workspaces",
   },
   emptyState: {
     title: "Escolha um workspace para começar",
@@ -882,12 +870,6 @@ const pt: ChatDict = {
     confirmTitle: "Sair?",
     confirmMessage: "Você precisará entrar de novo com um link mágico.",
     pending: "Saindo…",
-  },
-  sections: {
-    collapse: "Recolher {name}",
-    expand: "Expandir {name}",
-    workspace: "Workspace",
-    resize: "Redimensionar as caixas de projetos e conversas",
   },
   workspaceNav: {
     filterPlaceholder: "Filtrar workspaces",
@@ -1432,16 +1414,6 @@ const pt: ChatDict = {
     deleteFolderTitle: "Excluir esta pasta?",
     deleteFolderMessage:
       "{name} e {count} arquivo(s) dentro dela serão excluídos. O agente pode referenciá-los.",
-    sections: {
-      memory: "Notas fixas que você escreve para o agente.",
-      graph: "O que o agente aprendeu por conta própria.",
-      tasks: "O que roda em horário programado, e seus resultados.",
-      files: "Uploads e arquivos deste workspace.",
-      secrets: "Chaves que o agente usa, e qual modelo responde.",
-    },
-    resize: "Redimensionar Arquivos do workspace",
-    workspace: "Workspace",
-    closePanel: "Fechar painel",
     files: "Arquivos",
     refreshAria: "Atualizar arquivos",
     refresh: "Atualizar",
@@ -1493,7 +1465,7 @@ const pt: ChatDict = {
       "Os arquivos, a memória e todas as conversas dele são removidos. Não dá para desfazer.",
     deleteConfirm: "Excluir",
     restartNotice: "O agente reinicia na sua próxima mensagem.",
-    backToProjects: "Voltar aos projetos",
+    current: "Atual",
     projectChats: "Conversas deste projeto",
     selectorLabel: "Projeto",
     selectorAria: "Escolher o projeto desta conversa",

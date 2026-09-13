@@ -120,7 +120,7 @@ export default function MarkdownEditor({
       onClick={() => onClose(text)}
     >
       <div
-        className="flex h-[min(80vh,720px)] w-[min(960px,96vw)] flex-col overflow-hidden rounded-2xl border border-brand/40 bg-surface shadow-2xl"
+        className="flex h-[min(80vh,720px)] w-[min(960px,96vw)] flex-col overflow-hidden rounded-2xl border border-rule-strong bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -137,7 +137,7 @@ export default function MarkdownEditor({
         }}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 border-b border-brand/20 px-4 py-2.5">
+        <div className="flex items-center gap-2 border-b border-rule px-4 py-2.5">
           <span className="flex-1 font-display text-sm font-semibold text-fg">{t.markdownEditor.heading}</span>
           <IconButton
             variant="ghost"
@@ -154,7 +154,7 @@ export default function MarkdownEditor({
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-0.5 border-b border-brand/20 px-2 py-1.5">
+        <div className="flex flex-wrap items-center gap-0.5 border-b border-rule px-2 py-1.5">
           {tools.map((tool) => (
             <IconButton
               key={tool.label}
@@ -184,7 +184,7 @@ export default function MarkdownEditor({
             className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 font-mono text-sm leading-relaxed text-fg placeholder:text-fg-muted focus:outline-none"
           />
           {showPreview && (
-            <div className="min-h-0 flex-1 overflow-auto border-t border-brand/20 px-4 py-3 md:border-l md:border-t-0">
+            <div className="min-h-0 flex-1 overflow-auto border-t border-rule px-4 py-3 md:border-l md:border-t-0">
               {text.trim() ? (
                 <MessageContent content={text} />
               ) : (
@@ -195,7 +195,7 @@ export default function MarkdownEditor({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-brand/20 px-4 py-2.5">
+        <div className="flex items-center justify-end gap-2 border-t border-rule px-4 py-2.5">
           <Button variant="text" size="sm" onClick={() => onClose(text)}>
             {t.markdownEditor.saveDraft}
           </Button>

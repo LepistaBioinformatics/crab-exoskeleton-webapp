@@ -16,7 +16,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     <div
       role="group"
       aria-label={t.language.label}
-      className={cn("inline-flex items-center gap-0.5 rounded-lg border border-brand/30 p-0.5", className)}
+      className={cn("inline-flex items-center gap-0.5 rounded-lg border border-rule-strong p-0.5", className)}
     >
       {LOCALES.map((l: Locale) => (
         <button

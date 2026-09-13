@@ -4,30 +4,29 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cva } from "class-variance-authority";
 
-// The header of one foldable section in the chats sidebar.
+// The header row at the top of the sidebar's conversation list.
 //
-// It exists to be SHARED. The sidebar's three parts -- workspace, projects, chats --
-// had no common grammar: projects brought its own header and its own border, chats had
-// a bare label row, and the controls belonging to the chat list sat in the workspace
-// row at the top of the panel. A member could not tell where one part ended. Two
-// look-alike header rows written separately would drift back into that, which is the
-// complaint this is answering.
+// It was WRITTEN TO BE SHARED, when the sidebar had three parts -- workspace, projects,
+// chats -- with no common grammar between them, and three look-alike header rows would
+// have drifted apart. One of the three is left: projects became a destination in the
+// centre and the workspace moved into the breadcrumb, so this is no longer arbitrating
+// between sections. It stays because the row it draws -- a label on the left, the
+// controls that act on the list on the right -- is still the shape the list needs.
 
 const chevron = cva("shrink-0 text-fg-muted transition-colors group-hover/sec:text-fg");
 
-// The uppercase eyebrow. Exported because the workspace section -- which does NOT
-// fold, being the panel's own header row -- has to wear the same label treatment for
-// the three to read as three.
+// A quiet label, NOT an eyebrow any more (FR-6.3). The uppercase, letter-spaced,
+// 12px treatment was the idiom of a sidebar built out of named sections: it shouted
+// because three of them had to be told apart at a glance. There is one list in this
+// column now, and a single all-caps heading over it reads as a section marker for
+// sections that no longer exist. So it drops to the size the rows beneath it are set
+// in -- it names the list, it does not announce a part of the sidebar.
 export function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="truncate text-xs font-semibold uppercase tracking-wide text-fg-muted">
-      {children}
-    </span>
-  );
+  return <span className="truncate text-sm font-medium text-fg-muted">{children}</span>;
 }
 
 const row = cva(
-  "group/sec flex shrink-0 items-center gap-1 border-t border-brand/20 px-2 py-2",
+  "group/sec flex shrink-0 items-center gap-1 border-t border-rule px-2 py-2",
 );
 
 export function SectionHeader({

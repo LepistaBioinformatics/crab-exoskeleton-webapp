@@ -14,8 +14,18 @@
  */
 :root {
   --bg: #ffffff;         /* app background (M3 surface) */
-  --surface: #f7f9fa;    /* sidebars, cards (surface container) */
-  --elevated: #eef3f5;   /* raised/selected rows, composer field */
+  /* The light steps are WIDER than they look like they should be, and that is the
+     point. Separation between regions is tonal now — the violet hairline that used to
+     be drawn under every header is gone — and the dark theme gets that for free at
+     #14171a / #1b1f23 / #232a30. The old light values sat about 3% apart, so removing
+     the borders there removed the boundary outright.
+
+     Measured against dark rather than chosen by eye: bg->elevated is 1.236 here against
+     dark's 1.238, and the two steps come out nearly equal (1.114 / 1.109) where dark's
+     are uneven. `--bg` stays #ffffff — moving it would tint every page in the product,
+     the landing's hero included. */
+  --surface: #f0f3f5;    /* sidebars, cards (surface container) */
+  --elevated: #e2e8ec;   /* raised/selected rows, composer field */
   --accent: #64c5eb;     /* primary accent (infra cyan) */
   --accent-soft: #9ad9f0;/* state-layer / signature-shadow tint */
   --accent-fg: #0a2933;  /* text/icon on an accent fill */
@@ -37,6 +47,19 @@
      one asks for an action. */
   --notice: #9a6400;
   --notice-weak: #fdf1dc;
+  /* THE TWO RULES, and there are only two.
+     `border-brand/<n>` was used 136 times at six different opacities — /30, /20, /40,
+     /25, /50, /10 — which is not a grammar, it is six of them. Region boundaries are
+     drawn by tone now and take no border at all; what is left is these:
+
+       --rule         a boundary INSIDE one surface: a table row, a field group
+       --rule-strong  a boundary that is also a control's edge: an input, an outline
+
+     A case that fits neither is a case this decision missed, and it gets raised rather
+     than a seventh opacity. color-mix on the runtime var so both flip with the scheme —
+     `--brand` is #663a88 in light and #a988c9 in dark, and one definition covers both. */
+  --rule: color-mix(in srgb, var(--brand) 22%, transparent);
+  --rule-strong: color-mix(in srgb, var(--brand) 40%, transparent);
   /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
      A plain dark shadow vanishes on a dark background, so dark mode adds a
      faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
@@ -93,6 +116,8 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-fg: var(--accent-fg);
   --color-brand: var(--brand);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-blocked: var(--blocked);

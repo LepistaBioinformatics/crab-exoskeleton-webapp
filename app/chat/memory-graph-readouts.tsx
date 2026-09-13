@@ -263,7 +263,7 @@ export function HoverCard({
     <div
       // Positioned, so this is inline by necessity rather than by preference.
       style={{ left, top }}
-      className="pointer-events-none absolute z-10 max-w-[200px] rounded-md border border-brand/30 bg-surface/95 px-2 py-1.5 text-[11px] shadow-sm"
+      className="pointer-events-none absolute z-10 max-w-[200px] rounded-md border border-rule-strong bg-surface/95 px-2 py-1.5 text-[11px] shadow-sm"
     >
       <p className="truncate font-medium text-fg">{node.name}</p>
       <p className="truncate text-fg-muted">

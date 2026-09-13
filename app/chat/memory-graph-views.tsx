@@ -40,7 +40,7 @@ import type { EntityReference } from "@/lib/chatReference";
 // outlived the drawer they were first written for.
 
 const row = cva(
-  "flex w-full flex-col gap-1 border-b border-brand/20 px-3 py-2 text-left transition-colors hover:bg-elevated",
+  "flex w-full flex-col gap-1 border-b border-rule px-3 py-2 text-left transition-colors hover:bg-elevated",
   {
     variants: { selected: { true: "bg-elevated", false: "" } },
     defaultVariants: { selected: false },
@@ -56,7 +56,7 @@ const chip = cva(
       active: {
         true: "border-accent/60 bg-accent/20 text-fg",
         false:
-          "border-brand/40 text-fg-muted hover:border-accent/40 hover:text-fg",
+          "border-rule-strong text-fg-muted hover:border-accent/40 hover:text-fg",
       },
     },
     defaultVariants: { active: false },
@@ -116,7 +116,7 @@ export function BrowseList({
           clear the filter. The empty state below names the All chip; this is what makes
           that instruction true in every reachable state. */}
       {onTypeFilter && (types.length > 1 || typeFilter) && (
-        <div className="flex flex-wrap gap-1 border-b border-brand/20 px-3 py-2">
+        <div className="flex flex-wrap gap-1 border-b border-rule px-3 py-2">
           <button
             type="button"
             className={chip({ active: !typeFilter })}
@@ -274,7 +274,7 @@ export function RecentList({
                 <button
                   type="button"
                   onClick={() => onSelect(eo.entity)}
-                  className="w-full rounded-lg border border-brand/30 bg-elevated px-2 py-1.5 text-left transition-colors hover:bg-surface"
+                  className="w-full rounded-lg border border-rule-strong bg-elevated px-2 py-1.5 text-left transition-colors hover:bg-surface"
                 >
                   <span className="block truncate text-xs font-medium text-fg">
                     {eo.entity}
@@ -535,7 +535,7 @@ export function EntityDetail({
             {entity.observations.map((o, i) => (
               <li
                 key={i}
-                className="rounded-lg border border-brand/30 bg-surface px-2 py-1.5"
+                className="rounded-lg border border-rule bg-surface px-2 py-1.5"
               >
                 <p className="text-xs leading-relaxed text-fg">{o.content}</p>
                 <p className="mt-0.5 flex gap-2 text-[10px] text-fg-muted">
@@ -598,7 +598,7 @@ export function EntityDetail({
                     <button
                       type="button"
                       onClick={() => onOpenConversation?.(src.sessionId)}
-                      className="flex w-full items-center gap-1.5 rounded-lg border border-brand/30 bg-surface px-2 py-1 text-left text-[11px] transition-colors hover:border-accent/50 hover:bg-elevated"
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-rule-strong bg-surface px-2 py-1 text-left text-[11px] transition-colors hover:border-accent/50 hover:bg-elevated"
                     >
                       <MessageSquare
                         size={11}

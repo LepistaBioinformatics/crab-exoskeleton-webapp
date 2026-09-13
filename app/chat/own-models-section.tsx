@@ -56,10 +56,10 @@ const row = cva(
       state: {
         // In use: the accent says which one is answering without a second label.
         active: "border-accent bg-accent/10",
-        idle: "border-brand/30 bg-elevated",
+        idle: "border-rule-strong bg-elevated",
         // Registered but an administrator switched it off. Dimmed rather than
         // hidden: it is the member's own record and they may still delete it.
-        disabled: "border-brand/20 bg-elevated opacity-60",
+        disabled: "border-rule-strong bg-elevated opacity-60",
       },
     },
     defaultVariants: { state: "idle" },
@@ -237,7 +237,7 @@ export default function OwnModelsSection({
   return (
     <Accordion title={t.heading} summary={summary} variant="section">
       {/* What is answering, right now. */}
-      <div className="rounded-lg border border-brand/30 bg-elevated px-3 py-2">
+      <div className="rounded-lg border border-rule bg-elevated px-3 py-2">
         <p className="flex items-center gap-2 text-xs font-medium text-fg">
           <Cpu size={14} className="shrink-0 text-accent" aria-hidden />
           {source.kind === "own" ? t.inEffectOwn : t.inEffectOrg}
@@ -394,7 +394,7 @@ export default function OwnModelsSection({
           <Plus size={14} aria-hidden /> {t.add}
         </Button>
       ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-elevated p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-rule bg-elevated p-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-fg-muted">
               {t.labelLabel}

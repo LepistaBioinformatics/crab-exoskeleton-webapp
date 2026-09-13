@@ -18,7 +18,7 @@ import type { RecentChanges, SummaryGraph } from "@/lib/memoryGraph";
 // only through a fetch is deliberately absent below and is verified by looking at the
 // running app instead:
 //
-//   - Files: uploads-sidebar.tsx, both the empty and the filtered branch
+//   - Files: files-screen.tsx, both the empty and the filtered branch
 //   - Scheduled tasks: the "none" and "all finished" branches
 //   - Agent secrets: secrets-drawer.tsx
 //   - Knowledge graph › Search before a query: memory-graph-panel.tsx

@@ -1,183 +1,77 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { cva } from "class-variance-authority";
-import { CircleArrowLeft } from "lucide-react";
+import { CircleArrowLeft, MessageSquarePlus } from "lucide-react";
 import Logo from "@/app/logo";
 import BrandName from "@/app/brand-name";
 import { IconButton } from "@/components/ui/icon-button";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import LogoutButton from "./logout-button";
-import WorkspaceNav from "./workspace-nav";
 import HistorySidebar from "./history-sidebar";
+import SidebarDestinations from "./sidebar-destinations";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
-import { resolvePanel, type SidebarPanel } from "./sidebar-panel-state";
-import { useWorkspaceGroups } from "./use-workspaces";
-import {
-  accountName,
-  type TenantGroup,
-} from "@/lib/subscriptions";
 import { useT } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
+import type { Section } from "./workspace-sections";
 
-// The one sidebar: brand header, ONE OF TWO PANELS, and the account footer.
+// The one sidebar: brand header, the new-chat action, the destinations, the
+// conversation list, the account footer. One column, top to bottom.
 //
-// The two panels answer the two questions a member asks in sequence — which agent,
-// then which conversation — and they are shown in that sequence. The previous version
-// stacked them, splitting the column horizontally with the tree capped at 40vh above
-// the conversation list. That put both questions on screen at once, competing for the
-// same vertical space, and members read the result as one confusing pane rather than
-// two clear steps.
+// IT USED TO SLIDE. Two panels sat side by side on a track twice the pane's width and it
+// translated between them, asking "which agent" and then "which conversation" in
+// sequence. The track is gone with the first of those questions: choosing an agent
+// happens on the agent grid in the centre of the screen now, which is where it always
+// had more room than a 300px column could give it.
 //
-// Everything the stacked version needed to arbitrate height is therefore gone: the
-// 40vh cap and its vh-not-% argument, the per-group collapse, and the localStorage key
-// that persisted which groups were open. Each panel now simply takes the body's full
-// height and scrolls inside itself.
-
-// The TRACK holds both panels side by side at exactly twice the viewport width and
-// slides by half. Percent widths are safe here in a way the old percentage max-height
-// was not: this resolves against a definite inline size (the pane's `--pane-w` on
-// desktop, the drawer's fixed 300px on mobile), not against a flex-resolved height.
-export const track = cva("flex h-full w-[200%]", {
-  variants: {
-    panel: {
-      workspaces: "translate-x-0",
-      chats: "-translate-x-1/2",
-    },
-    // THE FIRST POSITION IS NOT A MOVE. Until the fragment has been read the sidebar
-    // cannot know which panel it is on, so it renders the default — workspaces — and
-    // then jumps to chats the instant the hash resolves. With the transition always on,
-    // that jump animated: every page load, and every navigation that remounted this
-    // tree, replayed the whole workspaces→chats slide for a member who had chosen
-    // nothing. It read as the sidebar scrolling sideways on its own.
-    //
-    // So the transition is ARMED one frame after the panel is first known (see
-    // `armed`): the settling jump lands with transitions off, and every later panel
-    // change — the ones a member actually asked for — animates.
-    animate: {
-      true: "transition-transform duration-300 ease-out motion-reduce:transition-none",
-      false: "",
-    },
-  },
-  defaultVariants: { panel: "workspaces", animate: false },
-});
-
-// Half the track, i.e. exactly the sidebar's width. `outline-none` because the slot is
-// focused programmatically after a slide (tabIndex -1) and a focus ring around the
-// whole panel would read as a selection rather than a landing point.
-const slot = cva("flex w-1/2 min-h-0 shrink-0 flex-col outline-none");
+// Everything the track needed has gone with it -- the `armed` flag that kept the first
+// settling jump from animating, the focus requests that put the cursor back after a
+// slide, the `inert` on whichever panel was off screen. None of it was incidental: each
+// answered a real bug. They are named here because their absence is the thing to check
+// if the sidebar ever starts moving on its own again.
 
 export default function UnifiedSidebar({
   email,
-  resolved,
   workspace,
   project,
+  projectsOpen,
+  openSection,
+  onProjects,
+  onSection,
+  onNewChat,
   onConversationSelect,
   onCollapse,
-  browsing,
-  setBrowsing,
+  hideProjects,
 }: {
   email: string;
-  /**
-   * False until the URL fragment has been read. The sidebar mounts BEFORE that — only
-   * the content pane waits — so this is what tells the track that its first position
-   * is a starting point rather than somewhere a member navigated to.
-   */
-  resolved: boolean;
   /** Null until the fragment resolves a workspace. */
   workspace: Workspace | null;
   /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
+  /** The centre pane is showing the projects screen -- the fragment's `v`. */
+  projectsOpen: boolean;
+  /** The section open in the pane beside the conversation, or null -- the fragment's `rs`. */
+  openSection: Section | null;
+  onProjects: () => void;
+  /** The section the pane should show next, or null to close it. */
+  onSection: (next: Section | null) => void;
+  onNewChat: () => void;
   /**
-   * Closes the mobile drawer. Wired to CONVERSATION selection only.
+   * Closes the mobile drawer. Wired to every row that changes what is on screen behind
+   * it -- a conversation, the projects screen, a section -- because leaving it open would
+   * cover the thing the member just asked for.
    *
-   * Picking a workspace deliberately leaves the drawer open: the slide to that
-   * workspace's conversations happens INSIDE the open drawer, and that list is the
-   * thing the member came for. Closing there made choosing an agent and then one of
-   * its chats two open-close cycles.
+   * A section row is included even though its pane opens on the OPPOSITE edge: on a phone
+   * that pane is a full-screen drawer of its own, so it covers this one regardless, and
+   * the drawer left standing underneath is what the member finds when they close it.
+   * On desktop there is no drawer and this is a no-op.
    */
   onConversationSelect?: () => void;
   onCollapse?: () => void;
-  /**
-   * "The back control was pressed" — owned by the shell, not here, because the
-   * COLLAPSED rail has to indicate which panel it would open, and a copy of this flag
-   * living in each place is exactly the drift sidebar-panel-state.ts exists to avoid.
-   */
-  browsing: boolean;
-  setBrowsing: (browsing: boolean) => void;
+  /** The agent's proxy predates projects; the row is omitted rather than disabled. */
+  hideProjects?: boolean;
 }) {
   const t = useT(chatCopy);
-
-  // The workspace list, shared with the shell and the workspace grid via
-  // useWorkspaceGroups: both panels here need it (the conversations panel names the
-  // subscription its chats belong to), and so does the header outside.
-  const { groups, error: workspacesError } = useWorkspaceGroups();
-
-  // The back control was pressed. Deliberately not persisted: a stored panel outlives
-  // the fragment that justified it, so a reload or a shared link would open on the
-  // wrong one. Everything else is derived.
-  const panel = resolvePanel({ workspace, browsing });
-
-  // Whether the track may animate. See the `animate` variant for why it starts off.
-  //
-  // A FRAME after the fragment resolves, not the same commit: the commit that learns
-  // the panel is the one that jumps to it, and enabling the transition in that very
-  // render is what animated the jump. requestAnimationFrame puts the class change in a
-  // later frame, where the transform is already where it belongs and there is nothing
-  // left to interpolate.
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!resolved || armed) return;
-    const id = requestAnimationFrame(() => setArmed(true));
-    return () => cancelAnimationFrame(id);
-  }, [resolved, armed]);
-  const showingChats = panel === "chats";
-
-  // FOCUS HAS TO FOLLOW THE SLIDE. The control the member just activated — the back
-  // button, an agent leaf — is inside the panel that is leaving, and `inert` on its
-  // ancestor blurs it. Without this, pressing back drops focus to <body>, and inside
-  // the mobile drawer (an overlay) there is no way back in except tabbing from the top
-  // of the document.
-  //
-  // It is a REQUEST recorded by the handlers, not an effect watching `panel`, because
-  // not every panel change is something the member asked for: the lone-workspace
-  // shortcut flips to chats on its own, and stealing focus there is exactly the bug
-  // this is meant to avoid.
-  const [focusRequest, setFocusRequest] = useState<SidebarPanel | null>(null);
-  const workspacesSlot = useRef<HTMLDivElement>(null);
-  const chatsSlot = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Wait for the panel to actually BE the requested one. Picking a workspace writes
-    // the fragment, and the `hashchange` that resolves it lands a task later — so on
-    // the render that records the request the chats panel is still inert, and focusing
-    // an inert subtree does nothing at all.
-    //
-    // It also has to be an EFFECT rather than a `focus()` in the handler: on the
-    // render this fires, `inert` has already been lifted off the incoming slot. Call
-    // it at handler time and you are focusing a still-inert subtree, which does
-    // nothing at all and fails silently.
-    if (!focusRequest || panel !== focusRequest) return;
-    // The SLOT, not the first control inside it. The slot is stable; the conversation
-    // list is keyed by workspace and remounts when the agent changes, which lands a
-    // beat after the panel flips — so focus placed on a control in there is blown away
-    // by the remount moments later. The container survives it, and Tab from there
-    // walks into the panel exactly as if the control had been focused.
-    //
-    // preventScroll IS LOAD-BEARING, not a nicety. `overflow-hidden` stops a user from
-    // scrolling; it does not stop the browser, and focusing an element scrolls it into
-    // view. Without this the viewport's scrollLeft jumps a full panel width to "reveal"
-    // the chats slot — which the track had ALREADY revealed by translating — and the
-    // two offsets compound, sliding the panel clean out of the box. The result is a
-    // sidebar that animates over to nothing at all, and comes back on reload only
-    // because a fresh document has scrollLeft 0.
-    (focusRequest === "chats" ? chatsSlot : workspacesSlot).current?.focus({
-      preventScroll: true,
-    });
-    setFocusRequest(null);
-  }, [focusRequest, panel]);
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -188,7 +82,7 @@ export default function UnifiedSidebar({
           <IconButton
             variant="ghost"
             size="sm"
-            aria-label={t.nav.collapseWorkspaces}
+            aria-label={t.nav.collapseSidebar}
             title={t.nav.collapse}
             onClick={onCollapse}
             className="hidden md:inline-flex"
@@ -198,90 +92,64 @@ export default function UnifiedSidebar({
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        {/* BOTH PANELS STAY MOUNTED for the whole transition. Unmounting the outgoing
-            one is how a slide animates to a blank column — and back preserves the
-            workspace precisely so the conversation list never loses its prop. Only the
-            off-screen panel is taken out of the tab order. */}
-        <div className={track({ panel, animate: armed })}>
-          <div
-            ref={workspacesSlot}
-            // Focusable only programmatically (tabIndex -1) and named, so landing here
-            // after a slide announces which panel you landed on.
-            tabIndex={-1}
-            role="group"
-            aria-label={t.shell.workspaces}
-            className={slot()}
-            aria-hidden={showingChats}
-            inert={showingChats || undefined}
-          >
-            <WorkspaceNav
-              groups={groups}
-              error={workspacesError}
-              // Picking a workspace slides to its conversations. No onSelect closing
-              // the drawer: see the prop's note above.
-              onSelect={() => {
-                setBrowsing(false);
-                setFocusRequest("chats");
-              }}
-              // A lone workspace is entered automatically — unless the member came
-              // back here on purpose, in which case selecting it for them would throw
-              // them straight forward again.
-              autoSelect={!browsing}
+      {/* Everything between the header and the footer needs a workspace to mean
+          anything: there is no list of chats, no project and no files until an agent is
+          chosen. With none chosen the centre pane IS the agent grid, so the sidebar has
+          nothing to add and says nothing rather than explaining itself. */}
+      {workspace && (
+        <>
+          <div className="px-2 pb-1">
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-fg transition-colors hover:bg-elevated"
+            >
+              <MessageSquarePlus size={16} className="shrink-0" aria-hidden />
+              <span className="truncate">{t.history.newChat}</span>
+            </button>
+          </div>
+
+          <SidebarDestinations
+            projectsOpen={projectsOpen}
+            openSection={openSection}
+            hideProjects={hideProjects}
+            onProjects={() => {
+              onProjects();
+              onConversationSelect?.();
+            }}
+            onSection={(next) => {
+              onSection(next);
+              onConversationSelect?.();
+            }}
+          />
+
+          <div className="mt-2 flex min-h-0 flex-1 flex-col">
+            <HistorySidebar
+              // Keyed by workspace so switching agents remounts the list instead of
+              // showing the previous agent's conversations for a beat.
+              //
+              // The PROJECT is deliberately not in this key: the fetch depends on
+              // `workspace.p` directly, and keying on it would throw away the panel's
+              // scroll position and folds on every project switch.
+              key={`${workspace.t}|${workspace.s}|${workspace.r}`}
+              workspace={workspace}
+              project={project}
+              onSelect={onConversationSelect}
             />
           </div>
+        </>
+      )}
 
-          <div
-            ref={chatsSlot}
-            tabIndex={-1}
-            role="group"
-            aria-label={workspace ? `${t.shell.agentPrefix} ${workspace.r}` : undefined}
-            className={slot()}
-            aria-hidden={!showingChats}
-            inert={!showingChats || undefined}
-          >
-            {workspace ? (
-              <HistorySidebar
-                // Keyed by workspace so switching agents remounts the list instead
-                // of showing the previous agent's conversations for a beat.
-                //
-                // The PROJECT is deliberately not in this key. It was, back when
-                // entering a project was a route change and the remount is what
-                // refetched the list; the fetch now depends on `workspace.p` directly.
-                // Keeping it here would throw away everything the panel holds on every
-                // project switch — the projects/chats split, both section folds, the
-                // scroll position — and none of that belongs to one project.
-                key={`${workspace.t}|${workspace.s}|${workspace.r}`}
-                workspace={workspace}
-                project={project}
-                // Null until the tree loads, or when the subscription carries no name.
-                // The header falls back to the agent alone rather than showing a uuid
-                // where a name belongs.
-                subscription={accountName(groups, workspace.t, workspace.s)}
-                onSelect={onConversationSelect}
-                onBack={() => {
-                  setBrowsing(true);
-                  setFocusRequest("workspaces");
-                }}
-              />
-            ) : (
-              // Unreachable in practice — the track only moves here once a workspace
-              // is set — but the slot is always rendered, so it needs something that
-              // is not a crash on a required prop.
-              <div className="flex-1" />
-            )}
-          </div>
-        </div>
-      </div>
+      {!workspace && <div className="min-h-0 flex-1" />}
 
-      <div className="flex shrink-0 flex-col gap-0.5 border-t border-brand/20 px-2 py-2">
+      <div className="flex shrink-0 flex-col gap-0.5 border-t border-rule px-2 py-2">
         <AdminLink />
         <InstallAppButton />
       </div>
 
       {/* The account footer is the one piece of chrome present on every /chat and
           /admin view, so the language toggle lives here. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-brand/20 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-rule px-4 py-3">
         <span className="min-w-0 truncate text-sm text-fg-muted" title={email}>
           {email}
         </span>

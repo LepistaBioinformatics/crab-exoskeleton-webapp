@@ -8,13 +8,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
 }));
 
-import UploadsSidebar from "./uploads-sidebar";
+import FilesScreen from "./files-screen";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Workspace } from "./fragment";
 
 // The three controls on a file row — preview, download, delete — are rendered by the
 // panel itself now that the row no longer goes through AttachmentButton's menu. Nothing
-// else asserts they exist, and this list has a history: uploads-sidebar.tsx records a
+// else asserts they exist, and this list has a history: files-screen.tsx records a
 // "New folder" button that was written, never rendered, and missed by six green tests.
 //
 // jsdom, because a row only exists after the listing effect has resolved, and the suite's
@@ -59,12 +59,7 @@ async function openFilesPane(): Promise<HTMLElement> {
   mounted = { host, root };
   await act(async () => {
     root.render(
-      <UploadsSidebar
-        workspace={workspace}
-        refreshSignal={0}
-        onClose={() => {}}
-        section="files"
-      />,
+      <FilesScreen workspace={workspace} />,
     );
   });
   // Let the listing promise resolve and the tree paint.

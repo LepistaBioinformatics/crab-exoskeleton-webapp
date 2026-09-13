@@ -413,7 +413,7 @@ export default function TurnDock({
           full-width chip, so a conversation gets the whole width for its four lines instead of
           a quarter of it. */}
       {expanded && panel.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-px max-h-64 overflow-y-auto border-t border-brand/30 bg-surface shadow-e">
+        <div className="absolute bottom-full left-0 right-0 mb-px max-h-64 overflow-y-auto border-t border-rule-strong bg-surface shadow-e">
           {panel.map((segment) => chip(segment, true))}
         </div>
       )}
@@ -465,7 +465,7 @@ export default function TurnDock({
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
               aria-label={t.dock.overflowAria}
-              className="shrink-0 border-l border-brand/30 px-3 py-2 text-xs font-semibold text-fg transition-colors hover:bg-elevated"
+              className="shrink-0 border-l border-rule px-3 py-2 text-xs font-semibold text-fg transition-colors hover:bg-elevated"
             >
               {t.dock.overflow.replace("{n}", String(overflow.length))}
             </button>

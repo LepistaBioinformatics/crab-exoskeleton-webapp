@@ -36,7 +36,7 @@ import { useT } from "@/lib/i18n/context";
 // handful of agents, and a tile gives the name room to be read at a glance instead of
 // competing with the permission icons on one line.
 const agentTile = cva(
-  "flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-brand/25 p-2 text-center transition-colors hover:border-accent/60 hover:bg-elevated disabled:opacity-60",
+  "flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-rule-strong p-2 text-center transition-colors hover:border-accent/60 hover:bg-elevated disabled:opacity-60",
 );
 
 export default function WorkspaceGrid() {
@@ -97,7 +97,7 @@ export default function WorkspaceGrid() {
         <div className="mt-6 space-y-8">
           {groups.map((tenant) => (
             <section key={tenant.tenantId}>
-              <div className="flex items-center gap-2 border-b border-brand/25 pb-2">
+              <div className="flex items-center gap-2 border-b border-rule pb-2">
                 <TenantAvatar
                   name={names[tenant.tenantId] ?? tenant.tenantId}
                   logo={brands[tenant.tenantId]?.logo}
@@ -115,7 +115,7 @@ export default function WorkspaceGrid() {
                 {tenant.accounts.map((account) => (
                   <li
                     key={account.subsAccId}
-                    className="rounded-xl border border-brand/30 bg-surface p-3"
+                    className="rounded-xl border border-rule bg-surface p-3"
                   >
                     <div className="flex items-center gap-1.5">
                       <FolderClosed

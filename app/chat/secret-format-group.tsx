@@ -91,7 +91,7 @@ export default function SecretFormatGroup({
           {names.map((secretName) => (
             <li
               key={secretName}
-              className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5"
+              className="flex items-center gap-2 rounded-lg border border-rule bg-elevated px-3 py-1.5"
             >
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{secretName}</span>
               <IconButton

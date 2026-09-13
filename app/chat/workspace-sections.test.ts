@@ -1,23 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { SECTION_ORDER, asSection, nextSidebarValue } from "./workspace-sections";
 
-// right-rail-discoverability FR-1.2. ONE source of order, shared by the rail, the
-// mobile expander and the sidebar's own legacy menu — three renderings of the same
-// list is three places that can disagree about what a workspace holds.
+// right-rail-discoverability FR-1.2. ONE source of order, and it outlived the three
+// surfaces it was written for: the sidebar's section rows, the collapsed rail and the
+// pane's own heading all read it now. Several renderings of the same list is several
+// places that can disagree about what a workspace holds.
 describe("the workspace's sections", () => {
   it("lists what the agent knows, then what it does, then what the member manages", () => {
     expect(SECTION_ORDER).toEqual(["memory", "graph", "tasks", "files", "secrets"]);
   });
 });
 
-// FR-2.1 / FR-2.2. The rail is the only control that can both open and close the
-// sidebar, so the toggle lives beside the list rather than inside the component.
-describe("clicking a rail entry", () => {
+// The sidebar row and the collapsed rail are the only controls that can both open and
+// close the pane, so the toggle lives beside the list rather than inside either of them.
+describe("clicking a section row", () => {
   it("opens the section that was clicked", () => {
     expect(nextSidebarValue(null, "files")).toBe("files");
   });
 
-  it("closes the sidebar when the open section is clicked again", () => {
+  it("closes the pane when the open section is clicked again", () => {
     expect(nextSidebarValue("files", "files")).toBeNull();
   });
 
@@ -25,9 +26,9 @@ describe("clicking a rail entry", () => {
     expect(nextSidebarValue("files", "memory")).toBe("memory");
   });
 
-  // `rs=menu` is the legacy list pane (FR-5.1): a shared link can still land on it,
-  // and from there a click is an open, never a close.
-  it("opens from the legacy menu pane", () => {
+  // The raw fragment value reaches here, so it can be a stale link's `rs=menu` — the
+  // list pane this shell no longer has. From there a click is an open, never a close.
+  it("opens from a value that names no section at all", () => {
     expect(nextSidebarValue("menu", "graph")).toBe("graph");
   });
 });
@@ -41,7 +42,7 @@ describe("reading a section out of the fragment", () => {
     for (const key of SECTION_ORDER) expect(asSection(key)).toBe(key);
   });
 
-  it("refuses the legacy menu pane, which is not a section", () => {
+  it("refuses the list pane this shell no longer has", () => {
     expect(asSection("menu")).toBeNull();
   });
 

@@ -438,7 +438,7 @@ export default function MemoryGraphPanel({
       </p>
 
       <div className="shrink-0 px-3 pt-2">
-        <div className="flex items-center rounded-lg border border-brand/40 bg-elevated p-0.5">
+        <div className="flex items-center rounded-lg border border-rule-strong bg-elevated p-0.5">
           <button
             type="button"
             className={tab({ active: mode === "browse" })}
@@ -523,8 +523,9 @@ export default function MemoryGraphPanel({
             )}
 
             {mode === "map" && graph && (
-              // Fills the pane: a graph in a narrow column is unreadable, and this panel
-              // deliberately has no max width (see uploads-sidebar) precisely for this.
+              // Fills whatever the pane is: a graph in a narrow column is unreadable, and
+              // the pane it renders in is drag-resizable to the width of the viewport
+              // precisely for this (see workspace-pane).
               <div className="flex h-full min-h-[320px] flex-col">
                 {/* The filter input is NOT rendered here. It lives inside MemoryGraphView, which
                     is the element fullscreen is requested on — rendered out here it disappeared

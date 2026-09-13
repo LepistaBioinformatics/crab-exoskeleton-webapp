@@ -34,7 +34,7 @@ const chip = cva(
     variants: {
       active: {
         true: "border-accent/40 bg-accent/15 text-accent",
-        false: "border-brand/30 text-fg-muted hover:text-fg",
+        false: "border-rule-strong text-fg-muted hover:text-fg",
       },
     },
     defaultVariants: { active: false },
@@ -60,7 +60,7 @@ const scopeChip = cva("rounded-full border px-1.5 py-0.5 text-[10px] transition-
   variants: {
     active: {
       true: "border-accent/40 bg-accent/15 text-accent",
-      false: "border-brand/30 text-fg-muted hover:text-fg",
+      false: "border-rule-strong text-fg-muted hover:text-fg",
     },
   },
   defaultVariants: { active: false },
@@ -377,7 +377,7 @@ export default function MapTools({
         open={openGroups.includes("focus")}
         onToggle={() => onToggleGroup("focus")}
       >
-        <div className="flex items-center gap-0.5 rounded-md border border-brand/30 p-0.5">
+        <div className="flex items-center gap-0.5 rounded-md border border-rule-strong p-0.5">
           {HOP_RADII.map((r) => (
             <button
               key={r}
@@ -403,7 +403,7 @@ export default function MapTools({
           <select
             value={tools.sizeBy}
             onChange={(e) => set("sizeBy", e.target.value as SizeMetric)}
-            className="mt-0.5 w-full rounded-md border border-brand/30 bg-elevated px-1.5 py-1 text-[11px] text-fg"
+            className="mt-0.5 w-full rounded-md border border-rule-strong bg-elevated px-1.5 py-1 text-[11px] text-fg"
           >
             {SIZE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -421,7 +421,7 @@ export default function MapTools({
           <select
             value={tools.colorBy}
             onChange={(e) => set("colorBy", e.target.value as ColorEncoding)}
-            className="mt-0.5 w-full rounded-md border border-brand/30 bg-elevated px-1.5 py-1 text-[11px] text-fg"
+            className="mt-0.5 w-full rounded-md border border-rule-strong bg-elevated px-1.5 py-1 text-[11px] text-fg"
           >
             {COLOR_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -527,7 +527,7 @@ export function MapToolsButton({
       title={copy.mapTools.open}
       aria-label={copy.mapTools.open}
       onClick={onOpen}
-      className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border border-brand/30 bg-surface/90 text-fg-muted transition-colors hover:text-fg"
+      className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border border-rule-strong bg-surface/90 text-fg-muted transition-colors hover:text-fg"
     >
       <SlidersHorizontal size={13} aria-hidden />
     </button>
@@ -556,7 +556,7 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-brand/20 first-of-type:border-t-0">
+    <section className="border-t border-rule first-of-type:border-t-0">
       <button
         type="button"
         aria-expanded={open}

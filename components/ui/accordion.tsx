@@ -21,14 +21,16 @@ import { cva } from "class-variance-authority";
 // `card` is the admin panel's: a bordered box per section, which reads as a
 // stack of independent panels — right for a wide screen full of them.
 //
-// `section` is the chat sidebar's grammar (app/chat/sidebar-section.tsx): a
-// flat row separated by a top rule, with an uppercase eyebrow. In a 380px
-// drawer the card's borders nest inside the drawer's own border and each
-// section reads as a floating box; the flat rule reads as one column divided
-// into parts, which is what it is. The sidebar established that grammar for the
-// same reason, and its own comment warns that a second look-alike header
-// written separately would drift away from it — hence a variant here rather
-// than a private copy in the drawer.
+// `section` is the narrow-column grammar: a flat row separated by a top rule,
+// with an uppercase eyebrow. In a 380px column the card's borders nest inside
+// the container's own border and each section reads as a floating box; the flat
+// rule reads as one column divided into parts, which is what it is.
+//
+// It was named after app/chat/sidebar-section.tsx, which no longer wears it: that
+// sidebar is one list now and its label has dropped to a quiet plain one (FR-6.3).
+// This variant is NOT following it down. What it still dresses is a genuine stack
+// of named, foldable sections inside one panel — memory, secrets, own models — and
+// an eyebrow is how a reader tells one of those from the next.
 //
 // `group` so the chevron can rotate off the <details> element's own open state
 // via the built-in `open` variant, which is a generated Tailwind class rather
@@ -37,7 +39,7 @@ const shell = cva("group", {
   variants: {
     variant: {
       card: "rounded-xl border bg-surface",
-      section: "border-t border-brand/20 first:border-t-0",
+      section: "border-t border-rule first:border-t-0",
     },
     tone: {
       // The section that answers "what is happening right now" is drawn as the
@@ -46,9 +48,13 @@ const shell = cva("group", {
       quiet: "",
     },
   },
+  // Two opacities, both from the named set, and which one a tone gets is not a
+  // free choice: the primary card is the one thing on the page meant to be acted
+  // on first, so it gets the weight the grammar reserves for a control's edge; a
+  // quiet card is a group of fields and gets the inside-a-surface rule.
   compoundVariants: [
-    { variant: "card", tone: "primary", class: "border-brand/40" },
-    { variant: "card", tone: "quiet", class: "border-brand/20" },
+    { variant: "card", tone: "primary", class: "border-rule-strong" },
+    { variant: "card", tone: "quiet", class: "border-rule" },
   ],
   defaultVariants: { variant: "card", tone: "quiet" },
 });
@@ -66,8 +72,8 @@ const header = cva(
   },
 );
 
-// The title treatment. `section` wears the sidebar's eyebrow so the drawer and
-// the sidebar read as the same product; `card` keeps the panel heading.
+// The title treatment. `section` wears the eyebrow that tells one section of a
+// stack from the next; `card` keeps the panel heading.
 const titleClass = cva("block min-w-0 truncate", {
   variants: {
     variant: {
@@ -81,7 +87,7 @@ const titleClass = cva("block min-w-0 truncate", {
 const bodyClass = cva("flex flex-col", {
   variants: {
     variant: {
-      card: "gap-4 border-t border-brand/20 px-4 py-4",
+      card: "gap-4 border-t border-rule px-4 py-4",
       // No inner rule: the section's own top border already separates it, and a
       // second line under the header would box it back up.
       section: "gap-3 px-1 pb-4 pt-1",

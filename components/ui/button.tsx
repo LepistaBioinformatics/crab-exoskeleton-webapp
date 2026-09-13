@@ -20,7 +20,7 @@ const button = cva(
         filled: "border border-brand bg-accent text-accent-fg",
         outlined: "border border-brand bg-transparent text-fg",
         text: "bg-transparent text-fg",
-        tonal: "border border-brand/40 bg-elevated text-fg",
+        tonal: "border border-rule-strong bg-elevated text-fg",
       },
       size: {
         sm: "h-8 px-3 text-sm",

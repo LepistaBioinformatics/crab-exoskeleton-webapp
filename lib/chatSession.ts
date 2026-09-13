@@ -94,8 +94,21 @@ function workspaceQuery(workspace: Workspace): string {
   }).toString();
 }
 
-export async function listConversations(workspace: Workspace): Promise<ConversationSummary[]> {
+// `onUnauthorized` is how an expired session gets out of here. Every non-OK status
+// still answers an empty list -- callers that only want names (the dock, the graph
+// panel) have nothing to say about a failure and rendering no name is right for them.
+// But 401 is not "no conversations", it is "nobody is signed in", and a caller that
+// owns a screen has to be able to send the member to /signin instead of showing them
+// an empty sidebar. The callback is optional so that stays the caller's decision.
+export async function listConversations(
+  workspace: Workspace,
+  onUnauthorized?: () => void,
+): Promise<ConversationSummary[]> {
   const res = await fetch(`/api/conversations?${workspaceQuery(workspace)}`);
+  if (res.status === 401) {
+    onUnauthorized?.();
+    return [];
+  }
   if (!res.ok) return [];
   const data = await res.json();
   const rows: ConversationApiRow[] = Array.isArray(data.conversations) ? data.conversations : [];

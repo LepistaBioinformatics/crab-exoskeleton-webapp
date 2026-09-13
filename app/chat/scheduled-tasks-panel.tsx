@@ -51,7 +51,7 @@ import { useLocale, useT } from "@/lib/i18n/context";
 // are unknown.
 
 const runRow = cva(
-  "flex w-full items-start gap-2 border-b border-brand/20 px-3 py-2 text-left transition-colors hover:bg-elevated",
+  "flex w-full items-start gap-2 border-b border-rule px-3 py-2 text-left transition-colors hover:bg-elevated",
 );
 
 const taskDot = cva("mt-1.5 size-2 shrink-0 rounded-full", {
@@ -270,7 +270,7 @@ export default function ScheduledTasksPanel({
   if (open) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-b border-brand/30 px-2 py-2">
+        <div className="flex items-center gap-1 border-b border-rule px-2 py-2">
           <button
             type="button"
             onClick={() => setOpen(null)}
@@ -293,7 +293,7 @@ export default function ScheduledTasksPanel({
           )}
         </div>
 
-        <div className="border-b border-brand/20 px-3 py-2">
+        <div className="border-b border-rule px-3 py-2">
           <p className="font-display text-sm font-semibold text-fg">{open.taskName}</p>
           <p className="text-[11px] text-fg-muted">
             {fmtInstant(open.run.startedAt)}
@@ -343,12 +343,12 @@ export default function ScheduledTasksPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <p className="border-b border-brand/30 px-3 py-2 text-[11px] leading-snug text-fg-muted">
+      <p className="border-b border-rule px-3 py-2 text-[11px] leading-snug text-fg-muted">
         {t.scheduledTasks.hint}
       </p>
 
       {finishedCount > 0 && (
-        <div className="flex items-center gap-2 border-b border-brand/30 px-3 py-2">
+        <div className="flex items-center gap-2 border-b border-rule px-3 py-2">
           <button
             type="button"
             role="switch"
@@ -377,7 +377,7 @@ export default function ScheduledTasksPanel({
           proxy sends no field at all, and warning everyone on it about a
           problem they do not have would be worse than saying nothing. */}
       {data?.fires === false && (
-        <div className="border-b border-brand/30 px-3 py-2">
+        <div className="border-b border-rule px-3 py-2">
           <Alert severity="warning">
             <p className="font-medium">{t.scheduledTasks.inert}</p>
             <p className="mt-0.5 text-[11px] leading-snug text-fg-muted">
@@ -416,7 +416,7 @@ export default function ScheduledTasksPanel({
         {shownTasks?.map((task) => {
           const isOpen = expanded.has(task.id);
           return (
-            <section key={task.id} className="border-b border-brand/30">
+            <section key={task.id} className="border-b border-rule">
               <div className="flex items-start gap-2 px-3 py-2.5">
                 <span className={taskDot({ enabled: task.enabled })} aria-hidden />
                 <div className="min-w-0 flex-1">
@@ -532,7 +532,7 @@ export default function ScheduledTasksPanel({
         })}
 
         {shownOrphans.map((group) => (
-          <section key={group.jobId} className="border-b border-brand/30">
+          <section key={group.jobId} className="border-b border-rule">
             <div className="flex items-start gap-2 px-3 py-2.5">
               <AlertTriangle
                 size={14}

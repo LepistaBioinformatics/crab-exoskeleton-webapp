@@ -14,7 +14,7 @@ import type { Workspace } from "./fragment";
 // portaled to <body>, neither of which survives `renderToStaticMarkup`. The idiom (and
 // the `IS_REACT_ACT_ENVIRONMENT` flag) is message-content-remount.test.tsx's.
 //
-// The reason this file exists at all is the failure recorded in uploads-sidebar.tsx:
+// The reason this file exists at all is the failure recorded in files-screen.tsx:
 // a control that was written but never rendered, with every existing test still green.
 
 beforeAll(() => {

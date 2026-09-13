@@ -14,7 +14,7 @@ import { chatCopy } from "@/lib/i18n/chat";
 // — collapse/resize don't apply there. Width is driven by the `--pane-w` CSS
 // var so it only takes effect at md+ (mobile keeps a fixed overlay width).
 const pane = cva(
-  "relative z-40 border-r border-brand/30 bg-surface max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:w-[300px] max-md:shadow-xl max-md:transition-transform md:shrink-0",
+  "relative z-40 bg-surface max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:w-[300px] max-md:shadow-xl max-md:transition-transform md:shrink-0",
   {
     variants: {
       open: { true: "max-md:translate-x-0", false: "max-md:-translate-x-full" },
@@ -55,7 +55,7 @@ const pane = cva(
 // parked pane never produces a scrollbar. `left-12` starts it after the rail — see the
 // `rail` cva below for why that offset is load-bearing.
 const PEEK_BASE =
-  "md:absolute md:inset-y-0 md:left-12 md:z-10 md:w-[var(--pane-w)] md:border-r md:border-brand/30 md:bg-surface md:shadow-xl md:transition-transform md:duration-200 md:ease-out";
+  "md:absolute md:inset-y-0 md:left-12 md:z-10 md:w-[var(--pane-w)] md:bg-surface md:shadow-xl md:transition-transform md:duration-200 md:ease-out";
 
 export const content = cva("h-full", {
   variants: {
