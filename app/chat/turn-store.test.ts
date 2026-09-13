@@ -346,9 +346,18 @@ describe("recovering a cut stream", () => {
     frames?: string[];
     /** One entry per history read, in order; the last is repeated. null = the read failed. */
     history: (number | null)[];
+    /**
+     * What `/active` answers, one entry per probe, last repeated. `"unreachable"` is
+     * the request failing, which is NOT an answer -- recovery keeps waiting on it.
+     *
+     * Defaults to "still running", which is the premise of every test here: the
+     * stream was cut while the turn was working. A test about the turn ENDING says so.
+     */
+    active?: (boolean | "unreachable")[];
   }) {
     const reads: (number | null)[] = [];
     const posts: string[] = [];
+    const probes: (boolean | "unreachable")[] = [];
     // A finished turn notifies the sidebar through a window event, and this suite
     // runs in the node environment. Unstubbed, the throw lands in runTurn's catch
     // and every assertion below reads "connectivity" instead of what it is testing.
@@ -372,6 +381,13 @@ describe("recovering a cut stream", () => {
           json: async () => ({ messages: Array.from({ length: next }, () => ({ role: "user", content: "x" })) }),
         });
       }
+      if (u.includes("/active?")) {
+        const answers = opts.active ?? [true];
+        const next = answers[Math.min(probes.length, answers.length - 1)];
+        probes.push(next);
+        if (next === "unreachable") return Promise.reject(new Error("offline"));
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ active: next }) });
+      }
       if (u.startsWith("/api/chat/")) {
         posts.push(u);
         return Promise.resolve({ ok: true, status: 200, body: cutStream(opts.frames ?? []) });
@@ -379,7 +395,7 @@ describe("recovering a cut stream", () => {
       // touchConversation / syncSessionRefs
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
     });
-    return { reads, posts };
+    return { reads, posts, probes };
   }
 
   /** Send a message and let the turn run until the stream is cut. */
@@ -414,8 +430,10 @@ describe("recovering a cut stream", () => {
     expect(turn.recovering).toBe(true);
   });
 
-  it("finishes the turn once the transcript grows", async () => {
-    stub({ history: [2, 2, 4] });
+  it("finishes the turn once the proxy says it is over", async () => {
+    // The baseline is read before the loop, so the reads are 2 (baseline), 2, then 4;
+    // the proxy reports the turn over on the poll the reply lands in.
+    stub({ history: [2, 2, 4], active: [true, false] });
     const painted: string[] = [];
     setPainter((sid) => painted.push(sid));
     await sendAndCut();
@@ -426,6 +444,35 @@ describe("recovering a cut stream", () => {
     expect(turn.error).toBeNull();
     // The reply is pulled through the existing completion path, not re-revealed.
     expect(painted).toEqual(["s1"]);
+  });
+
+  // THE DEFECT THIS REPLACED. The wait used to end at the first growth, on the
+  // grounds that a cut stream means the turn was finishing. The ganglion writes a
+  // transcript message per iteration, so a turn that fires subagents grows ten times
+  // before it answers -- and the conversation was released at the first step, with
+  // the real answer appearing whenever something reloaded the history next.
+  it("keeps waiting while the proxy still has the turn, however much lands", async () => {
+    const painted: string[] = [];
+    setPainter((sid) => painted.push(sid));
+    stub({ history: [2, 3, 4, 5], active: [true] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 4);
+    const turn = getTurn("s1");
+    expect(turn.running).toBe(true);
+    expect(turn.recovering).toBe(true);
+    // Each step that landed was pulled in, which is the whole point of not ending:
+    // the member watches the work rather than watching nothing.
+    expect(painted.length).toBeGreaterThan(1);
+  });
+
+  // A probe that could not be sent is not the proxy saying the turn is over. Reading
+  // it as one would rebuild the defect above out of a single dropped request.
+  it("does not end the wait on a probe it could not reach", async () => {
+    stub({ history: [2, 4], active: ["unreachable"] });
+    await sendAndCut();
+    await vi.advanceTimersByTimeAsync(RECOVERY_POLL_MS * 3);
+    expect(getTurn("s1").running).toBe(true);
+    expect(getTurn("s1").recovering).toBe(true);
   });
 
   it("gives up with its own code when the reply never lands", async () => {
