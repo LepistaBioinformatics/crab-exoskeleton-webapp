@@ -218,3 +218,52 @@ export function groupOutcomes(result: ScopeConfigResult): GroupedOutcomes {
 export function inspectionKey(scope: ScopeRef, agent: string, key: string): string {
   return JSON.stringify([scope.kind, scope.tenantId, scope.subsAccId ?? null, agent, key]);
 }
+
+export interface KeyListRow {
+  key: string;
+  managed: boolean;
+  /**
+   * The row that offers the FILTER TEXT ITSELF as a key (spec FR-2). It is not in the
+   * catalog, so nothing is known about it -- `managed` is false because the catalog
+   * never claimed it, not because the proxy will accept the write.
+   */
+  free: boolean;
+}
+
+// keyListRows is what the key column renders: the catalog, narrowed by the filter,
+// with the typed path appended when it is not already one of them.
+//
+// That last row is the whole reason this is not a plain `.filter()`. The catalog is a
+// SUGGESTION LIST, not a whitelist -- the proxy's own words -- and the control it
+// replaces was a text input where any dotted path could be typed. A list with no way
+// to name a key the catalog omits would silently take that away, and the key it would
+// take away first is agents.defaults.max_tool_iterations: the ganglion catalog comes
+// from a generated document that does not emit it, while the harness reads it.
+//
+// It is LAST, not first: when the filter does match catalog keys, those are the answer
+// and a raw fragment of a path is not.
+export function keyListRows(catalog: TemplateCatalog | null, filter: string): KeyListRow[] {
+  const wanted = filter.trim();
+  const keys = catalog?.keys ?? [];
+  const needle = wanted.toLowerCase();
+  const rows: KeyListRow[] = keys
+    .filter((k) => k.key.toLowerCase().includes(needle))
+    .map((k) => ({ key: k.key, managed: k.managed, free: false }));
+  // Exact against the WHOLE catalog rather than the filtered rows: a key that matched
+  // exactly is in `rows` by definition, and testing the filtered set would offer the
+  // typed path a second time whenever the filter happened to hide its own match.
+  if (wanted !== "" && !keys.some((k) => k.key === wanted)) {
+    rows.push({ key: wanted, managed: false, free: true });
+  }
+  return rows;
+}
+
+// catalogHarness names the runtime whose configuration document the catalog describes.
+//
+// One word for the whole list, because the proxy resolves a catalog with
+// TemplateConfigKeys(template, harness) -- one harness per response, so every key
+// carries the same one. It used to be repeated on each suggestion, which is what a
+// dropdown with no header of its own forced. Empty when there is nothing to name.
+export function catalogHarness(catalog: TemplateCatalog | null): string {
+  return catalog?.keys[0]?.harness ?? "";
+}

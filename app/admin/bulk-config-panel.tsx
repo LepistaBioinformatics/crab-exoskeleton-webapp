@@ -1,7 +1,7 @@
 "use client";
 
 import { DEFAULT_POLICY, type RestartPolicy } from "@/lib/restartPolicy";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
 import { type ScopeRef } from "@/lib/admin";
 import {
@@ -12,17 +12,19 @@ import {
   type ScopeConfigInspection,
   type ScopeConfigResult,
   type TemplateCatalog,
-  type TemplateKey,
 } from "@/lib/scopeConfig";
 import {
+  catalogHarness,
   displayBuckets,
   groupOutcomes,
   inspectionKey,
   isManagedKey,
+  keyListRows,
   parseValueInput,
   prettyJson,
   previewCounts,
   revisionsFor,
+  type KeyListRow,
 } from "./bulk-config-state";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -31,6 +33,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/cn";
 import { Field, fieldControlClass } from "./field";
+import { PanelEmpty } from "@/components/ui/panel-empty";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { SYNTAX_ROLE, tokenize } from "./json-tokens";
 import { roleClass } from "@/lib/syntax-theme";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -79,20 +83,35 @@ function bulkPolicy(policy: RestartPolicy): RestartPolicy {
   return { mode: "notice", note: policy.note };
 }
 
-// What a suggestion says about itself, beyond its own key.
+// ONE KEY in the left column.
 //
-// The HARNESS comes first because it is the part the key cannot imply: model_list and
-// agents.defaults.model_name exist in both harnesses' documents, so an admin who has
-// just switched agents has nothing else on screen telling them which list this is. The
-// managed note follows it rather than replacing it — a managed key is listed precisely
-// so the admin stops hunting for it, and that is still true of a key from either.
-function optionLabel(
-  copy: { keyHarness: string; managedSuffix: string },
-  key: TemplateKey,
-): string {
-  const harness = copy.keyHarness.replace("{h}", key.harness);
-  return key.managed ? `${harness} ${copy.managedSuffix}` : harness;
-}
+// `min-h-11` is the 44px touch target on every row at every width, the same rule
+// column-view.tsx states: a list whose row height changes between a phone and a desktop
+// reads as two different lists.
+//
+// The `free` variant is the row that offers the FILTER TEXT ITSELF. Dashed, because it
+// is not a row of the catalog and must not be read as one -- it is the affordance that
+// keeps "the catalog SUGGESTS, it is not a whitelist" true now that the picker is a
+// list rather than a text field.
+const keyRow = cva(
+  [
+    "flex min-h-11 w-full flex-col items-start justify-center gap-0.5 rounded-lg px-2.5 py-1.5 text-left",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+  ],
+  {
+    variants: {
+      state: {
+        // The fill was measured once already for column-view: bg-accent/15 on a dark
+        // background is indistinguishable from bg-elevated, so a selection drawn that
+        // way is a selection nobody can see.
+        current: "bg-accent text-accent-fg",
+        idle: "text-fg hover:bg-elevated/60",
+      },
+      free: { true: "border border-dashed border-rule", false: "" },
+    },
+    defaultVariants: { state: "idle", free: false },
+  },
+);
 
 export default function BulkConfigPanel({
   scope,
@@ -114,7 +133,11 @@ export default function BulkConfigPanel({
   const [catalog, setCatalog] = useState<TemplateCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  const [keyText, setKeyText] = useState("");
+  // The filter over the list, which is ALSO the way in for a key the catalog does not
+  // carry (keyListRows appends it as a row). Deliberately not the selection: typing
+  // narrows what is on offer, clicking is what picks.
+  const [filter, setFilter] = useState("");
+  const [selectedKey, setSelectedKey] = useState("");
   const [inspection, setInspection] = useState<ScopeConfigInspection | null>(null);
   // The identity the loaded inspection belongs to. Compared against the live one
   // rather than cleared from an effect: derived state cannot lag a render, and a
@@ -134,12 +157,27 @@ export default function BulkConfigPanel({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<ScopeConfigResult | null>(null);
 
+  // Every inspection this panel has already paid for, keyed by `inspectionKey`.
+  //
+  // Selecting a key now READS it, so browsing a list of sixteen would otherwise be
+  // sixteen round trips and going back to one already seen would be another. A ref
+  // rather than state: nothing renders from the map itself, only from the inspection
+  // that was put back into state, and a re-render on every write would be noise.
+  //
+  // An apply DROPS its entry (see onSubmit). The inspection described the state before
+  // the write, and restoring it from here would hand the admin a view the write has
+  // already invalidated -- the same reason the live one is discarded.
+  const cache = useRef(new Map<string, ScopeConfigInspection>());
+
   // Bulk editing is subscription-level (proxy DEC-1): a tenant sweep crosses
   // subscriptions that may be administered by different people, so there is no
   // tenant form of the request to send.
   const isSubscription = scope.kind === "subscription";
-  const identity = inspectionKey(scope, agent, keyText.trim());
+  const identity = inspectionKey(scope, agent, selectedKey.trim());
   const live = inspection !== null && inspectedIdentity === identity ? inspection : null;
+  // Derived, not state: the catalog and the selection are both already here, so a
+  // second copy could only disagree with them.
+  const managedPicked = isManagedKey(catalog, selectedKey);
 
   useEffect(() => {
     setCatalog(null);
@@ -149,6 +187,13 @@ export default function BulkConfigPanel({
     // switch would send a template write for an agent whose catalog says there is no
     // template — with no revision to gate it.
     setFutureTarget("none");
+    // And so does the selection. A key of the agent that was on screen need not exist
+    // in the next agent's document, and leaving it selected would fire a read for it
+    // the moment the new catalog lands.
+    setSelectedKey("");
+    setFilter("");
+    setResult(null);
+    setValueText("");
     if (!isSubscription) return;
     let cancelled = false;
     listConfigKeys(scope, agent)
@@ -159,26 +204,99 @@ export default function BulkConfigPanel({
     };
   }, [isSubscription, scope.kind, scope.tenantId, scope.subsAccId, agent]);
 
+  // Selecting a key READS it. The owner asked for the detail to be there on the click
+  // rather than behind a second one, and the cache above is what makes that affordable.
+  //
+  // Keyed on `identity`, which IS the (scope, agent, key) tuple this inspection would
+  // belong to — depending on the parts separately would be the same condition written
+  // twice. An apply clears the inspection without changing the identity, so it does NOT
+  // re-fire: the panel offers "Read again" instead, which is the rule that a spent
+  // inspection is not silently replaced.
+  useEffect(() => {
+    const key = selectedKey.trim();
+    // EVERY path that issues no request clears the flag, because one of them has to.
+    // The previous run's cleanup sets `cancelled`, which skips its own `.finally` --
+    // correct, since an answer for a key that is no longer selected must not touch this
+    // state -- so the run that replaces it is the only thing left that can. A read still
+    // in flight when the selection lands on a CACHED key is the case that stranded the
+    // panel: "Reading..." over values that were right there, and the re-read button that
+    // would have fixed it disabled by that same flag. The other two early returns end up
+    // requesting again anyway, and are written the same way rather than relying on it.
+    if (!isSubscription || key === "" || managedPicked) {
+      setInspecting(false);
+      return;
+    }
+    const cached = cache.current.get(identity);
+    if (cached) {
+      setInspection(cached);
+      setInspectedIdentity(identity);
+      setInspecting(false);
+      return;
+    }
+    let cancelled = false;
+    setInspecting(true);
+    setInspectError(null);
+    inspectConfigKey(scope, agent, key)
+      .then((insp) => {
+        if (cancelled) return;
+        cache.current.set(identity, insp);
+        setInspection(insp);
+        setInspectedIdentity(identity);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setInspection(null);
+        setInspectError(errorText(errs, err.message));
+      })
+      .finally(() => !cancelled && setInspecting(false));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, managedPicked, isSubscription]);
+
   if (!isSubscription) {
     return <Alert severity="info">{t.bulkConfig.subscriptionOnly}</Alert>;
   }
 
+  // The explicit re-read. It bypasses the cache in both directions — it asks the proxy
+  // even when an entry exists, and it replaces that entry — because the only reasons to
+  // press it are that the inspection is spent (an apply just ran) or that the admin
+  // believes it is stale. Serving either from memory would be the opposite of what was
+  // asked.
   async function onInspect() {
-    const key = keyText.trim();
+    const key = selectedKey.trim();
     if (!key) return;
     setInspecting(true);
     setInspectError(null);
     setResult(null);
     try {
       const insp = await inspectConfigKey(scope, agent, key);
+      const id = inspectionKey(scope, agent, key);
+      cache.current.set(id, insp);
       setInspection(insp);
-      setInspectedIdentity(inspectionKey(scope, agent, key));
+      setInspectedIdentity(id);
     } catch (err) {
       setInspection(null);
       setInspectError(errorText(errs, err instanceof Error ? err.message : null));
     } finally {
       setInspecting(false);
     }
+  }
+
+  // Picking a key from the list. Everything the previous key's inspection fed — the
+  // value typed against it, the errors it raised, the results of applying it — goes
+  // with it. A value typed for one key sitting in the form under another is the one
+  // mistake this screen must not make.
+  function onPick(key: string) {
+    if (key === selectedKey) return;
+    setSelectedKey(key);
+    setValueText("");
+    setSubmitError(null);
+    setInspectError(null);
+    setResult(null);
+    setInspection(null);
+    setInspectedIdentity(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -200,7 +318,7 @@ export default function BulkConfigPanel({
         scope,
         agent,
         {
-          key: keyText.trim(),
+          key: selectedKey.trim(),
           value: parsed.value,
           revisions: revisionsFor(live),
           alsoTemplate: futureSend === "template",
@@ -211,7 +329,10 @@ export default function BulkConfigPanel({
       );
       setResult(res);
       // The inspection described the state BEFORE this write, so it is spent. The
-      // admin reads again rather than acting on a view that is now historical.
+      // admin reads again rather than acting on a view that is now historical — and
+      // the cached copy goes with it, or selecting away and back would restore exactly
+      // the view this write invalidated.
+      cache.current.delete(inspectionKey(scope, agent, selectedKey.trim()));
       setInspection(null);
       setInspectedIdentity(null);
     } catch (err) {
@@ -221,9 +342,6 @@ export default function BulkConfigPanel({
     }
   }
 
-  // Derived, not state: the catalog and the typed key are both already here, so a
-  // second copy could only disagree with them.
-  const managedPicked = isManagedKey(catalog, keyText);
   // Whether there is a template document to write into at all. Unknown while the
   // catalog loads, which is the state the option's existing `disabled` already covers.
   const templateOffered = catalog === null || catalog.templateWritable;
@@ -241,253 +359,353 @@ export default function BulkConfigPanel({
   const appliedCount =
     grouped?.groups.find((g) => g.kind === "applied")?.instances.length ?? 0;
 
+  // Rebuilt on every keystroke. The list is sixteen rows and the filter is a substring
+  // test, so there is nothing here a memo would save that it would not cost in a stale
+  // reference to the catalog.
+  const rows = keyListRows(catalog, filter);
+  // The catalog's own matches, separated from the row that offers the typed path: the
+  // "nothing matched" line is a statement about the DOCUMENT, and the free row would
+  // make it never true.
+  const catalogRows = rows.filter((r) => !r.free);
+  const harness = catalogHarness(catalog);
+
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.keyJob}</p>
-
-      <Field
-        label={t.bulkConfig.keyLabel}
-        job={t.bulkConfig.keyJob}
-        htmlFor="bc-key"
-        consequence={managedPicked ? t.bulkConfig.managedPicked : undefined}
+    // TWO PANELS from `lg`, ONE below it. The breakpoint is lg rather than md because
+    // this panel is already the right-hand side of the admin browser's own split: at md
+    // the sections column is still drawn beside it, and splitting the remainder again
+    // leaves two columns too narrow for a dotted path to survive in either.
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+      {/* THE KEYS. `max-lg:hidden` once something is selected is the mobile half of
+          master-detail: one column, the list until a key is picked, then the detail in
+          its place with a way back. Same shape the column browser uses one level up. */}
+      <div
+        className={cn(
+          "flex min-w-0 flex-col gap-2 lg:w-72 lg:shrink-0 lg:border-r lg:border-rule lg:pr-4",
+          selectedKey && "max-lg:hidden",
+        )}
       >
-        {/* One field, with the template's keys as native suggestions: typing filters
-            them, and a path the template does not carry stays typeable. This
-            replaced a separate <select>, whose only job was to fill this same input
-            and which could not be searched at all. */}
-        <input
-          id="bc-key"
-          list="bc-key-options"
-          autoComplete="off"
-          className={fieldControlClass(true)}
-          placeholder={t.bulkConfig.keyPlaceholder}
-          value={keyText}
-          onChange={(e) => setKeyText(e.target.value)}
-        />
-      </Field>
+        {/* The filter is ALSO the field for a key the catalog does not carry, which is
+            why it keeps the example path as its placeholder: typing a whole dotted path
+            here is a supported use, not a misuse of a search box. */}
+        <Field label={t.bulkConfig.keyLabel} job={t.bulkConfig.keyJob} htmlFor="bc-key">
+          <input
+            id="bc-key"
+            autoComplete="off"
+            className={fieldControlClass(true)}
+            placeholder={t.bulkConfig.keyPlaceholder}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </Field>
 
-      {/* The catalog SUGGESTS; it is not the only way in. A key the template does
-          not carry — a newer picoclaw's field, or one a previous repair added —
-          stays reachable by typing it.
-
-          Managed keys are listed rather than hidden, so an admin looking for one
-          finds it instead of hunting. A datalist option cannot be disabled the way
-          the old <select> option was, so the guard moved to isManagedKey: the field
-          says why, and Inspect is blocked. */}
-      {catalogError ? (
-        <Alert severity="error">{errorText(errs, catalogError)}</Alert>
-      ) : catalog === null ? (
-        <div className="flex justify-center py-2">
-          <Spinner size={16} />
-        </div>
-      ) : (
-        <datalist id="bc-key-options">
-          {catalog.keys.map((k) => (
-            <option key={k.key} value={k.key} label={optionLabel(t.bulkConfig, k)} />
-          ))}
-        </datalist>
-      )}
-
-      {/* Said once, beside the list it is about. An agent whose configuration has no
-          template file has it GENERATED instead, per member, on every ensure — so a key
-          here is a key the next start may replace, and an admin reading only the row
-          labels would not learn that from a list where most rows are flagged managed
-          and a few are not. Disclosure, like DEC-4 below: it changes what the admin
-          knows, not what the screen lets them do. */}
-      {catalog !== null && !catalog.templateWritable && (
-        <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.generatedDoc}</p>
-      )}
-
-      <div>
-        <Button
-          type="button"
-          variant="outlined"
-          disabled={inspecting || !keyText.trim() || managedPicked}
-          onClick={onInspect}
-        >
-          {inspecting ? t.bulkConfig.inspecting : live ? t.bulkConfig.reinspect : t.bulkConfig.inspect}
-        </Button>
-      </div>
-
-      {inspectError && <Alert severity="error">{inspectError}</Alert>}
-
-      {live && <Distribution inspection={live} />}
-
-      {live && live.total > 0 && (
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Field
-            label={t.bulkConfig.valueLabel}
-            job={t.bulkConfig.valueJob}
-            htmlFor="bc-value"
-            consequence={
-              preview
-                ? [
-                    t.bulkConfig.previewWillChange.replace("{n}", String(preview.willChange)),
-                    t.bulkConfig.previewAlreadyMatch.replace("{n}", String(preview.alreadyMatch)),
-                    t.bulkConfig.previewExcluded.replace("{n}", String(preview.excluded)),
-                  ].join(" · ")
-                : undefined
-            }
-          >
-            {/* A textarea, not an input: the value is JSON, and an object or array
-                typed into one line is as unreadable to write as it was to read.
-                fieldControlClass(true) already carries font-mono; resize-y overrides
-                the primitive's resize-none (cn is tailwind-merge, last wins). */}
-            <Textarea
-              id="bc-value"
-              rows={4}
-              spellCheck={false}
-              className={cn(fieldControlClass(true), "resize-y leading-relaxed")}
-              placeholder={t.bulkConfig.valuePlaceholder}
-              value={valueText}
-              onChange={(e) => setValueText(e.target.value)}
-            />
-          </Field>
-
-          {/* WHO ELSE this reaches. The apply above covers existing members; these
-              are the two ways to reach members created LATER, and they differ only
-              in population — one subscription, or every subscription on the agent.
-              Presenting them as one choice is what makes that difference legible.
-
-              DEC-4 controls the template option by DISCLOSURE, not by authority: no
-              higher tier gates it, so the sentence beside it IS the control. Never a
-              title attribute, never a tooltip, and it must not be softened into one.
-
-              The template option needs the catalog: its write is revision-checked
-              and the revision comes from the catalog, so offering it after a failed
-              load would send a request the proxy can only refuse — and the admin
-              would read a stale-revision message for what was a load failure. The
-              scoped option has no revision, so it stays available. */}
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 font-display text-xs font-medium text-fg-muted">
-              {t.bulkConfig.futureLabel}
-            </legend>
-            {(
-              [
-                ["none", t.bulkConfig.futureNone, t.bulkConfig.futureNoneReach, false],
-                [
-                  "subscription",
-                  t.bulkConfig.futureSubscription,
-                  t.bulkConfig.futureSubscriptionReach,
-                  false,
-                ],
-                [
-                  "template",
-                  t.bulkConfig.futureTemplate,
-                  t.bulkConfig.futureTemplateReach,
-                  catalog === null,
-                ],
-              ] as const
-            )
-              // REMOVED rather than disabled when the catalog reports no template, and
-              // that is not a retreat from DEC-4. DEC-4 is about not gating a reachable
-              // write behind a tier — the sentence beside it stays the control for the
-              // write that EXISTS. This one does not exist: there is no document for it
-              // to land in, so a disabled radio would advertise an action the proxy
-              // could only refuse, and the admin would read a stale-revision error for
-              // a write that was never made. The sentence under the fieldset says so
-              // instead, which is the same disclosure the option's own "reach" line is.
-              .filter(([value]) => value !== "template" || templateOffered)
-              .map(([value, label, reach, disabled]) => (
-              <label key={value} className="flex items-start gap-2 text-[13px] text-fg">
-                <input
-                  type="radio"
-                  name="bc-future"
-                  className="mt-0.5"
-                  value={value}
-                  checked={futureSend === value}
-                  disabled={disabled}
-                  onChange={() => setFutureTarget(value)}
-                />
-                <span>
-                  {label}
-                  <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{reach}</span>
-                </span>
-              </label>
-            ))}
-            {!templateOffered && (
+        {catalogError ? (
+          <Alert severity="error">{errorText(errs, catalogError)}</Alert>
+        ) : catalog === null ? (
+          <div className="flex justify-center py-2">
+            <Spinner size={16} />
+          </div>
+        ) : (
+          <>
+            {harness && (
               <p className="text-xs leading-relaxed text-fg-muted">
-                {t.bulkConfig.futureTemplateAbsent}
+                {t.bulkConfig.catalogHarness.replace("{h}", harness)}
               </p>
             )}
-          </fieldset>
 
-          {/* Said out loud, because this is the one place the screen does not obey
-              the restart control above it (see bulkPolicy). Shown only when the two
-              actually disagree. */}
-          {restartPolicy.mode === "now" && (
-            <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.noticeOverride}</p>
-          )}
+            {/* Said when the DOCUMENT has nothing matching, which the free row would
+                otherwise hide — it is always there, so an empty list never happens and
+                the admin would read "use this path" with no idea the catalog was
+                searched at all. */}
+            {catalogRows.length === 0 && filter.trim() !== "" && (
+              <p className="text-xs leading-relaxed text-fg-muted">
+                {t.bulkConfig.keyNoMatch.replace("{q}", filter.trim())}
+              </p>
+            )}
 
-          {submitError && <Alert severity="error">{submitError}</Alert>}
+            <ul className="flex max-h-[20rem] flex-col gap-0.5 overflow-y-auto lg:max-h-[60dvh]">
+              {rows.map((r) => (
+                <li key={`${r.free ? "typed:" : ""}${r.key}`}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(r.key)}
+                    aria-current={r.key === selectedKey ? "true" : undefined}
+                    className={keyRow({
+                      state: r.key === selectedKey ? "current" : "idle",
+                      free: r.free,
+                    })}
+                  >
+                    <span className="w-full truncate font-mono text-[12.5px]" title={r.key}>
+                      {r.free ? t.bulkConfig.keyUseTyped.replace("{k}", r.key) : r.key}
+                    </span>
+                    {/* Managed keys are LISTED rather than hidden, so an admin looking
+                        for one finds it instead of hunting, and the row says why it is
+                        not a row they can change. The refusal itself is in the detail. */}
+                    {(r.free || r.managed) && (
+                      <span
+                        className={cn(
+                          "w-full truncate text-[11px] leading-tight",
+                          r.key === selectedKey ? "text-accent-fg/80" : "text-fg-muted",
+                        )}
+                      >
+                        {r.free ? t.bulkConfig.keyUseTypedJob : t.bulkConfig.managedSuffix}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-          <Button type="submit" variant="filled" disabled={submitting || inspecting}>
-            {submitting ? t.bulkConfig.applying : t.bulkConfig.apply}
-          </Button>
-        </form>
-      )}
+            {/* Said once, beside the list it is about. An agent whose configuration has
+                no template file has it GENERATED instead, per member, on every ensure —
+                so a key here is a key the next start may replace, and an admin reading
+                only the row labels would not learn that from a list where most rows are
+                flagged managed and a few are not. It belongs on THIS side because it is
+                about the document the list came from; futureTemplateAbsent, which is
+                about the write, stays with the fieldset in the detail. Disclosure, like
+                DEC-4: it changes what the admin knows, not what the screen lets them
+                do. */}
+            {!catalog.templateWritable && (
+              <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.generatedDoc}</p>
+            )}
+          </>
+        )}
+      </div>
 
-      {grouped && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-            <span className="font-display text-xs font-medium text-fg-muted">
-              {t.bulkConfig.resultTitle}
-            </span>
-          </div>
-
-          {/* `info`, not `error`: nothing failed. Those instances were skipped
-              precisely so a change the admin has not seen is not overwritten, and
-              the next step is to read again. */}
-          {grouped.hasStale && <Alert severity="info">{t.bulkConfig.stalePrompt}</Alert>}
-
-          {grouped.groups.map((g) => (
-            <div key={g.kind} className={bucketCard({ excluded: g.kind !== "applied" })}>
-              <div className="mb-1 flex items-start gap-2">
-                <Badge tone="neutral">{outcomeLabel(t, g.kind)}</Badge>
-                <span className="text-xs text-fg-muted">
-                  {t.bulkConfig.instancesCount.replace("{n}", String(g.instances.length))}
-                </span>
-              </div>
-              <ul className="flex flex-col gap-0.5">
-                {g.instances.map((o) => (
-                  <li key={o.userAccId} className="text-xs text-fg">
-                    <span className="font-mono">{o.email || o.userAccId}</span>
-                    {o.detail ? <span className="text-fg-muted"> — {o.detail}</span> : null}
-                    {o.reapplied && !o.reapplied.ok ? (
-                      <span className="text-fg-muted"> — {t.bulkConfig.reapplyWarning}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+      {/* THE KEY. Everything the panel knows about the one that is selected. */}
+      <div className={cn("flex min-w-0 flex-1 flex-col gap-4", !selectedKey && "max-lg:hidden")}>
+        {!selectedKey ? (
+          // Only ever seen from `lg` up: below it this whole column is hidden until
+          // something is selected, and the list is what fills the screen instead.
+          <PanelEmpty
+            icon={SlidersHorizontal}
+            title={t.bulkConfig.detailEmptyTitle}
+            body={t.bulkConfig.detailEmptyBody}
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* The way back, and the only one a phone has: at this width the list is
+                  not on screen to click. Gone from `lg`, where both columns are. */}
+              <button
+                type="button"
+                onClick={() => onPick("")}
+                className="flex min-h-11 items-center gap-1.5 rounded-lg px-1.5 text-sm text-fg-muted transition-colors hover:text-fg lg:hidden"
+              >
+                <ArrowLeft size={16} aria-hidden />
+                {t.bulkConfig.backToKeys}
+              </button>
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-fg"
+                title={selectedKey}
+              >
+                {selectedKey}
+              </span>
+              {/* Not offered for a managed key: there is nothing to read that the
+                  admin could then act on, and a button that only ever produces a
+                  refusal is worse than no button. */}
+              {!managedPicked && (
+                <Button
+                  type="button"
+                  variant="outlined"
+                  disabled={inspecting}
+                  onClick={onInspect}
+                >
+                  {inspecting
+                    ? t.bulkConfig.inspecting
+                    : live
+                      ? t.bulkConfig.reinspect
+                      : t.bulkConfig.inspect}
+                </Button>
+              )}
             </div>
-          ))}
 
-          <p className="text-xs text-fg-muted">
-            {appliedCount > 0
-              ? t.bulkConfig.restartNote.replace("{n}", String(appliedCount))
-              : t.bulkConfig.restartNoteNone}
-          </p>
+            {/* The refusal the key field used to carry as its `consequence`, moved to
+                where the work now happens. The row stays clickable — a row that
+                swallowed the click would say nothing at all. */}
+            {managedPicked && <Alert severity="info">{t.bulkConfig.managedPicked}</Alert>}
 
-          {result?.subscription &&
-            (result.subscription.ok ? (
-              <Alert severity="info">{t.bulkConfig.scopedApplied}</Alert>
-            ) : (
-              <Alert severity="error">
-                {t.bulkConfig.scopedFailed} {result.subscription.detail}
-              </Alert>
-            ))}
+            {inspectError && <Alert severity="error">{inspectError}</Alert>}
 
-          {result?.template &&
-            (result.template.ok ? (
-              <Alert severity="info">{t.bulkConfig.templateApplied}</Alert>
-            ) : (
-              <Alert severity="error">
-                {t.bulkConfig.templateFailed} {result.template.detail}
-              </Alert>
-            ))}
-        </div>
-      )}
+            {live && <Distribution inspection={live} />}
+
+            {live && live.total > 0 && (
+              <form onSubmit={onSubmit} className="flex flex-col gap-3">
+                <Field
+                  label={t.bulkConfig.valueLabel}
+                  job={t.bulkConfig.valueJob}
+                  htmlFor="bc-value"
+                  consequence={
+                    preview
+                      ? [
+                          t.bulkConfig.previewWillChange.replace("{n}", String(preview.willChange)),
+                          t.bulkConfig.previewAlreadyMatch.replace("{n}", String(preview.alreadyMatch)),
+                          t.bulkConfig.previewExcluded.replace("{n}", String(preview.excluded)),
+                        ].join(" · ")
+                      : undefined
+                  }
+                >
+                  {/* A textarea, not an input: the value is JSON, and an object or array
+                      typed into one line is as unreadable to write as it was to read.
+                      fieldControlClass(true) already carries font-mono; resize-y overrides
+                      the primitive's resize-none (cn is tailwind-merge, last wins). */}
+                  <Textarea
+                    id="bc-value"
+                    rows={4}
+                    spellCheck={false}
+                    className={cn(fieldControlClass(true), "resize-y leading-relaxed")}
+                    placeholder={t.bulkConfig.valuePlaceholder}
+                    value={valueText}
+                    onChange={(e) => setValueText(e.target.value)}
+                  />
+                </Field>
+
+                {/* WHO ELSE this reaches. The apply above covers existing members; these
+                    are the two ways to reach members created LATER, and they differ only
+                    in population — one subscription, or every subscription on the agent.
+                    Presenting them as one choice is what makes that difference legible.
+
+                    DEC-4 controls the template option by DISCLOSURE, not by authority: no
+                    higher tier gates it, so the sentence beside it IS the control. Never a
+                    title attribute, never a tooltip, and it must not be softened into one.
+
+                    The template option needs the catalog: its write is revision-checked
+                    and the revision comes from the catalog, so offering it after a failed
+                    load would send a request the proxy can only refuse — and the admin
+                    would read a stale-revision message for what was a load failure. The
+                    scoped option has no revision, so it stays available. */}
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="mb-1 font-display text-xs font-medium text-fg-muted">
+                    {t.bulkConfig.futureLabel}
+                  </legend>
+                  {(
+                    [
+                      ["none", t.bulkConfig.futureNone, t.bulkConfig.futureNoneReach, false],
+                      [
+                        "subscription",
+                        t.bulkConfig.futureSubscription,
+                        t.bulkConfig.futureSubscriptionReach,
+                        false,
+                      ],
+                      [
+                        "template",
+                        t.bulkConfig.futureTemplate,
+                        t.bulkConfig.futureTemplateReach,
+                        catalog === null,
+                      ],
+                    ] as const
+                  )
+                    // REMOVED rather than disabled when the catalog reports no template, and
+                    // that is not a retreat from DEC-4. DEC-4 is about not gating a reachable
+                    // write behind a tier — the sentence beside it stays the control for the
+                    // write that EXISTS. This one does not exist: there is no document for it
+                    // to land in, so a disabled radio would advertise an action the proxy
+                    // could only refuse, and the admin would read a stale-revision error for
+                    // a write that was never made. The sentence under the fieldset says so
+                    // instead, which is the same disclosure the option's own "reach" line is.
+                    .filter(([value]) => value !== "template" || templateOffered)
+                    .map(([value, label, reach, disabled]) => (
+                    <label key={value} className="flex items-start gap-2 text-[13px] text-fg">
+                      <input
+                        type="radio"
+                        name="bc-future"
+                        className="mt-0.5"
+                        value={value}
+                        checked={futureSend === value}
+                        disabled={disabled}
+                        onChange={() => setFutureTarget(value)}
+                      />
+                      <span>
+                        {label}
+                        <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{reach}</span>
+                      </span>
+                    </label>
+                  ))}
+                  {!templateOffered && (
+                    <p className="text-xs leading-relaxed text-fg-muted">
+                      {t.bulkConfig.futureTemplateAbsent}
+                    </p>
+                  )}
+                </fieldset>
+
+                {/* Said out loud, because this is the one place the screen does not obey
+                    the restart control above it (see bulkPolicy). Shown only when the two
+                    actually disagree. */}
+                {restartPolicy.mode === "now" && (
+                  <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.noticeOverride}</p>
+                )}
+
+                {submitError && <Alert severity="error">{submitError}</Alert>}
+
+                <Button type="submit" variant="filled" disabled={submitting || inspecting}>
+                  {submitting ? t.bulkConfig.applying : t.bulkConfig.apply}
+                </Button>
+              </form>
+            )}
+
+            {grouped && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+                  <span className="font-display text-xs font-medium text-fg-muted">
+                    {t.bulkConfig.resultTitle}
+                  </span>
+                </div>
+
+                {/* `info`, not `error`: nothing failed. Those instances were skipped
+                    precisely so a change the admin has not seen is not overwritten, and
+                    the next step is to read again. */}
+                {grouped.hasStale && <Alert severity="info">{t.bulkConfig.stalePrompt}</Alert>}
+
+                {grouped.groups.map((g) => (
+                  <div key={g.kind} className={bucketCard({ excluded: g.kind !== "applied" })}>
+                    <div className="mb-1 flex items-start gap-2">
+                      <Badge tone="neutral">{outcomeLabel(t, g.kind)}</Badge>
+                      <span className="text-xs text-fg-muted">
+                        {t.bulkConfig.instancesCount.replace("{n}", String(g.instances.length))}
+                      </span>
+                    </div>
+                    <ul className="flex flex-col gap-0.5">
+                      {g.instances.map((o) => (
+                        <li key={o.userAccId} className="text-xs text-fg">
+                          <span className="font-mono">{o.email || o.userAccId}</span>
+                          {o.detail ? <span className="text-fg-muted"> — {o.detail}</span> : null}
+                          {o.reapplied && !o.reapplied.ok ? (
+                            <span className="text-fg-muted"> — {t.bulkConfig.reapplyWarning}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+
+                <p className="text-xs text-fg-muted">
+                  {appliedCount > 0
+                    ? t.bulkConfig.restartNote.replace("{n}", String(appliedCount))
+                    : t.bulkConfig.restartNoteNone}
+                </p>
+
+                {result?.subscription &&
+                  (result.subscription.ok ? (
+                    <Alert severity="info">{t.bulkConfig.scopedApplied}</Alert>
+                  ) : (
+                    <Alert severity="error">
+                      {t.bulkConfig.scopedFailed} {result.subscription.detail}
+                    </Alert>
+                  ))}
+
+                {result?.template &&
+                  (result.template.ok ? (
+                    <Alert severity="info">{t.bulkConfig.templateApplied}</Alert>
+                  ) : (
+                    <Alert severity="error">
+                      {t.bulkConfig.templateFailed} {result.template.detail}
+                    </Alert>
+                  ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
