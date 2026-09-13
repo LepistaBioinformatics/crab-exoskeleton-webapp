@@ -634,24 +634,33 @@ async function transcriptLength(sid: string, ctx: RunContext): Promise<number | 
  * exists; from here on the turn is committed upstream and sending it again would run
  * a ten-minute turn twice.
  *
- * TWO MODES, and the difference is which end of a turn we are at.
+ * WHAT ENDS THE WAIT IS THE PROXY, never the transcript growing.
  *
- * Without `stillActive` (a stream cut on an open page) the first growth IS the reply:
- * the cut happened while the turn was finishing, so one repaint ends the wait.
+ * It used to be two modes. A resume after a reload asked `/active`; a stream cut on
+ * an open page took the FIRST GROWTH for the reply, on the grounds that the cut must
+ * have happened while the turn was finishing. That grounds held for picoclaw, which
+ * appends one assistant message per turn -- its inline `tool` entries are dropped by
+ * the proxy's history reader, so they never move the count this compares.
  *
- * With it (a resume after a reload) the turn may have minutes left, and the first
- * thing to land is a TOOL STEP -- picoclaw appends every message to the session file
- * as it happens (`pkg/memory/jsonl.go`'s `addMsg`), and the proxy's history handler
- * syncs before each read. Returning there is what made a reloaded conversation go
- * quiet seconds after the resume and need ANOTHER reload to show the rest. So in this
- * mode each growth repaints and the loop keeps going until the proxy says the turn is
- * over. See `.specs/features/turn-stream-continuity/field-observation-resume.md`.
+ * The ganglion moves it on every iteration. Each narration frame is appended as its
+ * own assistant message carrying tool_calls, and the history reader keeps those and
+ * marks them steps. A turn that fires subagents writes ten or more before it answers.
+ * So the first poll after a cut saw growth, the wait ended, `finishIfDrained` cleared
+ * `running`, and the conversation was released while the turn was still running --
+ * with the real answer landing minutes later and first appearing on whatever reloaded
+ * the history next. That is the "it prints the whole old message when I send another
+ * one" report.
+ *
+ * One mode, then: each growth repaints -- pulling the steps that landed during the
+ * cut -- and the loop runs until the proxy says the turn is over. See
+ * `.specs/features/turn-stream-continuity/field-observation-resume.md` and
+ * `.specs/features/answer-typing-and-step-recovery/spec.md`.
  */
 async function recover(
   sid: string,
   ctx: RunContext,
   preRead?: number | null,
-  stillActive?: () => Promise<boolean>,
+  probeActive: (sid: string, ctx: RunContext) => Promise<boolean | null> = fetchActive,
 ) {
   patch(sid, { recovering: true, recoveringSince: Date.now() });
   // The baseline comes from the first SUCCESSFUL read, not the first attempt: a
@@ -672,22 +681,27 @@ async function recover(
       // never extend the wait.
       await interruptibleSleep(RECOVERY_POLL_MS);
       const length = await transcriptLength(sid, ctx);
+      let landed = false;
       if (length !== null) {
         if (baseline === null) {
           baseline = length;
         } else if (length > baseline) {
           grew = true;
-          if (!stillActive) return; // the turn landed; the painter will pull it
+          landed = true;
           baseline = length;
-          // Repaint NOW rather than at the end. The turn is still running, so
-          // `clearCompleted` no-ops and the bands stay put; all this does is pull the
-          // steps that have landed since the last look.
-          onReplyDone?.(sid);
         }
       }
       // Asked AFTER the read, so the last growth is never left unpainted: a turn that
-      // ends between the two is still repainted by the caller's finishIfDrained.
-      if (stillActive && !(await stillActive())) return;
+      // ends between the two is repainted by the caller's finishIfDrained instead.
+      //
+      // Only an explicit `false` ends the wait. A probe that could not answer leaves
+      // the turn running as far as anyone here knows, and treating that as "over"
+      // would rebuild the released-too-early defect out of one dropped request.
+      if ((await probeActive(sid, ctx)) === false) return;
+      // Still running, so whatever landed is a STEP, not the reply. Repaint now rather
+      // than at the end: the turn is still running, so `clearCompleted` no-ops and the
+      // bands stay put -- all this does is pull what has landed since the last look.
+      if (landed) onReplyDone?.(sid);
     }
     // Only when NOTHING ever arrived. A resumed turn that kept producing and simply
     // outlived the budget was not lost, and saying so would be the "success shown as
@@ -1269,7 +1283,7 @@ export function __seed(sid: string, state: Partial<TurnState>) {
  * registers under the same scope as a main one. Sending it anyway would put a
  * parameter on the wire that reads like a guarantee nobody makes.
  */
-async function fetchActive(sid: string, ctx: RunContext): Promise<boolean> {
+async function fetchActive(sid: string, ctx: RunContext): Promise<boolean | null> {
   const query = new URLSearchParams({
     session_id: sid,
     tenant_id: ctx.workspace.t,
@@ -1277,13 +1291,18 @@ async function fetchActive(sid: string, ctx: RunContext): Promise<boolean> {
   });
   try {
     const res = await fetch(`/api/chat/${ctx.workspace.r}/active?${query.toString()}`);
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const data = await res.json();
     return data.active === true;
   } catch {
-    // Unreachable is not "finished". Returning false here only means we do not
-    // resume; the transcript still holds the reply whenever it lands.
-    return false;
+    // NULL, not false, and the distinction is load-bearing since recover() began
+    // ending its wait on this answer. "The proxy says no turn is running" ends a
+    // recovery; "we could not ask" must not, or a dropped packet would release a
+    // turn that is still running -- the exact defect the polling exists to prevent.
+    //
+    // resumeIfActive treats both the same and is right to: not knowing is not a
+    // reason to START a recovery, only a reason not to end one.
+    return null;
   }
 }
 
@@ -1315,7 +1334,14 @@ export async function resumeIfActive(
   ctx: RunContext,
   probes: Partial<{
     baseline: (sid: string, ctx: RunContext) => Promise<number | null>;
-    active: (sid: string, ctx: RunContext) => Promise<boolean>;
+    /**
+     * `null` is "could not ask", and it is a THIRD answer, not a false. Declared
+     * here as well as on fetchActive so a stub written against this type can
+     * produce it: the resume flow hands this same probe to recover(), where the
+     * difference between "no turn is running" and "no answer" decides whether the
+     * wait ends.
+     */
+    active: (sid: string, ctx: RunContext) => Promise<boolean | null>;
     /**
      * True once the caller has stopped caring — it navigated away mid-probe.
      *
@@ -1342,14 +1368,14 @@ export async function resumeIfActive(
 
   const baseline = await readBaseline(sid, ctx);
   if (cancelled()) return;
-  if (!(await readActive(sid, ctx))) return;
+  if ((await readActive(sid, ctx)) !== true) return;
   // Re-checked AFTER the probe, not only before it: the round-trip is exactly
   // when the member switches conversations.
   if (cancelled()) return;
 
   patch(sid, { running: true, arrivalDone: false, error: null });
   try {
-    await recover(sid, ctx, baseline, () => readActive(sid, ctx));
+    await recover(sid, ctx, baseline, readActive);
     syncSessionRefs(ctx.workspace, sid).catch(() => {});
     notifyConversationsUpdated();
   } finally {
