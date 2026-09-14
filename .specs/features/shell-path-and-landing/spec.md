@@ -89,7 +89,14 @@ conversations once.
   conversation minted without `p` is answered by the main agent and reads its history
   from the wrong workspace.
 - **FR-3.7** Deleting the open conversation lands on the landing rather than on a fresh
-  blank chat.
+  blank chat. **Verified, not built** — the shell's `onDeleted` is already
+  `setFragmentProject(project)`, which drops `sid`, and FR-3.1 is what makes that the
+  landing.
+- **FR-3.8** "New chat" NAVIGATES rather than creating. It minted a conversation and
+  wrote its id into the fragment, which is the same blank-transcript-with-a-ghost-id
+  state FR-3.5 removes from entering a place; it drops `sid` now, and the landing's
+  composer is the only mint. Added during execution — without it FR-3.5 would have been
+  false for the sidebar's own button and for the rail's action.
 
 ### FR-4 — The collapsed sidebar previews conversations, not the menu
 
@@ -123,8 +130,9 @@ conversations once.
 | FR-2.1 | with a workspace open and no conversation, the bar renders no chevron |
 | FR-2.2 | a `sid` absent from the conversation list produces no leaf and no chevron |
 | FR-3.1 | `resolveCentre` answers `landing` for a workspace with no `sid`, with and without `p` |
-| FR-3.5 | mounting `ChatView` without a `sid` creates nothing |
+| FR-3.5 | the landing creates nothing on arrival |
 | FR-3.6 | a send from the landing inside a project creates the conversation with that project |
+| FR-3.8 | new-chat writes no `sid` |
 | FR-4.1–4.2 | the sidebar renders destinations expanded and omits them collapsed |
 
 ## Open questions

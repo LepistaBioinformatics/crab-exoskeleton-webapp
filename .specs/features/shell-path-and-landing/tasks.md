@@ -75,9 +75,17 @@ Where: `app/chat/chat-view.tsx`; new test.
 Done when: `ChatView` mounted without a `sid` creates nothing; a send from the landing
 calls `createConversation(workspace, project)` with the project, writes both keys in one
 fragment write, and enqueues the text so the first message lands after the switch.
-Tests: **watch C4's "creates nothing" fail first** against the current effect; a landing
-send inside a project passes that project (this is FR-3.6, the invariant the deleted
-comment protected).
+Tests: `landing-screen.test.tsx` "creates nothing on arrival" is where FR-3.5 is pinned,
+**not** a `ChatView` mount. Once `resolveCentre` answers `landing` for an absent `sid`,
+`ChatView` is never mounted in that state, so a restored effect there would be dead code
+and a test of it would assert nothing. The two that carry the property are
+`destination.test.ts` (that state resolves to the landing) and the landing's own. And a
+landing send inside a project passes that project — FR-3.6, the invariant the deleted
+comment protected.
+
+**C4b — new-chat navigates instead of creating.** Found during execution: the sidebar's
+button and the rail's action both called the same eager mint, so FR-3.5 would have been
+false for them. `newChat` drops `sid` now. This is FR-3.8.
 
 **C5 — i18n parity.**
 Where: `lib/i18n/chat.ts`, `lib/i18n/parity.test.ts`.

@@ -19,7 +19,6 @@ import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
 import { useConversations } from "./use-conversations";
-import { createConversation } from "@/lib/chatSession";
 import { restoreDockedTurns } from "./turn-restore";
 import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
@@ -29,6 +28,7 @@ import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
 import WorkspaceGrid from "./workspace-grid";
 import ProjectsScreen from "./projects-screen";
+import LandingScreen from "./landing-screen";
 import WorkspaceScreen from "./workspace-screen";
 import RestartBanner from "./restart-banner";
 import ResizablePane, { type RailPanel } from "./resizable-pane";
@@ -165,16 +165,15 @@ export default function ChatShell({ email }: { email: string }) {
   // sidebar row that leads to a screen rendering nothing is worse than no row.
   const hideProjects = projectsError === "projects_unsupported";
 
-  const centre = resolveCentre({ resolved, workspace, destination });
+  const centre = resolveCentre({ resolved, workspace, destination, sid: sessionId ?? null });
 
+  // "New chat" NAVIGATES now; it does not create. It used to mint a conversation and
+  // write its id straight into the fragment, which put a member in a blank transcript
+  // holding a `sid` no row existed for -- the same state FR-3.5 removed from entering a
+  // place. Dropping `sid` lands on the landing, whose composer is the one mint.
   function newChat() {
     if (!workspace) return;
-    // Project AND session in one write: the new chat is born in whichever project the
-    // shell is showing, and two separate hash writes would put a half-state into the
-    // history stack.
-    void createConversation(workspace, project).then((c) =>
-      setFragmentProjectSid(project, c.id),
-    );
+    setFragmentProject(project);
     closeDrawer();
   }
 
@@ -355,6 +354,20 @@ export default function ChatShell({ email }: { email: string }) {
                 workspace={workspace}
                 browsedProject={project}
                 onBrowse={(id) => setFragmentProject(id)}
+              />
+            )}
+            {/* A place before a conversation is chosen: the agent's root and a
+                project's root alike. It replaced an empty transcript, and the effect
+                that used to fill that transcript with a freshly minted conversation is
+                gone with it -- see landing-screen.tsx. */}
+            {centre.kind === "landing" && workspace && (
+              <LandingScreen
+                // Keyed by the scope, so entering a project rebuilds the list rather
+                // than showing the previous scope's conversations for a beat.
+                key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
+                workspace={workspace}
+                project={openProject}
+                onOpen={(id) => setFragmentProjectSid(project, id)}
               />
             )}
             {centre.kind === "chat" && workspace && (

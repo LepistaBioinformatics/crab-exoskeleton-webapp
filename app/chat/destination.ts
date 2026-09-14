@@ -40,14 +40,23 @@ export type Centre =
   | { kind: "loading" }
   | { kind: "agents" }
   | { kind: "destination"; at: Destination }
+  | { kind: "landing" }
   | { kind: "chat" };
 
 /**
- * WHAT THE CENTRE PANE SHOWS. FR-1.3's table and nothing else.
+ * WHAT THE CENTRE PANE SHOWS. FR-3.1's table and nothing else.
  *
- * No `sid`: a workspace with no conversation open is still the chat, an empty one, and
- * ChatView's own empty state is what says so. Deciding that here would put the
- * conversation's emptiness in two places.
+ * `sid` IS an input, and it used not to be. The rule was "a workspace with no
+ * conversation open is still the chat, an empty one, and ChatView's own empty state is
+ * what says so" — and what made that true was an effect in ChatView that minted a
+ * conversation whenever `sid` was absent. Entering a project dropped `sid` precisely so
+ * that effect would run, which meant entering a place put the member in a blank
+ * transcript rather than in the place.
+ *
+ * The landing is that state given a screen of its own: a composer to start one, and the
+ * scope's conversations under it. It is not an empty chat, which is why deciding it here
+ * is no longer the duplication the old comment warned about — an empty chat and a
+ * landing are two screens, and only one of them can be the answer.
  *
  * `rs` is not an input. A section pane opens beside whatever this returns, so it can
  * never change the answer — which is the whole reason it is a second key.
@@ -56,14 +65,18 @@ export function resolveCentre({
   resolved,
   workspace,
   destination,
+  sid,
 }: {
   /** The fragment has been read. False on the first client render, before the mount effect. */
   resolved: boolean;
   workspace: Workspace | null;
   destination: Destination | null;
+  /** The fragment's `sid`. Absent means no conversation has been chosen or started. */
+  sid: string | null;
 }): Centre {
   if (!resolved) return { kind: "loading" };
   if (!workspace) return { kind: "agents" };
   if (destination) return { kind: "destination", at: destination };
+  if (!sid) return { kind: "landing" };
   return { kind: "chat" };
 }

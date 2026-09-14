@@ -35,8 +35,7 @@ import { TagCluster, ConversationEditor } from "./conversation-enrichment";
 import ConversationSearchBar from "./conversation-search-bar";
 import SidebarPanel from "./sidebar-panel";
 import { SectionHeader, SectionLabel } from "./sidebar-section";
-import { parseFilterQuery, applySyncFilters, applyContentFilter, isEmptyQuery } from "./conversation-filter";
-import { getHistory } from "./history-cache";
+import { useConversationSearch } from "./use-conversation-search";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { commonCopy } from "@/lib/i18n/common";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -101,13 +100,20 @@ export default function HistorySidebar({
   // The list itself is not this panel's to own any more: the shell reads the same one
   // to name the open conversation in its breadcrumb. See use-conversations.ts.
   const { conversations, apply: applyToConversations } = useConversations(workspace);
-  const [query, setQuery] = useState("");
+  // Query, results and the two-stage filter behind them belong to the HOOK now: the
+  // landing searches the same conversations with the same grammar, and two copies of a
+  // query parser is how two surfaces start accepting different queries.
+  const {
+    query,
+    setQuery,
+    results: searchResults,
+    searching,
+    applyToResults,
+  } = useConversationSearch(workspace, conversations);
   // Behind a magnifier, matching the workspaces panel. The search and its filter pills
   // are a four-row block, and they sat permanently above a list whose first rows are
   // what a member came here to click.
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchResults, setSearchResults] = useState<ConversationSummary[] | null>(null);
-  const [searching, setSearching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -120,48 +126,9 @@ export default function HistorySidebar({
   function applyToLists(id: string, fn: (c: ConversationSummary) => ConversationSummary) {
     const map = (list: ConversationSummary[]) => list.map((c) => (c.id === id ? fn(c) : c));
     applyToConversations(map);
-    setSearchResults((prev) => (prev ? map(prev) : prev));
+    applyToResults(map);
   }
 
-  // Two-stage filter: a synchronous predicate (tag/alias/date) narrows the set
-  // instantly, then an async content stage (text:) runs only over survivors,
-  // reading message history from the shared cache. AbortController guarantees
-  // latest-query-wins so a slow earlier keystroke can't clobber fresh results.
-  useEffect(() => {
-    const parsed = parseFilterQuery(query, Date.now());
-    if (isEmptyQuery(parsed)) {
-      setSearchResults(null);
-      setSearching(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(async () => {
-      const synced = applySyncFilters(conversations, parsed);
-      if (parsed.texts.length === 0) {
-        setSearchResults(synced);
-        setSearching(false);
-        return;
-      }
-      setSearching(true);
-      const matched = await applyContentFilter(
-        synced,
-        parsed.texts,
-        (c) => getHistory(workspace, c),
-        controller.signal,
-      );
-      if (!controller.signal.aborted) {
-        setSearchResults(matched);
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => {
-      controller.abort();
-      clearTimeout(timeout);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, conversations, workspace.t, workspace.s, workspace.r]);
 
   // A project's conversations are a SEPARATE list, not a subset shown alongside
   // the others: entering a project replaces what the sidebar lists, and the
@@ -205,7 +172,7 @@ export default function HistorySidebar({
       const apply = (list: ConversationSummary[]) =>
         list.map((c) => (c.id === id ? { ...c, title: saved } : c));
       applyToConversations(apply);
-      setSearchResults((prev) => (prev ? apply(prev) : prev));
+      applyToResults(apply);
       setEditingId(null);
       setRenameError(null);
     } catch (err) {
@@ -219,7 +186,7 @@ export default function HistorySidebar({
       await deleteConversation(id);
       const drop = (list: ConversationSummary[]) => list.filter((c) => c.id !== id);
       applyToConversations(drop);
-      setSearchResults((prev) => (prev ? drop(prev) : prev));
+      applyToResults(drop);
       setDeletingId(null);
     } catch (err) {
       setDeleteError(errorText(e, err instanceof Error ? err.message : null));

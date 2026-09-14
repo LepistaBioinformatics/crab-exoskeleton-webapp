@@ -150,6 +150,16 @@ interface ComposerProps {
    * must not disagree about what exists.
    */
   mentionFiles: MentionCandidate[];
+  /**
+   * False on the landing, where there is no conversation yet to upload against: the
+   * proxy stores an attachment under a session, and `sessionId` is "" until the first
+   * send mints one.
+   *
+   * The control is OMITTED rather than disabled, the rule this codebase already follows
+   * for the rail and for the projects row: a disabled button swallows its own click, so
+   * a member presses what looks like a way in and nothing happens.
+   */
+  canAttach?: boolean;
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -175,6 +185,7 @@ export default function Composer({
   chatRef,
   onCancelChatRef,
   mentionFiles,
+  canAttach = true,
 }: ComposerProps) {
   const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -594,6 +605,7 @@ export default function Composer({
         {/* Toolbar row inside the box, below the textarea: utilities on the
             left, Send on the right. Popovers open upward (bottom-full). */}
         <div className="mt-1 flex items-center gap-1">
+        {canAttach && (
         <div className="relative">
           <IconButton
             variant="ghost"
@@ -638,6 +650,7 @@ export default function Composer({
             </>
           )}
         </div>
+        )}
 
         <IconButton
           variant="ghost"
