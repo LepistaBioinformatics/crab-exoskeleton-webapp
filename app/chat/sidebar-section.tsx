@@ -25,8 +25,13 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return <span className="truncate text-sm font-medium text-fg-muted">{children}</span>;
 }
 
+// NO RULE ABOVE IT. It had `border-t border-rule`, which was drawn weight doing a job
+// the type already does: the label is `font-medium text-fg-muted` and the rows beneath
+// are `text-fg`, so the boundary is a tone step and a size of space. The rule survives in
+// this column only where content SCROLLS PAST one — the account footer — and nothing
+// scrolls past a heading that scrolls with its own list.
 const row = cva(
-  "group/sec flex shrink-0 items-center gap-1 border-t border-rule px-2 py-2",
+  "group/sec flex shrink-0 items-center gap-1 px-2 pb-2 pt-4",
 );
 
 export function SectionHeader({

@@ -372,8 +372,12 @@ export default function HistorySidebar({
                   </button>
                   {/* Mobile: an always-visible action row below the name. Desktop:
                       an absolute box on the right, revealed on hover, so it costs
-                      the name no width. */}
-                  <div className="flex items-center gap-0.5 border-t border-rule px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                      the name no width.
+
+                      NO RULE above it on mobile: it sits INSIDE the row it acts on,
+                      which already has its own surface, and a hairline there split one
+                      row into two. */}
+                  <div className="flex items-center gap-0.5 px-2 pb-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
                     <IconButton
                       variant="ghost"
                       size="sm"

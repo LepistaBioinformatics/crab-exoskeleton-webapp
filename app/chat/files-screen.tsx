@@ -759,7 +759,10 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
               column had; here the frame's heading already says FILES — where you are —
               and this row says which document is standing in for the tree (FR-5.5). */}
           <div className="flex items-center gap-2 pb-3">
-            <Button size="sm" variant="outlined" onClick={() => setPreviewFile(null)}>
+            {/* `link`, not `outlined`. A bordered box around "Files" sat heavier than the
+                document name beside it and than the tree it goes back to — and the way
+                back is the quietest thing in the row, not the loudest. */}
+            <Button size="link" variant="link" onClick={() => setPreviewFile(null)}>
               <ChevronLeft size={14} aria-hidden />
               {t.uploads.files}
             </Button>
@@ -804,9 +807,13 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
                 e.target.value = "";
               }}
             />
+            {/* Both `link`. Two bordered boxes over a file tree made the row of ACTIONS
+                read as the heaviest thing on a screen whose subject is the list under
+                it. The icons are what say these two do something; the type says it
+                quietly. */}
             <Button
-              size="sm"
-              variant="outlined"
+              size="link"
+              variant="link"
               disabled={uploading}
               onClick={() => fileRef.current?.click()}
             >
@@ -814,8 +821,8 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
               {t.uploads.upload}
             </Button>
             <Button
-              size="sm"
-              variant="outlined"
+              size="link"
+              variant="link"
               disabled={folderBusy}
               onClick={onNewFolder}
             >

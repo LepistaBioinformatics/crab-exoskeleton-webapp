@@ -158,7 +158,10 @@ export default function UnifiedSidebar({
 
       {!workspace && <div className="min-h-0 flex-1" />}
 
-      <div className="flex shrink-0 flex-col gap-0.5 border-t border-rule px-2 py-2">
+      {/* Space, not a rule: these are two quiet rows under the list, and a hairline over
+          them made the column read as three stacked regions. The one rule this column
+          keeps is the account footer below, which the conversation list scrolls under. */}
+      <div className="flex shrink-0 flex-col gap-0.5 px-2 pb-2 pt-3">
         <AdminLink />
         <InstallAppButton />
       </div>

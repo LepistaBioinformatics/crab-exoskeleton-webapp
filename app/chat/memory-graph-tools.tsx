@@ -556,12 +556,16 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-rule first-of-type:border-t-0">
+    // Space, not a rule. Each section leads with its own uppercase label in
+    // `text-fg-muted` over content in `text-fg` — the boundary is already a tone step
+    // and a weight change, and a hairline on top of it was the third statement of one
+    // thing. `pt-3` on every section but the first is what the rule was standing in for.
+    <section className="pt-3 first-of-type:pt-0">
       <button
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full items-center gap-1 py-2 text-left text-[10px] font-medium uppercase tracking-wide text-fg-muted transition-colors hover:text-fg"
+        className="flex w-full items-center gap-1 pb-2 text-left text-[10px] font-medium uppercase tracking-wide text-fg-muted transition-colors hover:text-fg"
       >
         <ChevronRight
           size={11}
