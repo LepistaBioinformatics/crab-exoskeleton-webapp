@@ -22,6 +22,8 @@ import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import HtmlScriptNotice from "./html-script-notice";
+import { useHtmlScripts } from "./html-scripts";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
@@ -163,6 +165,9 @@ export default function FilePreview({
   const [docHtml, setDocHtml] = useState<string | null>(null);
   const [sheets, setSheets] = useState<SheetPreview[] | null>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
+  // Off for this session unless the member said otherwise, and gone when the browser
+  // closes -- see html-scripts.ts.
+  const scripts = useHtmlScripts();
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   // Set when the bytes turn out to be binary after the NAME said they were text. Its own
@@ -493,21 +498,34 @@ export default function FilePreview({
         // changed; what changed is that a frame can render a page without being this
         // origin.
         //
-        // `sandbox` with NO tokens is the most restrictive value there is: no scripts,
-        // no same-origin, no forms, no navigation, no popups. The document lays out --
-        // CSS and images work, which is what "rendered" has to mean -- and can do
-        // nothing else. `allow-scripts` is deliberately absent, and adding it beside
-        // `allow-same-origin` would undo the sandbox entirely, which is the mistake this
-        // comment exists to stop.
+        // TWO VALUES, AND NEVER A THIRD. `sandbox=""` is the most restrictive value
+        // there is -- no scripts, no same-origin, no forms, no navigation, no popups --
+        // and is what a session gets until the member says otherwise. `allow-scripts`
+        // ALONE gives the frame an opaque origin: scripts run, and cookies,
+        // localStorage, the parent DOM and top-level navigation stay unreachable.
+        //
+        // `allow-same-origin` NEVER APPEARS, in either value or in any future one.
+        // Beside `allow-scripts` it undoes the sandbox entirely -- the frame could reach
+        // into this origin and remove its own sandbox attribute -- and that is the
+        // mistake this comment exists to stop.
         //
         // srcdoc, not a blob URL: the bytes are already here, and a blob would be an
         // object to revoke and a second way for the frame to have an origin.
-        <iframe
-          title={name}
-          sandbox=""
-          srcDoc={text}
-          className="h-full w-full border-0 bg-white"
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          <HtmlScriptNotice />
+          <iframe
+            title={name}
+            // Keyed on the setting so turning it on RELOADS the document. A frame keeps
+            // the sandbox it was created with; changing the attribute on a live frame
+            // leaves the page that is already parsed exactly as restricted as it was,
+            // and the member would read a notice saying scripts are on over a page where
+            // they are not.
+            key={scripts ? "scripts" : "no-scripts"}
+            sandbox={scripts ? "allow-scripts" : ""}
+            srcDoc={text}
+            className="min-h-0 w-full flex-1 border-0 bg-white"
+          />
+        </div>
       )}
 
       {!error && kind === "text" && text !== null && (

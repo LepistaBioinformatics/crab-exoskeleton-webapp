@@ -133,6 +133,23 @@ const en = {
     // the file (preview-formatting-and-odf FR-3.3).
     slidesPartial:
       "Text extracted from the slides. Download the file to see the deck itself.",
+    // Scripts in an HTML preview. Off by default and never persisted past the browser
+    // session; the dialog is what the member agrees to, so it says the four things that
+    // are true rather than a generic "are you sure".
+    scriptsOff: "Scripts are off. This page may not display as intended.",
+    scriptsEnable: "Run scripts",
+    scriptsOn: "Scripts are running in this preview, for this session.",
+    scriptsDisable: "Turn off",
+    scriptsTitle: "Run scripts in previews?",
+    scriptsRisk:
+      "This page was written by the agent from material it did not control. With scripts on it can send what the document contains to any address on the internet, and reach hosts your browser can see and our servers cannot.",
+    // The half that is safe, said as plainly as the half that is not: a warning nobody
+    // believes is a warning nobody reads.
+    scriptsSafe:
+      "Your session, your cookies and the rest of this app stay out of its reach — the preview has no access to them.",
+    // DEC-1's cost, said out loud rather than left implicit.
+    scriptsScope:
+      "This applies to every HTML file you open until you close the browser, including ones the agent downloads later.",
     slide: "Slide {n}",
     // An unrecognised extension is opened on trust now, so the file that turns out to be
     // binary says so once its bytes have arrived. A notice, not an error.
@@ -951,6 +968,17 @@ const pt: ChatDict = {
       "Mostrando as primeiras {n} linhas. Baixe o arquivo para ver todas.",
     slidesPartial:
       "Texto extraído dos slides. Baixe o arquivo para ver a apresentação.",
+    scriptsOff: "Scripts desligados. Esta página pode não aparecer como foi feita.",
+    scriptsEnable: "Executar scripts",
+    scriptsOn: "Scripts estão rodando nesta pré-visualização, nesta sessão.",
+    scriptsDisable: "Desligar",
+    scriptsTitle: "Executar scripts nas pré-visualizações?",
+    scriptsRisk:
+      "Esta página foi escrita pelo agente a partir de material que ele não controlava. Com scripts ligados ela pode enviar o conteúdo do documento para qualquer endereço da internet, e alcançar hosts que o seu navegador enxerga e os nossos servidores não.",
+    scriptsSafe:
+      "Sua sessão, seus cookies e o resto deste aplicativo continuam fora do alcance dela — a pré-visualização não tem acesso a nada disso.",
+    scriptsScope:
+      "Isso vale para todo arquivo HTML que você abrir até fechar o navegador, inclusive os que o agente baixar depois.",
     slide: "Slide {n}",
     binary: "Este arquivo não é texto. Baixe-o para abrir.",
   },
