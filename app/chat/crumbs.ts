@@ -4,22 +4,26 @@ import type { Destination } from "./destination";
 import type { Workspace } from "./fragment";
 
 // WHAT THE TOP BAR SAYS about where the member is standing — `subscription · agent /
-// project / the place itself` (FR-3.2).
+// Projects / project / the place itself` (FR-1).
 //
 // Its own module because the presence rules are the part that gets read wrong, and the
-// one that does is `v=projects` inside a project: the project stays named, because the
-// member is still in it (FR-1.5). A rule that can only be checked by mounting a bar is
-// a rule nobody checks — so this is React-free and DOM-free, like destination.ts and
-// for the same reason (the suite runs `environment: "node"`).
+// one that did was containment: `Projects` used to be the LAST segment, so standing in a
+// project and asking for the list read `agent / Legal / Projects` — the list rendered as
+// a child of a project it contains. It sits above the project now, which is the order a
+// member walks: through the list, into a project, into a conversation.
+//
+// A rule that can only be checked by mounting a bar is a rule nobody checks — so this is
+// React-free and DOM-free, like destination.ts and for the same reason (the suite runs
+// `environment: "node"`).
 //
 // Navigation arrives as callbacks rather than as a call into fragment.ts's setters:
 // importing those would put a browser back between this module and its test, which is
 // the whole thing this split exists to avoid.
 
 export interface Crumb {
-  key: "workspace" | "project" | "leaf";
+  key: "workspace" | "projects" | "project" | "leaf";
   label: string;
-  /** Absent on the last crumb: the place you already are is not a link. */
+  /** Absent on the last crumb, unless that crumb is the root. */
   go?: () => void;
 }
 
@@ -31,6 +35,7 @@ export function buildCrumbs({
   destination,
   t,
   onWorkspace,
+  onProjects,
   onProject,
 }: {
   workspace: Workspace | null;
@@ -43,6 +48,15 @@ export function buildCrumbs({
   /** Leave the workspace: the agent grid. */
   onWorkspace: () => void;
   /** The projects grid, keeping the project the member is in (FR-1.5). */
+  onProjects: () => void;
+  /**
+   * Back up to the project itself — its landing, not the list of projects.
+   *
+   * This used to be the list, which was the navigation half of the inversion above:
+   * clicking a project's own name answered with the list of every project. With
+   * `Projects` above it carrying that link, one level up from a conversation is the
+   * project, and the project is a place with a screen of its own.
+   */
   onProject: () => void;
 }): Crumb[] {
   // No workspace means the agent grid, which names itself. A lone crumb over it would
@@ -64,32 +78,39 @@ export function buildCrumbs({
     },
   ];
 
+  // `Projects` is present when there is a project to contain OR a list being looked at,
+  // and absent otherwise (FR-1.5). An agent with neither is not somewhere below a list
+  // of projects — it is the agent — and a segment naming one would be a level the
+  // member never walked through.
+  if (project || destination) {
+    crumbs.push({ key: "projects", label: t.projects.title, go: onProjects });
+  }
+
   if (project) crumbs.push({ key: "project", label: project.name, go: onProject });
 
-  // The last segment is one thing at a time: the projects screen replaces the
-  // conversation's title rather than sitting beside it, because the breadcrumb states
-  // where the member IS and the projects screen is instead of the transcript.
+  // The conversation, and only when the centre is showing it. On the projects list the
+  // path ends at the project (or at `Projects` with none open): the list is where the
+  // member came through and the project is where they are, which the grid also marks.
   //
   // THE FIVE SECTION NAMES NEVER APPEAR HERE, and that is the correction of 2026-09-12.
   // They were leaves for as long as they were centre destinations; they open in a pane
   // beside the conversation now, and a pane is not a place you are standing — a
   // breadcrumb reading `… / Files` while the transcript is still on screen would name
   // somewhere the member has not gone.
-  const leaf = destination ? t.projects.title : conversationTitle;
-  if (leaf) crumbs.push({ key: "leaf", label: leaf });
+  if (!destination && conversationTitle) {
+    crumbs.push({ key: "leaf", label: conversationTitle });
+  }
 
-  // The LEAF has no link, and only the leaf. Rebuilt without `go` rather than
+  // THE LAST CRUMB HAS NO LINK, unless it is the root. Rebuilt without `go` rather than
   // overwritten with undefined, because a bar that renders a `<button>` for the place
   // you are already standing is a control that looks like it goes somewhere and does
   // not.
   //
-  // "The last crumb" was the rule for a while and it was subtly wrong: with a workspace
-  // open and nothing else — an agent whose conversation has not been chosen yet — the
-  // workspace IS the last crumb, and stripping its link left the agent grid with no way
-  // back to it at all. The grid is reached from this segment and nowhere else, so the
-  // root keeps its link however short the path is.
+  // The exception is not a special case bolted on: the workspace segment is the ONLY way
+  // to the agent grid, so stripping its link when the path is one crumb long — an agent
+  // with no conversation open — left the member with no way back out of it at all.
   const last = crumbs[crumbs.length - 1];
-  if (last.key === "leaf") {
+  if (last.key !== "workspace") {
     crumbs[crumbs.length - 1] = { key: last.key, label: last.label };
   }
   return crumbs;

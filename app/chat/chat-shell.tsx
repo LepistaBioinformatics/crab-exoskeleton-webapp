@@ -190,7 +190,11 @@ export default function ChatShell({ email }: { email: string }) {
         onWorkspace: clearWorkspace,
         // Keeps `p`: asking to see the list is not leaving the project you are in
         // (FR-1.5). The grid marks it as the one you are inside.
-        onProject: () => setDestination("projects"),
+        onProjects: () => setDestination("projects"),
+        // Up one level from a conversation is the PROJECT, which drops `sid` and lands
+        // on the project's own screen. It used to be the list of projects, which is what
+        // `Projects` above it carries now.
+        onProject: () => openProject && setFragmentProject(openProject.id),
       }),
     [workspace, subscription, openProject, conversationTitle, destination, t],
   );
@@ -306,9 +310,10 @@ export default function ChatShell({ email }: { email: string }) {
             {crumbs.length > 0 ? (
               <Breadcrumb
                 crumbs={crumbs}
-                // The menu acts on a conversation, so it is offered only while one is
-                // what the breadcrumb's last segment names.
-                sessionId={destination === null && sessionId ? sessionId : null}
+                // Passed unconditionally. Whether the menu is offered is decided from
+                // the LAST CRUMB, inside the bar, because that is the fact the menu
+                // depends on and the only place that knows it — see breadcrumb.tsx.
+                sessionId={sessionId ?? null}
                 onChanged={() => {}}
                 onDeleted={() => setFragmentProject(project)}
               />

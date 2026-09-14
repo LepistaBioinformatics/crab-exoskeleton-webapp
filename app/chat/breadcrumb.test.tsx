@@ -102,6 +102,35 @@ describe("Breadcrumb", () => {
     expect(html).not.toContain('aria-haspopup="menu"');
   });
 
+  // THE DEFECT THE MEMBER REPORTED, and the reason the guard moved off `sessionId`.
+  //
+  // `createConversation` mints an id and persists nothing, so a conversation nobody has
+  // written in yet is absent from the list, has no title, and produces no leaf. A
+  // sessionId therefore exists while the last crumb is the AGENT — and the bar offered
+  // to rename and delete it.
+  it("offers no actions when the last crumb is the agent, even with a conversation open", () => {
+    const html = render({
+      crumbs: [{ key: "workspace", label: "Acme · alpha", go: () => {} }],
+      sessionId: "s-1",
+    });
+    expect(html).not.toContain(`aria-label="${en.shell.crumbActions}"`);
+    expect(html).not.toContain('aria-haspopup="menu"');
+  });
+
+  // The same rule from the other direction: on the projects list the path ends at the
+  // project, which is a place and not a conversation.
+  it("offers no actions when the last crumb is a project", () => {
+    const html = render({
+      crumbs: [
+        { key: "workspace", label: "Acme · alpha", go: () => {} },
+        { key: "projects", label: en.projects.title, go: () => {} },
+        { key: "project", label: "Legal" },
+      ],
+      sessionId: "s-1",
+    });
+    expect(html).not.toContain(`aria-label="${en.shell.crumbActions}"`);
+  });
+
   // The menu is portalled to <body>, which does not exist in this environment. It stays
   // behind its own open state, and this is what says so: a first paint that reached the
   // portal would throw rather than fail.
