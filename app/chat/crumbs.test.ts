@@ -18,13 +18,14 @@ function crumbs(input: Partial<Parameters<typeof buildCrumbs>[0]> = {}) {
     destination: null,
     t,
     onWorkspace: () => {},
+    onProjects: () => {},
     onProject: () => {},
     ...input,
   });
 }
 
-// FR-3.2's table, walked row by row. Each segment is omitted when it has no value, and
-// the combination that decides it is the last one.
+// FR-1's table, walked row by row. Each segment is omitted when it has no value, and the
+// combination of `p` and `v` decides the tail.
 describe("which segments the breadcrumb shows", () => {
   it("shows nothing before a workspace is chosen — the agent grid names itself", () => {
     expect(crumbs({ workspace: null })).toEqual([]);
@@ -40,33 +41,45 @@ describe("which segments the breadcrumb shows", () => {
     expect(result[1].label).toBe("Parecer TBDC");
   });
 
-  it("names the project between them when the conversation is inside one", () => {
+  // FR-1.1, and the correction this feature exists for. `Projects` is the level a member
+  // walks THROUGH to reach a project, so it stands above it. It used to be the last
+  // segment, which rendered the list as a child of a project it contains.
+  it("puts the projects list above the project, not below it", () => {
     const result = crumbs({ project, conversationTitle: "Parecer TBDC" });
-    expect(result.map((c) => c.key)).toEqual(["workspace", "project", "leaf"]);
-    expect(result[1].label).toBe("Legal");
+    expect(result.map((c) => c.key)).toEqual(["workspace", "projects", "project", "leaf"]);
+    expect(result[1].label).toBe(t.projects.title);
+    expect(result[2].label).toBe("Legal");
+    expect(result[3].label).toBe("Parecer TBDC");
   });
 
-  it("puts the projects screen where the conversation's title was, because that is where the member is", () => {
+  // FR-1.3. On the list the path ends at the project: the list is where the member came
+  // through, the project is where they are, and the grid marks it.
+  it("ends at the project when the projects list is what the centre shows", () => {
     const result = crumbs({ project, conversationTitle: "Parecer TBDC", destination: "projects" });
-    expect(result.map((c) => c.key)).toEqual(["workspace", "project", "leaf"]);
-    expect(result[2].label).toBe(t.projects.title);
+    expect(result.map((c) => c.key)).toEqual(["workspace", "projects", "project"]);
+    expect(result[2].label).toBe("Legal");
   });
 
-  // FR-1.5, and the row an implementer gets wrong: asking to see the list of projects
-  // does not leave the project. `p` survives `v=projects`, so the segment naming it does.
-  it("still names the project when the destination is the projects grid itself", () => {
-    const result = crumbs({ project, conversationTitle: "Parecer TBDC", destination: "projects" });
-    expect(result.map((c) => c.key)).toEqual(["workspace", "project", "leaf"]);
-    expect(result[1].label).toBe("Legal");
-    expect(result[2].label).toBe(t.projects.title);
+  // FR-1.4.
+  it("ends at the list when no project is open", () => {
+    const result = crumbs({ destination: "projects" });
+    expect(result.map((c) => c.key)).toEqual(["workspace", "projects"]);
+    expect(result[1].label).toBe(t.projects.title);
+  });
+
+  // FR-1.5. An agent with no project and no list is not somewhere below a list of
+  // projects, so naming one would be a level the member never walked through.
+  it("says nothing about projects when neither a project nor the list is open", () => {
+    const result = crumbs({ conversationTitle: "Parecer TBDC" });
+    expect(result.map((c) => c.key)).not.toContain("projects");
   });
 });
 
 // Asserted against the dictionary rather than against the literal "Projects": the
 // sidebar row, the screen's heading and this segment name one place, and a literal here
 // would keep passing while the three of them drifted apart.
-describe("what the leaf is called", () => {
-  it("takes the projects grid's name from the projects copy", () => {
+describe("what the segments are called", () => {
+  it("takes the projects list's name from the projects copy", () => {
     expect(crumbs({ destination: "projects" })[1].label).toBe(t.projects.title);
   });
 
@@ -103,15 +116,15 @@ describe("the workspace segment", () => {
 });
 
 describe("which segments are links", () => {
-  it("leaves the leaf unlinked — the place you already are is not somewhere to go", () => {
+  it("leaves the last one unlinked — the place you already are is not somewhere to go", () => {
     for (const input of [
       { conversationTitle: "Parecer TBDC" },
       { project, conversationTitle: "Parecer TBDC" },
       { project, conversationTitle: "Parecer TBDC", destination: "projects" as const },
+      { destination: "projects" as const },
     ]) {
       const result = crumbs(input);
       const last = result[result.length - 1];
-      expect(last.key).toBe("leaf");
       expect("go" in last).toBe(false);
     }
   });
@@ -127,25 +140,34 @@ describe("which segments are links", () => {
     expect(onWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it("links the earlier ones to what the caller supplied", () => {
-    const onWorkspace = vi.fn();
+  // FR-1.2, the navigation half of the inversion. The list is reached from the segment
+  // that NAMES the list; the project's own name goes up to the project.
+  it("sends the projects segment to the list and the project segment to the project", () => {
+    const onProjects = vi.fn();
     const onProject = vi.fn();
     const result = crumbs({
       project,
       conversationTitle: "Parecer TBDC",
-      onWorkspace,
+      onProjects,
       onProject,
     });
 
-    result[0].go?.();
     result[1].go?.();
-    expect(onWorkspace).toHaveBeenCalledOnce();
+    result[2].go?.();
+    expect(onProjects).toHaveBeenCalledOnce();
     expect(onProject).toHaveBeenCalledOnce();
   });
 
-  // The projects grid is reached from here, so the segment above it stays a link even
-  // while that grid is what the centre shows: it is the project, not the list.
-  it("keeps the project a link while the projects grid is open", () => {
+  it("links the workspace to what the caller supplied", () => {
+    const onWorkspace = vi.fn();
+    const result = crumbs({ project, conversationTitle: "Parecer TBDC", onWorkspace });
+    result[0].go?.();
+    expect(onWorkspace).toHaveBeenCalledOnce();
+  });
+
+  // The list is reached from here, so this segment stays a link even while that list is
+  // what the centre shows: the member is standing on the project, not on the list.
+  it("keeps the projects segment a link while the list is open", () => {
     const result = crumbs({ project, destination: "projects" });
     expect(typeof result[1].go).toBe("function");
   });

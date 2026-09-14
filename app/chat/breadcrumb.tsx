@@ -59,15 +59,19 @@ export default function Breadcrumb({
   onChanged,
   onDeleted,
 }: {
-  /** Already built by `buildCrumbs`. The last one never has `go` — it is where you are. */
+  /**
+   * Already built by `buildCrumbs`. The last one has no `go` — it is where you are —
+   * unless it is the root, which keeps its link because the agent grid is reached from
+   * that segment and nowhere else.
+   */
   crumbs: Crumb[];
   /**
-   * The conversation the last crumb names, when it names one. Null when the leaf is the
-   * projects screen or when no conversation is open: the chevron menu acts on a
-   * conversation, so with none there is nothing for it to do and it is not rendered.
+   * The open conversation, or null. Whether the MENU is offered is not this prop's
+   * decision — see `actionable` below.
    *
-   * An open workspace pane does NOT null it. The pane is beside the conversation, not
-   * instead of it, so the leaf still names the transcript and the menu still acts on it.
+   * An open workspace pane does not affect either. The pane is beside the conversation,
+   * not instead of it, so the leaf still names the transcript and the menu still acts
+   * on it.
    */
   sessionId: string | null;
   /** A rename landed; the caller re-reads the conversation list. */
@@ -135,13 +139,27 @@ export default function Breadcrumb({
   if (crumbs.length === 0) return null;
 
   const leaf = crumbs[crumbs.length - 1];
+  // THE MENU IS GUARDED BY THE LAST CRUMB, not by the existence of a sessionId, and the
+  // difference is a defect the member reported.
+  //
+  // `createConversation` mints an id client-side and persists NOTHING — the row is
+  // created lazily on the first sent message, so a conversation nobody wrote in leaves no
+  // ghost. Until then it is absent from the conversation list, so the shell has no title
+  // for it and `buildCrumbs` emits no leaf. With the guard on `sessionId` alone, the
+  // chevron then rendered beside the AGENT's segment and offered to rename and delete an
+  // agent — which is not a thing this menu can do, and not a race: it stayed until the
+  // first message.
+  //
+  // A destination open produces a non-leaf last crumb too, which is why the shell no
+  // longer computes that separately.
+  const actionable = sessionId !== null && leaf.key === "leaf";
   // Both are held only while the leaf is STILL the conversation the action was started
   // on. Navigating away mid-edit would otherwise leave the input sitting over a different
   // place's name, and the confirm dialog warning about deleting a conversation whose
   // title it no longer has — the id is captured and correct either way, but the member
   // would be reading the wrong name in the sentence asking them to be sure.
-  const renaming = editing === sessionId ? editing : null;
-  const pendingDelete = deleting === sessionId ? deleting : null;
+  const renaming = actionable && editing === sessionId ? editing : null;
+  const pendingDelete = actionable && deleting === sessionId ? deleting : null;
 
   async function submitRename(id: string) {
     const title = draft.trim();
@@ -254,7 +272,7 @@ export default function Breadcrumb({
         {/* Outside the list: it is not a place on the path, it is what can be done to the
             thing at the end of it. Absent with no conversation open — the actions it holds
             are a conversation's, so with none there is nothing for it to do. */}
-        {sessionId && renaming === null && (
+        {actionable && renaming === null && (
           <button
             type="button"
             aria-haspopup="menu"
@@ -277,6 +295,7 @@ export default function Breadcrumb({
       {/* Portalled to <body>, for the reason ConfirmDialog already records: an in-tree
           overlay is at the mercy of every ancestor's clipping and stacking context. */}
       {menu &&
+        actionable &&
         sessionId &&
         createPortal(
           <div

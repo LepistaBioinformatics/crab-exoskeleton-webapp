@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  createConversation,
   listConversations,
   touchConversation,
   syncSessionRefs,
@@ -36,7 +35,6 @@ import {
   Wrench,
 } from "lucide-react";
 import {
-  setFragmentSid,
   setFragmentProjectSid,
   historyQuery,
   setRightSidebar,
@@ -435,7 +433,6 @@ export default function ChatView({
   // floating composer, and the reply then grows downward off-screen. At the top
   // the message stays visible and the answer fills the space beneath it.
   const newestSentRef = useRef<HTMLDivElement | null>(null);
-  const creatingSid = useRef(false);
 
   // Jump-to-latest: is the end of the conversation off-screen?
   //
@@ -504,24 +501,18 @@ export default function ChatView({
     [],
   );
 
-  // A valid workspace with no `sid` (direct nav) gets a fresh conversation (id
-  // minted server-side, so it also lands in the sidebar) instead of losing the
-  // chosen workspace.
+  // THERE IS NO MINT HERE ANY MORE. A workspace with no `sid` used to get a fresh
+  // conversation on sight, which is what let `resolveCentre` answer "chat" for that
+  // state -- and entering a project drops `sid` precisely so this would run. The effect
+  // was doing its job; the job was wrong. It put the member inside a blank transcript
+  // instead of in the place they had just entered, and it left a `sid` in the fragment
+  // that no row existed for until the first message.
   //
-  // It is born in THIS page's project. Entering a project drops `sid` precisely
-  // so this runs, and a conversation minted here without the project would be
-  // global — it would answer from the main agent while the user is looking at a
-  // project, which is the exact symptom the route change exists to remove.
-  useEffect(() => {
-    if (!sessionId && !creatingSid.current) {
-      creatingSid.current = true;
-      createConversation(workspace, project)
-        .then((conversation) => setFragmentSid(conversation.id))
-        .finally(() => {
-          creatingSid.current = false;
-        });
-    }
-  }, [workspace, project, sessionId]);
+  // `resolveCentre` answers `landing` for that state now, so this view is only ever
+  // mounted with a conversation. THE INVARIANT THIS EFFECT PROTECTED MOVED WITH IT and
+  // must not be lost: a conversation created without the project is answered by the main
+  // agent and reads its history from the wrong workspace directory. landing-screen.tsx's
+  // `send` is where that is now true.
 
   useEffect(() => {
     if (!sessionId) return;

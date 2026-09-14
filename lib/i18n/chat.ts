@@ -23,6 +23,19 @@ const en = {
     // the chevron, because what the menu holds is what a member is looking for.
     crumbActions: "Conversation actions",
   },
+  landing: {
+    // The centre pane with no conversation open, at an agent's root and inside a
+    // project alike. It is the screen that replaced an empty transcript, so the heading
+    // says what to DO rather than naming a place -- "Agent" and the project's name are
+    // already in the path above it.
+    title: "Start a conversation",
+    // Over the list below the composer. Short, because the path already says which
+    // agent and which project these belong to.
+    conversations: "Conversations",
+    // The conversations here are the scope's, and the scope is the project you are in.
+    // Said once, under the heading, rather than repeated on every row.
+    inProject: "In {name}",
+  },
   pane: {
     // Prefixes, completed with the pane's own name: "Expand Conversations".
     expand: "Expand",
@@ -855,6 +868,11 @@ const pt: ChatDict = {
     destinations: "Ir para",
     path: "Caminho",
     crumbActions: "Ações da conversa",
+  },
+  landing: {
+    title: "Comece uma conversa",
+    conversations: "Conversas",
+    inProject: "Em {name}",
   },
   pane: {
     expand: "Expandir",
