@@ -75,7 +75,12 @@ import TurnProgress, { TurnRecovery, TurnSteering } from "@/app/chat/turn-progre
 // No borders, no origin bars: the agent's messages carry no background at all,
 // while the user's sit on a faint accent tint. Both speakers share the same
 // text color (neutral in light mode, a soft warm gray in dark).
-const messageBand = cva("group relative w-full text-fg dark:text-[#c9c7be] [container-type:inline-size]", {
+// `text-reading-fg`. This line used to carry a dark-mode override to the hex #c9c7be
+// inline, the only place in the repository it appeared. It is a token now (globals.css)
+// because the file preview renders the same documents and was reading plain `--fg`: in
+// dark mode a markdown file was visibly cooler and brighter than the same markdown in
+// the transcript beside it.
+const messageBand = cva("group relative w-full text-reading-fg [container-type:inline-size]", {
   variants: {
     role: {
       // Vertical padding is applied per-message in the render (bandPad) since it

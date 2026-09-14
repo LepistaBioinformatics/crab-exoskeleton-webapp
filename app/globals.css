@@ -32,6 +32,12 @@
   --brand: #663a88;      /* structural violet border (brand-600) */
   --fg: #0a2933;         /* text primary */
   --fg-muted: #5a6b72;   /* secondary text */
+  /* LONG-FORM READING: a transcript, a markdown file, a Word document, a spreadsheet.
+     Same as --fg here; dark overrides it to a warmer off-white (see the dark block).
+     It exists because the chat's message band already carried that override as a
+     one-off hex, so every document preview read cooler and brighter than the same
+     content in the chat. One token, one answer, both surfaces. */
+  --reading-fg: var(--fg);
   /* Semantic state, deliberately NOT the accent: the accent means "interactive"
      or "in effect", so a blocked or retiring state must not compete with it.
      Desaturated to sit on teal ink without shouting. */
@@ -91,6 +97,10 @@
     --brand: #a988c9;
     --fg: #e6eef2;
     --fg-muted: #9fb0b7;
+    /* Warmer and a step down from --fg. Paragraph after paragraph of #e6eef2 on #14171a
+       glares; this is the value the chat's message band had been carrying inline since
+       the band was written, promoted here so the previews can read it too. */
+    --reading-fg: #c9c7be;
     --blocked: #e0857c;
     --blocked-weak: #35211f;
     --retiring: #c9b45f;
@@ -120,6 +130,7 @@
   --color-rule-strong: var(--rule-strong);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
+  --color-reading-fg: var(--reading-fg);
   --color-blocked: var(--blocked);
   --color-blocked-weak: var(--blocked-weak);
   --color-retiring: var(--retiring);

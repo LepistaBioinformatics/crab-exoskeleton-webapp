@@ -50,8 +50,22 @@ import { useLocale, useT } from "@/lib/i18n/context";
 // only its most recent run, and it is displayed verbatim because its possible values
 // are unknown.
 
+// ONE rule under the whole pinned stack, not one per block inside it. The panel's
+// header, its hint, its filter switch and its inert warning are one region — what the
+// rule says is that the list scrolls UNDER them, and saying it four times made the panel
+// read as four stacked bars before the first task.
+const pinned = cva("shrink-0 border-b border-rule");
+
+// No separator between runs. It had `border-b border-rule` on every row, which drew a
+// line between things the space and the hover can separate instead — and a list of
+// twenty runs was twenty hairlines.
+//
+// The SPACE is the replacement and has to be added, not merely left behind: internal
+// padding is not a boundary, and a run list with the rule removed and nothing put in its
+// place is a wall of flush rows with nothing to read at rest. It comes from `space-y` on
+// the list, so the gap is BETWEEN rows and does not pad the ends of the run.
 const runRow = cva(
-  "flex w-full items-start gap-2 border-b border-rule px-3 py-2 text-left transition-colors hover:bg-elevated",
+  "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-elevated",
 );
 
 const taskDot = cva("mt-1.5 size-2 shrink-0 rounded-full", {
@@ -270,7 +284,8 @@ export default function ScheduledTasksPanel({
   if (open) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-b border-rule px-2 py-2">
+        <div className={pinned()}>
+        <div className="flex items-center gap-1 px-2 py-2">
           <button
             type="button"
             onClick={() => setOpen(null)}
@@ -293,13 +308,14 @@ export default function ScheduledTasksPanel({
           )}
         </div>
 
-        <div className="border-b border-rule px-3 py-2">
+        <div className="px-3 py-2">
           <p className="font-display text-sm font-semibold text-fg">{open.taskName}</p>
           <p className="text-[11px] text-fg-muted">
             {fmtInstant(open.run.startedAt)}
             {runDuration(open.run) && ` · ${runDuration(open.run)}`}
             {` · ${t.scheduledTasks.entries.replace("{count}", String(open.run.count))}`}
           </p>
+        </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
@@ -343,12 +359,13 @@ export default function ScheduledTasksPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <p className="border-b border-rule px-3 py-2 text-[11px] leading-snug text-fg-muted">
+      <div className={pinned()}>
+      <p className="px-3 py-2 text-[11px] leading-snug text-fg-muted">
         {t.scheduledTasks.hint}
       </p>
 
       {finishedCount > 0 && (
-        <div className="flex items-center gap-2 border-b border-rule px-3 py-2">
+        <div className="flex items-center gap-2 px-3 py-2">
           <button
             type="button"
             role="switch"
@@ -377,7 +394,7 @@ export default function ScheduledTasksPanel({
           proxy sends no field at all, and warning everyone on it about a
           problem they do not have would be worse than saying nothing. */}
       {data?.fires === false && (
-        <div className="border-b border-rule px-3 py-2">
+        <div className="px-3 pb-2">
           <Alert severity="warning">
             <p className="font-medium">{t.scheduledTasks.inert}</p>
             <p className="mt-0.5 text-[11px] leading-snug text-fg-muted">
@@ -386,6 +403,7 @@ export default function ScheduledTasksPanel({
           </Alert>
         </div>
       )}
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && (
@@ -416,7 +434,9 @@ export default function ScheduledTasksPanel({
         {shownTasks?.map((task) => {
           const isOpen = expanded.has(task.id);
           return (
-            <section key={task.id} className="border-b border-rule">
+            // Space, not a rule. A task is a heading with its runs under it; the gap
+            // between two of them is what says where one ends.
+            <section key={task.id} className="pb-3">
               <div className="flex items-start gap-2 px-3 py-2.5">
                 <span className={taskDot({ enabled: task.enabled })} aria-hidden />
                 <div className="min-w-0 flex-1">
@@ -532,7 +552,7 @@ export default function ScheduledTasksPanel({
         })}
 
         {shownOrphans.map((group) => (
-          <section key={group.jobId} className="border-b border-rule">
+          <section key={group.jobId} className="pb-3">
             <div className="flex items-start gap-2 px-3 py-2.5">
               <AlertTriangle
                 size={14}
@@ -609,7 +629,7 @@ export function RunList({
 
   return (
     <>
-      <ul>
+      <ul className="space-y-1 px-2">
         {shown.map((run) => (
           <li key={run.basename}>
             <RunButton

@@ -69,10 +69,20 @@ const CODE_TYPE = "font-mono text-[13px] leading-[20px]";
  * time either was touched. Kept as arbitrary variants here rather than as a class in
  * `globals.css` for the same reason — this way the two sit in files one change can reach.
  *
- * Tables are the one deliberate departure. The markdown table's rounded outer corners
- * come from `border-separate` plus `:first-child`/`:last-child` edge rules that assume a
- * `<thead>`; a .docx table frequently has none, so the same border TOKENS are applied
- * over `border-collapse`, which degrades to a plain grid instead of a broken one.
+ * Tables depart in TWO ways, and only two, each with a reason.
+ *
+ * `border-collapse` rather than `border-separate`: the markdown table's rounded outer
+ * corners come from `:first-child`/`:last-child` edge rules that assume a `<thead>`, and
+ * a .docx table frequently has none — so the same border TOKENS are applied over
+ * collapse, which degrades to a plain grid instead of a broken one.
+ *
+ * No `min-w-[7rem] max-w-[32rem]` on the cells: markdown's table sits in its own
+ * `overflow-x-auto` wrapper that can scroll when the clamps push it wide, and the docx
+ * body is ONE injected tree with no per-table wrapper to give it one. A clamp with
+ * nowhere to overflow to is a column pushed off the page.
+ *
+ * Everything else matches, including the three that did not until a member said so: the
+ * header tint, the cell word-wrap, and the vertical rhythm around the table.
  */
 const DOCX_BODY = [
   "text-base leading-relaxed [&>*:last-child]:mb-0",
@@ -95,9 +105,10 @@ const DOCX_BODY = [
   "[&_code]:font-mono [&_code]:text-[0.85em]",
   "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
   "[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-current/10 [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
-  "[&_table]:mb-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[0.9em]",
-  "[&_th]:border [&_th]:border-current/15 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:align-top [&_th]:font-semibold",
-  "[&_td]:border [&_td]:border-current/15 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
+  "[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[0.9em]",
+  "[&_thead_th]:bg-current/[0.05]",
+  "[&_th]:border [&_th]:border-current/15 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:align-top [&_th]:font-semibold [&_th]:[overflow-wrap:break-word]",
+  "[&_td]:border [&_td]:border-current/15 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_td]:[overflow-wrap:break-word]",
   "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg",
 ].join(" ");
 
@@ -462,7 +473,10 @@ export default function FilePreview({
             // Declaring the container makes the same formula measure THIS column, and
             // its own clamp then does the right thing: a modest breakout when the
             // dialog is wide, and none at all once the column is under 720px.
-            <div className="mx-auto max-w-[820px] px-6 py-5 text-fg [container-type:inline-size]">
+            // `text-reading-fg`, the same token the chat's message band reads. It was
+            // `text-fg`, so in dark mode a markdown file rendered cooler and brighter
+            // here than the same markdown in the transcript beside it.
+            <div className="mx-auto max-w-[820px] px-6 py-5 text-reading-fg [container-type:inline-size]">
               <MarkdownImageContext.Provider value={resolveImage}>
                 <MessageContent content={text} />
               </MarkdownImageContext.Provider>
@@ -497,7 +511,7 @@ export default function FilePreview({
       )}
 
       {!error && kind === "text" && text !== null && (
-        <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-fg">
+        <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-reading-fg">
           {text}
         </pre>
       )}
@@ -515,7 +529,7 @@ export default function FilePreview({
           {/* The one `dangerouslySetInnerHTML` in the preview, and the only reason it is
               acceptable is the line above it: what goes in has been through
               sanitizeDocxHtml, which is an allowlist and has its own suite. */}
-          <div className={`text-fg ${DOCX_BODY}`} dangerouslySetInnerHTML={{ __html: docHtml }} />
+          <div className={`text-reading-fg ${DOCX_BODY}`} dangerouslySetInnerHTML={{ __html: docHtml }} />
         </div>
       )}
 
@@ -538,15 +552,26 @@ export default function FilePreview({
               ))}
             </div>
           )}
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-max border-collapse text-xs">
+          {/* THE MARKDOWN TABLE'S GRAMMAR, not chrome's. It was `border-rule` at
+              `px-2 py-1 text-xs` -- `--rule` is a brand-tinted boundary for the frame
+              around a document, and drawing a document's own grid in it made a
+              spreadsheet look like a different product from the same data pasted into
+              the chat. `border-current/15` is the markdown cell's, and it follows the
+              text colour, which is what lets one grid read on any surface.
+
+              The zebra follows it inward for the same reason: `bg-elevated/40` is a
+              surface step, `bg-current/[0.04]` is the tint the markdown table already
+              uses for its header row. Kept at all -- markdown has no zebra -- because a
+              sheet is hundreds of rows wide and a markdown table is not. */}
+          <div className="min-h-0 flex-1 overflow-auto text-reading-fg">
+            <table className="w-max border-collapse text-[0.9em]">
               <tbody>
                 {(sheets[sheetIndex]?.rows ?? []).map((row, r) => (
-                  <tr key={r} className="even:bg-elevated/40">
+                  <tr key={r} className="even:bg-current/[0.04]">
                     {row.map((cell, c) => (
                       <td
                         key={c}
-                        className="max-w-[320px] truncate border border-rule px-2 py-1 text-fg"
+                        className="max-w-[320px] truncate border border-current/15 px-3 py-2 align-top"
                         title={cell}
                       >
                         {cell}

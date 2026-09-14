@@ -39,8 +39,11 @@ import type { EntityReference } from "@/lib/chatReference";
 // `entityType`), an absent `confidence` (not zero) and epoch milliseconds. And they
 // outlived the drawer they were first written for.
 
+// No separator between rows, and the space is the replacement rather than the absence
+// of one: a hairline under every entity drew a line between things a gap and the row's
+// own hover surface already separate, and a graph with forty entities was forty of them.
 const row = cva(
-  "flex w-full flex-col gap-1 border-b border-rule px-3 py-2 text-left transition-colors hover:bg-elevated",
+  "flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left transition-colors hover:bg-elevated",
   {
     variants: { selected: { true: "bg-elevated", false: "" } },
     defaultVariants: { selected: false },
@@ -116,7 +119,7 @@ export function BrowseList({
           clear the filter. The empty state below names the All chip; this is what makes
           that instruction true in every reachable state. */}
       {onTypeFilter && (types.length > 1 || typeFilter) && (
-        <div className="flex flex-wrap gap-1 border-b border-rule px-3 py-2">
+        <div className="flex flex-wrap gap-1 px-3 pb-2 pt-2">
           <button
             type="button"
             className={chip({ active: !typeFilter })}
@@ -152,7 +155,9 @@ export function BrowseList({
           body={noneOfTypeHint}
         />
       ) : (
-        <ul>
+        // `space-y-1 px-2`: the gap that replaced the row separators, between the rows
+        // rather than padding the ends of the list.
+        <ul className="space-y-1 px-2">
           {shown.map((e) => (
             <li key={e.name}>
               <button
@@ -207,7 +212,7 @@ export function SearchList({
     return <PanelEmpty icon={SearchX} title={noResults} body={noResultsHint} />;
   }
   return (
-    <ul>
+    <ul className="space-y-1 px-2">
       {hits.entities.map((e) => (
         <li key={e.name}>
           <button
