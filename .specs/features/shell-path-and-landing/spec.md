@@ -97,9 +97,11 @@ conversations once.
   the conversation search and the conversation list.
 - **FR-4.2** The destination rows — Projetos, Memória, Grafo, Tarefas, Arquivos, Segredos
   — render in the sidebar only while it is expanded.
-- **FR-4.3** While collapsed, the rail's icons remain the way to change section. To be
-  **verified rather than built**: `railDestinations` already wires every row to
-  `setRightSidebar`/`setDestination`, so this half of the report may already hold.
+- **FR-4.3** While collapsed, the rail's icons remain the way to change section.
+  **Verified, not built** — `railDestinations` already wires every row to
+  `setRightSidebar`/`setDestination`, and `rail-destinations.test.tsx` passed against
+  unchanged production code. It is a test because FR-4.2 makes the rail the only way in
+  while collapsed, and that claim had nothing holding it.
 
 ## Non-goals
 

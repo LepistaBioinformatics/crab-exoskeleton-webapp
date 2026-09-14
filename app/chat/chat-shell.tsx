@@ -276,6 +276,9 @@ export default function ChatShell({ email }: { email: string }) {
             onSection={setRightSidebar}
             onNewChat={newChat}
             onConversationSelect={closeDrawer}
+            // FR-4.2. The hover preview renders this same sidebar in its collapsed
+            // state, and the rail beside it already lists the destinations as icons.
+            showDestinations={!collapsed}
             // UNDEFINED while collapsed, which OMITS the header's collapse button
             // entirely: while collapsed — and the hover preview shows the panel in
             // exactly that state — "collapse" is a state the pane is already in, so the

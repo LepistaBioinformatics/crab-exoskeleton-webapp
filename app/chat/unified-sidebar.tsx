@@ -42,6 +42,7 @@ export default function UnifiedSidebar({
   onConversationSelect,
   onCollapse,
   hideProjects,
+  showDestinations = true,
 }: {
   email: string;
   /** Null until the fragment resolves a workspace. */
@@ -70,6 +71,14 @@ export default function UnifiedSidebar({
   onCollapse?: () => void;
   /** The agent's proxy predates projects; the row is omitted rather than disabled. */
   hideProjects?: boolean;
+  /**
+   * False while the pane is COLLAPSED, which is also the state the hover preview shows
+   * it in. The rail standing beside the preview already lists these same destinations as
+   * icons, so showing them again inside the preview offered the menu twice and the
+   * conversations once — and the conversations are what a member hovers a collapsed
+   * sidebar to find.
+   */
+  showDestinations?: boolean;
 }) {
   const t = useT(chatCopy);
 
@@ -109,19 +118,26 @@ export default function UnifiedSidebar({
             </button>
           </div>
 
-          <SidebarDestinations
-            projectsOpen={projectsOpen}
-            openSection={openSection}
-            hideProjects={hideProjects}
-            onProjects={() => {
-              onProjects();
-              onConversationSelect?.();
-            }}
-            onSection={(next) => {
-              onSection(next);
-              onConversationSelect?.();
-            }}
-          />
+          {/* HIDDEN AT `md+` WHEN COLLAPSED, not dropped. `collapsed` is a desktop-only
+              state: below `md` this pane is an off-canvas drawer and there is no rail,
+              so removing the rows on a phone because the desktop pane happens to be
+              collapsed would take the only way to reach them. The breakpoint is the
+              same one the rail appears at, which is what makes the swap exact. */}
+          <div className={showDestinations ? undefined : "md:hidden"}>
+            <SidebarDestinations
+              projectsOpen={projectsOpen}
+              openSection={openSection}
+              hideProjects={hideProjects}
+              onProjects={() => {
+                onProjects();
+                onConversationSelect?.();
+              }}
+              onSection={(next) => {
+                onSection(next);
+                onConversationSelect?.();
+              }}
+            />
+          </div>
 
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
             <HistorySidebar

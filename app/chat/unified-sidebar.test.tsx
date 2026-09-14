@@ -78,6 +78,42 @@ describe("UnifiedSidebar", () => {
     expect(render({ onCollapse: () => {} })).toContain(t.nav.collapseSidebar);
   });
 
+  // FR-4.1 and FR-4.2. The hover preview of a collapsed sidebar renders this component
+  // in its collapsed state, and the rail standing beside it already lists the same
+  // destinations as icons — so the preview showed the menu twice and the conversations
+  // once, which is the opposite of what a member hovers a collapsed sidebar to find.
+  describe("while the pane is collapsed", () => {
+    it("hides the destinations at the width where the rail exists", () => {
+      const html = render({ showDestinations: false });
+      const nav = html.indexOf(`aria-label="${t.shell.destinations}"`);
+      expect(nav).toBeGreaterThan(-1);
+      // The wrapper immediately around the nav, not some ancestor further up.
+      const wrapper = html.lastIndexOf("<div", nav);
+      expect(html.slice(wrapper, nav)).toContain("md:hidden");
+    });
+
+    // `collapsed` is a DESKTOP state. Below `md` this pane is an off-canvas drawer with
+    // no rail beside it, so dropping the rows outright would take the only way to reach
+    // them on a phone.
+    it("keeps them reachable below that width", () => {
+      const html = render({ showDestinations: false });
+      for (const label of [t.projects.title, t.history.newChat]) {
+        expect(html).toContain(label);
+      }
+    });
+
+    it("keeps the new-chat action, which is a verb rather than a destination", () => {
+      expect(render({ showDestinations: false })).toContain(t.history.newChat);
+    });
+
+    it("leaves the rows alone while the pane is open", () => {
+      const html = render();
+      const nav = html.indexOf(`aria-label="${t.shell.destinations}"`);
+      const wrapper = html.lastIndexOf("<div", nav);
+      expect(html.slice(wrapper, nav)).not.toContain("md:hidden");
+    });
+  });
+
   it("says the destination group's name in both locales", () => {
     expect(chatCopy.pt.shell.destinations).toBeTruthy();
     expect(chatCopy.pt.shell.destinations).not.toBe(chatCopy.en.shell.destinations);
