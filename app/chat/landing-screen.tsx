@@ -5,6 +5,7 @@ import { MessageSquare } from "lucide-react";
 import { cva } from "class-variance-authority";
 import { createConversation, type ConversationSummary } from "@/lib/chatSession";
 import { PanelEmpty } from "@/components/ui/panel-empty";
+import { Spinner } from "@/components/ui/spinner";
 import Composer from "./composer";
 import ConversationSearchBar from "./conversation-search-bar";
 import { useConversations } from "./use-conversations";
@@ -46,6 +47,7 @@ export default function LandingScreen({
   workspace,
   project,
   onOpen,
+  focusSignal,
 }: {
   /** Carries `p`, so the conversation list below is already the scope's. */
   workspace: Workspace;
@@ -53,11 +55,18 @@ export default function LandingScreen({
   project: Project | null;
   /** A conversation was chosen. The shell writes the fragment. */
   onOpen: (sid: string) => void;
+  /**
+   * Bumped when "New chat" is pressed. On every other screen that press NAVIGATES here;
+   * pressed while already here it wrote the hash that was already in the bar, which
+   * fires no hashchange and re-rendered nothing — a button that looked like a way in and
+   * did nothing, on the one screen a member is most likely to press it.
+   */
+  focusSignal?: number;
 }) {
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
   const router = useRouter();
-  const { conversations } = useConversations(workspace);
+  const { conversations, loaded } = useConversations(workspace);
   const { query, setQuery, results, searching } = useConversationSearch(
     workspace,
     conversations,
@@ -75,6 +84,11 @@ export default function LandingScreen({
   // the text is enqueued against the new id rather than handed to the chat view — the
   // turn store is module scope, so the message survives this screen being replaced by
   // the transcript.
+  // Returns true — the composer clears — before the promise settles, and that is safe
+  // because `createConversation` MINTS LOCALLY: it is `crypto.randomUUID()` and an
+  // object, `async` only in its signature, with no request and no failure mode. The row
+  // is created by the first message (`touchConversation`). If that ever starts hitting
+  // the network, the text has to be held until it resolves.
   function send(text: string): boolean {
     const body = text.trim();
     if (!body) return false;
@@ -122,6 +136,7 @@ export default function LandingScreen({
             chatRef={null}
             onCancelChatRef={() => {}}
             mentionFiles={[]}
+            focusSignal={focusSignal}
           />
         </div>
       </div>
@@ -137,7 +152,16 @@ export default function LandingScreen({
           />
         </div>
 
-        {visible.length === 0 ? (
+        {/* THE FIRST READ HAS TO COME BACK BEFORE THIS SAYS THERE IS NOTHING. The list
+            starts empty and fills from an effect, so "no conversations yet" would flash
+            on every arrival — and a member reaches this screen four ways: entering an
+            agent, entering a project, pressing New chat, and deleting the one they were
+            reading. */}
+        {!loaded && !query ? (
+          <div className="flex justify-center py-6">
+            <Spinner size={20} />
+          </div>
+        ) : visible.length === 0 ? (
           <PanelEmpty
             icon={MessageSquare}
             title={query ? t.history.noMatches : t.history.noneYet}

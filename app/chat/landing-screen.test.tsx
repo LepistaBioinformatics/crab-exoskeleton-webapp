@@ -18,9 +18,16 @@ const navigated: { project: string | null; sid: string }[] = [];
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 
 let list: ConversationSummary[] = [];
+let loaded = true;
 
 vi.mock("./use-conversations", () => ({
-  useConversations: () => ({ conversations: list, error: null, reload: async () => {}, apply: () => {} }),
+  useConversations: () => ({
+    conversations: list,
+    loaded,
+    error: null,
+    reload: async () => {},
+    apply: () => {},
+  }),
 }));
 
 vi.mock("@/lib/chatSession", async () => {
@@ -89,6 +96,7 @@ beforeEach(() => {
   enqueued.length = 0;
   navigated.length = 0;
   list = [];
+  loaded = true;
 });
 
 afterEach(() => {
@@ -208,6 +216,51 @@ describe("LandingScreen", () => {
     const el = await mount(null);
     expect(el.textContent).toContain("Contrato");
     expect(el.textContent).not.toContain("Parecer TBDC");
+  });
+
+  // The list starts empty and fills from an effect, and a member reaches this screen
+  // four ways -- entering an agent, entering a project, New chat, and deleting the
+  // conversation they were reading. Without this it said "no conversations yet" on every
+  // one of them, for a tick, before the real list arrived.
+  it("waits for the first read before saying there are none", async () => {
+    loaded = false;
+    const el = await mount(null);
+    expect(el.textContent).not.toContain(t.history.noneYet);
+  });
+
+  it("says there are none once the read has come back empty", async () => {
+    const el = await mount(null);
+    expect(el.textContent).toContain(t.history.noneYet);
+  });
+
+  // "New chat" navigates HERE from every other screen. Pressed while already here it
+  // writes the hash that is already in the bar, which fires no hashchange and re-renders
+  // nothing -- so the press did nothing at all on the one screen a member is most likely
+  // to press it from. The composer's own mount-focus does not help: it is keyed on
+  // `sessionId`, which on the landing never changes.
+  it("returns the cursor to the composer when new-chat is pressed from here", async () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const render = (signal: number) =>
+      act(() => {
+        root!.render(
+          <LandingScreen
+            workspace={{ t: "acme", s: "growth", r: "alpha", p: null }}
+            project={null}
+            onOpen={() => {}}
+            focusSignal={signal}
+          />,
+        );
+      });
+    render(0);
+    const box = host.querySelector("textarea")!;
+    // The member has moved on -- scrolled the list, clicked something else.
+    act(() => box.blur());
+    expect(document.activeElement).not.toBe(box);
+
+    render(1);
+    expect(document.activeElement).toBe(box);
   });
 
   // OQ-1: there is no conversation to upload against yet, and the proxy stores an

@@ -160,6 +160,16 @@ interface ComposerProps {
    * a member presses what looks like a way in and nothing happens.
    */
   canAttach?: boolean;
+  /**
+   * Bumped to move the cursor here. Used by the landing, whose "New chat" button sits in
+   * a sidebar that is already showing the landing -- so the click had nothing to
+   * navigate to and gave no feedback at all.
+   *
+   * A signal rather than a second mount-focus: the effect above already focuses on
+   * mount, keyed on `sessionId`, and on the landing that key never changes — so the
+   * press had nothing to re-trigger. This fires only when the number moves.
+   */
+  focusSignal?: number;
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -186,6 +196,7 @@ export default function Composer({
   onCancelChatRef,
   mentionFiles,
   canAttach = true,
+  focusSignal,
 }: ComposerProps) {
   const t = useT(chatCopy);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -214,6 +225,14 @@ export default function Composer({
     }
     if (onSend(v)) setValue("");
   }
+
+  // Skips the initial value, so this never fires on mount -- see `focusSignal`.
+  const focusedFor = useRef(focusSignal);
+  useEffect(() => {
+    if (focusSignal === undefined || focusSignal === focusedFor.current) return;
+    focusedFor.current = focusSignal;
+    ref.current?.focus();
+  }, [focusSignal]);
 
   function markTyping() {
     onTyping?.();

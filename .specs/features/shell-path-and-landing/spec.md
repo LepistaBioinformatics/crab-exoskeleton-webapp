@@ -92,7 +92,10 @@ conversations once.
   blank chat. **Verified, not built** — the shell's `onDeleted` is already
   `setFragmentProject(project)`, which drops `sid`, and FR-3.1 is what makes that the
   landing.
-- **FR-3.8** "New chat" NAVIGATES rather than creating. It minted a conversation and
+- **FR-3.8** "New chat" NAVIGATES rather than creating, and moves the cursor to the
+  composer when the landing is already on screen — the hash it writes is the hash
+  already in the bar, which fires no `hashchange`, and the composer's own mount-focus is
+  keyed on `sessionId`, which never changes here. It minted a conversation and
   wrote its id into the fragment, which is the same blank-transcript-with-a-ghost-id
   state FR-3.5 removes from entering a place; it drops `sid` now, and the landing's
   composer is the only mint. Added during execution — without it FR-3.5 would have been
@@ -132,8 +135,25 @@ conversations once.
 | FR-3.1 | `resolveCentre` answers `landing` for a workspace with no `sid`, with and without `p` |
 | FR-3.5 | the landing creates nothing on arrival |
 | FR-3.6 | a send from the landing inside a project creates the conversation with that project |
-| FR-3.8 | new-chat writes no `sid` |
+| FR-3.8 | new-chat writes no `sid`, and returns the cursor to the composer |
+| — | the landing waits for the first read before saying there are no conversations |
 | FR-4.1–4.2 | the sidebar renders destinations expanded and omits them collapsed |
+
+## Found while building
+
+**The landing flashed "no conversations yet" on arrival.** `useConversations` starts at
+`[]` and fills from an effect, and the landing is reached FOUR ways — entering an agent,
+entering a project, New chat, and deleting the conversation being read. The hook gained
+`loaded`, set on the first read of a scope (and on a failed one: the read finished, and
+what is on screen is the last answer the server gave). `HistorySidebar` has the same
+flash and is deliberately left alone — it predates this feature, and fixing it there is a
+change to a surface nobody reported.
+
+**`createConversation` cannot fail**, which is what makes the landing's `send` safe to
+return `true` from before its promise settles: it is `crypto.randomUUID()` and an object
+literal, `async` only in signature. The row is created by the first message
+(`touchConversation`). Written down in the call site, because the `async` invites the
+opposite assumption.
 
 ## Open questions
 

@@ -1,7 +1,12 @@
 # shell-path-and-landing — tasks
 
-Three groups. A and B are independent of each other and of C; C is the one that moves an
-invariant and ships last. One PR per group.
+Three groups, in the order they were built: the path, the collapsed sidebar, the
+landing. C is the one that moves an invariant and went last.
+
+**ONE PR, not three.** The plan said one per group and that was wrong: all three touch
+`chat-shell.tsx`, so they are stacked rather than independent, and a PR whose branch
+carries the other two is not a reviewable unit. The commits stay one per group, which is
+where the separation is real.
 
 ## Group A — the path (FR-1, FR-2)
 

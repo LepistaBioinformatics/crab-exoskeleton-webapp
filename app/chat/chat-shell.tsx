@@ -87,6 +87,8 @@ export default function ChatShell({ email }: { email: string }) {
   // Bumped whenever something the member did needs a restart (a secret write),
   // so the banner appears at once instead of at its next poll.
   const [restartRefresh, setRestartRefresh] = useState(0);
+  // Bumped by "New chat" — see the function for why a navigation alone is not enough.
+  const [composeFocus, setComposeFocus] = useState(0);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -171,9 +173,15 @@ export default function ChatShell({ email }: { email: string }) {
   // write its id straight into the fragment, which put a member in a blank transcript
   // holding a `sid` no row existed for -- the same state FR-3.5 removed from entering a
   // place. Dropping `sid` lands on the landing, whose composer is the one mint.
+  //
+  // The bump is for the case where the landing is ALREADY what is on screen: the hash
+  // written is the hash already in the bar, which fires no hashchange and re-renders
+  // nothing, so the press had no effect at all on the one screen a member is most
+  // likely to press it from. It moves the cursor to the composer instead.
   function newChat() {
     if (!workspace) return;
     setFragmentProject(project);
+    setComposeFocus((n) => n + 1);
     closeDrawer();
   }
 
@@ -368,6 +376,7 @@ export default function ChatShell({ email }: { email: string }) {
                 workspace={workspace}
                 project={openProject}
                 onOpen={(id) => setFragmentProjectSid(project, id)}
+                focusSignal={composeFocus}
               />
             )}
             {centre.kind === "chat" && workspace && (

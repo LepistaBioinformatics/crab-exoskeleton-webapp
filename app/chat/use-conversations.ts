@@ -24,6 +24,16 @@ import type { Workspace } from "./fragment";
 // miss another.
 export function useConversations(workspace: Workspace | null): {
   conversations: ConversationSummary[];
+  /**
+   * The first read for this scope has come back. `conversations` starts `[]` and fills
+   * from an effect, so without this a caller cannot tell "none yet" from "not asked
+   * yet" -- and the landing, which is the screen a member lands on four different ways,
+   * painted "No conversations yet" for a tick on every one of them.
+   *
+   * The sidebar has the same flash and does not read this. Left alone deliberately: it
+   * predates this feature and fixing it there is a change to a surface nobody reported.
+   */
+  loaded: boolean;
   /** An error CODE, resolved to a sentence at render time so a locale switch re-renders it. */
   error: string | null;
   reload: () => Promise<void>;
@@ -38,6 +48,7 @@ export function useConversations(workspace: Workspace | null): {
 } {
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Primitives in the dep list, never the object: ChatShell rebuilds `workspace` on
@@ -57,6 +68,7 @@ export function useConversations(workspace: Workspace | null): {
     try {
       setConversations(await listConversations(workspace, () => router.push("/signin")));
       setError(null);
+      setLoaded(true);
     } catch {
       setError("connectivity");
     }
@@ -66,8 +78,13 @@ export function useConversations(workspace: Workspace | null): {
   useEffect(() => {
     if (!key) {
       setConversations([]);
+      setLoaded(false);
       return;
     }
+    // A NEW SCOPE HAS NOT BEEN READ YET. Without this, switching into a project carries
+    // the previous scope's `loaded` and the list below reads as settled while it is
+    // still the agent's.
+    setLoaded(false);
     let cancelled = false;
     const refresh = async () => {
       try {
@@ -75,13 +92,20 @@ export function useConversations(workspace: Workspace | null): {
         if (!cancelled) {
           setConversations(list);
           setError(null);
+          setLoaded(true);
         }
       } catch {
         // The list is LEFT ALONE, unlike useProjects, which empties it. A conversation
         // list that blanks itself on one failed poll loses the member's place; the
         // error code says the last read failed, and the rows on screen are still the
         // last answer the server gave.
-        if (!cancelled) setError("connectivity");
+        // `loaded` is set either way: the read finished, and what is on screen is the
+        // last answer the server gave. A failed poll must not put the caller back into
+        // "still asking" forever.
+        if (!cancelled) {
+          setError("connectivity");
+          setLoaded(true);
+        }
       }
     };
     void refresh();
@@ -102,5 +126,5 @@ export function useConversations(workspace: Workspace | null): {
     [],
   );
 
-  return { conversations, error, reload, apply };
+  return { conversations, loaded, error, reload, apply };
 }
