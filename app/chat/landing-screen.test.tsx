@@ -51,15 +51,30 @@ vi.mock("./turn-store", async () => {
   };
 });
 
+// `hv` decides list vs tree, exactly as it does in the sidebar. Stubbed rather than
+// driven through `window.location.hash` so a test says which view it is asserting on.
+let hv: string | undefined;
+
 vi.mock("./fragment", async () => {
   const actual = await vi.importActual<typeof import("./fragment")>("./fragment");
   return {
     ...actual,
+    useFragment: () => ({ hv }),
     setFragmentProjectSid: (project: string | null, sid: string) => {
       navigated.push({ project, sid });
     },
   };
 });
+
+// The tree measures its own layout and fetches its events; neither is what these tests
+// are about. What matters here is WHICH conversations it is handed.
+const treeRows: string[][] = [];
+vi.mock("./conversation-tree", () => ({
+  default: ({ conversations }: { conversations: ConversationSummary[] }) => {
+    treeRows.push(conversations.map((c) => c.id));
+    return <div data-tree="" />;
+  },
+}));
 
 import LandingScreen from "./landing-screen";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -97,6 +112,8 @@ beforeEach(() => {
   navigated.length = 0;
   list = [];
   loaded = true;
+  hv = "list";
+  treeRows.length = 0;
 });
 
 afterEach(() => {
@@ -261,6 +278,68 @@ describe("LandingScreen", () => {
 
     render(1);
     expect(document.activeElement).toBe(box);
+  });
+
+  // THE DEFECT A MEMBER REPORTED AS "sometimes it opens the conversation and sometimes
+  // it doesn't". `listConversations` sends tenant/subscription/role and NOT the project,
+  // so it answers with every conversation of the agent. This screen listed all of them
+  // under one project's name, and opening a row from another project wrote THIS
+  // project's `p` beside that conversation's `sid` -- the transcript read from the wrong
+  // workspace directory, came back empty, and the chat fell through to its "pick one or
+  // start one" state.
+  it("lists only the conversations of the project it is standing in", async () => {
+    list = [
+      conversation({ id: "root", project: null, title: "No projeto nenhum" }),
+      conversation({ id: "legal", project: "legal", title: "Dentro do Legal" }),
+      conversation({ id: "other", project: "hr", title: "De outro projeto" }),
+    ];
+    const el = await mount("legal");
+    expect(el.textContent).toContain("Dentro do Legal");
+    expect(el.textContent).not.toContain("No projeto nenhum");
+    expect(el.textContent).not.toContain("De outro projeto");
+  });
+
+  it("lists only the agent's own conversations at its root", async () => {
+    list = [
+      conversation({ id: "root", project: null, title: "No projeto nenhum" }),
+      conversation({ id: "legal", project: "legal", title: "Dentro do Legal" }),
+    ];
+    const el = await mount(null);
+    expect(el.textContent).toContain("No projeto nenhum");
+    expect(el.textContent).not.toContain("Dentro do Legal");
+  });
+
+  // Same key the sidebar reads, so the two never disagree about which view is on. The
+  // switch itself stays in the sidebar: two controls for one setting is how they drift.
+  describe("which view it draws", () => {
+    it("draws the tree unless the member asked for a list", async () => {
+      hv = undefined;
+      list = [conversation({ id: "c1" })];
+      const el = await mount(null);
+      expect(el.querySelector("[data-tree]")).toBeTruthy();
+      expect(treeRows).toEqual([["c1"]]);
+    });
+
+    it("draws a list when hv says list", async () => {
+      hv = "list";
+      list = [conversation({ id: "c1", title: "Parecer TBDC" })];
+      const el = await mount(null);
+      expect(el.querySelector("[data-tree]")).toBeNull();
+      expect(el.textContent).toContain("Parecer TBDC");
+    });
+
+    // The tree gets the SAME narrowed list, not the raw one: it navigates itself with
+    // `setFragmentSid`, which leaves `p` alone, so a row from another project would land
+    // on the same wrong-workspace transcript the list did.
+    it("hands the tree the project's conversations only", async () => {
+      hv = undefined;
+      list = [
+        conversation({ id: "legal", project: "legal" }),
+        conversation({ id: "other", project: "hr" }),
+      ];
+      await mount("legal");
+      expect(treeRows).toEqual([["legal"]]);
+    });
   });
 
   // OQ-1: there is no conversation to upload against yet, and the proxy stores an

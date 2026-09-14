@@ -11,7 +11,8 @@ import ConversationSearchBar from "./conversation-search-bar";
 import { useConversations } from "./use-conversations";
 import { useConversationSearch } from "./use-conversation-search";
 import { enqueue as storeEnqueue } from "./turn-store";
-import { setFragmentProjectSid } from "./fragment";
+import { setFragmentProjectSid, useFragment } from "./fragment";
+import ConversationTree from "./conversation-tree";
 import type { Project } from "@/lib/projects";
 import type { Workspace } from "./fragment";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -66,7 +67,29 @@ export default function LandingScreen({
   const t = useT(chatCopy);
   const tag = BCP47[useLocale().locale];
   const router = useRouter();
-  const { conversations, loaded } = useConversations(workspace);
+  const fragment = useFragment();
+  // Tree unless the member asked for a list, which is the sidebar's own rule read off
+  // the same fragment key. ONE setting, one control: the switch lives in the sidebar's
+  // panel and this follows it rather than offering a second one that could disagree.
+  const asList = fragment?.hv === "list";
+  const { conversations: all, loaded } = useConversations(workspace);
+
+  // THE PROJECT FILTER, and leaving it out was a defect.
+  //
+  // `listConversations` sends tenant/subscription/role and NOT the project, so it
+  // answers with every conversation of the agent — the ones at its root and the ones
+  // inside each project. The sidebar has always narrowed that itself; this screen did
+  // not, so it listed the whole agent under a project's name, and opening a row from
+  // another project wrote THIS project's `p` beside that conversation's `sid`. The
+  // transcript then read from the wrong workspace directory, came back empty, and the
+  // chat rendered its "pick one or start one" empty state — which is what a member
+  // reported as "sometimes it opens the conversation and sometimes it doesn't".
+  //
+  // Client-side, like the sidebar's, because the full list is already fetched: the
+  // search and the tree both need every conversation to build from.
+  const inScope = (c: ConversationSummary) => (c.project ?? null) === (workspace.p ?? null);
+  const conversations = all.filter(inScope);
+
   const { query, setQuery, results, searching } = useConversationSearch(
     workspace,
     conversations,
@@ -167,7 +190,7 @@ export default function LandingScreen({
             title={query ? t.history.noMatches : t.history.noneYet}
             body={query ? t.history.noMatchesHint : undefined}
           />
-        ) : (
+        ) : asList ? (
           <ul className="mt-2 flex flex-col">
             {visible.map((conversation) => (
               <li key={conversation.id}>
@@ -185,6 +208,13 @@ export default function LandingScreen({
               </li>
             ))}
           </ul>
+        ) : (
+          // The same tree the sidebar draws, off the same `hv` key and the same list.
+          // It navigates itself (`setFragmentSid`), which is correct here because `p`
+          // is already this screen's project — the rows it shows are scoped to it.
+          <div className="mt-2">
+            <ConversationTree workspace={workspace} conversations={visible} />
+          </div>
         )}
       </div>
     </div>

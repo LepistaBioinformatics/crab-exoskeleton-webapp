@@ -80,8 +80,15 @@ conversations once.
   conversation.
 - **FR-3.3** Below the composer, the conversations of the current scope — the project's
   inside a project, the agent's at the root — each row opening the conversation.
+  **`listConversations` does not scope by project**: it sends tenant/subscription/role
+  only, and the sidebar has always narrowed the answer itself. This screen must narrow it
+  the same way, or it lists the whole agent under one project's name.
 - **FR-3.4** A search box above that list, accepting the same query grammar the sidebar's
   does (`tag:`, `alias:`, `text:`, `date:`), and reusing the same parser.
+- **FR-3.4.1** The list obeys `hv`, the fragment key the sidebar's List|Tree switch
+  already writes: a list when it says `list`, the sidebar's own `ConversationTree`
+  otherwise. **No second switch** — one setting with two controls is how the two start
+  disagreeing about which view is on.
 - **FR-3.5** **No conversation is created until the member sends.** `ChatView`'s
   auto-mint effect goes; the landing is what stands in the state it existed to fill.
 - **FR-3.6** **A conversation born on the landing carries the project.** This is the
@@ -136,6 +143,8 @@ conversations once.
 | FR-3.5 | the landing creates nothing on arrival |
 | FR-3.6 | a send from the landing inside a project creates the conversation with that project |
 | FR-3.8 | new-chat writes no `sid`, and returns the cursor to the composer |
+| FR-3.3 | a project's landing lists that project's conversations and no others |
+| FR-3.4.1 | `hv=list` draws the list; anything else draws the tree, on the same narrowed list |
 | — | the landing waits for the first read before saying there are no conversations |
 | FR-4.1–4.2 | the sidebar renders destinations expanded and omits them collapsed |
 
@@ -148,6 +157,14 @@ entering a project, New chat, and deleting the conversation being read. The hook
 what is on screen is the last answer the server gave). `HistorySidebar` has the same
 flash and is deliberately left alone — it predates this feature, and fixing it there is a
 change to a surface nobody reported.
+
+**The landing listed every conversation of the agent**, reported as "sometimes it opens
+the conversation and sometimes it doesn't". `listConversations` sends no project, so a
+row from another project could be clicked; opening it wrote THIS project's `p` beside
+that conversation's `sid`, the transcript read from the wrong workspace directory and
+came back empty, and the chat fell through to its "pick one or start one" state. Fixed by
+the same client-side narrowing the sidebar does — and the tree gets the narrowed list
+too, because it navigates with `setFragmentSid`, which leaves `p` alone.
 
 **`createConversation` cannot fail**, which is what makes the landing's `send` safe to
 return `true` from before its promise settles: it is `crypto.randomUUID()` and an object
