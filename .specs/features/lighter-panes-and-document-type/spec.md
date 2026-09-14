@@ -126,6 +126,31 @@ highlighter and would fight a body colour; and the **HTML** preview, which is a
 `srcdoc` iframe — a separate document that inherits nothing, and whose `sandbox=""` is
 the reason it is allowed to exist at all.
 
+## 4 — The files row is set like a link, not like a form
+
+> os botões da aba de arquivos de upload, nova pasta e quando o preview está aberto para
+> voltar estão muito grosseiros
+
+Upload, New folder and the preview's way back were `variant="outlined" size="sm"`: a
+brand-coloured border around two words, at `font-semibold`, over a file tree. The row of
+*actions* read as the heaviest thing on a screen whose subject is the list under it.
+
+**FR-4.1** `Button` gains a **`link`** variant and a matching `link` size. Not a
+per-call-site override: the idiom already exists twice unnamed — the sidebar's destination
+rows and the tasks panel's back control are both `font-medium text-fg-muted hover:text-fg`
+— and a third spelling is how the three drift. The underline arrives on hover, which is
+the one thing Bootstrap's `btn-link` gets right.
+
+**FR-4.2 — The state layer and `font-semibold` move OUT of the base and INTO the four
+button-shaped variants.** Turning them off from a `link` variant would be two utilities of
+the same property on one element, resolved by the order Tailwind *emits* them rather than
+the order they appear in the class string — the hazard `resizable-pane.test.ts` exists to
+record, invisible to `tsc` and to every behavioural test. Mutually exclusive values are
+the only shape that cannot go wrong.
+
+**FR-4.3 — Lighter type is not a smaller target.** `link` keeps `h-8`, the 32px `sm`
+already gives. Only the border and the weight go.
+
 ## Acceptance
 
 | # | Check |
@@ -138,3 +163,6 @@ the reason it is allowed to exist at all.
 | FR-2.2–2.4 | the docx table carries the header tint, the wrap and the spacing |
 | FR-3.1 | the hex is a token; no component carries `text-[#c9c7be]` |
 | FR-3.2 | the chat band and the document bodies resolve to the same colour class |
+| FR-4.1 | the three files-tab controls render with no border and no fill |
+| FR-4.2 | `link` carries neither the state layer nor `font-semibold`, and the other four keep both |
+| FR-4.3 | `link` still renders `h-8` |
