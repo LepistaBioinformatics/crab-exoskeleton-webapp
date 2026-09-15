@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, MessageSquarePlus, X } from "lucide-react";
+import { Menu, MessageSquarePlus, MessagesSquare, X } from "lucide-react";
 import {
   useFragment,
   toWorkspace,
@@ -13,8 +13,8 @@ import {
   setFragmentProjectSid,
 } from "./fragment";
 import { asDestination, resolveCentre } from "./destination";
-import { asSection, nextSidebarValue } from "./workspace-sections";
-import { DESTINATION_ROWS, rowIcon, rowKey, rowLabel } from "./sidebar-destinations";
+import { asSection, nextSidebarValue, type Section } from "./workspace-sections";
+import { DESTINATION_ROWS, rowBlurb, rowIcon, rowKey, rowLabel } from "./sidebar-destinations";
 import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
@@ -89,6 +89,25 @@ export default function ChatShell({ email }: { email: string }) {
   const [restartRefresh, setRestartRefresh] = useState(0);
   // Bumped by "New chat" — see the function for why a navigation alone is not enough.
   const [composeFocus, setComposeFocus] = useState(0);
+
+  // THE SECTION THE PANE IS CLOSING ON, which outlives the fragment that named it.
+  //
+  // `rs` clears the instant the pane is dismissed — and three gestures dismiss it: the
+  // pane's own X, the collapsed rail's icon, and the sidebar row toggled off — so the
+  // <aside> left the tree in the same frame and there was nothing left to animate. The
+  // pane opened over 200ms and vanished in one.
+  //
+  // Holding the section here for the length of the exit is the only shape that covers all
+  // three gestures: a `closing` flag owned by the pane itself would only ever see the X.
+  const [exiting, setExiting] = useState<Section | null>(null);
+  const lastSection = useRef<Section | null>(null);
+  useEffect(() => {
+    if (openSection !== null) setExiting(null);
+    else if (lastSection.current !== null) setExiting(lastSection.current);
+    lastSection.current = openSection;
+  }, [openSection]);
+  // What the pane renders: the open section, or the one it is still playing out.
+  const shownSection = openSection ?? exiting;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -214,11 +233,41 @@ export default function ChatShell({ email }: { email: string }) {
   // A row means here exactly what it means there, toggle included: `nextSidebarValue` is
   // what both call, so clicking the open section on the rail closes the pane rather than
   // reopening it on itself.
+  // THE CONVERSATION LIST, as an entry of its own, and the reason the rail has three
+  // groups now.
+  //
+  // What the collapsed pane previews is the conversation list — and it used to appear
+  // from a hover anywhere on the column, so reaching for Files meant dismissing a list
+  // that had opened over the screen on the way past. Naming it gives the preview a place
+  // to come FROM: this is the only entry carrying `peek`, and every other one closes it.
+  //
+  // Clicking EXPANDS, which is the exception to the rule two groups below — the others
+  // choose a panel without opening the pane, because opening on click pinned the sidebar
+  // on what was meant to be a glance. This entry has no panel to choose: the list it
+  // names is what the expanded pane already shows, so "open it properly" is the only verb
+  // a click could have.
+  const railConversations: RailPanel[] = workspace
+    ? [
+        {
+          key: "conversations",
+          Icon: MessagesSquare,
+          label: t.shell.conversations,
+          active: false,
+          peek: true,
+          onSelect: () => {
+            setCollapsed(false);
+            setPeeking(false);
+          },
+        },
+      ]
+    : [];
+
   const railDestinations: RailPanel[] = workspace
     ? DESTINATION_ROWS.filter((r) => !(r.kind === "projects" && hideProjects)).map((r) => ({
         key: rowKey(r),
         Icon: rowIcon(r),
         label: rowLabel(r, t),
+        blurb: rowBlurb(r, t),
         active: r.kind === "projects" ? destination !== null : openSection === r.section,
         onSelect: () =>
           r.kind === "projects"
@@ -233,6 +282,7 @@ export default function ChatShell({ email }: { email: string }) {
           key: "new-chat",
           Icon: MessageSquarePlus,
           label: t.history.newChat,
+          blurb: t.history.newChatBlurb,
           active: false,
           emphasis: true,
           onSelect: newChat,
@@ -240,7 +290,14 @@ export default function ChatShell({ email }: { email: string }) {
       ]
     : [];
 
-  const railGroups = [railDestinations, railActions].filter((g) => g.length > 0);
+  // THE SAME ORDER THE OPEN SIDEBAR READS, top to bottom: New chat, the destinations,
+  // then the conversation list. The rail had the list first and the action last, so the
+  // two renderings of one column disagreed about where anything was — and the rail is
+  // what a member reads while the column is collapsed, which is exactly when they cannot
+  // check.
+  const railGroups = [railActions, railDestinations, railConversations].filter(
+    (g) => g.length > 0,
+  );
 
   return (
     // `h-dvh`, not `h-screen`: `100vh` is the LARGE viewport, which ignores both the
@@ -407,15 +464,17 @@ export default function ChatShell({ email }: { email: string }) {
             The height chain the five panels need starts here — this row is
             `min-h-0 flex-1` under `h-dvh`, so the <aside> stretches to a definite height
             and workspace-pane.tsx can hand one down. */}
-        {openSection && workspace && (
+        {shownSection && workspace && (
           <WorkspaceScreen
             // Keyed by the workspace AND the project: a section addresses one workspace
             // directory, so entering a project must rebuild it rather than leave the
             // agent's own memory or files on screen under the project's name.
             key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
             workspace={workspace}
-            section={openSection}
+            section={shownSection}
             onClose={() => setRightSidebar(null)}
+            closing={openSection === null}
+            onClosed={() => setExiting(null)}
             onReference={setChatRef}
             onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
           />

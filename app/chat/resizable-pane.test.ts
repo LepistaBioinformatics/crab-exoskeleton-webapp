@@ -28,11 +28,26 @@ describe("pane content modes", () => {
   it("can animate, which means it must not be display-toggled", () => {
     for (const mode of ["collapsed", "peeking"] as const) {
       const cls = content({ mode });
-      expect(cls).toContain("md:transition-transform");
+      expect(cls).toContain("md:transition-[transform,visibility]");
       expect(
         cls,
         "a display change cannot be transitioned, so the slide would pop",
       ).not.toContain("md:hidden");
+    }
+  });
+
+  // The slide OUT, which played invisibly for as long as the transition covered
+  // `transform` alone: `visibility: hidden` is not gradual, so it landed at t=0 and the
+  // 200ms that followed animated an element nobody could see. Transitioning visibility
+  // alongside the transform holds it visible for the whole duration on the way out and
+  // reveals it immediately on the way in — the asymmetry, in one property name, which is
+  // why it is asserted rather than left to the shorthand.
+  it("transitions the property that decides whether the slide is visible", () => {
+    for (const mode of ["collapsed", "peeking"] as const) {
+      expect(
+        content({ mode }),
+        "transform alone hides the pane before its departure can be seen",
+      ).not.toContain("md:transition-transform ");
     }
   });
 

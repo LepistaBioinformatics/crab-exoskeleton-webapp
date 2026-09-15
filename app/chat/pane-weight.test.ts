@@ -42,6 +42,10 @@ const PINNED: Record<string, { rules: number; why: string }> = {
   "workspace-pane.tsx": { rules: 1, why: "the panel body scrolls under the pane header" },
   "scheduled-tasks-panel.tsx": { rules: 1, why: "the task list scrolls under the pinned stack" },
   "file-preview.tsx": { rules: 3, why: "the view tabs, the sheet tabs and the truncation notice" },
+  // The PDF pane draws its own pages now — the browser's viewer, and the annotation tools
+  // it ships that nothing here can save, went with the `<object>`. Its footer is the page
+  // and zoom readout, and the pages scroll under it.
+  "pdf-pane.tsx": { rules: 1, why: "the pages scroll under the page and zoom bar" },
   // Not sidebar or pane chrome: a modal of its own, whose toolbar and footer frame a
   // scrolling editor. Listed so its count is a decision rather than an omission.
   "markdown-editor.tsx": { rules: 4, why: "a dialog's own header, toolbar, split and footer" },

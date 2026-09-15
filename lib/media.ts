@@ -288,24 +288,6 @@ export function fileTypeGroup(nameOrPath: string): FileTypeGroup {
   return FILE_TYPE_GROUPS[leaf.slice(dot + 1).toLowerCase()] ?? "unknown";
 }
 
-/**
- * The MIME type a preview has to assert locally, or null when none is needed.
- *
- * The proxy serves EVERY media file as `application/octet-stream` with
- * `Content-Disposition: attachment` (crab-shell-proxy handlers.go), which is a
- * deliberate posture: a member's file is untrusted content and must never render
- * inline from this origin. `res.blob()` inherits that type, and a browser trusts the
- * blob's own type over an `<object type=…>` attribute — so a PDF preview showed the
- * fallback in Firefox and downloaded itself in Chromium.
- *
- * Images are unaffected and get null: `<img>` sniffs the bytes and ignores the type.
- * Re-typing is scoped to the blob: URL the preview builds, which is an opaque origin —
- * the server's posture for every other consumer is untouched.
- */
-export function previewBlobType(kind: PreviewKind): string | null {
-  return kind === "pdf" ? "application/pdf" : null;
-}
-
 /** One file's bytes. Shared by the download-to-disk path and by the preview. */
 export async function fetchMediaBlob(workspace: Workspace, path: string): Promise<Blob> {
   const res = await fetch(mediaUrl(workspace, path));

@@ -53,6 +53,20 @@ export function rowIcon(row: DestinationRow): LucideIcon {
   return row.kind === "projects" ? Folders : SECTIONS[row.section].Icon;
 }
 
+/**
+ * One line saying what the row opens, for the COLLAPSED RAIL and nothing else.
+ *
+ * A labelled row does not need it — that is why these were deleted once. A rail entry is
+ * a glyph with no label at all, so the sentence is what the tooltip has to say.
+ *
+ * Projects has a `blurb` of its own rather than borrowing `projects.hint`: the hint is a
+ * paragraph the projects screen can afford, and at tooltip width in small type it runs to
+ * four lines beside five one-line neighbours.
+ */
+export function rowBlurb(row: DestinationRow, t: ChatDict): string {
+  return row.kind === "projects" ? t.projects.blurb : SECTIONS[row.section].blurb(t);
+}
+
 const row = cva(
   [
     "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm",

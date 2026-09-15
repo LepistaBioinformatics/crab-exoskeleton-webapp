@@ -16,22 +16,39 @@ export type Section = "memory" | "graph" | "tasks" | "files" | "secrets";
 
 export const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files", "secrets"];
 
-// A one-line blurb under each label used to live here too. It had one reader — the
-// menu pane that listed the five sections inside the right-hand panel — and that pane
-// is gone: the sidebar's rows are labelled, and a row that is already named does not
-// need a sentence explaining that Files holds files.
+// THE BLURB IS BACK, and the reason it was deleted is the reason it returns.
+//
+// It went when the pane that listed the five sections with a sentence under each did:
+// the sidebar's rows are LABELLED, and a row already reading "Files" does not need a
+// line saying Files holds files. That argument holds wherever the label is on screen.
+// The COLLAPSED RAIL is where it does not — there the row is a bare glyph, and with
+// `title` replaced by a real tooltip the sentence is the only thing that says what the
+// glyph opens. So the blurb has exactly one reader again, and a different one.
 export const SECTIONS: Record<
   Section,
   {
     Icon: typeof Brain;
     label: (t: ChatDict) => string;
+    blurb: (t: ChatDict) => string;
   }
 > = {
-  memory: { Icon: Brain, label: (t) => t.memory.title },
-  graph: { Icon: Network, label: (t) => t.memoryGraph.title },
-  tasks: { Icon: CalendarClock, label: (t) => t.scheduledTasks.title },
-  files: { Icon: FileText, label: (t) => t.uploads.files },
-  secrets: { Icon: KeyRound, label: (t) => t.secrets.title },
+  memory: { Icon: Brain, label: (t) => t.memory.title, blurb: (t) => t.uploads.sections.memory },
+  graph: {
+    Icon: Network,
+    label: (t) => t.memoryGraph.title,
+    blurb: (t) => t.uploads.sections.graph,
+  },
+  tasks: {
+    Icon: CalendarClock,
+    label: (t) => t.scheduledTasks.title,
+    blurb: (t) => t.uploads.sections.tasks,
+  },
+  files: { Icon: FileText, label: (t) => t.uploads.files, blurb: (t) => t.uploads.sections.files },
+  secrets: {
+    Icon: KeyRound,
+    label: (t) => t.secrets.title,
+    blurb: (t) => t.uploads.sections.secrets,
+  },
 };
 
 /**

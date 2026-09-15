@@ -151,6 +151,11 @@ describe("opening a document from the files tree", () => {
     expect(host.textContent).toContain("print(os.getcwd())");
   });
 
+  // The gutter is a CELL PER LINE now rather than one `<pre>` of numbers — which is what
+  // lets a number stay with its line when the line wraps into three rows.
+  const numbers = (host: HTMLElement) =>
+    [...host.querySelectorAll("[data-line]")].map((el) => el.getAttribute("data-line"));
+
   // preview-line-numbers FR-1. A file is not a fenced block in a message: the line number
   // is how a member says WHERE something is, to a colleague or back to the agent.
   it("numbers the lines of a script", async () => {
@@ -161,7 +166,7 @@ describe("opening a document from the files tree", () => {
 
     // The trailing newline TERMINATES the second line rather than opening a third, so it
     // must not be counted — that is the off-by-one this asserts.
-    expect(host.querySelector("pre[aria-hidden]")?.textContent).toBe("1\n2");
+    expect(numbers(host)).toEqual(["1", "2"]);
   });
 
   it("counts CRLF lines once, not twice", async () => {
@@ -170,7 +175,7 @@ describe("opening a document from the files tree", () => {
 
     await act(async () => byLabel(host, `${t.preview.action} run.py`).click());
 
-    expect(host.querySelector("pre[aria-hidden]")?.textContent).toBe("1\n2\n3");
+    expect(numbers(host)).toEqual(["1", "2", "3"]);
     // And the stray carriage returns do not survive into the body.
     expect(host.textContent).not.toContain("\r");
   });
@@ -183,7 +188,7 @@ describe("opening a document from the files tree", () => {
 
     await act(async () => byLabel(host, `${t.preview.action} report.md`).click());
 
-    expect(host.querySelector("pre[aria-hidden]")).toBeNull();
+    expect(numbers(host)).toEqual([]);
   });
 
   // preview-plain-text-fallback FR-2. The name said text; the bytes disagreed. That is an

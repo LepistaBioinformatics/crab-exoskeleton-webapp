@@ -1,6 +1,6 @@
 "use client";
 
-import { MouseEvent, ReactNode, useEffect, useState } from "react";
+import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -58,6 +58,8 @@ export default function WorkspacePane({
   title,
   actions,
   onClose,
+  closing = false,
+  onClosed,
   children,
 }: {
   /** The open section's name -- the heading, and what the pane is called to a screen reader. */
@@ -65,10 +67,39 @@ export default function WorkspacePane({
   /** Controls for the section itself, beside the close button. */
   actions?: ReactNode;
   onClose: () => void;
+  /**
+   * The pane is on its way out and should play the closing animation instead of the
+   * opening one. Owned by the shell, not here: `rs` is already cleared by the time this
+   * is true, and three separate gestures clear it — this pane's X, the collapsed rail's
+   * icon, and the sidebar row that toggles the open section off.
+   */
+  closing?: boolean;
+  /**
+   * The closing animation finished and the pane can leave the tree. Driven by
+   * `animationend` rather than a timer so that a member on reduced motion — for whom the
+   * global guard clamps the animation to a hundredth of a millisecond — gets the unmount
+   * at once instead of staring at a dead pane for 200ms.
+   */
+  onClosed?: () => void;
   children: ReactNode;
 }) {
   const t = useT(chatCopy);
   const [width, setWidth] = useState(MIN_WIDTH);
+
+  // ONCE THE PANE HAS STARTED LEAVING IT NEVER PLAYS THE ARRIVAL AGAIN.
+  //
+  // `pane-open` animates width from zero, which is right on a mount and wrong on anything
+  // else. A member who re-opens the section mid-exit flips `closing` back to false, and
+  // re-applying the class there RESTARTS that animation: the half-shrunk pane snapped to
+  // nothing and grew back. Dropping straight to the element's own width is a jump from
+  // most of the way open, which is the smaller of the two.
+  const hasClosed = useRef(false);
+  if (closing) hasClosed.current = true;
+  const phase = closing
+    ? "pane-close pointer-events-none"
+    : hasClosed.current
+      ? ""
+      : "pane-open";
 
   useEffect(() => {
     const raw = Number(localStorage.getItem(WIDTH_KEY));
@@ -107,18 +138,19 @@ export default function WorkspacePane({
 
   return (
     <>
-      {/* On mobile the pane is an overlay drawer; the backdrop dismisses it. */}
+      {/* On mobile the pane is an overlay drawer; the backdrop dismisses it. Inert while
+          the pane is leaving: a second dismissal has nothing left to dismiss. */}
       <div
-        className="fixed inset-0 z-40 bg-black/40 md:hidden"
+        className={`fixed inset-0 z-40 bg-black/40 md:hidden${closing ? " pointer-events-none" : ""}`}
         onClick={onClose}
         aria-hidden
       />
       <aside
         aria-label={title}
         style={{ width }}
-        // pane-open animates width from 0 on mount (see globals.css). It is an
-        // animation rather than a transition precisely because this width is
-        // drag-resizable: a transition would make the drag lag.
+        // pane-open animates width from 0 on mount and pane-close animates it back to 0
+        // on the way out (see globals.css). Animations rather than transitions precisely
+        // because this width is drag-resizable: a transition would make the drag lag.
         //
         // `max-md:w-[92vw]!` — the `!` is load-bearing. `width` above is an inline style
         // (it is drag-resizable on desktop), and an inline style beats an ordinary class,
@@ -127,10 +159,26 @@ export default function WorkspacePane({
         // only caps a width, it never widens one. Tailwind v4 puts the important modifier
         // at the END.
         //
-        // NO BORDER on the left edge, unlike the panel this came from: the pane is
-        // `--surface` against the centre's `--bg`, and a region boundary that the tone
-        // already draws is the hairline FR-6.1 removes.
-        className="pane-open relative flex shrink-0 flex-col overflow-hidden bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl"
+        // A CARD ON THE CHAT'S OWN GROUND, which is a reversal of what this comment used
+        // to say. The pane was `--surface` against the centre's `--bg` and took no border
+        // at all, because the tone drew the boundary. It is `--bg` now, level with the
+        // conversation beside it — so the tone draws nothing, and the edge has to come
+        // back as an edge: a rounded border with air around it on three sides.
+        //
+        // `md:` on all four, because below that width this is a full-height overlay
+        // drawer. A drawer inset from the edges of the screen is a dialog that forgot to
+        // dim what is behind it.
+        className={`${phase} relative flex shrink-0 flex-col overflow-hidden bg-bg md:my-2 md:mr-2 md:rounded-2xl md:border md:border-rule max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl`}
+        // Only the aside's own animation ends the exit. Animations inside the pane — a
+        // spinner, a fading row — bubble their `animationend` through here too, and one
+        // of those firing would drop the pane mid-slide.
+        onAnimationEnd={
+          closing
+            ? (e) => {
+                if (e.target === e.currentTarget) onClosed?.();
+              }
+            : undefined
+        }
       >
         <div
           role="separator"
