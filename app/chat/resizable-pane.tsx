@@ -1,6 +1,6 @@
 "use client";
 
-import { MouseEvent, ReactNode } from "react";
+import { MouseEvent, ReactNode, useState } from "react";
 import { cva } from "class-variance-authority";
 import { CircleArrowRight, type LucideIcon } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
@@ -13,8 +13,14 @@ import { chatCopy } from "@/lib/i18n/chat";
 // expand affordance). On MOBILE it is an off-canvas overlay drawer (unchanged)
 // — collapse/resize don't apply there. Width is driven by the `--pane-w` CSS
 // var so it only takes effect at md+ (mobile keeps a fixed overlay width).
+// `bg-bg`, NOT `bg-surface`. The sidebar used to be a tonal step above the conversation,
+// which is how the region boundary was drawn once the violet hairline came out. The owner
+// asked for one continuous ground instead: the column's structure is its own content —
+// the rows, the headings, the spacing — and the tone was doing work the content already
+// does. What still needs an edge gets one (the pane beside the conversation is a card
+// with a border now); this column does not.
 const pane = cva(
-  "relative z-40 bg-surface max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:w-[300px] max-md:shadow-xl max-md:transition-transform md:shrink-0",
+  "relative z-40 bg-bg max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:w-[300px] max-md:shadow-xl max-md:transition-transform md:shrink-0",
   {
     variants: {
       open: { true: "max-md:translate-x-0", false: "max-md:-translate-x-full" },
@@ -45,17 +51,28 @@ const pane = cva(
 // transition run. Note `invisible`/`visible` are one property, so they carry the same
 // ordering hazard as display did — another reason these stay mutually exclusive.
 //
-// The slide is on the way IN. Leaving hides immediately: visibility is discrete, and
-// animating a departure nobody is looking at buys nothing. Reduced motion is handled
-// globally in globals.css, which neutralises every transition — no per-class variant.
+// THE SLIDE RUNS BOTH WAYS, and `visibility` being in the transitioned property list is
+// the whole of why. Leaving used to hide immediately: the transition covered `transform`
+// alone, so `visibility: hidden` landed at t=0 and the outbound slide played behind an
+// element nobody could see. `visibility` transitions with exactly the semantics wanted —
+// visible the instant the preview is asked for, and held visible for the full duration on
+// the way out — so it needs no delay trick and no second class that could fight the first.
+// Reduced motion is handled globally in globals.css, which neutralises every transition —
+// no per-class variant.
 //
 // Overlay rather than widening the column: widening would reflow the whole conversation
 // on a mouse-over, which is jarring for something this transient. The `<aside>` keeps
 // its 48px rail footprint, so nothing moves, and the root shell clips overflow so the
 // parked pane never produces a scrollbar. `left-12` starts it after the rail — see the
 // `rail` cva below for why that offset is load-bearing.
+// `md:border-r`, and it is the same argument the pane beside the conversation makes.
+// This panel is an OVERLAY at the conversation's own fill: the tone that used to say
+// "this is in front" went with `bg-surface`, and a shadow over a ground of the same
+// colour is a smudge rather than an edge. Its other three sides are the viewport's, so
+// the right edge is the only one there is to draw. Vertical, so it is not one of the
+// horizontal rules `pane-weight.test.ts` budgets.
 const PEEK_BASE =
-  "md:absolute md:inset-y-0 md:left-12 md:z-10 md:w-[var(--pane-w)] md:bg-surface md:shadow-xl md:transition-transform md:duration-200 md:ease-out";
+  "md:absolute md:inset-y-0 md:left-12 md:z-10 md:w-[var(--pane-w)] md:border-r md:border-rule md:bg-bg md:shadow-xl md:transition-[transform,visibility] md:duration-200 md:ease-out";
 
 export const content = cva("h-full", {
   variants: {
@@ -124,6 +141,22 @@ export interface RailPanel {
   initials?: string;
   /** Tints the entry the accent even when inactive — the new-chat action. */
   emphasis?: boolean;
+  /**
+   * Hovering THIS entry is what reveals the collapsed pane's preview.
+   *
+   * It used to be the whole `<aside>`: crossing the rail anywhere opened the panel, so
+   * reaching for Files meant dismissing a conversation list that had appeared over the
+   * screen on the way. Exactly one entry carries this — the conversation list's own —
+   * and hovering any other entry closes the preview rather than leaving it standing over
+   * the tooltip that entry is about to show.
+   */
+  peek?: boolean;
+  /**
+   * One line saying what the entry opens, shown under its name in the tooltip. A rail
+   * entry is a glyph with no label, so this is what the tooltip exists to carry; an
+   * entry without one shows its name alone.
+   */
+  blurb?: string;
 }
 
 // The rail is GROUPS, not one list, because it now mixes two kinds of entry that must
@@ -131,6 +164,20 @@ export interface RailPanel {
 // projects (which NAVIGATE), and the actions (which do something immediately). A
 // hairline between them is what keeps a click from meaning the wrong verb.
 export type RailGroup = RailPanel[];
+
+// THE RAIL'S TOOLTIP, and why it is not `title`.
+//
+// `title` is the browser's: it waits about a second, it cannot be styled, it is one line,
+// and on a glyph-only rail that one line has to be both the name and the explanation. So
+// the rail says both — the name at reading weight, what it opens under it in small muted
+// type — and says it at once.
+//
+// FIXED, not absolute. The entries live inside the rail's own `overflow-y-auto` column,
+// and a box with `overflow-y: auto` computes `overflow-x` to `auto` as well: anything
+// placed at `left-full` inside it would be clipped at the rail's 48px edge. Fixed
+// coordinates from the button's own rect escape every clipping ancestor, which is also
+// what lets one element serve every entry instead of one per row.
+type Tip = { label: string; blurb?: string; top: number; left: number };
 
 const MAX_WIDTH = 480;
 
@@ -167,6 +214,20 @@ export default function ResizablePane({
   children: ReactNode;
 }) {
   const t = useT(chatCopy);
+  const [tip, setTip] = useState<Tip | null>(null);
+
+  // Hover and focus do the SAME thing, which is the whole of the keyboard story here: a
+  // `title` was never read out on focus either, so a member arriving by Tab used to get
+  // nothing at all from a column of glyphs.
+  function showTip(el: HTMLElement, entry: RailPanel) {
+    const rect = el.getBoundingClientRect();
+    setTip({
+      label: entry.label,
+      blurb: entry.blurb,
+      top: rect.top + rect.height / 2,
+      left: rect.right + 8,
+    });
+  }
 
   function startResize(e: MouseEvent) {
     e.preventDefault();
@@ -197,9 +258,17 @@ export default function ResizablePane({
       aria-label={ariaLabel}
       style={{ "--pane-w": `${width}px` } as React.CSSProperties}
       className={pane({ open, collapsed })}
-      // Only while collapsed: an expanded pane has nothing to preview, and wiring
-      // these unconditionally would re-render it on every crossing of the sidebar.
-      onMouseEnter={collapsed ? () => onPeekChange(true) : undefined}
+      // LEAVING IS THE ASIDE'S; ARRIVING IS AN ENTRY'S.
+      //
+      // The preview opens from one rail entry now (`peek`), so the enter handler moved
+      // down to the buttons. Leaving stays here, and has to: the preview panel is a DOM
+      // DESCENDANT of this element even though it is painted outside it, and `mouseleave`
+      // follows the tree rather than the geometry — so travelling from the entry into the
+      // panel to click a conversation fires nothing, which is the only way the panel is
+      // usable at all. On the entry it would close under the pointer.
+      //
+      // Still guarded on `collapsed`: an expanded pane has nothing to preview, and an
+      // unguarded handler would fire on every crossing of an open sidebar.
       onMouseLeave={collapsed ? () => onPeekChange(false) : undefined}
     >
       <div
@@ -215,7 +284,15 @@ export default function ResizablePane({
             button, which the pane hides while collapsed, so the two never appear at
             once — one circled arrow pointing right to open, one pointing left to close,
             so the pair reads as one control in two states rather than two glyphs. */}
-        <IconButton variant="ghost" size="sm" aria-label={`${t.pane.expand} ${ariaLabel}`} onClick={onExpand}>
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label={`${t.pane.expand} ${ariaLabel}`}
+          onClick={onExpand}
+          // The one control above the entries, and the one place a preview opened from
+          // the entry below it could otherwise be left standing.
+          onMouseEnter={() => onPeekChange(false)}
+        >
           <CircleArrowRight size={18} aria-hidden />
         </IconButton>
 
@@ -242,29 +319,63 @@ export default function ResizablePane({
               {gi > 0 && group.length > 0 && (
                 <span className="my-1 h-px w-6 shrink-0 bg-brand/30" aria-hidden />
               )}
-              {group.map(({ key, Icon, label, active, onSelect, initials, emphasis }) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-current={active || undefined}
-                  aria-label={label}
-                  title={label}
-                  onClick={onSelect}
-                  className={railIcon({ active, emphasis })}
-                >
-                  {initials ? (
-                    <span className={railInitials()} aria-hidden>
-                      {initials}
-                    </span>
-                  ) : (
-                    <Icon size={17} aria-hidden />
-                  )}
-                </button>
-              ))}
+              {group.map((entry) => {
+                const { key, Icon, label, active, onSelect, initials, emphasis } = entry;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-current={active || undefined}
+                    aria-label={label}
+                    // No `title`: the tooltip below replaces it, and both at once is the
+                    // browser's one-line version arriving a second after the real one.
+                    onClick={onSelect}
+                    // The entry that owns the preview shows no tooltip on hover — the
+                    // panel IS the answer, and it opens at exactly the coordinates the
+                    // tooltip would. On FOCUS it still shows one: the preview is a
+                    // pointer affordance, so a member arriving by Tab would otherwise
+                    // have a glyph and nothing else.
+                    onMouseEnter={(e) => {
+                      onPeekChange(entry.peek === true);
+                      if (entry.peek) setTip(null);
+                      else showTip(e.currentTarget, entry);
+                    }}
+                    onMouseLeave={() => setTip(null)}
+                    onFocus={(e) => showTip(e.currentTarget, entry)}
+                    onBlur={() => setTip(null)}
+                    className={railIcon({ active, emphasis })}
+                  >
+                    {initials ? (
+                      <span className={railInitials()} aria-hidden>
+                        {initials}
+                      </span>
+                    ) : (
+                      <Icon size={17} aria-hidden />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
       </div>
+
+      {tip && collapsed && (
+        // `aria-hidden`, and not a `role="tooltip"`: the button already carries the same
+        // name in `aria-label`, so announcing this would read the name twice. It is a
+        // drawing for the eye, which is the half a glyph-only rail was missing.
+        //
+        // Tone and shadow rather than a rule — the pane's own separation is the surface
+        // it sits on, and this is one more element that would otherwise add a line.
+        <div
+          aria-hidden
+          style={{ top: tip.top, left: tip.left }}
+          className="pointer-events-none fixed z-50 max-w-64 -translate-y-1/2 rounded-lg bg-elevated px-3 py-2 shadow-lg"
+        >
+          <p className="text-sm font-medium text-fg">{tip.label}</p>
+          {tip.blurb && <p className="mt-0.5 text-xs leading-snug text-fg-muted">{tip.blurb}</p>}
+        </div>
+      )}
 
       {!collapsed && (
         <div

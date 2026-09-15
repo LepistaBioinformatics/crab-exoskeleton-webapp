@@ -83,7 +83,7 @@ export default function UnifiedSidebar({
   const t = useT(chatCopy);
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="flex h-full flex-col bg-bg">
       <div className="flex h-16 shrink-0 items-center gap-2 px-4">
         <Logo size={32} />
         <BrandName className="min-w-0 flex-1 truncate font-display text-base font-semibold text-fg" />

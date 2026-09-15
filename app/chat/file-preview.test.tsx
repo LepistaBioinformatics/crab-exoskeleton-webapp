@@ -162,74 +162,68 @@ describe("markdown preview table overflow", () => {
   });
 });
 
-// preview-formatting-and-odf FR-1. The `code` pane rendered a bare `<code>`, which keeps
-// `white-space: normal` under Tailwind's preflight — so every newline in a .yaml, .json
-// or .ts collapsed and the file arrived as one unreadable line. A `<pre>` restores them,
-// and it belongs at THIS call site (DEC-1): CodeBlock is shared with the chat, where
-// `message-content.tsx` already supplies one, so wrapping inside CodeBlock would nest
-// `<pre>` in every message instead.
+// THE READING CONTROLS, and where they are is the fix rather than a rearrangement.
 //
-// Source-based for the same reason the suite above is: the code column only exists once
-// the fetched body is in state, and effects never fire under `environment: "node"`.
-describe("code preview keeps its lines", () => {
+// They were `sticky top-0` INSIDE the scrolling area, level with the code gutter's own
+// `sticky left-0`. Two sticky elements at the same z-index in the same stacking context
+// are ordered by the document, and the gutter comes later — so scrolling a source file up
+// painted the numbers' background and rule straight over the bar. Outside the scrollport
+// no descendant can reach them, whatever it sticks to.
+//
+// Source-based for the reason the suite above is: the footer only shows once the fetched
+// body is in state, and effects never fire under `environment: "node"`.
+describe("the preview's reading controls", () => {
   const src = readFileSync(new URL("./file-preview.tsx", import.meta.url), "utf8");
-  // The JSX only, with the explanatory comments stripped. The previous version of this
-  // suite sliced from the first `<pre` in the branch and found one inside a COMMENT that
-  // happens to mention `<pre>` — so it was asserting against prose, and kept passing
-  // while the markup it meant to describe changed underneath it.
-  // The code branch is the LAST one the component renders, so it runs to the end of the
-  // file. (An earlier attempt bounded it with the docx branch and got an empty string:
-  // `kind === "docx"` appears in the effect too, well above this.)
-  const branch = src
-    // `|| asSource`: the code pane paints the source reading of markdown and html as
-    // well as the `code` kind, so the branch that owns the `<pre>` is this one.
-    .slice(src.indexOf('(kind === "code" || asSource) && text !== null'))
+  const jsx = src
+    .slice(src.indexOf("  return ("))
     .replace(/\/\/[^\n]*/g, "")
     .replace(/\/\*[\s\S]*?\*\//g, "");
 
-  it("wraps the code pane in a <pre>", () => {
-    expect(branch.slice(0, branch.indexOf("<CodeBlock"))).toContain("<pre");
+  it("keeps them outside the element that scrolls", () => {
+    const scroller = jsx.indexOf("overflow-auto");
+    const footer = jsx.indexOf("{footer && (");
+    expect(scroller).toBeGreaterThan(-1);
+    expect(footer).toBeGreaterThan(scroller);
+    // The scrolling div is closed before the footer opens — the footer is its sibling,
+    // not a sticky child of it.
+    expect(jsx.slice(scroller, footer)).toContain("</div>");
   });
 
-  it("scrolls the code pane rather than wrapping it", () => {
-    // DEC-2: the `text` kind wraps because a log's line breaks are incidental; code
-    // scrolls because its columns carry meaning.
-    expect(branch).toContain("overflow-x-auto");
-    expect(branch).not.toContain("whitespace-pre-wrap");
+  it("never pins anything to the top of the scrollport again", () => {
+    expect(
+      jsx,
+      "a sticky bar in the scroller is what the line-number gutter painted over",
+    ).not.toContain("sticky top-0");
   });
 
-  // preview-line-numbers DEC-5, and the defect it was written for: the gutter and the
-  // code were sized SEPARATELY, one at `0.85em` on its own `<pre>` and one at `0.85em`
-  // on the `<code>` inside the other. A block's line boxes are at least as tall as its
-  // strut, and the strut follows the block's own font-size — so the code column's lines
-  // stayed 15% taller than its numbers and the two drifted apart down the file.
-  it("gives both columns of the code pane the same type", () => {
-    const pres = branch.match(/<pre[\s\S]*?>/g) ?? [];
-    expect(pres).toHaveLength(2);
-    for (const pre of pres) expect(pre).toContain("CODE_TYPE");
+  // Icons alone are not a label. Every control says what it does on hover and to a screen
+  // reader, from the same string.
+  it("names every control in both title and aria-label", () => {
+    const buttons = jsx.slice(jsx.indexOf("{footer && (")).match(/<button[\s\S]*?>/g) ?? [];
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    for (const button of buttons) {
+      expect(button).toContain("title=");
+      expect(button).toContain("aria-label=");
+      expect(button).toContain("aria-pressed=");
+    }
   });
 
-  it("sizes that type absolutely, so neither column can inherit a different one", () => {
-    const decl = /const CODE_TYPE = "([^"]+)"/.exec(src)?.[1] ?? "";
-    expect(decl).toMatch(/text-\[\d+px\]/);
-    expect(decl).toMatch(/leading-\[\d+px\]/);
-    expect(decl).not.toContain("em]");
+  it("takes those names from the dictionary, in both locales", () => {
+    for (const key of ["viewRendered", "viewSource", "wrapLines"] as const) {
+      expect(chatCopy.pt.preview[key]).toBeTruthy();
+      expect(chatCopy.pt.preview[key]).not.toBe(chatCopy.en.preview[key]);
+    }
   });
 
-  it("leaves the <code> unsized, so the <pre> is the only thing that decides", () => {
-    // A size on the inner `<code>` is exactly what desynchronised the columns before.
-    const codeBlock = branch.slice(branch.indexOf("<CodeBlock"));
-    expect(codeBlock.slice(0, codeBlock.indexOf("/>"))).not.toContain("text-[");
+  it("offers the wrap control wherever the code pane paints, not only on a dual file", () => {
+    // `dual` gates the rendered/source pair; the wrap control is gated on the code pane
+    // itself, so a plain .yaml gets it too.
+    expect(jsx).toContain("{showsCode && (");
+    expect(src).toContain('const showsCode = (kind === "code" || asSource) && text !== null');
   });
 
-  it("carries the newlines through the highlighter into the markup", () => {
-    const code = "root:\n  key: value\n  list:\n    - one\n";
-    const html = renderToStaticMarkup(
-      <pre>
-        <CodeBlock code={code} className="language-yaml" streaming={false} />
-      </pre>,
-    );
-    expect(html).toContain(code.trimEnd());
+  it("hands the code pane the file and the member's wrap choice", () => {
+    expect(jsx).toContain("<CodePane code={text} language={language} wrap={wrap} />");
   });
 });
 

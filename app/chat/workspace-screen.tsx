@@ -35,6 +35,8 @@ export default function WorkspaceScreen({
   workspace,
   section,
   onClose,
+  closing,
+  onClosed,
   onReference,
   onRestartNeeded,
 }: {
@@ -42,6 +44,9 @@ export default function WorkspaceScreen({
   section: Section;
   /** Closes the pane — the shell clears `rs`. */
   onClose: () => void;
+  /** Passed straight through to the pane's chrome; see `workspace-pane.tsx`. */
+  closing?: boolean;
+  onClosed?: () => void;
   /**
    * Carries a graph entity or a scheduled task up to the composer's context slot. It
    * belongs to the SHELL rather than to the chat view, which is why a pane can still
@@ -73,6 +78,8 @@ export default function WorkspaceScreen({
     <WorkspacePane
       title={SECTIONS[section].label(t)}
       onClose={onClose}
+      closing={closing}
+      onClosed={onClosed}
       actions={
         refresh && (
           <IconButton

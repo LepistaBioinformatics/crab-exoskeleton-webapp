@@ -71,8 +71,12 @@ async function flush() {
   }
 }
 
+// By `aria-label`, not by text: the reading controls are icons in the footer now, so
+// their name is the thing a screen reader and a hover tooltip both read.
 function click(label: string) {
-  const el = [...host!.querySelectorAll("button")].find((b) => b.textContent?.trim() === label);
+  const el = [...host!.querySelectorAll("button")].find(
+    (b) => b.getAttribute("aria-label") === label,
+  );
   if (!el) throw new Error(`no control labelled ${label}`);
   act(() => el.click());
 }

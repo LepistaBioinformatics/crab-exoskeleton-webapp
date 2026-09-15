@@ -7,7 +7,6 @@ import {
   isSheetKind,
   looksBinary,
   mediaUrl,
-  previewBlobType,
   previewKind,
   resolveMediaRef,
 } from "@/lib/media";
@@ -240,27 +239,6 @@ describe("resolveMediaRef", () => {
 describe("PREVIEW_TEXT_MAX", () => {
   it("is 2 MB", () => {
     expect(PREVIEW_TEXT_MAX).toBe(2 * 1024 * 1024);
-  });
-});
-
-// The proxy serves every media file as `application/octet-stream` with
-// `Content-Disposition: attachment` — a deliberate posture, since a member's file is
-// untrusted content that must never render inline from this origin. `res.blob()`
-// inherits that type, and a browser trusts the blob over an `<object type=…>`
-// attribute, so a PDF preview showed the fallback in Firefox and DOWNLOADED itself in
-// Chromium while the modal sat open behind it.
-describe("previewBlobType", () => {
-  it("asserts application/pdf, which the transport does not", () => {
-    expect(previewBlobType("pdf")).toBe("application/pdf");
-  });
-
-  it("leaves images alone — <img> sniffs the bytes and ignores the type", () => {
-    expect(previewBlobType("image")).toBeNull();
-  });
-
-  it("leaves the text kinds alone — they are read as text, never framed", () => {
-    expect(previewBlobType("markdown")).toBeNull();
-    expect(previewBlobType("text")).toBeNull();
   });
 });
 

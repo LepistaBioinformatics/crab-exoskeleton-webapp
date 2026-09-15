@@ -522,7 +522,7 @@ export default function Composer({
       )}
 
       <div
-        className={`flex flex-col gap-2 rounded-2xl border border-accent/40 bg-elevated px-4 pt-4 pb-3 shadow-lg transition-[border-color,box-shadow] focus-within:border-[2.5px] focus-within:border-accent${
+        className={`flex flex-col gap-2 rounded-2xl border border-accent/40 bg-composer-bg px-4 pt-4 pb-3 shadow-lg transition-[border-color,box-shadow] focus-within:border-[2.5px] focus-within:border-accent${
           typing ? " composer-typing" : ""
         }`}
       >

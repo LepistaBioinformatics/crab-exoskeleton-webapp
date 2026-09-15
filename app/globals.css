@@ -13,7 +13,7 @@
  * (a literal value in `@theme` would bake at build time and never flip).
  */
 :root {
-  --bg: #ffffff;         /* app background (M3 surface) */
+  --bg: #fcfcfb;         /* app background (M3 surface) */
   /* The light steps are WIDER than they look like they should be, and that is the
      point. Separation between regions is tonal now — the violet hairline that used to
      be drawn under every header is gone — and the dark theme gets that for free at
@@ -22,10 +22,23 @@
 
      Measured against dark rather than chosen by eye: bg->elevated is 1.236 here against
      dark's 1.238, and the two steps come out nearly equal (1.114 / 1.109) where dark's
-     are uneven. `--bg` stays #ffffff — moving it would tint every page in the product,
-     the landing's hero included. */
+     are uneven.
+
+     `--bg` USED TO BE #ffffff, with a note here saying it had to stay — moving it tints
+     every page in the product. That is still true and is now the point: the owner asked
+     for the whole product to sit a hair off white. #fcfcfb is a 1.5% step down and a
+     degree warm, which is enough to stop a full-screen white from glaring without
+     reading as grey. The two steps above are unchanged, so the tonal separation this
+     block was measured for still holds. */
   --surface: #f0f3f5;    /* sidebars, cards (surface container) */
-  --elevated: #e2e8ec;   /* raised/selected rows, composer field */
+  --elevated: #e2e8ec;   /* raised/selected rows */
+  /* THE COMPOSER'S FIELD, and the one thing in light mode that is still pure white.
+     It was `--elevated` with everything else, which worked while the page behind it was
+     #ffffff: the field read as a well pressed INTO the page. With the page a step down,
+     the same relationship inverts — the field is the thing being written in, so it is
+     the thing that should be brightest. Dark keeps `--elevated`, where a white field
+     would be a lamp. */
+  --composer-bg: #ffffff;
   --accent: #64c5eb;     /* primary accent (infra cyan) */
   --accent-soft: #9ad9f0;/* state-layer / signature-shadow tint */
   --accent-fg: #0a2933;  /* text/icon on an accent fill */
@@ -91,6 +104,7 @@
     --bg: #14171a;
     --surface: #1b1f23;
     --elevated: #232a30;
+    --composer-bg: var(--elevated);
     --accent: #64c5eb;
     --accent-soft: #9ad9f0;
     --accent-fg: #0a2933;
@@ -122,6 +136,7 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-elevated: var(--elevated);
+  --color-composer-bg: var(--composer-bg);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-fg: var(--accent-fg);
@@ -461,6 +476,49 @@
 }
 .pane-open {
   animation: paneOpen 200ms ease-out;
+}
+
+/* The same panel closing, which for a long time it simply did not do.
+ *
+ * `rs` clears the instant the member presses the X, the rail icon or the sidebar row, and
+ * the <aside> left the tree with it — so there was nothing left to animate and the
+ * column vanished in one frame while opening took 200ms. The shell keeps the closing
+ * section mounted for the length of this animation (`exiting` in chat-shell.tsx) and
+ * drops it on `animationend`.
+ *
+ * `forwards`, and only `to` is declared: the implicit `from` is the element's own
+ * computed width — the inline px value the resize handle writes — so this closes from
+ * whatever width the member had dragged it to, the mirror of paneOpen. The fill keeps it
+ * at zero for the frame between the animation ending and React removing the node.
+ *
+ * An animation rather than a transition for paneOpen's reason, unchanged: a
+ * `transition: width` would lag the cursor on every drag.
+ *
+ * Auto-neutralized by the reduced-motion guard below, which is also what makes the
+ * unmount immediate for those members — `animationend` fires at once. */
+@keyframes paneClose {
+  to {
+    width: 0;
+  }
+}
+.pane-close {
+  animation: paneClose 200ms ease-out forwards;
+}
+
+/* THE MOBILE DRAWER LEAVES AT ONCE, and it is the `!important` above it that makes that
+ * the right answer. `max-md:w-[92vw]!` beats an animation in the cascade, so neither
+ * paneOpen nor paneClose can move this element on a phone — the drawer has always
+ * appeared and disappeared in one frame, symmetrically. Left at 200ms the animation would
+ * still RUN, invisibly, and hold a dead drawer and its backdrop on screen for a fifth of a
+ * second before React removed them: an exit animation that only added latency.
+ *
+ * The animation is shortened rather than removed. `animation: none` would mean no
+ * `animationend`, and the shell waits for that event to unmount — the drawer would never
+ * leave at all. */
+@media (max-width: 767px) {
+  .pane-close {
+    animation-duration: 1ms;
+  }
 }
 
 /* Respect reduced-motion everywhere without policing each transition. */

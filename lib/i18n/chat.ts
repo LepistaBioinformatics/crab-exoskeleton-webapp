@@ -16,6 +16,10 @@ const en = {
     // The sidebar's list of places. A <nav> needs a name to be told apart from the
     // conversation list below it, which is also a nav.
     destinations: "Go to",
+    // The rail entry that reveals the conversation list, and the ONLY one whose hover
+    // opens the collapsed sidebar's preview. Named here rather than reused from
+    // `landing.conversations`, which is a heading over a list on another screen.
+    conversations: "Conversations",
     // The breadcrumb across the top. A second nav needs a second name: "Go to" is the
     // list of where you could go, this one is where you already are.
     path: "Path",
@@ -121,6 +125,14 @@ const en = {
     viewLabel: "How to read this file",
     viewRendered: "Rendered",
     viewSource: "Source",
+    wrapLines: "Wrap long lines",
+    // The PDF pane draws its own pages rather than handing the file to the browser's
+    // viewer — see `pdf-pane.tsx`. These are the two controls that came back with it.
+    pdfPrev: "Previous page",
+    pdfNext: "Next page",
+    pdfZoomIn: "Zoom in",
+    pdfZoomOut: "Zoom out",
+    pdfZoomReset: "Fit to width",
     tooLarge: "This file is too large to preview. Download it to open it.",
     pdfFallback:
       "This browser cannot display the PDF here — download it instead.",
@@ -576,6 +588,7 @@ const en = {
     noneYet: "No conversations yet.",
     noneYetHint: "Start one with New chat above and it will show up here.",
     newChat: "New chat",
+    newChatBlurb: "Opens an empty composer in the project you are in.",
     // Heading over the conversations that belong to no project — named for what
     // they are, so it reads as a peer of the projects group above it rather than
     // as "everything".
@@ -804,6 +817,20 @@ const en = {
     deleteFolderMessage:
       "{name} and {count} file(s) inside it will be deleted. The agent may reference them.",
     files: "Files",
+    // ONE LINE UNDER EACH SECTION'S NAME, back after being deleted in d42e9c7.
+    //
+    // They were removed for a reason that was right about the surface it was written
+    // for: the sidebar's rows are LABELLED, and a row already reading "Files" does not
+    // need a sentence saying Files holds files. The collapsed rail is the case that
+    // removal did not cover — there the row is a bare glyph, and with `title` replaced
+    // by a real tooltip the sentence is the only thing that says what the glyph opens.
+    sections: {
+      memory: "Standing notes you write for the agent.",
+      graph: "What the agent learned on its own.",
+      tasks: "What runs on a schedule, and its results.",
+      files: "Uploads and files in this workspace.",
+      secrets: "Keys the agent uses, and which model answers.",
+    },
     refreshAria: "Refresh files",
     refresh: "Refresh",
     filterPlaceholder: "Filter files",
@@ -831,6 +858,10 @@ const en = {
   projects: {
     title: "Projects",
     hint: "A project keeps its own files, memory and instructions, and inherits this agent's model, skills and credentials.",
+    // The rail's tooltip, where `hint` runs to four lines in small type beside one-line
+    // blurbs. Same claim, tooltip length — it is the sentence a glyph needs, not the
+    // paragraph the projects screen can afford.
+    blurb: "Chats, files and instructions kept apart by subject.",
     none: "No projects yet.",
     noneHint:
       "Create one to keep a subject's chats, files and instructions apart from the rest.",
@@ -883,6 +914,7 @@ const pt: ChatDict = {
     openMenu: "Abrir menu",
     closeMenu: "Fechar menu",
     destinations: "Ir para",
+    conversations: "Conversas",
     path: "Caminho",
     crumbActions: "Ações da conversa",
   },
@@ -960,6 +992,12 @@ const pt: ChatDict = {
     viewLabel: "Como ler este arquivo",
     viewRendered: "Renderizado",
     viewSource: "Código-fonte",
+    wrapLines: "Quebrar linhas longas",
+    pdfPrev: "Página anterior",
+    pdfNext: "Próxima página",
+    pdfZoomIn: "Aproximar",
+    pdfZoomOut: "Afastar",
+    pdfZoomReset: "Ajustar à largura",
     tooLarge:
       "Este arquivo é grande demais para pré-visualizar. Baixe-o para abrir.",
     pdfFallback:
@@ -1291,6 +1329,7 @@ const pt: ChatDict = {
     noneYet: "Nenhuma conversa ainda.",
     noneYetHint: "Comece uma em Nova conversa, acima, e ela aparece aqui.",
     newChat: "Nova conversa",
+    newChatBlurb: "Abre um compositor vazio no projeto em que você está.",
     globalChats: "Conversas gerais",
     renameAria: "Renomear conversa",
     rename: "Renomear",
@@ -1486,6 +1525,13 @@ const pt: ChatDict = {
     deleteFolderMessage:
       "{name} e {count} arquivo(s) dentro dela serão excluídos. O agente pode referenciá-los.",
     files: "Arquivos",
+    sections: {
+      memory: "Notas fixas que você escreve para o agente.",
+      graph: "O que o agente aprendeu por conta própria.",
+      tasks: "O que roda em horário programado, e seus resultados.",
+      files: "Uploads e arquivos deste workspace.",
+      secrets: "Chaves que o agente usa, e qual modelo responde.",
+    },
     refreshAria: "Atualizar arquivos",
     refresh: "Atualizar",
     filterPlaceholder: "Filtrar arquivos",
@@ -1511,6 +1557,7 @@ const pt: ChatDict = {
   projects: {
     title: "Projetos",
     hint: "Um projeto guarda arquivos, memória e instruções próprios, e herda o modelo, as skills e as credenciais deste agente.",
+    blurb: "Conversas, arquivos e instruções separados por assunto.",
     none: "Nenhum projeto ainda.",
     noneHint:
       "Crie um para manter as conversas, os arquivos e as instruções de um assunto separados do resto.",

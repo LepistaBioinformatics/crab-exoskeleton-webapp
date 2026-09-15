@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { Code2, Download, Eye, WrapText } from "lucide-react";
 import {
   PREVIEW_TEXT_MAX,
   downloadMedia,
@@ -9,14 +9,14 @@ import {
   mediaUrl,
   resolveMediaRef,
   type PreviewKind,
-  previewBlobType,
   isDocumentKind,
   isSheetKind,
   looksBinary,
 } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content";
-import CodeBlock from "@/app/chat/code-block";
+import CodePane from "@/app/chat/code-pane";
+import PdfPane from "@/app/chat/pdf-pane";
 import { languageForFile } from "@/lib/code-highlight";
 import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
 import { Button } from "@/components/ui/button";
@@ -27,32 +27,23 @@ import { useHtmlScripts } from "./html-scripts";
 import { chatCopy } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
+import { cva } from "class-variance-authority";
 
-/**
- * The typography of the code pane, applied to BOTH of its columns.
- *
- * One constant on two elements, and that is the whole of the fix it exists for. The
- * gutter and the code used to be styled separately — `text-[0.85em]` on the gutter's own
- * `<pre>`, and the same `0.85em` on the `<code>` INSIDE the other one — which reads like
- * the same size and is not. A block's line boxes are at least as tall as its strut, and
- * the strut is computed from the block's OWN font-size: the code column's `<pre>` carried
- * no size of its own, so its strut stayed at `1.625 × 1em` while the gutter's was
- * `1.625 × 0.85em`. Every code line was ~15% taller than its number, the two drifted
- * apart down the file, and the numbers ran out before the code did.
- *
- * Both values are ABSOLUTE for the same reason. A relative `em` resolves against whatever
- * each column inherits, and an unitless line-height re-multiplies per element — so the
- * two columns can agree on the tokens and still disagree on the pixels. A fixed
- * line-height makes every line exactly 20px in both columns regardless of what the
- * `<code>` inside one of them does.
- *
- * This is also why nothing was added from outside for it: every ready-made line-number
- * plugin (`highlightjs-line-numbers`, `react-syntax-highlighter`'s `showLineNumbers`,
- * Prism's plugin) aligns the two columns the same way, by giving them identical type. The
- * ones that would come as a package deal replace the highlighter as well, and with it the
- * per-grammar lazy loading `code-highlight.ts` accounts for.
- */
-const CODE_TYPE = "font-mono text-[13px] leading-[20px]";
+// One button in the reading footer. Icon-sized, so the strip reads as chrome under the
+// document rather than as a second header — each carries its name in `title` and in
+// `aria-label`, since the glyph alone is not a label for anyone.
+const toolButton = cva(
+  "flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+  {
+    variants: {
+      on: {
+        true: "bg-accent/15 text-accent",
+        false: "text-fg-muted hover:bg-elevated hover:text-fg",
+      },
+    },
+    defaultVariants: { on: false },
+  },
+);
 
 /**
  * The word-processor pane's typography, derived token for token from the markdown
@@ -176,11 +167,19 @@ export default function FilePreview({
 
   // Which way a file with TWO readings is being read. See the toggle below.
   const [view, setView] = useState<PreviewView>("rendered");
-  // Back to the rendered reading whenever the FILE changes. The choice belongs to the
-  // document being read, not to the pane: a member who looked at one file's markup
-  // does not mean "show me markup from now on", and carrying it would open the next
-  // report as source.
-  useEffect(() => setView("rendered"), [path]);
+  // SESSION-SCOPED AND PER-PANE, deliberately unpersisted. Wrapping is a reading of the
+  // file in front of the member, not a preference about code: the report whose every line
+  // is a 300-character URL wants it and the YAML opened next does not.
+  const [wrap, setWrap] = useState(false);
+  // Back to the rendered reading, and to scrolling, whenever the FILE changes. Both
+  // choices belong to the document being read, not to the pane: a member who looked at
+  // one file's markup does not mean "show me markup from now on", and this pane is NOT
+  // keyed by path — opening a second file reuses the instance, so anything not reset
+  // here is carried into the next file silently.
+  useEffect(() => {
+    setView("rendered");
+    setWrap(false);
+  }, [path]);
 
   // The kinds that can be read two ways, and therefore the only ones that offer the
   // choice. Everything else has one reading and a toggle would be a control that does
@@ -198,22 +197,6 @@ export default function FilePreview({
   // says those extensions mean.
   const language = kind === "code" || asSource ? languageForFile(name) : null;
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
-  // The body the code pane paints and the gutter that counts it, derived TOGETHER so the
-  // two cannot disagree about how many lines there are.
-  //
-  // A trailing newline terminates the last line rather than opening an empty one, so it
-  // is dropped — keeping it would number a row that paints nothing. Counted by scanning
-  // rather than by `split`, because a 2 MB file is 50k lines and the array would exist
-  // only to have its length read.
-  const { codeBody, lineNumbers } = useMemo(() => {
-    if ((kind !== "code" && !asSource) || text === null) return { codeBody: "", lineNumbers: "" };
-    const body = text.replace(/\n$/, "");
-    let lines = 1;
-    for (let i = 0; i < body.length; i++) if (body.charCodeAt(i) === 10) lines++;
-    let gutter = "1";
-    for (let n = 2; n <= lines; n++) gutter += `\n${n}`;
-    return { codeBody: body, lineNumbers: gutter };
-  }, [kind, asSource, text]);
   // Read out here, so the effect below depends on a STRING rather than on the copy
   // object — the same reason its other dependencies are `workspace`'s primitives.
   const slideLabel = t.preview.slide;
@@ -332,10 +315,12 @@ export default function FilePreview({
       fetchMediaBlob(workspace, path)
         .then((blob) => {
           if (cancelled) return;
-          // Re-typed, because the bytes arrive as octet-stream and the browser believes
-          // the blob over the <object type=…> attribute. See previewBlobType.
-          const mime = previewBlobType(kind);
-          created = URL.createObjectURL(mime ? new Blob([blob], { type: mime }) : blob);
+          // No re-typing any more. The bytes arrive as octet-stream and used to be
+          // relabelled `application/pdf`, because a browser trusts a blob's own type over
+          // an `<object type=…>` attribute — so the preview showed its fallback in Firefox
+          // and downloaded itself in Chromium. There is no `<object>` now: pdf.js reads
+          // the bytes and never asks what they claim to be.
+          created = URL.createObjectURL(blob);
           setFrameUrl(created);
         })
         .catch((e: Error) => {
@@ -379,34 +364,21 @@ export default function FilePreview({
     }
   }
 
+  // Which controls the footer has anything to offer. Both are about the FILE rather than
+  // about the panel, which is why they are here and not in the pane's header.
+  const showsCode = (kind === "code" || asSource) && text !== null;
+  const footer = !error && !tooLarge && (dual || showsCode);
+
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-bg" aria-label={t.preview.aria}>
-          {dual && !error && !tooLarge && (
-            // Pinned above the content rather than put in the panel header, because the
-            // header belongs to the panel and this belongs to the FILE: it appears for
-            // the two kinds that have two readings and for nothing else.
-            <div
-              role="group"
-              aria-label={t.preview.viewLabel}
-              className="sticky top-0 z-10 flex gap-1 border-b border-rule bg-bg/95 px-3 py-2 backdrop-blur"
-            >
-              {(["rendered", "source"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  aria-pressed={view === v}
-                  onClick={() => setView(v)}
-                  className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
-                    view === v
-                      ? "bg-accent text-accent-fg"
-                      : "text-fg-muted hover:bg-elevated"
-                  }`}
-                >
-                  {v === "rendered" ? t.preview.viewRendered : t.preview.viewSource}
-                </button>
-              ))}
-            </div>
-          )}
+    // A COLUMN, so the controls sit BELOW the scrolling area instead of floating inside
+    // it. They were `sticky top-0` in the scroller, level with the line-number gutter's
+    // own `sticky left-0`, and at equal z-index in one stacking context the tie goes to
+    // document order — so scrolling a source file up dragged the numbers' background and
+    // rule straight over the bar. Outside the scrollport there is nothing left to race:
+    // no sticky descendant can reach the footer, and the footer cannot cover the last
+    // line of a file or the bottom edge of a rendered frame either.
+    <div className="flex min-h-0 flex-1 flex-col bg-bg">
+      <div className="min-h-0 flex-1 overflow-auto" aria-label={t.preview.aria}>
 
           {error && (
             <div className="p-4">
@@ -449,19 +421,26 @@ export default function FilePreview({
           )}
 
           {!error && kind === "pdf" && frameUrl && (
-            // `<object>`, not `<iframe>`: an iframe's children are fallback for a browser
-            // with no frame support at all, so on a browser that simply has no PDF viewer
-            // they never paint and the member gets a blank rectangle. An object DOES
-            // render its children when it cannot display the data.
-            <object data={frameUrl} type="application/pdf" className="h-full w-full">
-              <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
-                <p className="text-sm text-fg-muted">{t.preview.pdfFallback}</p>
-                <Button size="sm" variant="outlined" disabled={downloading} onClick={onDownload}>
-                  <Download size={14} aria-hidden />
-                  {downloading ? t.attachment.downloading : t.attachment.download}
-                </Button>
-              </div>
-            </object>
+            // DRAWN HERE, not handed to the browser. It was an `<object>` — the browser's
+            // own viewer — and every current browser's viewer ships annotation tools that
+            // this pane cannot honour: it reads bytes out of the workspace and has nothing
+            // that writes them back, so a highlight or a typed note could only ever be
+            // discarded. `pdf-pane.tsx` records why no setting turns them off.
+            //
+            // The fallback survives the change and is the same offer it always was: a
+            // document pdf.js cannot open is a document to download, not an error.
+            <PdfPane
+              url={frameUrl}
+              fallback={
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+                  <p className="text-sm text-fg-muted">{t.preview.pdfFallback}</p>
+                  <Button size="sm" variant="outlined" disabled={downloading} onClick={onDownload}>
+                    <Download size={14} aria-hidden />
+                    {downloading ? t.attachment.downloading : t.attachment.download}
+                  </Button>
+                </div>
+              }
+            />
           )}
 
           {!error && kind === "markdown" && !asSource && text !== null && (
@@ -613,47 +592,56 @@ export default function FilePreview({
           what makes widening the format list free of the "member bytes never render
           from this origin" posture — `page.html` arrives here as source. */}
       {!error && (kind === "code" || asSource) && text !== null && (
-        // The `<pre>` is HERE and not inside CodeBlock, which is the whole of DEC-1.
-        // CodeBlock renders a bare `<code>` because in the chat its wrapper comes from
-        // the markdown renderer (`message-content.tsx`, the `pre` component); moving the
-        // wrapper inward would nest `<pre>` in every message. This pane has no markdown
-        // renderer, so it had no wrapper at all — and a `<code>` keeps
-        // `white-space: normal` under Tailwind's preflight, which is why every .yaml,
-        // .json and .ts arrived as a single line.
-        //
-        // It SCROLLS rather than wraps (DEC-2), unlike the `text` kind above: a log is
-        // prose whose line breaks are incidental, a YAML is a structure whose columns
-        // carry meaning, and wrapping the second destroys what was opened to be seen.
-        // Numbered, because this is a FILE rather than a fenced block in a message: the
+        // NUMBERED, because this is a FILE rather than a fenced block in a message: the
         // number is how a member says where something is, to a colleague or back to the
         // agent, and a code pane without one makes them count. The chat's blocks are
         // deliberately left unnumbered — a four-line snippet has no line to refer to.
         //
-        // The gutter is a sibling `<pre>` rather than a per-line wrapper because
-        // highlight.js hands back spans that cross newlines: splitting its output into
-        // lines would mean re-opening those spans, which is a source of subtly wrong
-        // colouring. Two `<pre>` elements sharing one font size and one line-height stay
-        // aligned by construction instead.
-        //
-        // `sticky left-0` keeps the numbers in place when a long line scrolls the pane
-        // sideways, which is the whole reason the scroll container is the OUTER element
-        // and not the code column.
-        <div className="m-3 overflow-x-auto rounded-lg bg-elevated text-fg">
-          <div className="flex min-w-max">
-            <pre
-              aria-hidden
-              className={`sticky left-0 z-10 shrink-0 select-none border-r border-rule bg-elevated px-3 py-3 text-right text-fg-muted ${CODE_TYPE}`}
+        // Scrolling is still the DEFAULT (`preview-formatting-and-odf` DEC-2: a log is
+        // prose whose line breaks are incidental, a YAML is a structure whose columns
+        // carry meaning), but it is no longer the only reading. The control below turns
+        // wrapping on for the file in front of the member, which is the case DEC-2 never
+        // covered — a generated HTML report whose every line is a 300-character URL.
+        <CodePane code={text} language={language} wrap={wrap} />
+      )}
+      </div>
+
+      {footer && (
+        // ICONS, not words, and `title` on every one of them. The bar is a strip of
+        // reading controls under a document, not a navigation level: at label width it
+        // read as the more important thing on screen, which it is not.
+        <div
+          role="group"
+          aria-label={t.preview.viewLabel}
+          className="flex shrink-0 items-center gap-0.5 border-t border-rule px-2 py-1"
+        >
+          {dual &&
+            (["rendered", "source"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                title={v === "rendered" ? t.preview.viewRendered : t.preview.viewSource}
+                aria-label={v === "rendered" ? t.preview.viewRendered : t.preview.viewSource}
+                onClick={() => setView(v)}
+                className={toolButton({ on: view === v })}
+              >
+                {v === "rendered" ? <Eye size={14} aria-hidden /> : <Code2 size={14} aria-hidden />}
+              </button>
+            ))}
+
+          {showsCode && (
+            <button
+              type="button"
+              aria-pressed={wrap}
+              title={t.preview.wrapLines}
+              aria-label={t.preview.wrapLines}
+              onClick={() => setWrap((w) => !w)}
+              className={toolButton({ on: wrap })}
             >
-              {lineNumbers}
-            </pre>
-            <pre className={`px-3 py-3 ${CODE_TYPE}`}>
-              <CodeBlock
-                code={codeBody}
-                className={language ? `language-${language}` : undefined}
-                streaming={false}
-              />
-            </pre>
-          </div>
+              <WrapText size={14} aria-hidden />
+            </button>
+          )}
         </div>
       )}
     </div>
