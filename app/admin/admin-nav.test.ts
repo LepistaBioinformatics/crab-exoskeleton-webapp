@@ -22,16 +22,16 @@ const OTHER_SUB: AdminScope = { kind: "subscription", tenantId: "t2", subsAccId:
 
 describe("railItems", () => {
   it("offers only what the caller can use", () => {
-    expect(railItems({ hasScopes: true, canEditBranding: true })).toEqual([
+    expect(railItems({ hasScopes: true, canEditBranding: true, canManageDirectory: false })).toEqual([
       "workspaces",
       "branding",
     ]);
-    expect(railItems({ hasScopes: true, canEditBranding: false })).toEqual(["workspaces"]);
-    expect(railItems({ hasScopes: false, canEditBranding: true })).toEqual(["branding"]);
+    expect(railItems({ hasScopes: true, canEditBranding: false, canManageDirectory: false })).toEqual(["workspaces"]);
+    expect(railItems({ hasScopes: false, canEditBranding: true, canManageDirectory: false })).toEqual(["branding"]);
   });
 
   it("is empty for a caller with no authority at all", () => {
-    expect(railItems({ hasScopes: false, canEditBranding: false })).toEqual([]);
+    expect(railItems({ hasScopes: false, canEditBranding: false, canManageDirectory: false })).toEqual([]);
   });
 });
 
@@ -87,18 +87,18 @@ describe("encodeScope / resolveScope", () => {
 // A single-item console is indistinguishable from a broken one unless it says why.
 describe("brandingOnly", () => {
   it("is the branding-rights-but-no-scope state", () => {
-    expect(brandingOnly({ hasScopes: false, canEditBranding: true })).toBe(true);
+    expect(brandingOnly({ hasScopes: false, canEditBranding: true, canManageDirectory: false })).toBe(true);
   });
 
   it("is not a caller who has scopes, whatever their branding rights", () => {
-    expect(brandingOnly({ hasScopes: true, canEditBranding: true })).toBe(false);
-    expect(brandingOnly({ hasScopes: true, canEditBranding: false })).toBe(false);
+    expect(brandingOnly({ hasScopes: true, canEditBranding: true, canManageDirectory: false })).toBe(false);
+    expect(brandingOnly({ hasScopes: true, canEditBranding: false, canManageDirectory: false })).toBe(false);
   });
 
   // No authority at all is a different screen -- the "no admin access" state, which
   // already explains itself.
   it("is not a caller with no authority at all", () => {
-    expect(brandingOnly({ hasScopes: false, canEditBranding: false })).toBe(false);
+    expect(brandingOnly({ hasScopes: false, canEditBranding: false, canManageDirectory: false })).toBe(false);
   });
 });
 
@@ -158,5 +158,40 @@ describe("tenantsOf", () => {
   // jump between reloads.
   it("preserves first-seen order", () => {
     expect(tenantsOf([OTHER_SUB, TENANT]).map((t) => t.id)).toEqual(["t2", "t1"]);
+  });
+});
+
+// --- the directory, added with the third rail item -------------------------------------
+
+describe("railItems with the directory", () => {
+  it("offers it to a caller who may manage it, between workspaces and branding", () => {
+    expect(
+      railItems({ hasScopes: true, canEditBranding: true, canManageDirectory: true }),
+    ).toEqual(["workspaces", "directory", "branding"]);
+  });
+
+  it("offers it alone to staff who administer no workspace content", () => {
+    expect(
+      railItems({ hasScopes: false, canEditBranding: false, canManageDirectory: true }),
+    ).toEqual(["directory"]);
+  });
+});
+
+describe("brandingOnly with a second scope-free item", () => {
+  // THE CASE THAT BROKE. `brandingOnly` used to be `!hasScopes && canEditBranding`,
+  // which was a correct reading of "only one item" while branding was the only
+  // scope-free one. The directory is scope-free too, so a staff caller with no
+  // workspace scopes has TWO items -- and the old form would have shown them both
+  // plus an alert saying there was only one.
+  it("is false when the directory is also on offer", () => {
+    expect(
+      brandingOnly({ hasScopes: false, canEditBranding: true, canManageDirectory: true }),
+    ).toBe(false);
+  });
+
+  it("is still true when branding really is the only item", () => {
+    expect(
+      brandingOnly({ hasScopes: false, canEditBranding: true, canManageDirectory: false }),
+    ).toBe(true);
   });
 });

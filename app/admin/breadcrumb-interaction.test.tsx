@@ -43,7 +43,7 @@ afterEach(() => {
 
 async function mount(onSelect: (c: Column, r: ColumnRow) => void = () => {}) {
   const columns = buildColumns({
-    authority: { hasScopes: true, canEditBranding: true },
+    authority: { hasScopes: true, canEditBranding: true, canManageDirectory: false },
     agents: AGENTS,
     scopes: SCOPES,
     root: "workspaces",
@@ -51,6 +51,10 @@ async function mount(onSelect: (c: Column, r: ColumnRow) => void = () => {}) {
     tenantId: "t1",
     scope: SCOPE_A,
     section: "secrets",
+    directoryArea: null,
+    directoryTenants: null,
+    directoryTenant: null,
+    directorySection: null,
   });
   const { crumbs, open } = splitColumns(columns);
   const chosen = open?.key === "sections" ? (open.rows.find((r) => r.selected) ?? null) : null;

@@ -12,12 +12,24 @@ import type { AdminScope, ScopeRef } from "@/lib/admin";
 // separate modes; they are one menu entered by one selection, and `members` is a
 // section of it. `branding` stays apart because it is instance-wide — it has no scope
 // and no agent, which is why it needs no gate.
-export type RailItem = "workspaces" | "branding";
+export type RailItem = "workspaces" | "directory" | "branding";
 
 export interface Authority {
   /** At least one manageable tenant or subscription. */
   hasScopes: boolean;
   canEditBranding: boolean;
+  /**
+   * Mycelium staff or manager. Gates the DIRECTORY -- tenants, subscription
+   * accounts and guest roles -- which is scope-free for the same reason branding
+   * is: creating a tenant has no scope to hang off, because the scope is what it
+   * creates.
+   *
+   * Distinct from `canEditBranding` even though both come from the same profile
+   * read. That one collapses staff and manager into one boolean, which is right
+   * for branding and not enough here: the account status transitions refuse a
+   * manager acting on a privileged target while letting staff through.
+   */
+  canManageDirectory: boolean;
 }
 
 // `hasSubscriptions` is deliberately NOT here. It used to decide whether the Members
@@ -33,6 +45,7 @@ export interface Authority {
 export function railItems(a: Authority): RailItem[] {
   const items: RailItem[] = [];
   if (a.hasScopes) items.push("workspaces");
+  if (a.canManageDirectory) items.push("directory");
   if (a.canEditBranding) items.push("branding");
   return items;
 }
@@ -75,7 +88,13 @@ export function resolveScope(
 
 
 // The state where the console has exactly one thing to offer and no obvious reason why:
-// branding rights, no manageable scope.
+// branding rights, and nothing else.
+//
+// ASKED OF THE ITEM LIST, not of two flags. It used to read `!hasScopes &&
+// canEditBranding`, which was true while branding was the only scope-free item. It
+// is not any more -- the directory is scope-free too -- so a staff caller with no
+// workspace scopes would have seen two items on screen and an alert underneath
+// telling them there was only one.
 //
 // It has to be NAMED rather than left implicit, because it is indistinguishable from a
 // broken screen. Branding is instance-wide and needs no scope, so it survives the
@@ -83,7 +102,7 @@ export function resolveScope(
 // /admin and finds a single item they did not ask for reads that as the screen failing,
 // not as an answer about their authority -- which is exactly what happened.
 export function brandingOnly(a: Authority): boolean {
-  return !a.hasScopes && a.canEditBranding;
+  return railItems(a).length === 1 && a.canEditBranding;
 }
 
 // THE TENANT whose subscriptions column is open.

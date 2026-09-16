@@ -17,7 +17,7 @@ const SCOPE_A: ScopeRef = { kind: "subscription", tenantId: "t1", subsAccId: "a1
 
 function render(over: Partial<ColumnsInput> = {}) {
   const columns = buildColumns({
-    authority: { hasScopes: true, canEditBranding: true },
+    authority: { hasScopes: true, canEditBranding: true, canManageDirectory: false },
     agents: AGENTS,
     scopes: SCOPES,
     root: "workspaces",
@@ -25,6 +25,10 @@ function render(over: Partial<ColumnsInput> = {}) {
     tenantId: null,
     scope: null,
     section: null,
+    directoryArea: null,
+    directoryTenants: null,
+    directoryTenant: null,
+    directorySection: null,
     ...over,
   });
   const { crumbs, open } = splitColumns(columns);
@@ -113,7 +117,7 @@ describe("Breadcrumb", () => {
   });
 
   it("draws nothing for a caller with no authority", () => {
-    expect(render({ authority: { hasScopes: false, canEditBranding: false } })).toBe("");
+    expect(render({ authority: { hasScopes: false, canEditBranding: false, canManageDirectory: false } })).toBe("");
   });
 
   // Branding is instance-wide: one crumb, and it is where you are.

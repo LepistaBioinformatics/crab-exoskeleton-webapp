@@ -22,7 +22,13 @@ import PanelHeader from "./panel-header";
 import { buildColumns, type Column, type ColumnRow } from "./columns";
 import { brandingOnly, openTenant, resolveScope } from "./admin-nav";
 import { LEGACY_AGENT, resolveAgent, resolveAgentTab } from "./agent-scope";
-import { parseTab, resolveRailItem, sectionNeedsDelivery, type Tab } from "./tabs";
+import {
+  parseTab,
+  resolveRailItem,
+  rootSelection,
+  sectionNeedsDelivery,
+  type Tab,
+} from "./tabs";
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
 import SharedSkillsPanel from "./shared-skills-panel";
@@ -31,6 +37,21 @@ import ModelRegistryPanel from "./model-registry-panel";
 import BulkConfigPanel from "./bulk-config-panel";
 import MembersPanel from "./members-panel";
 import BrandingPanel from "./branding-panel";
+import DirectoryTenantsPanel from "./directory-tenants-panel";
+import DirectoryTenantPanel from "./directory-tenant-panel";
+import DirectoryAccountsPanel from "./directory-accounts-panel";
+import DirectoryRolesPanel from "./directory-roles-panel";
+import {
+  directoryPanel,
+  resolveArea,
+  resolveDirSection,
+  resolveDirTenant,
+} from "./directory-nav";
+import {
+  fetchDirectoryAuthority,
+  listTenants,
+  type TenantRow,
+} from "@/lib/tenantAdmin";
 import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 import { DEFAULT_POLICY, policyIsValid, type RestartPolicy } from "@/lib/restartPolicy";
@@ -50,6 +71,14 @@ export default function AdminScreen() {
   const [scopes, setScopes] = useState<AdminScope[] | null>(null);
   const [agents, setAgents] = useState<AgentRef[] | null>(null);
   const [canEditBranding, setCanEditBranding] = useState(false);
+  const [canManageDirectory, setCanManageDirectory] = useState(false);
+  // `null` until the directory is actually opened. The tenant list is not needed
+  // to draw the rest of the console, and fetching it on every visit to /admin
+  // would put a staff-only call on a screen most callers reach without it.
+  const [tenants, setTenants] = useState<TenantRow[] | null>(null);
+  const [tenantsTruncated, setTenantsTruncated] = useState(false);
+  // Bumped to refetch the tenant list after a write in a panel that does not own it.
+  const [tenantsEpoch, setTenantsEpoch] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [restartPolicy, setRestartPolicy] = useState<RestartPolicy>(DEFAULT_POLICY);
   // Where to return when the admin leaves Branding. Without it the trip back always lands
@@ -85,6 +114,13 @@ export default function AdminScreen() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => !cancelled && setCanEditBranding(!!data?.canEdit))
       .catch(() => {});
+    // Staff or manager. Read separately from branding's probe even though both come
+    // from the same profile: branding collapses the two tiers into one boolean,
+    // which is right for it and cannot express the difference the directory needs.
+    // A failure leaves the item off, the same posture as branding's.
+    fetchDirectoryAuthority()
+      .then((a) => !cancelled && setCanManageDirectory(a.isStaff || a.isManager))
+      .catch(() => {});
     // Names resolve BEFORE the columns draw, so no column ever flashes raw uuids.
     //
     // NOTHING IS SELECTED HERE. This once ended with `setSelected(scopes[0])`, and that one
@@ -113,7 +149,11 @@ export default function AdminScreen() {
   const scope: ScopeRef | null = scopes ? resolveScope(searchParams.get("scope"), scopes) : null;
   const tenantId = scopes ? openTenant(scope, searchParams.get("tenant"), scopes) : null;
 
-  const authority = { hasScopes: !!scopes && scopes.length > 0, canEditBranding };
+  const authority = {
+    hasScopes: !!scopes && scopes.length > 0,
+    canEditBranding,
+    canManageDirectory,
+  };
   const root = resolveRailItem(tab, authority);
 
   // A SECTION IS ONLY SELECTED WHEN THE URL SAYS ONE IS. `parseTab` defaults to `files`,
@@ -129,8 +169,50 @@ export default function AdminScreen() {
     if (section) lastSection.current = section;
   }, [section]);
 
-  const columns = buildColumns({ authority, agents: agents ?? [], scopes: scopes ?? [], root, agent, tenantId, scope, section });
-  const panelOpen = root === "branding" || (!!scope && !!section);
+  // THE DIRECTORY'S OWN PATH, resolved against its own list. `?dirTenant=` is
+  // checked against the tenants that came back rather than merely parsed, for the
+  // same reason `?scope=` is: the query string is user-editable and outlives a
+  // tenant deleted between visits.
+  const directoryArea = root === "directory" ? resolveArea(searchParams.get("dir")) : null;
+  const directoryTenant = tenants
+    ? resolveDirTenant(searchParams.get("dirTenant"), tenants)
+    : null;
+  const directorySection = resolveDirSection(searchParams.get("dirTab"));
+
+  // Fetched only once the tenants area is actually open, and refetched when a
+  // panel that does not own the list changes it.
+  const directoryTenantsOpen = root === "directory" && directoryArea === "tenants";
+  useEffect(() => {
+    if (!directoryTenantsOpen) return;
+    let cancelled = false;
+    listTenants()
+      .then((out) => {
+        if (cancelled) return;
+        setTenants(out.tenants);
+        setTenantsTruncated(out.truncated);
+      })
+      // The empty list, not a hang: `null` holds the column on "still loading",
+      // and a swallowed failure there would never settle.
+      .catch(() => !cancelled && setTenants([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [directoryTenantsOpen, tenantsEpoch]);
+
+  const columns = buildColumns({
+    authority,
+    agents: agents ?? [],
+    scopes: scopes ?? [],
+    root,
+    agent,
+    tenantId,
+    scope,
+    section,
+    directoryArea,
+    directoryTenants: tenants,
+    directoryTenant,
+    directorySection,
+  });
 
   // Names for the panel header. An id reads worse than a name and far better than a header
   // that says "undefined".
@@ -161,10 +243,13 @@ export default function AdminScreen() {
       // Finder does not collapse an open branch when you click it again either.
       if (row.selected) return;
       switch (column.key) {
-        case "root":
-          if (row.id === "root:branding") setParams({ tab: "branding" });
-          else setParams({ tab: lastSection.current });
+        case "root": {
+          // The mapping is in tabs.ts, keyed on the row -- see rootSelection for
+          // why this must not be an if/else with a catch-all arm.
+          const next = rootSelection(row.id, lastSection.current);
+          if (next) setParams(next);
           return;
+        }
         case "agents":
           setParams({ agent: row.id.slice("agent:".length), tenant: null, scope: null });
           return;
@@ -176,6 +261,21 @@ export default function AdminScreen() {
           return;
         case "sections":
           setParams({ tab: row.id.slice("section:".length) });
+          return;
+        case "directory":
+          // Changing area discards the tenant and section below it, for the same
+          // reason every other branch here discards its tail.
+          setParams({
+            dir: row.id.slice("dir:".length),
+            dirTenant: null,
+            dirTab: null,
+          });
+          return;
+        case "directoryTenants":
+          setParams({ dirTenant: row.id.slice("dirTenant:".length), dirTab: null });
+          return;
+        case "directorySections":
+          setParams({ dirTab: row.id.slice("dirSection:".length) });
       }
     },
     [setParams],
@@ -183,8 +283,37 @@ export default function AdminScreen() {
 
   const blocked = !!section && sectionNeedsDelivery(section) && !policyIsValid(restartPolicy);
 
+  // WHICH panel, decided in one place (directory-nav.ts) and only rendered here.
+  const whichDirectoryPanel = directoryPanel(
+    directoryArea,
+    directoryTenant,
+    directorySection,
+  );
+  // Rendered from the row the list already returned -- see directory-tenant-panel.tsx
+  // for why there is no fetch-one call for a tenant.
+  const selectedTenant = tenants?.find((row) => row.id === directoryTenant) ?? null;
+
+  const directoryBody =
+    whichDirectoryPanel === "roles" ? (
+      <DirectoryRolesPanel />
+    ) : whichDirectoryPanel === "create" ? (
+      <DirectoryTenantsPanel
+        truncated={tenantsTruncated}
+        onCreated={() => setTenantsEpoch((n) => n + 1)}
+      />
+    ) : whichDirectoryPanel === "accounts" && selectedTenant ? (
+      <DirectoryAccountsPanel tenantId={selectedTenant.id} />
+    ) : whichDirectoryPanel === "tenant" && selectedTenant ? (
+      <DirectoryTenantPanel
+        tenant={selectedTenant}
+        onChanged={() => setTenantsEpoch((n) => n + 1)}
+      />
+    ) : null;
+
   const panel =
-    root === "branding" ? (
+    root === "directory" ? (
+      <div className="mx-auto w-full max-w-4xl px-4 py-4 pb-16">{directoryBody}</div>
+    ) : root === "branding" ? (
       <div className="mx-auto w-full max-w-4xl px-4 py-4 pb-16">
         {/* Why there is only one thing here. A console offering a single item the caller
             did not ask for is indistinguishable from a broken one. */}

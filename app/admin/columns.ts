@@ -2,6 +2,11 @@ import { scopeKey, type AdminScope, type AgentRef, type ScopeRef } from "@/lib/a
 import { LEGACY_AGENT, agentTabs } from "./agent-scope";
 import { encodeScope, tenantsOf, type Authority, type RailItem } from "./admin-nav";
 import type { Tab } from "./tabs";
+import type {
+  DirectoryArea,
+  DirectorySection,
+  DirectoryTenantRef,
+} from "./directory-nav";
 
 // THE WHOLE NAVIGATION, as data.
 //
@@ -16,11 +21,28 @@ import type { Tab } from "./tabs";
 // PURE, and tested with a truth table. This screen has now been rebuilt twice around
 // navigation state that lived inside a component. It does not live in a component again.
 
-export type ColumnKey = "root" | "agents" | "tenants" | "subscriptions" | "sections";
+export type ColumnKey =
+  | "root"
+  | "agents"
+  | "tenants"
+  | "subscriptions"
+  | "sections"
+  | "directory"
+  | "directoryTenants"
+  | "directorySections";
 
 // Copy keys for rows whose name is prose. Rows that name something the SYSTEM owns — an
 // agent key, a tenant or account name — carry `text` instead and are never translated.
-export type RowTextKey = "branding" | "agents" | "legacy" | "tenantWide" | Tab;
+export type RowTextKey =
+  | "branding"
+  | "agents"
+  | "legacy"
+  | "tenantWide"
+  | "directoryTenants"
+  | "directoryRoles"
+  | "directoryOverview"
+  | "directoryAccounts"
+  | Tab;
 
 export type RowIcon =
   | "branding"
@@ -30,9 +52,13 @@ export type RowIcon =
   | "tenant"
   | "tenantWide"
   | "subscription"
+  | "directoryTenants"
+  | "directoryRoles"
+  | "directoryOverview"
+  | "directoryAccounts"
   | Tab;
 
-export type EmptyReason = "noAgents" | "noTenants" | "noSubscriptions";
+export type EmptyReason = "noAgents" | "noTenants" | "noSubscriptions" | "noDirectoryTenants";
 
 export interface ColumnRow {
   /** Click payload and React key. Namespaced per column so ids can never collide. */
@@ -75,6 +101,19 @@ export interface ColumnsInput {
   tenantId: string | null;
   scope: ScopeRef | null;
   section: Tab | null;
+  /**
+   * The directory's own path. Separate fields rather than reused ones: `tenantId`
+   * above is a tenant the caller administers CONTENT in, resolved from
+   * `AdminScope[]`; `directoryTenant` is a tenant that EXISTS, resolved from the
+   * tenant list. Different lists, different questions.
+   *
+   * `directoryTenants` is null while the list is still loading, which is why the
+   * column can be drawn empty-but-not-"noDirectoryTenants".
+   */
+  directoryArea: DirectoryArea | null;
+  directoryTenants: DirectoryTenantRef[] | null;
+  directoryTenant: string | null;
+  directorySection: DirectorySection | null;
 }
 
 export function buildColumns(input: ColumnsInput): Column[] {
@@ -104,8 +143,22 @@ export function buildColumns(input: ColumnsInput): Column[] {
       icon: "agents",
     });
   }
+  // DIRECTORY. A branch, unlike branding: it asks which area, then which tenant,
+  // then which section, and every one of those answers belongs in the URL.
+  if (authority.canManageDirectory) {
+    rootRows.push({
+      id: "root:directory",
+      textKey: "directory",
+      branch: true,
+      selected: root === "directory",
+      tone: "normal",
+      icon: "directory",
+    });
+  }
   if (rootRows.length === 0) return [];
   columns.push({ key: "root", rows: rootRows });
+
+  if (root === "directory") return directoryColumns(columns, input);
 
   if (root !== "workspaces" || !authority.hasScopes) return columns;
 
@@ -215,7 +268,100 @@ export function buildColumns(input: ColumnsInput): Column[] {
   return columns;
 }
 
+// The directory's columns: area, then tenant, then section.
+//
+// Guest roles are a LEAF of the area column rather than a section of a tenant,
+// because in mycelium they are global -- `guestManager.guestRoles.list` takes no
+// tenant at all. Nesting them under one would draw a containment that does not
+// exist, and an admin would reasonably conclude that deleting a tenant took its
+// roles with it.
+function directoryColumns(columns: Column[], input: ColumnsInput): Column[] {
+  const { directoryArea, directoryTenants, directoryTenant, directorySection } = input;
+
+  columns.push({
+    key: "directory",
+    rows: [
+      {
+        id: "dir:tenants",
+        textKey: "directoryTenants",
+        branch: true,
+        selected: directoryArea === "tenants",
+        tone: "normal",
+        icon: "directoryTenants",
+      },
+      {
+        id: "dir:roles",
+        textKey: "directoryRoles",
+        branch: false,
+        selected: directoryArea === "roles",
+        tone: "normal",
+        icon: "directoryRoles",
+      },
+    ],
+  });
+
+  if (directoryArea !== "tenants") return columns;
+
+  // `null` is "still loading" and `[]` is "there are none". Only the second earns
+  // the empty reason -- announcing "no tenants" during the fetch would state as
+  // fact something not yet known.
+  const tenants = directoryTenants ?? [];
+  columns.push({
+    key: "directoryTenants",
+    rows: tenants.map((t) => ({
+      id: `dirTenant:${t.id}`,
+      text: t.name,
+      branch: true,
+      selected: directoryTenant === t.id,
+      tone: "normal" as const,
+      icon: "tenant" as const,
+    })),
+    empty:
+      directoryTenants !== null && tenants.length === 0 ? "noDirectoryTenants" : undefined,
+  });
+
+  if (!directoryTenant) return columns;
+
+  columns.push({
+    key: "directorySections",
+    rows: [
+      {
+        id: "dirSection:overview",
+        textKey: "directoryOverview",
+        branch: false,
+        selected: directorySection === "overview",
+        tone: "normal",
+        icon: "directoryOverview",
+      },
+      {
+        id: "dirSection:accounts",
+        textKey: "directoryAccounts",
+        branch: false,
+        selected: directorySection === "accounts",
+        tone: "normal",
+        icon: "directoryAccounts",
+      },
+    ],
+  });
+
+  return columns;
+}
+
 // --- what gets DRAWN as a column, and what becomes a crumb ------------------------------
+
+// WHETHER A COLUMN IS A SECTIONS COLUMN — the level you switch between while working,
+// rather than one you answer once and move past.
+//
+// A PREDICATE, not a literal comparison, and that is the whole reason it exists. Two
+// places have to agree on this: `splitColumns` below, which keeps such a column drawn
+// instead of folding it into a crumb, and `column-browser.tsx`, which draws it as a
+// sidebar BESIDE the panel rather than as a full-width list in front of it. They were
+// two separate `key === "sections"` tests, and the directory's own sections column
+// satisfied one and not the other — so selecting a section wrote the parameter, then
+// redrew the same list with no panel. It read as the click doing nothing.
+export function isSectionsColumn(key: ColumnKey): boolean {
+  return key === "sections" || key === "directorySections";
+}
 
 export interface Split {
   /** Answered levels, in path order. Each becomes a breadcrumb segment. */
@@ -243,7 +389,7 @@ export function splitColumns(columns: Column[]): Split {
     // to fold into a line of text. The section is the one you change repeatedly while
     // working, and a list you switch between all day belongs on screen as a list, not
     // behind a click.
-    if (column.key === "sections") {
+    if (isSectionsColumn(column.key)) {
       open = column;
       continue;
     }

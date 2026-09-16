@@ -13,6 +13,7 @@ export const TAB_KEYS = [
   "config",
   "members",
   "branding",
+  "directory",
 ] as const;
 export type Tab = (typeof TAB_KEYS)[number];
 
@@ -32,6 +33,9 @@ export const DEFAULT_TAB: Tab = "files";
 // picoclaw agents only, and the legacy all-agents entry gets neither the picoclaw
 // sections nor `members`. That rule lives in `agent-scope.ts`, with the rest of the
 // agent's vocabulary; this is the full set it draws from.
+// `directory` and `branding` are deliberately ABSENT: both are instance-wide, and
+// adding either here would make it appear inside every agent and scope path via
+// `agent-scope.ts`.
 export const SECTION_TABS: Tab[] = [
   "files",
   "secrets",
@@ -89,6 +93,37 @@ export function parseTab(raw: string | null | undefined): Tab {
 // caller landing on `workspaces` would get a gate leading nowhere.
 export function resolveRailItem(tab: Tab, a: Authority): RailItem {
   if (tab === "branding" && a.canEditBranding) return "branding";
+  // The directory needs the SAME guard branding has, and its absence is silent:
+  // without this line a hand-typed or bookmarked `?tab=directory` from a caller
+  // who also has workspace scopes falls through to `workspaces` below and lands
+  // them somewhere they did not ask for, with nothing to indicate why.
+  if (tab === "directory" && a.canManageDirectory) return "directory";
   if (a.hasScopes) return "workspaces";
   return railItems(a)[0] ?? "workspaces";
+}
+
+// WHICH `?tab=` A ROOT ROW SELECTS, as data rather than as a branch inside the
+// click handler.
+//
+// KEYED ON THE ROW, never "branding, or else". The screen's handler read
+// `row.id === "root:branding" ? branding : lastSection`, which was total while
+// there were two root rows and silently wrong the moment there were three: a
+// click on Directory took the else arm, wrote the last WORKSPACE section into
+// `?tab=`, and resolved straight back to `workspaces` -- so the menu item looked
+// like it did nothing at all.
+//
+// `null` for a row this does not know means WRITE NOTHING. Leaving the screen
+// where it is beats moving it somewhere nobody chose, which is the failure this
+// function exists to have made impossible.
+export function rootSelection(
+  rowId: string,
+  lastSection: Tab | null,
+): { tab: Tab | null } | null {
+  if (rowId === "root:branding") return { tab: "branding" };
+  if (rowId === "root:directory") return { tab: "directory" };
+  // Returning to workspaces restores the section they were last on; null there
+  // deletes the parameter and lands on the default, which is correct for a first
+  // visit.
+  if (rowId === "root:agents") return { tab: lastSection };
+  return null;
 }

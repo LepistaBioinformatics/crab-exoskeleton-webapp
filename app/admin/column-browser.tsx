@@ -1,7 +1,7 @@
 "use client";
 
 import type { Column, ColumnRow } from "./columns";
-import { splitColumns } from "./columns";
+import { isSectionsColumn, splitColumns } from "./columns";
 import ColumnView from "./column-view";
 import Chooser from "./chooser";
 import Breadcrumb from "./breadcrumb";
@@ -34,7 +34,7 @@ export default function ColumnBrowser({
   // so tapping a section on a phone appeared to do nothing. The breadcrumb grows a
   // mobile-only tail segment instead, which names the section and gets back to its list.
   const sectionChosen =
-    open?.key === "sections" ? (open.rows.find((r) => r.selected) ?? null) : null;
+    open && isSectionsColumn(open.key) ? (open.rows.find((r) => r.selected) ?? null) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -55,7 +55,7 @@ export default function ColumnBrowser({
 
           The sections level is the other case. It is switched repeatedly while working, so
           it stays a sidebar beside the panel rather than standing in front of it. */}
-      {open && open.key !== "sections" ? (
+      {open && !isSectionsColumn(open.key) ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Chooser column={open} onSelect={(row) => onSelect(open, row)} />
         </div>
@@ -69,11 +69,19 @@ export default function ColumnBrowser({
             </div>
           )}
           {/* `min-w-0` so a wide panel — the JSON editor, the model table — shrinks rather
-              than pushing the sidebar off screen. Hidden below `md` while the list is what
-              is showing; there is nothing in it then anyway. */}
+              than pushing the sidebar off screen.
+
+              HIDDEN BELOW `md` ONLY WHILE A LIST IS ACTUALLY SHOWING. The two cannot sit
+              side by side on a phone, so the one being asked wins — but that is a reason
+              to yield to a LIST, not to hide unconditionally. The test used to be
+              `sectionChosen` alone, which is also false when there is no column at all:
+              branding, and now the directory's own scope-free panels, reach this branch
+              with `open === null` and were hidden on a phone with nothing shown in their
+              place. */}
           <div
             className={
-              "min-w-0 flex-1 overflow-y-auto" + (sectionChosen ? "" : " max-md:hidden")
+              "min-w-0 flex-1 overflow-y-auto" +
+              (open && !sectionChosen ? " max-md:hidden" : "")
             }
           >
             {children}
