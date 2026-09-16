@@ -20,7 +20,7 @@ const SCOPE_A: ScopeRef = { kind: "subscription", tenantId: "t1", subsAccId: "a1
 
 function build(over: Partial<ColumnsInput> = {}) {
   return buildColumns({
-    authority: { hasScopes: true, canEditBranding: true },
+    authority: { hasScopes: true, canEditBranding: true, canManageDirectory: false },
     agents: AGENTS,
     scopes: SCOPES,
     root: "workspaces",
@@ -28,6 +28,10 @@ function build(over: Partial<ColumnsInput> = {}) {
     tenantId: "t1",
     scope: SCOPE_A,
     section: "secrets",
+    directoryArea: null,
+    directoryTenants: null,
+    directoryTenant: null,
+    directorySection: null,
     ...over,
   });
 }

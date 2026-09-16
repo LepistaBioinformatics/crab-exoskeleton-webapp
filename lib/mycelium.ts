@@ -93,9 +93,28 @@ export async function fetchMycelium(
 // resolves the internal issuer (verified empirically). Throws
 // MyceliumConnectivityError on transport failure (via fetchMycelium); otherwise
 // returns a discriminated result ({error} envelopes and non-2xx both -> ok:false).
+// The failure arm carries what the gateway actually sent, not just prose.
+//
+// `/_adm/rpc` answers **HTTP 200 for refusals too** (rpc/handlers.rs), and the
+// dispatcher substitutes an anonymous profile rather than rejecting, so a
+// permission denial and a malformed call are indistinguishable without the
+// JSON-RPC code. `rpcCode` is `error.code` -- note FORBIDDEN is a non-standard
+// `-32401`, not one of the spec's reserved values -- and `myc` is
+// `error.data.code`, the stable `MYC000xx` discriminator that survives any
+// rewording of the message.
+//
+// `status` stays 400 on this arm so the call sites that predate this keep
+// behaving exactly as they did; the two new fields are additive, and mapping
+// them to an error code is the routes' job (lib/rpcErrors.ts).
 export type RpcResult<R> =
   | { ok: true; result: R }
-  | { ok: false; status: number; message: string };
+  | {
+      ok: false;
+      status: number;
+      message: string;
+      rpcCode?: number;
+      myc?: string;
+    };
 
 export async function myceliumRpc<R>(
   method: string,
@@ -116,7 +135,15 @@ export async function myceliumRpc<R>(
   }
   const json = await res.json().catch(() => null);
   if (json?.error) {
-    return { ok: false, status: 400, message: json.error.message ?? "rpc error" };
+    const code = json.error.code;
+    const myc = json.error.data?.code;
+    return {
+      ok: false,
+      status: 400,
+      message: json.error.message ?? "rpc error",
+      rpcCode: typeof code === "number" ? code : undefined,
+      myc: typeof myc === "string" && myc.trim() ? myc.trim() : undefined,
+    };
   }
   return { ok: true, result: json?.result as R };
 }

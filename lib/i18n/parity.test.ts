@@ -67,6 +67,15 @@ const SHARED = new Set([
   // The column browser's heading for the same word admin.scope.tenantPrefix already keeps
   // unchanged: "tenant" is the product's own term in both locales.
   "admin.columns.headings.tenants",
+  // "Tenant" is the loanword Portuguese uses for this, unchanged -- the same
+  // reason the heading above is here. Both the column heading and the row that
+  // opens it carry it.
+  "admin.columns.headings.directoryTenants",
+  "admin.columns.rows.directoryTenants",
+  // Same loanword, as the panel's own heading.
+  "admin.directory.tenantsTitle",
+  // "Logo" is the word Portuguese uses for this, unchanged.
+  "admin.directory.brandTitle",
   "admin.ladderRungs.tenant",
   "admin.ladderRungs.tenantNamed",
   "admin.models.keyGoesToAfter",

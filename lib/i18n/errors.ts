@@ -34,6 +34,12 @@ const en = {
   invalid_code: "Invalid code. Try again.",
   workspaces_load_failed: "Couldn't load your workspaces.",
   version_conflict: "Another admin changed this model — reload before saving.",
+  // tenant-subscription-admin: the gateway answers a tenant write it refuses and
+  // a tenant write with a bad id with the SAME code, because the use-case has no
+  // permission guard at all and scopes by ownership at the repository. Naming one
+  // cause would be wrong half the time, so the copy names both.
+  tenant_not_found_or_not_owned:
+    "That tenant either doesn't exist or isn't one you own.",
   models_incomplete: "Fill model name, provider and model.",
   // turn-failure-visible: the agent ran and could not finish. The harness's own
   // sentence is shown beneath this, untranslated, because it is the only part that
@@ -122,6 +128,8 @@ const pt: ErrorDict = {
   invalid_code: "Código inválido. Tente de novo.",
   workspaces_load_failed: "Não foi possível carregar seus workspaces.",
   version_conflict: "Outro admin alterou este modelo — recarregue antes de salvar.",
+  tenant_not_found_or_not_owned:
+    "Esse tenant não existe ou não é um dos seus.",
   models_incomplete: "Preencha o nome do modelo, o provedor e o modelo.",
   harness_error: "O agente não conseguiu concluir esta mensagem.",
   turn_lost:

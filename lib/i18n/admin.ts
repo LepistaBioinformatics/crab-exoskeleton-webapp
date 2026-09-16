@@ -32,6 +32,7 @@ const en = {
       config: "Config",
       members: "Members",
     },
+    directory: "Directory",
     // "The inventory is proxy-wide. Only the defaults and pins below it belong
     // to <scope> and <agent>." Shown on the model tab, where the scope line
     // would otherwise overstate what a scope owns.
@@ -70,11 +71,21 @@ const en = {
       tenants: "Tenant",
       subscriptions: "Where",
       sections: "Manage",
+      directory: "Directory",
+      directoryTenants: "Tenants",
+      directorySections: "Manage",
     },
     rows: {
       agents: "Agents",
       // The tenant itself, as a target among that tenant's targets.
       tenantWide: "The whole tenant",
+      directoryTenants: "Tenants",
+      // A sibling of the tenant list, not a section inside a tenant: guest roles
+      // are global in mycelium, so nesting them would draw a containment that
+      // does not exist.
+      directoryRoles: "Guest roles",
+      directoryOverview: "Overview",
+      directoryAccounts: "Subscriptions",
     },
     hints: {
       tenantWide: "Reaches every subscription under it",
@@ -83,6 +94,7 @@ const en = {
       noAgents: "The proxy reported no agents",
       noTenants: "No tenant to administer",
       noSubscriptions: "No subscriptions under this tenant",
+      noDirectoryTenants: "No tenants yet — create the first one",
     },
     // The one line in the space to the right of the deepest column, naming what to click.
     // Finder leaves that space blank; an admin tool earns the sentence.
@@ -91,6 +103,9 @@ const en = {
       tenants: "Choose the tenant to administer it in.",
       subscriptions: "Choose a subscription, or the tenant as a whole.",
       sections: "Choose what to manage.",
+      directory: "Choose what to administer.",
+      directoryTenants: "Choose a tenant, or create one.",
+      directorySections: "Choose what to manage in this tenant.",
     },
     pathAria: "Selected target",
     // The breadcrumb. Segments name what was CHOSEN; the trailing hint names the question
@@ -99,6 +114,86 @@ const en = {
     // "Change alpha" — the segment's accessible name, since the visible text is the value.
     changeAria: "Change {level}",
     hintSuffix: "?",
+  },
+  // The directory: tenants, their subscription accounts, and the guest roles that
+  // make an agent grantable. Replaces the screens this stack used to run a second
+  // admin application for.
+  directory: {
+    search: "Search",
+    truncated: "More exist than are shown — narrow the search.",
+
+    tenantsTitle: "Tenants",
+    tenantsIntro:
+      "A tenant is the top of the access model: subscriptions live under it, and a workspace belongs to a subscription.",
+    tenantsPick: "Pick a tenant on the left to manage it, or create one here.",
+    createName: "Name",
+    createNamePlaceholder: "Acme Ltd",
+    createDescription: "Description",
+    createDescriptionPlaceholder: "What this tenant is for (optional)",
+    createSubmit: "Create tenant",
+    // Said out loud because it decides who can edit the tenant afterwards.
+    createOwnerNote:
+      "You become the tenant's owner. Only an owner can rename, archive or verify it.",
+    created: "Tenant created.",
+
+    overviewTitle: "This tenant",
+    idLabel: "Identifier",
+    ownedByYou: "You own this tenant",
+    notOwnedByYou:
+      "You are not an owner of this tenant, so renaming, archiving and verifying will be refused.",
+    renameSubmit: "Save changes",
+    renamed: "Tenant updated.",
+    archive: "Archive",
+    unarchive: "Unarchive",
+    archiveDone: "Archiving status changed.",
+    archivedBadge: "Archived",
+    verifiedBadge: "Verified",
+    deleteTenant: "Delete tenant",
+    deleteTenantTitle: "Delete this tenant?",
+    deleteTenantBody:
+      "The subscriptions under it, and the workspaces behind them, are not removed by this. Only the tenant record goes.",
+    deleted: "Tenant deleted.",
+
+    brandTitle: "Logo",
+    brandIntro:
+      "Shown beside the tenant's name in the chat sidebar. A square image reads best.",
+    brandPick: "Choose an image",
+    brandSave: "Save logo",
+    brandSaved: "Logo saved.",
+    brandTooLarge: "That image is still too large after resizing — try a smaller one.",
+    brandNotImage: "That file is not an image.",
+    brandNone: "No logo yet — members see the tenant's initials.",
+
+    accountsTitle: "Subscriptions",
+    accountsIntro:
+      "Creating a subscription is what provisions the workspace behind it. Members are invited per subscription, under Workspaces.",
+    accountsNone: "No subscriptions under this tenant yet.",
+    accountName: "Name",
+    accountNamePlaceholder: "Marketing team",
+    accountCreate: "Create subscription",
+    accountCreated: "Subscription created.",
+    accountDelete: "Delete",
+    accountDeleteTitle: "Delete this subscription?",
+    accountDeleteBody:
+      "The workspace provisioned for it is not removed by this, and members guested on it lose their access.",
+    accountDeleted: "Subscription deleted.",
+    statusActive: "Active",
+    statusInactive: "Inactive",
+    statusApproved: "Approved",
+    statusArchivedAcc: "Archived",
+
+    rolesTitle: "Guest roles",
+    // The fact that makes this screen make sense in this stack.
+    rolesIntro:
+      "A role's name is an agent's key, and its permission is the access it grants. An agent becomes grantable once it has a role — one for read, one for write.",
+    rolesNone: "No guest roles yet.",
+    // Why the screen has no buttons. Without this an admin reads a read-only list
+    // as a broken one.
+    rolesReadOnly:
+      "Roles come from the gateway's configuration file and are created when the gateway starts. Add, rename or remove one there — the gateway only ever creates roles it finds declared, so a change made here would not survive the next start and could leave two roles with one name.",
+    read: "read",
+    write: "write",
+    roleSystem: "System role",
   },
   restartChrome: {
     // The policy is chrome of the menu now, not an accordion inside each section: what
@@ -815,6 +910,7 @@ const pt: AdminDict = {
       config: "Configuração",
       members: "Membros",
     },
+    directory: "Diretório",
     inventoryProxyWideBefore: "O inventário é ",
     inventoryProxyWide: "global do proxy",
     inventoryProxyWideAfter:
@@ -839,10 +935,17 @@ const pt: AdminDict = {
       tenants: "Tenant",
       subscriptions: "Onde",
       sections: "Administrar",
+      directory: "Diretório",
+      directoryTenants: "Tenants",
+      directorySections: "Administrar",
     },
     rows: {
       agents: "Agentes",
       tenantWide: "O tenant inteiro",
+      directoryTenants: "Tenants",
+      directoryRoles: "Papéis de convidado",
+      directoryOverview: "Visão geral",
+      directoryAccounts: "Assinaturas",
     },
     hints: {
       tenantWide: "Alcança todas as assinaturas sob ele",
@@ -851,17 +954,95 @@ const pt: AdminDict = {
       noAgents: "O proxy não reportou nenhum agente",
       noTenants: "Nenhum tenant para administrar",
       noSubscriptions: "Nenhuma assinatura sob este tenant",
+      noDirectoryTenants: "Nenhum tenant ainda — crie o primeiro",
     },
     next: {
       agents: "Escolha um agente para administrar.",
       tenants: "Escolha o tenant em que ele será administrado.",
       subscriptions: "Escolha uma assinatura, ou o tenant como um todo.",
       sections: "Escolha o que administrar.",
+      directory: "Escolha o que administrar.",
+      directoryTenants: "Escolha um tenant, ou crie um.",
+      directorySections: "Escolha o que administrar neste tenant.",
     },
     pathAria: "Alvo selecionado",
     trailAria: "Caminho",
     changeAria: "Trocar {level}",
     hintSuffix: "?",
+  },
+  directory: {
+    search: "Buscar",
+    truncated: "Existem mais do que os mostrados — refine a busca.",
+
+    tenantsTitle: "Tenants",
+    tenantsIntro:
+      "O tenant é o topo do modelo de acesso: as assinaturas vivem sob ele, e um workspace pertence a uma assinatura.",
+    tenantsPick: "Escolha um tenant à esquerda para administrá-lo, ou crie um aqui.",
+    createName: "Nome",
+    createNamePlaceholder: "Acme Ltda",
+    createDescription: "Descrição",
+    createDescriptionPlaceholder: "Para que serve este tenant (opcional)",
+    createSubmit: "Criar tenant",
+    createOwnerNote:
+      "Você se torna o dono do tenant. Só um dono pode renomear, arquivar ou verificar.",
+    created: "Tenant criado.",
+
+    overviewTitle: "Este tenant",
+    idLabel: "Identificador",
+    ownedByYou: "Você é dono deste tenant",
+    notOwnedByYou:
+      "Você não é dono deste tenant, então renomear, arquivar e verificar serão recusados.",
+    renameSubmit: "Salvar alterações",
+    renamed: "Tenant atualizado.",
+    archive: "Arquivar",
+    unarchive: "Desarquivar",
+    archiveDone: "Status de arquivamento alterado.",
+    archivedBadge: "Arquivado",
+    verifiedBadge: "Verificado",
+    deleteTenant: "Excluir tenant",
+    deleteTenantTitle: "Excluir este tenant?",
+    deleteTenantBody:
+      "As assinaturas sob ele, e os workspaces por trás delas, não são removidos por isso. Só o registro do tenant sai.",
+    deleted: "Tenant excluído.",
+
+    brandTitle: "Logo",
+    brandIntro:
+      "Aparece ao lado do nome do tenant na barra lateral do chat. Uma imagem quadrada fica melhor.",
+    brandPick: "Escolher imagem",
+    brandSave: "Salvar logo",
+    brandSaved: "Logo salvo.",
+    brandTooLarge:
+      "Essa imagem continua grande demais depois do redimensionamento — tente uma menor.",
+    brandNotImage: "Esse arquivo não é uma imagem.",
+    brandNone: "Sem logo ainda — os membros veem as iniciais do tenant.",
+
+    accountsTitle: "Assinaturas",
+    accountsIntro:
+      "Criar uma assinatura é o que provisiona o workspace por trás dela. Membros são convidados por assinatura, em Workspaces.",
+    accountsNone: "Nenhuma assinatura sob este tenant ainda.",
+    accountName: "Nome",
+    accountNamePlaceholder: "Time de marketing",
+    accountCreate: "Criar assinatura",
+    accountCreated: "Assinatura criada.",
+    accountDelete: "Excluir",
+    accountDeleteTitle: "Excluir esta assinatura?",
+    accountDeleteBody:
+      "O workspace provisionado para ela não é removido por isso, e os membros convidados nela perdem o acesso.",
+    accountDeleted: "Assinatura excluída.",
+    statusActive: "Ativa",
+    statusInactive: "Inativa",
+    statusApproved: "Aprovada",
+    statusArchivedAcc: "Arquivada",
+
+    rolesTitle: "Papéis de convidado",
+    rolesIntro:
+      "O nome de um papel é a chave de um agente, e a permissão dele é o acesso que concede. Um agente passa a ser concedível quando tem papel — um de leitura, um de escrita.",
+    rolesNone: "Nenhum papel de convidado ainda.",
+    rolesReadOnly:
+      "Os papéis vêm do arquivo de configuração do gateway e são criados quando ele sobe. Adicione, renomeie ou remova um por lá — o gateway só cria papéis que encontra declarados, então uma alteração feita aqui não sobreviveria ao próximo start e poderia deixar dois papéis com o mesmo nome.",
+    read: "leitura",
+    write: "escrita",
+    roleSystem: "Papel do sistema",
   },
   restartChrome: {
     label: "Entrega",

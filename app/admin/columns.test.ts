@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { AdminScope, AgentRef, ScopeRef } from "@/lib/admin";
 import { LEGACY_AGENT } from "./agent-scope";
-import { buildColumns, isAsking, splitColumns, type Column, type ColumnsInput } from "./columns";
+import {
+  buildColumns,
+  isAsking,
+  isSectionsColumn,
+  splitColumns,
+  type Column,
+  type ColumnsInput,
+} from "./columns";
 
 const AGENTS: AgentRef[] = [
   { key: "alpha", harness: "picoclaw" },
@@ -23,7 +30,7 @@ const SCOPE_A: ScopeRef = { kind: "subscription", tenantId: "t1", subsAccId: "a1
 
 function build(over: Partial<ColumnsInput> = {}): Column[] {
   return buildColumns({
-    authority: { hasScopes: true, canEditBranding: true },
+    authority: { hasScopes: true, canEditBranding: true, canManageDirectory: false },
     agents: AGENTS,
     scopes: [TENANT, SUB_A, SUB_B, OTHER],
     root: "workspaces",
@@ -31,6 +38,10 @@ function build(over: Partial<ColumnsInput> = {}): Column[] {
     tenantId: null,
     scope: null,
     section: null,
+    directoryArea: null,
+    directoryTenants: null,
+    directoryTenant: null,
+    directorySection: null,
     ...over,
   });
 }
@@ -65,7 +76,7 @@ describe("buildColumns — which columns exist", () => {
 
   it("draws nothing at all for a caller with no authority", () => {
     expect(
-      build({ authority: { hasScopes: false, canEditBranding: false } }),
+      build({ authority: { hasScopes: false, canEditBranding: false, canManageDirectory: false } }),
     ).toEqual([]);
   });
 });
@@ -80,14 +91,14 @@ describe("buildColumns — the root column", () => {
 
   it("offers only what the caller can use", () => {
     expect(
-      col(build({ authority: { hasScopes: true, canEditBranding: false } }), "root").rows.map(
+      col(build({ authority: { hasScopes: true, canEditBranding: false, canManageDirectory: false } }), "root").rows.map(
         (r) => r.textKey,
       ),
     ).toEqual(["agents"]);
     // The branding-only caller, inherited from the deleted nav-rail test.
     expect(
       col(
-        build({ authority: { hasScopes: false, canEditBranding: true }, root: "branding" }),
+        build({ authority: { hasScopes: false, canEditBranding: true, canManageDirectory: false }, root: "branding" }),
         "root",
       ).rows.map((r) => r.textKey),
     ).toEqual(["branding"]);
@@ -283,7 +294,7 @@ describe("splitColumns", () => {
 
   it("is empty for a caller with no authority", () => {
     const { crumbs, open } = splitColumns(
-      build({ authority: { hasScopes: false, canEditBranding: false } }),
+      build({ authority: { hasScopes: false, canEditBranding: false, canManageDirectory: false } }),
     );
     expect(crumbs).toEqual([]);
     expect(open).toBeNull();
@@ -296,5 +307,94 @@ describe("splitColumns", () => {
     const agentCrumb = crumbs.find((c) => c.column.key === "agents")!;
     expect(agentCrumb.selected.textKey).toBe("legacy");
     expect(agentCrumb.selected.text).toBeUndefined();
+  });
+});
+
+// --- the directory ----------------------------------------------------------------------
+
+const DIR_TENANTS = [
+  { id: "dt1", name: "Acme" },
+  { id: "dt2", name: "Globex" },
+];
+
+const dir = (over: Partial<ColumnsInput> = {}) =>
+  build({
+    authority: { hasScopes: true, canEditBranding: true, canManageDirectory: true },
+    root: "directory",
+    ...over,
+  });
+
+describe("the directory's columns", () => {
+  it("offers the directory as a root row when the caller may manage it", () => {
+    const rows = col(dir(), "root").rows.map((r) => r.id);
+    expect(rows).toContain("root:directory");
+  });
+
+  it("asks which area first, and roles is a leaf", () => {
+    const area = col(dir(), "directory");
+    expect(area.rows.map((r) => r.id)).toEqual(["dir:tenants", "dir:roles"]);
+    // Guest roles are global in mycelium, so choosing the area is the whole path.
+    expect(area.rows.find((r) => r.id === "dir:roles")?.branch).toBe(false);
+  });
+
+  it("lists tenants once the tenants area is chosen", () => {
+    const columns = dir({ directoryArea: "tenants", directoryTenants: DIR_TENANTS });
+    expect(col(columns, "directoryTenants").rows.map((r) => r.text)).toEqual([
+      "Acme",
+      "Globex",
+    ]);
+  });
+
+  // `null` is the fetch still running and `[]` is an answer. Announcing "no tenants"
+  // during the fetch would state as fact something not yet known.
+  it("does not claim there are no tenants while the list is still loading", () => {
+    expect(col(dir({ directoryArea: "tenants", directoryTenants: null }), "directoryTenants").empty)
+      .toBeUndefined();
+    expect(col(dir({ directoryArea: "tenants", directoryTenants: [] }), "directoryTenants").empty)
+      .toBe("noDirectoryTenants");
+  });
+
+  it("opens the sections of a chosen tenant", () => {
+    const columns = dir({
+      directoryArea: "tenants",
+      directoryTenants: DIR_TENANTS,
+      directoryTenant: "dt1",
+    });
+    expect(col(columns, "directorySections").rows.map((r) => r.id)).toEqual([
+      "dirSection:overview",
+      "dirSection:accounts",
+    ]);
+  });
+});
+
+// THE BUG THIS COVERS SHIPPED: with a tenant selected, clicking a section did
+// nothing visible. `splitColumns` kept the column drawn, but the browser decided
+// how to draw it with its own `key === "sections"` test, which the directory's
+// column did not satisfy — so it rendered as a full-width chooser, and the panel,
+// which lives only in the other branch, never appeared.
+describe("isSectionsColumn", () => {
+  it("covers both sections columns", () => {
+    expect(isSectionsColumn("sections")).toBe(true);
+    expect(isSectionsColumn("directorySections")).toBe(true);
+  });
+
+  it("does not cover a level you answer once and move past", () => {
+    for (const key of ["root", "agents", "tenants", "subscriptions", "directory", "directoryTenants"] as const) {
+      expect(isSectionsColumn(key)).toBe(false);
+    }
+  });
+
+  // The property that actually matters: a sections column stays DRAWN even once it
+  // holds a selection, because the panel renders beside it.
+  it("keeps a directory sections column open rather than folding it into a crumb", () => {
+    const columns = dir({
+      directoryArea: "tenants",
+      directoryTenants: DIR_TENANTS,
+      directoryTenant: "dt1",
+      directorySection: "overview",
+    });
+    const { open, crumbs } = splitColumns(columns);
+    expect(open?.key).toBe("directorySections");
+    expect(crumbs.map((c) => c.column.key)).not.toContain("directorySections");
   });
 });

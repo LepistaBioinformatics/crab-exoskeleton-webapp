@@ -11,9 +11,12 @@ import {
   FileBox,
   FolderClosed,
   IdCard,
+  Info,
   KeyRound,
   LayoutGrid,
+  Library,
   Palette,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
   Wrench,
@@ -76,6 +79,15 @@ export const ROW_ICONS: Record<RowIcon, React.ReactNode> = {
   model: <Cpu size={15} aria-hidden />,
   config: <SlidersHorizontal size={15} aria-hidden />,
   members: <Users size={15} aria-hidden />,
+  // The directory. `directoryTenants` deliberately reuses the tenant glyph and
+  // `directoryAccounts` the subscription one: the row that opens a list and the
+  // rows inside it name the same kind of thing, and a different icon for each
+  // would say they are different kinds.
+  directory: <Library size={15} aria-hidden />,
+  directoryTenants: <Building2 size={15} aria-hidden />,
+  directoryRoles: <ShieldCheck size={15} aria-hidden />,
+  directoryOverview: <Info size={15} aria-hidden />,
+  directoryAccounts: <FolderClosed size={15} aria-hidden />,
 };
 
 // A row names either something the SYSTEM owns — an agent key, a tenant or account name,
@@ -94,6 +106,19 @@ export function rowText(r: ColumnRow, t: AdminDict): string {
       return t.legacyStore.entryLabel;
     case "tenantWide":
       return t.columns.rows.tenantWide;
+    // `directory` is a Tab, so it would otherwise fall to the lookup below and
+    // find nothing -- `shell.tabs` lists the sections of a workspace, and the
+    // directory is not one. Named here for the same reason branding is.
+    case "directory":
+      return t.shell.directory;
+    case "directoryTenants":
+      return t.columns.rows.directoryTenants;
+    case "directoryRoles":
+      return t.columns.rows.directoryRoles;
+    case "directoryOverview":
+      return t.columns.rows.directoryOverview;
+    case "directoryAccounts":
+      return t.columns.rows.directoryAccounts;
     default:
       return t.shell.tabs[r.textKey as keyof typeof t.shell.tabs] ?? r.textKey;
   }
