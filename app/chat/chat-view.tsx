@@ -12,6 +12,8 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
+import { messageTime } from "@/app/chat/message-time";
+import { BCP47 } from "@/lib/i18n/format";
 import { pickResumeCandidate } from "@/app/chat/conversation-filter";
 import {
   toRows,
@@ -53,7 +55,8 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
-import { useT } from "@/lib/i18n/context";
+import ApprovalCard from "@/app/chat/approval-card";
+import { useLocale, useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import {
@@ -328,6 +331,11 @@ export default function ChatView({
   onRestartNeeded?: () => void;
 }) {
   const t = useT(chatCopy);
+  // The reader's own locale, for the timestamp under each message. Taken from
+  // the app's setting rather than the browser default, so a pt-BR reader on an
+  // en-US machine gets Portuguese dates beside Portuguese copy -- the same
+  // reason conversation-tree.tsx takes a BCP 47 tag rather than reading it.
+  const { locale } = useLocale();
   const err = useT(errorCopy);
   const router = useRouter();
   const fragment = useFragment();
@@ -1097,6 +1105,29 @@ export default function ChatView({
                           {renderActions(m, i)}
                         </div>
                         {text && <MessageContent content={text} />}
+                        {/* WHEN IT WAS SAID. Under the text and quiet, because it
+                            answers a question the reader only sometimes has --
+                            following a long conversation, or one that spans days.
+                            The short label is for scanning; the title carries the
+                            whole instant, which is what makes "14:32" usable three
+                            days later.
+
+                            Absent for a message the transcript recorded no time
+                            for, and for one still streaming -- see messageTime for
+                            why that is null rather than "now". */}
+                        {(() => {
+                          const when = messageTime(m.created_at, BCP47[locale]);
+                          if (!when) return null;
+                          return (
+                            <time
+                              dateTime={when.machine}
+                              title={when.full}
+                              className="mt-1.5 block text-[11px] leading-none text-fg-muted/70"
+                            >
+                              {when.label}
+                            </time>
+                          );
+                        })()}
                         {refs.length > 0 && (
                           // Scrolls sideways rather than wrapping, for the reason the
                           // composer's row does — and with the precedent a wide table
@@ -1156,6 +1187,15 @@ export default function ChatView({
                           <TurnSteering mode={steering} />
                         </div>
                       )}
+                      {/* ABOVE the arms for the same reason steering is, and a
+                          stronger one: the turn is STOPPED on this. Whatever the
+                          band below is narrating, nothing advances until the
+                          member answers or the harness's deadline refuses it.
+                          Mounted only while a turn is running, which is the only
+                          window a request can exist in. */}
+                      <div className="mb-2">
+                        <ApprovalCard workspace={workspace} />
+                      </div>
                       {revealed === "" ? (
                         // Before the first word: progress only. The two never
                         // share the band. A recovery REPLACES progress rather than

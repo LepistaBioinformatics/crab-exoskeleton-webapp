@@ -1,12 +1,15 @@
 import type { Workspace } from "@/app/chat/fragment";
 import { getJson, workspaceQuery } from "@/lib/workspaceApi";
 
-// Read-only client for the agent's scheduled tasks (picoclaw cron jobs) and the
-// transcripts each execution leaves behind.
+// Read-only client for the agent's scheduled tasks and the transcripts each
+// execution leaves behind.
 //
-// Read-only deliberately: picoclaw owns the job store and holds the live schedule
-// in memory, so nothing here writes it. Creating and changing tasks is done by
-// asking the agent.
+// Read-only deliberately, and for two different reasons depending on the harness.
+// picoclaw owns its own job store and holds the live schedule in memory, so
+// nothing may write it from outside. The ganglion's store is the proxy's, and a
+// task there comes into being by asking the agent -- which stops and asks the
+// member to approve before it creates one. Either way, creating and changing
+// tasks is done in the conversation, not here.
 
 /**
  * When a task runs. Exactly one parameter is meaningful, selected by `kind`:
