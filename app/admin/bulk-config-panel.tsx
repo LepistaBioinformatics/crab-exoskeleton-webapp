@@ -18,13 +18,17 @@ import {
   displayBuckets,
   groupOutcomes,
   inspectionKey,
+  clampValue,
   isManagedKey,
+  isTunableKey,
   keyListRows,
+  keySections,
   parseValueInput,
   prettyJson,
   previewCounts,
   revisionsFor,
   type KeyListRow,
+  type KeySection,
 } from "./bulk-config-state";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -177,7 +181,13 @@ export default function BulkConfigPanel({
   const live = inspection !== null && inspectedIdentity === identity ? inspection : null;
   // Derived, not state: the catalog and the selection are both already here, so a
   // second copy could only disagree with them.
+  //
+  // The CATALOG's answer, which is a guess about a key the catalog may not carry.
+  // Once an inspection lands the proxy's own answer replaces it (see `managedNow`):
+  // this one exists to shape the screen before the read comes back, and to be right
+  // about the rows the picker actually offered.
   const managedPicked = isManagedKey(catalog, selectedKey);
+  const tunablePicked = isTunableKey(catalog, selectedKey);
 
   useEffect(() => {
     setCatalog(null);
@@ -222,7 +232,7 @@ export default function BulkConfigPanel({
     // panel: "Reading..." over values that were right there, and the re-read button that
     // would have fixed it disabled by that same flag. The other two early returns end up
     // requesting again anyway, and are written the same way rather than relying on it.
-    if (!isSubscription || key === "" || managedPicked) {
+    if (!isSubscription || key === "") {
       setInspecting(false);
       return;
     }
@@ -253,7 +263,7 @@ export default function BulkConfigPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, managedPicked, isSubscription]);
+  }, [identity, isSubscription]);
 
   if (!isSubscription) {
     return <Alert severity="info">{t.bulkConfig.subscriptionOnly}</Alert>;
@@ -367,7 +377,18 @@ export default function BulkConfigPanel({
   // "nothing matched" line is a statement about the DOCUMENT, and the free row would
   // make it never true.
   const catalogRows = rows.filter((r) => !r.free);
+  const sections = keySections(rows);
   const harness = catalogHarness(catalog);
+
+  // WHO SAYS THE KEY IS MANAGED. The proxy, once it has answered; the catalog until
+  // then. The two agree for every row the picker offered, and only the proxy can be
+  // right about a path typed by hand — which is exactly the case where being wrong
+  // means offering a write that can only 400.
+  const managedNow = live ? live.managed : managedPicked;
+  // Whether there is anything to submit. A managed key is read, never written, and a
+  // scope with no instances has nothing to write TO -- in both cases the form would be
+  // a control whose only outcome is a refusal.
+  const editable = live !== null && live.total > 0 && !managedNow;
 
   return (
     // TWO PANELS from `lg`, ONE below it. The breakpoint is lg rather than md because
@@ -422,38 +443,58 @@ export default function BulkConfigPanel({
               </p>
             )}
 
-            <ul className="flex max-h-[20rem] flex-col gap-0.5 overflow-y-auto lg:max-h-[60dvh]">
-              {rows.map((r) => (
-                <li key={`${r.free ? "typed:" : ""}${r.key}`}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(r.key)}
-                    aria-current={r.key === selectedKey ? "true" : undefined}
-                    className={keyRow({
-                      state: r.key === selectedKey ? "current" : "idle",
-                      free: r.free,
-                    })}
-                  >
-                    <span className="w-full truncate font-mono text-[12.5px]" title={r.key}>
-                      {r.free ? t.bulkConfig.keyUseTyped.replace("{k}", r.key) : r.key}
-                    </span>
-                    {/* Managed keys are LISTED rather than hidden, so an admin looking
-                        for one finds it instead of hunting, and the row says why it is
-                        not a row they can change. The refusal itself is in the detail. */}
-                    {(r.free || r.managed) && (
-                      <span
-                        className={cn(
-                          "w-full truncate text-[11px] leading-tight",
-                          r.key === selectedKey ? "text-accent-fg/80" : "text-fg-muted",
-                        )}
-                      >
-                        {r.free ? t.bulkConfig.keyUseTypedJob : t.bulkConfig.managedSuffix}
-                      </span>
-                    )}
-                  </button>
-                </li>
+            {/* TWO GROUPS, each said once over its own heading, rather than the same
+                sentence repeated down every managed row. In a ganglion catalog most
+                rows are the proxy's, so the per-row subtitle was a dozen copies of one
+                fact competing with the dotted path that is the row's actual content.
+                Managed keys are still LISTED rather than hidden — an admin looking for
+                one finds it, reads why it is not theirs to set, and can still open it
+                to see what their members hold. */}
+            <div className="flex max-h-[20rem] min-h-0 flex-col gap-3 overflow-y-auto lg:max-h-[52dvh]">
+              {sections.map((section) => (
+                <section key={section.kind} className="flex flex-col gap-1">
+                  <h3 className="font-display text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                    {sectionTitle(t, section)}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed text-fg-muted">
+                    {sectionJob(t, section)}
+                  </p>
+                  <ul className="flex flex-col gap-0.5">
+                    {section.rows.map((r) => (
+                      <li key={`${r.free ? "typed:" : ""}${r.key}`}>
+                        <button
+                          type="button"
+                          onClick={() => onPick(r.key)}
+                          aria-current={r.key === selectedKey ? "true" : undefined}
+                          className={keyRow({
+                            state: r.key === selectedKey ? "current" : "idle",
+                            free: r.free,
+                          })}
+                        >
+                          <span className="w-full truncate font-mono text-[12.5px]" title={r.key}>
+                            {r.free ? t.bulkConfig.keyUseTyped.replace("{k}", r.key) : r.key}
+                          </span>
+                          {/* What the heading cannot say, because it is true of some
+                              rows in the group and not others: the free row is a
+                              proposal rather than a catalog entry, and a tunable row
+                              is one the document does not hold yet. */}
+                          {(r.free || r.tunable) && (
+                            <span
+                              className={cn(
+                                "w-full truncate text-[11px] leading-tight",
+                                r.key === selectedKey ? "text-accent-fg/80" : "text-fg-muted",
+                              )}
+                            >
+                              {r.free ? t.bulkConfig.keyUseTypedJob : t.bulkConfig.tunableSuffix}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
 
             {/* Said once, beside the list it is about. An agent whose configuration has
                 no template file has it GENERATED instead, per member, on every ensure —
@@ -471,8 +512,23 @@ export default function BulkConfigPanel({
         )}
       </div>
 
-      {/* THE KEY. Everything the panel knows about the one that is selected. */}
-      <div className={cn("flex min-w-0 flex-1 flex-col gap-4", !selectedKey && "max-lg:hidden")}>
+      {/* THE KEY. Everything the panel knows about the one that is selected.
+
+          BOUNDED FROM `lg`, and the bound is the point. This column used to grow with
+          whatever it held -- a distribution over forty members, each bucket printing a
+          whole configuration value -- and pushed the value field, the restart sentence
+          and the Apply button off the bottom of the window. An admin then scrolled the
+          PAGE to reach a control they had been looking at a moment earlier. So the
+          column takes a viewport-relative ceiling, the part that grows scrolls inside
+          it, and the controls sit in a bar that does not move. Below `lg` there is no
+          ceiling: a phone has one column, the page scroll is the only scroll it has,
+          and nesting a second one there is how a pane stops being reachable at all. */}
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col gap-3 lg:max-h-[72dvh]",
+          !selectedKey && "max-lg:hidden",
+        )}
+      >
         {!selectedKey ? (
           // Only ever seen from `lg` up: below it this whole column is hidden until
           // something is selected, and the list is what fills the screen instead.
@@ -483,7 +539,7 @@ export default function BulkConfigPanel({
           />
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               {/* The way back, and the only one a phone has: at this width the list is
                   not on screen to click. Gone from `lg`, where both columns are. */}
               <button
@@ -500,214 +556,258 @@ export default function BulkConfigPanel({
               >
                 {selectedKey}
               </span>
-              {/* Not offered for a managed key: there is nothing to read that the
-                  admin could then act on, and a button that only ever produces a
-                  refusal is worse than no button. */}
-              {!managedPicked && (
-                <Button
-                  type="button"
-                  variant="outlined"
-                  disabled={inspecting}
-                  onClick={onInspect}
-                >
-                  {inspecting
-                    ? t.bulkConfig.inspecting
-                    : live
-                      ? t.bulkConfig.reinspect
-                      : t.bulkConfig.inspect}
-                </Button>
-              )}
+              {/* Offered for a managed key too, now that one has something to read.
+                  It used to be hidden there because a managed key produced nothing but
+                  a refusal; it produces the preview instead, and a preview an admin
+                  cannot refresh is a preview they have to reload the page to trust. */}
+              <Button type="button" variant="outlined" disabled={inspecting} onClick={onInspect}>
+                {inspecting
+                  ? t.bulkConfig.inspecting
+                  : live
+                    ? t.bulkConfig.reinspect
+                    : t.bulkConfig.inspect}
+              </Button>
             </div>
 
-            {/* The refusal the key field used to carry as its `consequence`, moved to
-                where the work now happens. The row stays clickable — a row that
-                swallowed the click would say nothing at all. */}
-            {managedPicked && <Alert severity="info">{t.bulkConfig.managedPicked}</Alert>}
+            {/* Why the form below is absent. It is a statement about the WRITE, which
+                is what the proxy refuses; the read underneath it is served, which is
+                why this no longer reads as a dead end. */}
+            {managedNow && (
+              <Alert severity="info" className="shrink-0">
+                {t.bulkConfig.managedPicked}
+              </Alert>
+            )}
 
-            {inspectError && <Alert severity="error">{inspectError}</Alert>}
+            {/* A key the catalog offers although the generated document does not hold
+                it. Two things follow that nothing else on the screen says: an empty
+                distribution here means the harness's own default is in force rather
+                than that something is wrong, and the write lands beside the document
+                rather than in it, so it takes effect when the workspace next starts. */}
+            {tunablePicked && !managedNow && (
+              <Alert severity="info" className="shrink-0">
+                {t.bulkConfig.tunablePicked}
+              </Alert>
+            )}
 
-            {live && <Distribution inspection={live} />}
+            {inspectError && (
+              <Alert severity="error" className="shrink-0">
+                {inspectError}
+              </Alert>
+            )}
 
-            {live && live.total > 0 && (
-              <form onSubmit={onSubmit} className="flex flex-col gap-3">
-                <Field
-                  label={t.bulkConfig.valueLabel}
-                  job={t.bulkConfig.valueJob}
-                  htmlFor="bc-value"
-                  consequence={
-                    preview
-                      ? [
-                          t.bulkConfig.previewWillChange.replace("{n}", String(preview.willChange)),
-                          t.bulkConfig.previewAlreadyMatch.replace("{n}", String(preview.alreadyMatch)),
-                          t.bulkConfig.previewExcluded.replace("{n}", String(preview.excluded)),
-                        ].join(" · ")
-                      : undefined
-                  }
-                >
-                  {/* A textarea, not an input: the value is JSON, and an object or array
-                      typed into one line is as unreadable to write as it was to read.
-                      fieldControlClass(true) already carries font-mono; resize-y overrides
-                      the primitive's resize-none (cn is tailwind-merge, last wins). */}
-                  <Textarea
-                    id="bc-value"
-                    rows={4}
-                    spellCheck={false}
-                    className={cn(fieldControlClass(true), "resize-y leading-relaxed")}
-                    placeholder={t.bulkConfig.valuePlaceholder}
-                    value={valueText}
-                    onChange={(e) => setValueText(e.target.value)}
-                  />
-                </Field>
+            <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+              {/* EVERYTHING THAT GROWS. The histogram grows with the membership, the
+                  outcome list grows with it again, and the value field grows with
+                  whatever is typed into it -- none of them has a bound this panel can
+                  state, so they share one scroller and the bar below keeps its place.
+                  `lg:` only, for the reason on the column itself. */}
+              <div className="flex min-h-0 flex-1 flex-col gap-4 lg:overflow-y-auto lg:pr-1">
+                {live && <Distribution inspection={live} />}
 
-                {/* WHO ELSE this reaches. The apply above covers existing members; these
-                    are the two ways to reach members created LATER, and they differ only
-                    in population — one subscription, or every subscription on the agent.
-                    Presenting them as one choice is what makes that difference legible.
-
-                    DEC-4 controls the template option by DISCLOSURE, not by authority: no
-                    higher tier gates it, so the sentence beside it IS the control. Never a
-                    title attribute, never a tooltip, and it must not be softened into one.
-
-                    The template option needs the catalog: its write is revision-checked
-                    and the revision comes from the catalog, so offering it after a failed
-                    load would send a request the proxy can only refuse — and the admin
-                    would read a stale-revision message for what was a load failure. The
-                    scoped option has no revision, so it stays available. */}
-                <fieldset className="flex flex-col gap-2">
-                  <legend className="mb-1 font-display text-xs font-medium text-fg-muted">
-                    {t.bulkConfig.futureLabel}
-                  </legend>
-                  {(
-                    [
-                      ["none", t.bulkConfig.futureNone, t.bulkConfig.futureNoneReach, false],
-                      [
-                        "subscription",
-                        t.bulkConfig.futureSubscription,
-                        t.bulkConfig.futureSubscriptionReach,
-                        false,
-                      ],
-                      [
-                        "template",
-                        t.bulkConfig.futureTemplate,
-                        t.bulkConfig.futureTemplateReach,
-                        catalog === null,
-                      ],
-                    ] as const
-                  )
-                    // REMOVED rather than disabled when the catalog reports no template, and
-                    // that is not a retreat from DEC-4. DEC-4 is about not gating a reachable
-                    // write behind a tier — the sentence beside it stays the control for the
-                    // write that EXISTS. This one does not exist: there is no document for it
-                    // to land in, so a disabled radio would advertise an action the proxy
-                    // could only refuse, and the admin would read a stale-revision error for
-                    // a write that was never made. The sentence under the fieldset says so
-                    // instead, which is the same disclosure the option's own "reach" line is.
-                    .filter(([value]) => value !== "template" || templateOffered)
-                    .map(([value, label, reach, disabled]) => (
-                    <label key={value} className="flex items-start gap-2 text-[13px] text-fg">
-                      <input
-                        type="radio"
-                        name="bc-future"
-                        className="mt-0.5"
-                        value={value}
-                        checked={futureSend === value}
-                        disabled={disabled}
-                        onChange={() => setFutureTarget(value)}
+                {editable && (
+                  <>
+                    <Field
+                      label={t.bulkConfig.valueLabel}
+                      job={t.bulkConfig.valueJob}
+                      htmlFor="bc-value"
+                      consequence={
+                        preview
+                          ? [
+                              t.bulkConfig.previewWillChange.replace("{n}", String(preview.willChange)),
+                              t.bulkConfig.previewAlreadyMatch.replace("{n}", String(preview.alreadyMatch)),
+                              t.bulkConfig.previewExcluded.replace("{n}", String(preview.excluded)),
+                            ].join(" · ")
+                          : undefined
+                      }
+                    >
+                      {/* A textarea, not an input: the value is JSON, and an object or array
+                          typed into one line is as unreadable to write as it was to read.
+                          fieldControlClass(true) already carries font-mono; resize-y overrides
+                          the primitive's resize-none (cn is tailwind-merge, last wins). */}
+                      <Textarea
+                        id="bc-value"
+                        rows={4}
+                        spellCheck={false}
+                        className={cn(fieldControlClass(true), "resize-y leading-relaxed")}
+                        placeholder={t.bulkConfig.valuePlaceholder}
+                        value={valueText}
+                        onChange={(e) => setValueText(e.target.value)}
                       />
-                      <span>
-                        {label}
-                        <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{reach}</span>
-                      </span>
-                    </label>
-                  ))}
-                  {!templateOffered && (
-                    <p className="text-xs leading-relaxed text-fg-muted">
-                      {t.bulkConfig.futureTemplateAbsent}
-                    </p>
-                  )}
-                </fieldset>
+                    </Field>
 
-                {/* Said out loud, because this is the one place the screen does not obey
-                    the restart control above it (see bulkPolicy). Shown only when the two
-                    actually disagree. */}
-                {restartPolicy.mode === "now" && (
-                  <p className="text-xs leading-relaxed text-fg-muted">{t.bulkConfig.noticeOverride}</p>
+                    {/* WHO ELSE this reaches. The apply above covers existing members; these
+                        are the two ways to reach members created LATER, and they differ only
+                        in population — one subscription, or every subscription on the agent.
+                        Presenting them as one choice is what makes that difference legible.
+
+                        DEC-4 controls the template option by DISCLOSURE, not by authority: no
+                        higher tier gates it, so the sentence beside it IS the control. Never a
+                        title attribute, never a tooltip, and it must not be softened into one.
+
+                        The template option needs the catalog: its write is revision-checked
+                        and the revision comes from the catalog, so offering it after a failed
+                        load would send a request the proxy can only refuse — and the admin
+                        would read a stale-revision message for what was a load failure. The
+                        scoped option has no revision, so it stays available. */}
+                    <fieldset className="flex flex-col gap-2">
+                      <legend className="mb-1 font-display text-xs font-medium text-fg-muted">
+                        {t.bulkConfig.futureLabel}
+                      </legend>
+                      {(
+                        [
+                          ["none", t.bulkConfig.futureNone, t.bulkConfig.futureNoneReach, false],
+                          [
+                            "subscription",
+                            t.bulkConfig.futureSubscription,
+                            t.bulkConfig.futureSubscriptionReach,
+                            false,
+                          ],
+                          [
+                            "template",
+                            t.bulkConfig.futureTemplate,
+                            t.bulkConfig.futureTemplateReach,
+                            catalog === null,
+                          ],
+                        ] as const
+                      )
+                        // REMOVED rather than disabled when the catalog reports no template, and
+                        // that is not a retreat from DEC-4. DEC-4 is about not gating a reachable
+                        // write behind a tier — the sentence beside it stays the control for the
+                        // write that EXISTS. This one does not exist: there is no document for it
+                        // to land in, so a disabled radio would advertise an action the proxy
+                        // could only refuse, and the admin would read a stale-revision error for
+                        // a write that was never made. The sentence under the fieldset says so
+                        // instead, which is the same disclosure the option's own "reach" line is.
+                        .filter(([value]) => value !== "template" || templateOffered)
+                        .map(([value, label, reach, disabled]) => (
+                          <label key={value} className="flex items-start gap-2 text-[13px] text-fg">
+                            <input
+                              type="radio"
+                              name="bc-future"
+                              className="mt-0.5"
+                              value={value}
+                              checked={futureSend === value}
+                              disabled={disabled}
+                              onChange={() => setFutureTarget(value)}
+                            />
+                            <span>
+                              {label}
+                              <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">
+                                {reach}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                      {!templateOffered && (
+                        <p className="text-xs leading-relaxed text-fg-muted">
+                          {t.bulkConfig.futureTemplateAbsent}
+                        </p>
+                      )}
+                    </fieldset>
+                  </>
                 )}
 
-                {submitError && <Alert severity="error">{submitError}</Alert>}
-
-                <Button type="submit" variant="filled" disabled={submitting || inspecting}>
-                  {submitting ? t.bulkConfig.applying : t.bulkConfig.apply}
-                </Button>
-              </form>
-            )}
-
-            {grouped && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
-                  <span className="font-display text-xs font-medium text-fg-muted">
-                    {t.bulkConfig.resultTitle}
-                  </span>
-                </div>
-
-                {/* `info`, not `error`: nothing failed. Those instances were skipped
-                    precisely so a change the admin has not seen is not overwritten, and
-                    the next step is to read again. */}
-                {grouped.hasStale && <Alert severity="info">{t.bulkConfig.stalePrompt}</Alert>}
-
-                {grouped.groups.map((g) => (
-                  <div key={g.kind} className={bucketCard({ excluded: g.kind !== "applied" })}>
-                    <div className="mb-1 flex items-start gap-2">
-                      <Badge tone="neutral">{outcomeLabel(t, g.kind)}</Badge>
-                      <span className="text-xs text-fg-muted">
-                        {t.bulkConfig.instancesCount.replace("{n}", String(g.instances.length))}
+                {grouped && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+                      <span className="font-display text-xs font-medium text-fg-muted">
+                        {t.bulkConfig.resultTitle}
                       </span>
                     </div>
-                    <ul className="flex flex-col gap-0.5">
-                      {g.instances.map((o) => (
-                        <li key={o.userAccId} className="text-xs text-fg">
-                          <span className="font-mono">{o.email || o.userAccId}</span>
-                          {o.detail ? <span className="text-fg-muted"> — {o.detail}</span> : null}
-                          {o.reapplied && !o.reapplied.ok ? (
-                            <span className="text-fg-muted"> — {t.bulkConfig.reapplyWarning}</span>
-                          ) : null}
-                        </li>
+
+                    {/* `info`, not `error`: nothing failed. Those instances were skipped
+                        precisely so a change the admin has not seen is not overwritten, and
+                        the next step is to read again. */}
+                    {grouped.hasStale && <Alert severity="info">{t.bulkConfig.stalePrompt}</Alert>}
+
+                    {grouped.groups.map((g) => (
+                      <div key={g.kind} className={bucketCard({ excluded: g.kind !== "applied" })}>
+                        <div className="mb-1 flex items-start gap-2">
+                          <Badge tone="neutral">{outcomeLabel(t, g.kind)}</Badge>
+                          <span className="text-xs text-fg-muted">
+                            {t.bulkConfig.instancesCount.replace("{n}", String(g.instances.length))}
+                          </span>
+                        </div>
+                        <ul className="flex flex-col gap-0.5">
+                          {g.instances.map((o) => (
+                            <li key={o.userAccId} className="text-xs text-fg">
+                              <span className="font-mono">{o.email || o.userAccId}</span>
+                              {o.detail ? <span className="text-fg-muted"> — {o.detail}</span> : null}
+                              {o.reapplied && !o.reapplied.ok ? (
+                                <span className="text-fg-muted"> — {t.bulkConfig.reapplyWarning}</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    <p className="text-xs text-fg-muted">
+                      {appliedCount > 0
+                        ? t.bulkConfig.restartNote.replace("{n}", String(appliedCount))
+                        : t.bulkConfig.restartNoteNone}
+                    </p>
+
+                    {result?.subscription &&
+                      (result.subscription.ok ? (
+                        <Alert severity="info">{t.bulkConfig.scopedApplied}</Alert>
+                      ) : (
+                        <Alert severity="error">
+                          {t.bulkConfig.scopedFailed} {result.subscription.detail}
+                        </Alert>
                       ))}
-                    </ul>
+
+                    {result?.template &&
+                      (result.template.ok ? (
+                        <Alert severity="info">{t.bulkConfig.templateApplied}</Alert>
+                      ) : (
+                        <Alert severity="error">
+                          {t.bulkConfig.templateFailed} {result.template.detail}
+                        </Alert>
+                      ))}
                   </div>
-                ))}
-
-                <p className="text-xs text-fg-muted">
-                  {appliedCount > 0
-                    ? t.bulkConfig.restartNote.replace("{n}", String(appliedCount))
-                    : t.bulkConfig.restartNoteNone}
-                </p>
-
-                {result?.subscription &&
-                  (result.subscription.ok ? (
-                    <Alert severity="info">{t.bulkConfig.scopedApplied}</Alert>
-                  ) : (
-                    <Alert severity="error">
-                      {t.bulkConfig.scopedFailed} {result.subscription.detail}
-                    </Alert>
-                  ))}
-
-                {result?.template &&
-                  (result.template.ok ? (
-                    <Alert severity="info">{t.bulkConfig.templateApplied}</Alert>
-                  ) : (
-                    <Alert severity="error">
-                      {t.bulkConfig.templateFailed} {result.template.detail}
-                    </Alert>
-                  ))}
+                )}
               </div>
-            )}
+
+              {/* THE BAR THAT DOES NOT MOVE. The restart sentence is here rather than
+                  above with the fields it qualifies, and deliberately: it is the one
+                  place the screen does not obey the shared restart control, and a
+                  disclosure an admin has to scroll to find is a disclosure the screen
+                  is not really making. Shown only when the two actually disagree. */}
+              {editable && (
+                <div className="flex shrink-0 flex-col gap-2 border-t border-rule pt-3">
+                  {restartPolicy.mode === "now" && (
+                    <p className="text-xs leading-relaxed text-fg-muted">
+                      {t.bulkConfig.noticeOverride}
+                    </p>
+                  )}
+
+                  {submitError && <Alert severity="error">{submitError}</Alert>}
+
+                  <Button type="submit" variant="filled" disabled={submitting || inspecting}>
+                    {submitting ? t.bulkConfig.applying : t.bulkConfig.apply}
+                  </Button>
+                </div>
+              )}
+            </form>
           </>
         )}
       </div>
     </div>
   );
+}
+
+// The two headings, and the sentence under each. Said once over a group rather than
+// once per row: see keySections.
+function sectionTitle(t: typeof adminCopy.en, section: KeySection): string {
+  return section.kind === "managed" ? t.bulkConfig.sectionManaged : t.bulkConfig.sectionEditable;
+}
+
+function sectionJob(t: typeof adminCopy.en, section: KeySection): string {
+  return section.kind === "managed"
+    ? t.bulkConfig.sectionManagedJob
+    : t.bulkConfig.sectionEditableJob;
 }
 
 function outcomeLabel(t: typeof adminCopy.en, kind: string): string {
@@ -754,7 +854,7 @@ function Distribution({ inspection }: { inspection: ScopeConfigInspection }) {
 
       {buckets.map((b, i) => (
         <div key={`${b.state}-${i}`} className={bucketCard({ excluded: b.state !== "value" })}>
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 flex items-start gap-2">
             {b.state === "value" ? (
               <JsonValueView value={b.value} />
             ) : (
@@ -793,22 +893,46 @@ function Distribution({ inspection }: { inspection: ScopeConfigInspection }) {
 // is what makes slicing them in order reproduce the input exactly — no character
 // dropped, none reordered.
 function JsonValueView({ value }: { value: unknown }) {
-  const text = prettyJson(value);
+  const t = useT(adminCopy);
+  const [open, setOpen] = useState(false);
+  const full = prettyJson(value);
+  // Collapsed by default, and the default is the whole reason this exists. A bucket
+  // holding one member's entire configuration value prints dozens of lines, and a
+  // distribution is one of these per DISTINCT value — so the panel's height was set by
+  // the longest thing anybody happened to have. Cut to a fixed number of lines, the
+  // histogram is a histogram again and the reading is opt-in per bucket.
+  const { head, hidden } = clampValue(full);
+  const text = open ? full : head;
   const tokens = useMemo(() => tokenize(text), [text]);
   return (
-    <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre font-mono text-xs leading-relaxed text-fg">
-      {tokens.map((token, i) => {
-        const slice = text.slice(token.start, token.end);
-        const cls = roleClass(SYNTAX_ROLE[token.kind]);
-        return cls ? (
-          <span key={i} className={cls}>
-            {slice}
-          </span>
-        ) : (
-          slice
-        );
-      })}
-    </pre>
+    <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      <pre className="w-full min-w-0 overflow-x-auto whitespace-pre font-mono text-xs leading-relaxed text-fg">
+        {tokens.map((token, i) => {
+          const slice = text.slice(token.start, token.end);
+          const cls = roleClass(SYNTAX_ROLE[token.kind]);
+          return cls ? (
+            <span key={i} className={cls}>
+              {slice}
+            </span>
+          ) : (
+            slice
+          );
+        })}
+      </pre>
+      {/* Offered only when something is hidden, so it never invites a click that
+          reveals nothing (clampValue counts, it does not estimate). The collapsed
+          label carries the COUNT: "12 more lines" tells an admin whether expanding is
+          worth it, and "show more" does not. */}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-[11px] text-accent underline-offset-2 hover:underline"
+        >
+          {open ? t.bulkConfig.valueShowLess : t.bulkConfig.valueShowMore.replace("{n}", String(hidden))}
+        </button>
+      )}
+    </div>
   );
 }
 

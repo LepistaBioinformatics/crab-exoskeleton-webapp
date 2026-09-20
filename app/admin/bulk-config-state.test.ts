@@ -2,8 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   canonicalJson,
   catalogHarness,
+  clampValue,
   isManagedKey,
+  isTunableKey,
   keyListRows,
+  keySections,
+  VALUE_CLAMP_LINES,
   prettyJson,
   displayBuckets,
   groupOutcomes,
@@ -41,6 +45,7 @@ const MIXED: ScopeConfigInspection = {
   key: "agents.defaults.max_tokens",
   agent: "alpha",
   total: 9,
+  managed: false,
   buckets: [
     { state: "unreadable", count: 1, instances: [inst("u-unreadable")] },
     { state: "value", value: "z", count: 3, instances: [inst("u-1"), inst("u-2"), inst("u-3")] },
@@ -53,7 +58,7 @@ const MIXED: ScopeConfigInspection = {
 
 const NEW_VALUE = { a: 1, b: 2 };
 
-const EMPTY: ScopeConfigInspection = { key: "k", agent: "alpha", total: 0, buckets: [] };
+const EMPTY: ScopeConfigInspection = { key: "k", agent: "alpha", total: 0, managed: false, buckets: [] };
 
 function outcome(userAccId: string, kind: Outcome): InstanceOutcome {
   return { userAccId, outcome: kind };
@@ -116,8 +121,8 @@ describe("isManagedKey", () => {
     templateRevision: "sha256:a",
     templateWritable: true,
     keys: [
-      { key: "model_list", value: [], managed: true, harness: "picoclaw" },
-      { key: "tools.web.brave.enabled", value: false, managed: false, harness: "picoclaw" },
+      { key: "model_list", value: [], managed: true, tunable: false, harness: "picoclaw" },
+      { key: "tools.web.brave.enabled", value: false, managed: false, tunable: false, harness: "picoclaw" },
     ],
   };
 
@@ -415,8 +420,8 @@ describe("keyListRows", () => {
     templateRevision: "sha256:a",
     templateWritable: true,
     keys: [
-      { key: "model_list", value: [], managed: true, harness: "picoclaw" },
-      { key: "tools.web.brave.enabled", value: false, managed: false, harness: "picoclaw" },
+      { key: "model_list", value: [], managed: true, tunable: false, harness: "picoclaw" },
+      { key: "tools.web.brave.enabled", value: false, managed: false, tunable: false, harness: "picoclaw" },
     ],
   };
 
@@ -447,7 +452,7 @@ describe("keyListRows", () => {
   it("offers the typed path as the last row when the catalog lacks it", () => {
     const rows = keyListRows(catalog, "agents.defaults.max_tool_iterations");
     expect(rows).toEqual([
-      { key: "agents.defaults.max_tool_iterations", managed: false, free: true },
+      { key: "agents.defaults.max_tool_iterations", managed: false, tunable: false, free: true },
     ]);
   });
 
@@ -455,7 +460,7 @@ describe("keyListRows", () => {
   // being typed.
   it("does not offer a path the catalog already carries", () => {
     expect(keyListRows(catalog, "model_list")).toEqual([
-      { key: "model_list", managed: true, free: false },
+      { key: "model_list", managed: true, tunable: false, free: false },
     ]);
   });
 
@@ -463,7 +468,7 @@ describe("keyListRows", () => {
   // that matched nothing while naming a real key would otherwise duplicate it.
   it("trims before deciding, so a padded exact match is not offered twice", () => {
     expect(keyListRows(catalog, "  model_list  ")).toEqual([
-      { key: "model_list", managed: true, free: false },
+      { key: "model_list", managed: true, tunable: false, free: false },
     ]);
   });
 
@@ -475,7 +480,7 @@ describe("keyListRows", () => {
   // the affordance depend on a race.
   it("still offers a typed path with no catalog", () => {
     expect(keyListRows(null, "tools.x")).toEqual([
-      { key: "tools.x", managed: false, free: true },
+      { key: "tools.x", managed: false, tunable: false, free: true },
     ]);
   });
 });
@@ -487,7 +492,7 @@ describe("catalogHarness", () => {
         template: "",
         templateRevision: "",
         templateWritable: false,
-        keys: [{ key: "model_list", managed: true, harness: "ganglion" }],
+        keys: [{ key: "model_list", managed: true, tunable: false, harness: "ganglion" }],
       }),
     ).toBe("ganglion");
   });
@@ -499,5 +504,100 @@ describe("catalogHarness", () => {
     expect(
       catalogHarness({ template: "", templateRevision: "", templateWritable: true, keys: [] }),
     ).toBe("");
+  });
+});
+
+describe("keySections", () => {
+  const row = (key: string, managed: boolean, free = false) => ({
+    key,
+    managed,
+    tunable: false,
+    free,
+  });
+
+  it("puts the group an admin can act on first", () => {
+    const got = keySections([row("model_list", true), row("tools.web.brave.enabled", false)]);
+    expect(got.map((s) => s.kind)).toEqual(["editable", "managed"]);
+  });
+
+  it("keeps the order inside each group", () => {
+    const got = keySections([
+      row("a", false),
+      row("m1", true),
+      row("b", false),
+      row("m2", true),
+    ]);
+    expect(got[0].rows.map((r) => r.key)).toEqual(["a", "b"]);
+    expect(got[1].rows.map((r) => r.key)).toEqual(["m1", "m2"]);
+  });
+
+  // The free row is a key the admin is PROPOSING to write, so it belongs with the
+  // writable ones -- and last within them, which is where keyListRows appends it.
+  it("files the typed path with the editable keys", () => {
+    const got = keySections([row("model_list", true), row("some.typed.path", false, true)]);
+    expect(got[0].kind).toBe("editable");
+    expect(got[0].rows.map((r) => r.key)).toEqual(["some.typed.path"]);
+  });
+
+  // A heading over blank space says nothing and costs a line of a narrow column.
+  it("drops a group with no rows", () => {
+    expect(keySections([row("tools.web.brave.enabled", false)]).map((s) => s.kind)).toEqual([
+      "editable",
+    ]);
+    expect(keySections([row("model_list", true)]).map((s) => s.kind)).toEqual(["managed"]);
+    expect(keySections([])).toEqual([]);
+  });
+});
+
+describe("isTunableKey", () => {
+  const catalog = {
+    template: "",
+    templateRevision: "",
+    templateWritable: false,
+    keys: [
+      { key: "agents.defaults.max_tool_iterations", managed: false, tunable: true, harness: "ganglion" },
+      { key: "tools.web.brave.enabled", managed: false, tunable: false, harness: "ganglion" },
+    ],
+  };
+
+  it("flags a key the catalog offers but the document does not hold", () => {
+    expect(isTunableKey(catalog, "agents.defaults.max_tool_iterations")).toBe(true);
+  });
+
+  it("does not flag a key the document does hold", () => {
+    expect(isTunableKey(catalog, "tools.web.brave.enabled")).toBe(false);
+  });
+
+  // Nothing here knows whether the harness reads a hand-typed path, and claiming a
+  // restart is needed for a key that may not exist would be inventing a fact.
+  it("says nothing about a key the catalog has never heard of", () => {
+    expect(isTunableKey(catalog, "agents.defaults.something_else")).toBe(false);
+    expect(isTunableKey(null, "agents.defaults.max_tool_iterations")).toBe(false);
+  });
+});
+
+describe("clampValue", () => {
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
+
+  it("leaves a value that already fits", () => {
+    const text = lines(VALUE_CLAMP_LINES);
+    expect(clampValue(text)).toEqual({ head: text, hidden: 0 });
+  });
+
+  // Exact by construction: the toggle exists precisely when something is hidden, so
+  // it never invites a click that reveals nothing.
+  it("cuts to the limit and counts what is left", () => {
+    const got = clampValue(lines(VALUE_CLAMP_LINES + 5));
+    expect(got.head.split("\n")).toHaveLength(VALUE_CLAMP_LINES);
+    expect(got.hidden).toBe(5);
+  });
+
+  it("cuts nothing off a one-line value, however wide", () => {
+    const wide = `{"k":"${"x".repeat(4000)}"}`;
+    expect(clampValue(wide)).toEqual({ head: wide, hidden: 0 });
+  });
+
+  it("honours a caller's own limit", () => {
+    expect(clampValue(lines(10), 3)).toEqual({ head: lines(3), hidden: 7 });
   });
 });

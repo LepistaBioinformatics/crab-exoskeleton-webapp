@@ -696,6 +696,17 @@ const en = {
     keyJob: "A dotted path to one value, e.g. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(owned by the proxy)",
+    // The two groups the key list is drawn in. Said once over a group rather than
+    // once per row, which is what the suffix above used to be for — it is kept
+    // because the members panel still labels a single key with it.
+    sectionEditable: "Yours to set",
+    sectionEditableJob: "Keys an admin writes. A change here reaches every member you choose.",
+    sectionManaged: "Injected by the proxy",
+    sectionManagedJob:
+      "Keys crab-shell-proxy writes itself, every time an agent starts. Open one to see what your members hold; it cannot be changed from here.",
+    // The row-level note the heading cannot carry, because it is true of some rows
+    // in the group and not others.
+    tunableSuffix: "not in the document yet",
     // Said ONCE, over the list. The two harnesses share key names while meaning
     // different files, so the list alone does not say which document is on screen —
     // but the proxy resolves one harness per catalog, so every row would carry the
@@ -714,7 +725,11 @@ const en = {
     generatedDoc:
       "This agent has no configuration template: the proxy generates its config file for each member and rewrites it whenever the agent is started. Your change is stored beside that file and re-applied every time it is rewritten, so it survives — but keys the proxy owns are regenerated and cannot be changed here.",
     managedPicked:
-      "The proxy owns this key and rewrites it on every materialization, so a bulk change here could not survive. Pick another key.",
+      "The proxy owns this key and rewrites it on every materialization, so it cannot be changed from here. What each member holds is shown below, read only. Credentials are never served: an api key or a bearer token reads as ***.",
+    tunablePicked:
+      "The harness reads this key but the proxy does not write it, so an empty distribution below means the harness's own default is in force rather than that something is missing. A value set here is stored beside the configuration file and re-applied every time it is rewritten — it takes effect the next time the member's agent starts, not on the turn they are in.",
+    valueShowMore: "Show {n} more lines",
+    valueShowLess: "Show less",
     inspect: "See current values",
     inspecting: "Reading…",
     reinspect: "Read again",
@@ -1496,6 +1511,13 @@ const pt: AdminDict = {
     keyJob: "Um caminho pontilhado até um valor, ex. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
     managedSuffix: "(pertence ao proxy)",
+    sectionEditable: "Você define",
+    sectionEditableJob:
+      "Chaves que um admin escreve. Uma mudança aqui alcança todos os membros que você escolher.",
+    sectionManaged: "Injetadas pelo proxy",
+    sectionManagedJob:
+      "Chaves que o crab-shell-proxy escreve sozinho, toda vez que um agente sobe. Abra uma para ver o que seus membros têm; não dá para alterar por aqui.",
+    tunableSuffix: "ainda não está no documento",
     catalogHarness: "Chaves que o documento de configuração do {h} carrega.",
     keyNoMatch: "Nenhuma chave aqui contém “{q}”.",
     keyUseTyped: "Usar “{k}”",
@@ -1507,7 +1529,11 @@ const pt: AdminDict = {
     generatedDoc:
       "Este agente não tem template de configuração: o proxy gera o arquivo de config dele para cada membro e o reescreve sempre que o agente é iniciado. Sua alteração fica guardada ao lado desse arquivo e é reaplicada a cada reescrita, então ela sobrevive — mas as chaves que pertencem ao proxy são regeradas e não podem ser alteradas aqui.",
     managedPicked:
-      "Esta chave pertence ao proxy, que a reescreve em cada materialização — uma mudança em massa aqui não sobreviveria. Escolha outra chave.",
+      "Esta chave pertence ao proxy, que a reescreve em cada materialização, então não dá para alterá-la por aqui. Abaixo está o que cada membro tem hoje, somente leitura. Credenciais nunca são servidas: uma api key ou um bearer token aparece como ***.",
+    tunablePicked:
+      "O harness lê esta chave, mas o proxy não a escreve — então uma distribuição vazia abaixo significa que o padrão do próprio harness está valendo, não que falta algo. Um valor definido aqui fica guardado ao lado do arquivo de configuração e é reaplicado a cada reescrita: ele passa a valer na próxima vez que o agente do membro subir, não no turno em que ele está.",
+    valueShowMore: "Ver mais {n} linhas",
+    valueShowLess: "Ver menos",
     inspect: "Ver valores atuais",
     inspecting: "Lendo…",
     reinspect: "Ler de novo",

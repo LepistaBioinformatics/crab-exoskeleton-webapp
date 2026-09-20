@@ -15,8 +15,8 @@ const catalogs = {
     templateRevision: "sha256:abc",
     templateWritable: true,
     keys: [
-      { key: "model_list", value: [], managed: true, harness: "picoclaw" },
-      { key: "tools.web.brave.enabled", value: false, managed: false, harness: "picoclaw" },
+      { key: "model_list", value: [], managed: true, tunable: false, harness: "picoclaw" },
+      { key: "tools.web.brave.enabled", value: false, managed: false, tunable: false, harness: "picoclaw" },
     ],
   },
   // A ganglion agent: the document is generated per member, so there is no template
@@ -27,8 +27,10 @@ const catalogs = {
     templateRevision: "",
     templateWritable: false,
     keys: [
-      { key: "model_list", managed: true, harness: "ganglion" },
-      { key: "tools.web.brave.enabled", managed: false, harness: "ganglion" },
+      { key: "model_list", managed: true, tunable: false, harness: "ganglion" },
+      { key: "tools.web.brave.enabled", managed: false, tunable: false, harness: "ganglion" },
+      // A key the proxy OFFERS although the document it generates does not hold it.
+      { key: TUNABLE, managed: false, tunable: true, harness: "ganglion" },
     ],
   },
 };
@@ -48,6 +50,10 @@ const inspected = vi.fn(async (_scope: unknown, _agent: string, key: string) => 
   key,
   agent: "alpha",
   total: 1,
+  // The proxy's own answer, which is what the panel trusts over the catalog. A
+  // managed key inspects — the histogram is the read-only preview — and the flag is
+  // what keeps the write from being offered on the back of it.
+  managed: key === "model_list",
   // One member holding one value, which is the least that makes the panel show its
   // value field and the "members created later" fieldset under it.
   buckets: [
@@ -74,9 +80,13 @@ import { adminCopy } from "@/lib/i18n/admin";
 
 const t = adminCopy.en.bulkConfig;
 
-// A key neither catalog carries, and not a hypothetical one: the ganglion reads it and
-// the document it generates does not emit it.
-const TYPED = "agents.defaults.max_tool_iterations";
+// The ganglion reads it and the document it generates does not emit it, so the proxy
+// appends it to the catalog as a suggestion rather than writing it into every member.
+const TUNABLE = "agents.defaults.max_tool_iterations";
+
+// A key neither catalog carries. Deliberately NOT one the proxy offers, so the row that
+// proposes a hand-typed path still has something to be about.
+const TYPED = "agents.defaults.subturn.default_token_budget";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -133,6 +143,12 @@ function futureValues(el: HTMLElement): string[] {
   );
 }
 
+// Which heading the row sits under. The grouping is the assertion, so reading the row's
+// own text would not make it.
+function sectionOf(el: HTMLElement, key: string): string {
+  return rowFor(el, key).closest("section")!.textContent!;
+}
+
 function rowTexts(el: HTMLElement): string[] {
   return Array.from(el.querySelectorAll("ul li button")).map((b) =>
     b.querySelector("span")!.textContent!.trim(),
@@ -149,9 +165,11 @@ describe("BulkConfigPanel — the key list", () => {
   // The whole catalog is on screen without typing. The datalist this replaced only
   // opened once the admin typed, so a key nobody remembered the name of could not be
   // found at all.
-  it("lists every key the catalog carries", async () => {
+  it("lists every key the catalog carries, editable group first", async () => {
     const el = await mount("picoclaw");
-    expect(rowTexts(el)).toEqual(["model_list", "tools.web.brave.enabled"]);
+    // The order is the grouping, not the catalog's: the group an admin can act on
+    // comes first, which is what the eye lands on.
+    expect(rowTexts(el)).toEqual(["tools.web.brave.enabled", "model_list"]);
   });
 
   // The bug the harness label was written for: a ganglion agent was offered picoclaw's
@@ -164,10 +182,34 @@ describe("BulkConfigPanel — the key list", () => {
     expect(el.textContent).not.toContain(t.catalogHarness.replace("{h}", "picoclaw"));
   });
 
-  it("marks the keys the proxy owns", async () => {
+  // Said ONCE over a group rather than once per row. In a ganglion catalog most rows
+  // are the proxy's, so the per-row suffix was a dozen copies of one sentence
+  // competing with the dotted path that is the row's actual content.
+  it("separates the proxy's keys from the admin's, with a heading each", async () => {
     const el = await mount("picoclaw");
-    expect(rowFor(el, "model_list").textContent).toContain(t.managedSuffix);
-    expect(rowFor(el, "tools.web.brave.enabled").textContent).not.toContain(t.managedSuffix);
+    expect(el.textContent).toContain(t.sectionEditable);
+    expect(el.textContent).toContain(t.sectionManaged);
+    expect(rowFor(el, "model_list").textContent).not.toContain(t.managedSuffix);
+    expect(sectionOf(el, "model_list")).toContain(t.sectionManaged);
+    expect(sectionOf(el, "tools.web.brave.enabled")).toContain(t.sectionEditable);
+  });
+
+  // The one thing a heading cannot say, because it is true of some rows in the group
+  // and not others: the document does not hold this key yet.
+  it("marks a key the catalog offers but the document does not hold", async () => {
+    const el = await mount("ganglion");
+    expect(rowFor(el, TUNABLE).textContent).toContain(t.tunableSuffix);
+    expect(rowFor(el, "tools.web.brave.enabled").textContent).not.toContain(t.tunableSuffix);
+    // And it is the admin's to set, not the proxy's.
+    expect(sectionOf(el, TUNABLE)).toContain(t.sectionEditable);
+  });
+
+  // An empty group is dropped rather than drawn as a heading over blank space.
+  it("draws no heading for a group the filter emptied", async () => {
+    const el = await mount("picoclaw");
+    await type(el.querySelector<HTMLInputElement>("#bc-key")!, "brave");
+    expect(el.textContent).toContain(t.sectionEditable);
+    expect(el.textContent).not.toContain(t.sectionManaged);
   });
 
   it("narrows the list to what the filter matches", async () => {
@@ -205,15 +247,26 @@ describe("BulkConfigPanel — the key list", () => {
     expect(el.textContent).toContain(t.valueLabel);
   });
 
-  // A managed row is selectable rather than inert — isManagedKey exists so the screen
-  // can say WHY, and a row that swallows the click says nothing at all. What it must
-  // not do is read the key or offer a value to write.
-  it("explains a managed key instead of reading it", async () => {
+  // A managed key is PREVIEWED and explained. The read is served — the proxy masks
+  // credentials on its way out, so there is nothing here an admin could not already
+  // get from one instance's raw editor — and what is withheld is the write.
+  it("previews a managed key read-only", async () => {
     const el = await mount("picoclaw");
     await pick(el, "model_list");
     expect(el.textContent).toContain(t.managedPicked);
-    expect(el.textContent).not.toContain(t.distribution);
+    expect(el.textContent).toContain(t.distribution);
     expect(el.textContent).not.toContain(t.valueLabel);
+    expect(el.querySelector('button[type="submit"]')).toBeNull();
+  });
+
+  // Two things nothing else on the screen says: an empty distribution means the
+  // harness's default is in force, and the write only lands on the next start.
+  it("says what an unset tuning key means, and when a change takes effect", async () => {
+    const el = await mount("ganglion");
+    await pick(el, TUNABLE);
+    expect(el.textContent).toContain(t.tunablePicked);
+    // Still editable: the sentence is disclosure, not a refusal.
+    expect(el.textContent).toContain(t.valueLabel);
   });
 });
 
@@ -253,17 +306,13 @@ describe("BulkConfigPanel — one read per key", () => {
     const el = await mount("picoclaw");
     await pick(el, "tools.web.brave.enabled");
     expect(inspected).toHaveBeenCalledTimes(1);
+    // The managed key on the way through costs its own read — it has a preview now —
+    // and coming back to the first one costs nothing.
     await pick(el, "model_list");
+    expect(inspected).toHaveBeenCalledTimes(2);
     await pick(el, "tools.web.brave.enabled");
-    expect(inspected).toHaveBeenCalledTimes(1);
+    expect(inspected).toHaveBeenCalledTimes(2);
     expect(el.textContent).toContain(t.distribution);
-  });
-
-  // The managed key on the way through: it is selectable, and selecting it asks nobody.
-  it("reads nothing for a managed key", async () => {
-    const el = await mount("picoclaw");
-    await pick(el, "model_list");
-    expect(inspected).not.toHaveBeenCalled();
   });
 
   // The explicit re-read exists for exactly the two cases the cache cannot serve — the

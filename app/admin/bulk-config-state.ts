@@ -82,6 +82,19 @@ export function isManagedKey(catalog: TemplateCatalog | null, key: string): bool
   return catalog.keys.some((k) => k.key === wanted && k.managed);
 }
 
+// isTunableKey reports whether the catalog offers this key although the document it
+// describes does not hold it.
+//
+// Same shape and same narrowness as isManagedKey above: an exact match against a row
+// the catalog really carried. A hand-typed path the catalog has never heard of is not
+// flagged, because nothing here knows whether the harness reads it -- and claiming a
+// restart is needed for a key that may not exist would be inventing a fact.
+export function isTunableKey(catalog: TemplateCatalog | null, key: string): boolean {
+  if (!catalog) return false;
+  const wanted = key.trim();
+  return catalog.keys.some((k) => k.key === wanted && k.tunable);
+}
+
 // prettyJson is the same value, indented for a human.
 //
 // It exists BESIDE canonicalJson rather than replacing it because the two have
@@ -228,6 +241,12 @@ export interface KeyListRow {
    * never claimed it, not because the proxy will accept the write.
    */
   free: boolean;
+  /**
+   * A key the catalog offers although the document it describes does not hold it.
+   * False for the free row for the same reason `managed` is: the catalog said
+   * nothing about it either way.
+   */
+  tunable: boolean;
 }
 
 // keyListRows is what the key column renders: the catalog, narrowed by the filter,
@@ -237,8 +256,11 @@ export interface KeyListRow {
 // SUGGESTION LIST, not a whitelist -- the proxy's own words -- and the control it
 // replaces was a text input where any dotted path could be typed. A list with no way
 // to name a key the catalog omits would silently take that away, and the key it would
-// take away first is agents.defaults.max_tool_iterations: the ganglion catalog comes
-// from a generated document that does not emit it, while the harness reads it.
+// take away first WAS agents.defaults.max_tool_iterations: the ganglion catalog comes
+// from a generated document that does not emit it, while the harness reads it. The
+// proxy now appends that key and the sub-agent budget as `tunable` rows, so the
+// typed path is no longer the only way to reach them -- but it stays the way to
+// reach a key nobody has thought to list yet, which is what a suggestion list means.
 //
 // It is LAST, not first: when the filter does match catalog keys, those are the answer
 // and a raw fragment of a path is not.
@@ -248,12 +270,12 @@ export function keyListRows(catalog: TemplateCatalog | null, filter: string): Ke
   const needle = wanted.toLowerCase();
   const rows: KeyListRow[] = keys
     .filter((k) => k.key.toLowerCase().includes(needle))
-    .map((k) => ({ key: k.key, managed: k.managed, free: false }));
+    .map((k) => ({ key: k.key, managed: k.managed, tunable: k.tunable, free: false }));
   // Exact against the WHOLE catalog rather than the filtered rows: a key that matched
   // exactly is in `rows` by definition, and testing the filtered set would offer the
   // typed path a second time whenever the filter happened to hide its own match.
   if (wanted !== "" && !keys.some((k) => k.key === wanted)) {
-    rows.push({ key: wanted, managed: false, free: true });
+    rows.push({ key: wanted, managed: false, tunable: false, free: true });
   }
   return rows;
 }
@@ -266,4 +288,68 @@ export function keyListRows(catalog: TemplateCatalog | null, filter: string): Ke
 // dropdown with no header of its own forced. Empty when there is nothing to name.
 export function catalogHarness(catalog: TemplateCatalog | null): string {
   return catalog?.keys[0]?.harness ?? "";
+}
+
+export interface KeySection {
+  kind: "editable" | "managed";
+  rows: KeyListRow[];
+}
+
+// keySections splits the key list in two: the keys an admin can write, and the keys
+// crab-shell-proxy writes on every ensure.
+//
+// It replaces a per-row subtitle. Every managed row used to carry the same sentence
+// saying it was proxy-owned, which in a ganglion catalog is most of the list -- the
+// same words repeated a dozen times down a narrow column, each one competing with the
+// dotted path that is the row's actual content. Said once, over a group, it is the
+// same information and reads as a fact about the group rather than as a property
+// discovered separately on each member.
+//
+// EDITABLE FIRST, and not merely because it is usually shorter. The managed group is
+// listed at all so that an admin hunting a key finds it and learns why it cannot be
+// set (proxy DEC: they are flagged, never filtered); the editable group is the one
+// anything can be done with. Putting the actionable group where the eye lands is the
+// same ordering the panel already uses everywhere else.
+//
+// The FREE ROW lands in the editable group, since it is a key the admin is proposing
+// to write, and stays last within it -- keyListRows already appends it there.
+//
+// An empty group is DROPPED rather than rendered with a header and nothing under it:
+// a filter that matches only managed keys should not draw an "editable" heading over
+// blank space.
+export function keySections(rows: KeyListRow[]): KeySection[] {
+  const editable = rows.filter((r) => !r.managed);
+  const managed = rows.filter((r) => r.managed);
+  const out: KeySection[] = [];
+  if (editable.length > 0) out.push({ kind: "editable", rows: editable });
+  if (managed.length > 0) out.push({ kind: "managed", rows: managed });
+  return out;
+}
+
+/** Lines of a value shown before it is cut. */
+export const VALUE_CLAMP_LINES = 8;
+
+export interface ClampedValue {
+  /** What to render while collapsed. */
+  head: string;
+  /** How many lines are hidden. Zero means nothing is, and there is no toggle. */
+  hidden: number;
+}
+
+// clampValue cuts a pretty-printed value down to something a bounded panel can hold.
+//
+// BY LINES, not by characters, and that is what the shape being cut calls for. A
+// distribution bucket renders one member's whole configuration value, indented -- so
+// what overflows is HEIGHT, and a character budget would cut a 6-line object and a
+// 60-line one at wildly different places for the same visual cost. Counting lines is
+// also exact: the toggle exists precisely when something is hidden, never inviting a
+// click that reveals nothing.
+//
+// The hidden COUNT is returned rather than a bare flag because the label says it --
+// "12 more lines" tells an admin whether expanding is worth the scroll, and "show
+// more" does not.
+export function clampValue(text: string, limit: number = VALUE_CLAMP_LINES): ClampedValue {
+  const lines = text.split("\n");
+  if (lines.length <= limit) return { head: text, hidden: 0 };
+  return { head: lines.slice(0, limit).join("\n"), hidden: lines.length - limit };
 }
