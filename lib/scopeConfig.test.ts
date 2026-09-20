@@ -80,6 +80,10 @@ describe("defensive parsing", () => {
       agent: "",
       total: 0,
       buckets: [],
+      // Absent counts as editable: a proxy from before the field existed refused a
+      // managed key outright, so an inspection that came back at all was for a key
+      // the admin may write.
+      managed: false,
     });
   });
 
@@ -90,6 +94,10 @@ describe("defensive parsing", () => {
       agent: "",
       total: 0,
       buckets: [],
+      // Absent counts as editable: a proxy from before the field existed refused a
+      // managed key outright, so an inspection that came back at all was for a key
+      // the admin may write.
+      managed: false,
     });
   });
 

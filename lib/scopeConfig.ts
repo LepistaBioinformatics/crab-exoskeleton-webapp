@@ -40,6 +40,17 @@ export interface TemplateKey {
    */
   managed: boolean;
   /**
+   * A key the catalog OFFERS although the document it was flattened from does not
+   * contain it — the harness's tuning numbers, which crab-shell-proxy deliberately
+   * does not generate.
+   *
+   * It changes what the picker may claim about the row. There is no default to show
+   * (`value` is absent and would be a lie if it were not), absent means the harness's
+   * own built-in is in force, and a write lands in the overlay rather than in the
+   * document, so it takes effect when the workspace next starts.
+   */
+  tunable: boolean;
+  /**
    * Which runtime's configuration document this key came from. The picker says so
    * beside the key, because the two harnesses' documents share names — model_list and
    * agents.defaults.model_name exist in both — and an admin who has just switched
@@ -96,6 +107,16 @@ export interface ScopeConfigInspection {
   agent: string;
   total: number;
   buckets: ConfigKeyBucket[];
+  /**
+   * The proxy owns this key, so the histogram beside it is a READ-ONLY PREVIEW and
+   * the apply would refuse the write.
+   *
+   * The server's answer, not the catalog's. A managed path can be typed by hand and
+   * need not be a catalog row at all, so a client inferring "absent from the catalog,
+   * therefore editable" would offer a write that can only 400. It is computed with
+   * the same function the apply refuses with.
+   */
+  managed: boolean;
   // There is deliberately no template field: the catalog already carries a value
   // for every key, so the panel has it before it ever inspects.
 }
@@ -222,6 +243,10 @@ function parseCatalog(raw: unknown): TemplateCatalog {
         key: e.key as string,
         value: e.value,
         managed: e.managed === true,
+        // Absent counts as FALSE, which is the safe direction: a proxy from before the
+        // flag existed offered only keys its document really held, so reading an
+        // omission as "tunable" would attach a restart warning to every row of it.
+        tunable: e.tunable === true,
         // Absent counts as picoclaw, the same back-compat reading picoclawAgentKeys uses
         // in lib/admin.ts: a proxy from before the field existed served picoclaw's
         // template and nothing else, so an unlabelled key is a picoclaw key.
@@ -242,6 +267,9 @@ function parseInspection(raw: unknown): ScopeConfigInspection {
     agent: str(r.agent),
     total: num(r.total),
     buckets: Array.isArray(r.buckets) ? r.buckets.map(parseBucket) : [],
+    // Absent counts as FALSE. A proxy from before the field existed refused a managed
+    // key outright, so an inspection that came back at all was for an editable one.
+    managed: r.managed === true,
   };
 }
 
