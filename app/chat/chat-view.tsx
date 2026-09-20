@@ -887,15 +887,16 @@ export default function ChatView({
       <span className="select-none self-center pl-1 text-fg-muted" aria-hidden>
         {m.role === "user" ? <User size={15} /> : <Bot size={15} />}
       </span>
-      <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
-        {index + 1}
-      </span>
       {/* WHEN IT WAS SAID, in the action row rather than under the text.
           A timestamp on every message, always visible, is a column of noise that
           hides the one you are actually looking for -- and it answers a question
           the reader only sometimes has. Here it follows the buttons' own reveal:
           hover on desktop, tap on mobile, because this fragment renders in both.
-          One rule, and no second mechanic to keep in step with the first. */}
+          One rule, and no second mechanic to keep in step with the first.
+
+          BEFORE the message number, not after: the two are read together, and
+          the number is an index into this conversation while the time is a fact
+          about the message. The fact comes first. */}
       {(() => {
         const when = messageTime(m.created_at, BCP47[locale]);
         if (!when) return null;
@@ -909,6 +910,9 @@ export default function ChatView({
           </time>
         );
       })()}
+      <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
+        {index + 1}
+      </span>
       <IconButton
         variant="ghost"
         size="sm"
