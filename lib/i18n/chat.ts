@@ -260,6 +260,10 @@ const en = {
     allFinishedHint:
       "Turn off “Hide finished” to see past tasks and their results.",
     showMoreRuns: "Show {count} older run(s)",
+    // A task's heading can be a whole prompt. The toggle appears only when
+    // something is actually hidden.
+    showMore: "show more",
+    showLess: "show less",
     showFewerRuns: "Show fewer runs",
   },
   memoryGraph: {
@@ -1118,6 +1122,8 @@ const pt: ChatDict = {
     allFinishedHint:
       "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
     showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
+    showMore: "ver mais",
+    showLess: "ver menos",
     showFewerRuns: "Mostrar menos execuções",
   },
   memoryGraph: {

@@ -30,6 +30,7 @@ import { Alert } from "@/components/ui/alert";
 import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
+import ClampedTitle from "@/app/chat/clamped-title";
 import { chatCopy } from "@/lib/i18n/chat";
 import { BCP47 } from "@/lib/i18n/format";
 import { useLocale, useT } from "@/lib/i18n/context";
@@ -434,15 +435,26 @@ export default function ScheduledTasksPanel({
         {shownTasks?.map((task) => {
           const isOpen = expanded.has(task.id);
           return (
-            // Space, not a rule. A task is a heading with its runs under it; the gap
-            // between two of them is what says where one ends.
-            <section key={task.id} className="pb-3">
+            // A RULE, not just space. The gap was tried first, on the argument
+            // that a task is a heading with its runs under it -- but a task with
+            // several runs is tall, and the space between two of them reads as
+            // more of the same task rather than as a boundary. The line is what
+            // says where one ends.
+            //
+            // `first:` rather than a separator element, so the orphan sections
+            // below share the same rule without either list knowing about the
+            // other: the first orphan is not the parent's first child, so it
+            // correctly gets a line separating it from the last task.
+            <section key={task.id} className="border-t border-rule pt-3 first:border-t-0 first:pt-0 pb-3">
               <div className="flex items-start gap-2 px-3 py-2.5">
                 <span className={taskDot({ enabled: task.enabled })} aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <p className="font-display text-sm font-semibold text-fg">
-                    {task.name || task.id}
-                  </p>
+                  <ClampedTitle
+                    text={task.name || task.id}
+                    className="font-display text-sm font-semibold text-fg"
+                    more={t.scheduledTasks.showMore}
+                    less={t.scheduledTasks.showLess}
+                  />
                   <p className="text-[11px] text-fg-muted">
                     {scheduleText(task.schedule)}
                     {!task.enabled && ` · ${t.scheduledTasks.disabled}`}
@@ -552,7 +564,7 @@ export default function ScheduledTasksPanel({
         })}
 
         {shownOrphans.map((group) => (
-          <section key={group.jobId} className="pb-3">
+          <section key={group.jobId} className="border-t border-rule pt-3 first:border-t-0 first:pt-0 pb-3">
             <div className="flex items-start gap-2 px-3 py-2.5">
               <AlertTriangle
                 size={14}
@@ -560,9 +572,14 @@ export default function ScheduledTasksPanel({
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="font-display text-sm font-semibold text-fg">
-                  {group.runs[0]?.prompt || t.scheduledTasks.removedTask}
-                </p>
+                {/* The orphan's heading is the PROMPT that produced it, which
+                    the store caps at eight kilobytes and nothing capped here. */}
+                <ClampedTitle
+                  text={group.runs[0]?.prompt || t.scheduledTasks.removedTask}
+                  className="font-display text-sm font-semibold text-fg"
+                  more={t.scheduledTasks.showMore}
+                  less={t.scheduledTasks.showLess}
+                />
                 <p className="text-[11px] text-fg-muted">
                   {t.scheduledTasks.removedTask} · {group.jobId}
                 </p>

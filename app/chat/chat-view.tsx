@@ -890,6 +890,25 @@ export default function ChatView({
       <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
         {index + 1}
       </span>
+      {/* WHEN IT WAS SAID, in the action row rather than under the text.
+          A timestamp on every message, always visible, is a column of noise that
+          hides the one you are actually looking for -- and it answers a question
+          the reader only sometimes has. Here it follows the buttons' own reveal:
+          hover on desktop, tap on mobile, because this fragment renders in both.
+          One rule, and no second mechanic to keep in step with the first. */}
+      {(() => {
+        const when = messageTime(m.created_at, BCP47[locale]);
+        if (!when) return null;
+        return (
+          <time
+            dateTime={when.machine}
+            title={when.full}
+            className="select-none self-center px-1 text-[11px] tabular-nums text-fg-muted"
+          >
+            {when.label}
+          </time>
+        );
+      })()}
       <IconButton
         variant="ghost"
         size="sm"
@@ -1105,29 +1124,6 @@ export default function ChatView({
                           {renderActions(m, i)}
                         </div>
                         {text && <MessageContent content={text} />}
-                        {/* WHEN IT WAS SAID. Under the text and quiet, because it
-                            answers a question the reader only sometimes has --
-                            following a long conversation, or one that spans days.
-                            The short label is for scanning; the title carries the
-                            whole instant, which is what makes "14:32" usable three
-                            days later.
-
-                            Absent for a message the transcript recorded no time
-                            for, and for one still streaming -- see messageTime for
-                            why that is null rather than "now". */}
-                        {(() => {
-                          const when = messageTime(m.created_at, BCP47[locale]);
-                          if (!when) return null;
-                          return (
-                            <time
-                              dateTime={when.machine}
-                              title={when.full}
-                              className="mt-1.5 block text-[11px] leading-none text-fg-muted/70"
-                            >
-                              {when.label}
-                            </time>
-                          );
-                        })()}
                         {refs.length > 0 && (
                           // Scrolls sideways rather than wrapping, for the reason the
                           // composer's row does — and with the precedent a wide table
