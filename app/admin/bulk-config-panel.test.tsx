@@ -7,6 +7,10 @@ import { act } from "react";
 // `environment: "node"` never fires one. What this covers is what the panel makes of the
 // catalog it gets back: the list it draws from it, the key it still lets an admin reach
 // when the catalog does not carry it, and whether the template option exists at all.
+// The ganglion reads it and the document it generates does not emit it, so the proxy
+// appends it to the catalog as a suggestion rather than writing it into every member.
+const TUNABLE = "agents.defaults.max_tool_iterations";
+
 const catalogs = {
   // A picoclaw agent: the template file IS the source, and writing it is the
   // established way to reach members created later.
@@ -80,9 +84,6 @@ import { adminCopy } from "@/lib/i18n/admin";
 
 const t = adminCopy.en.bulkConfig;
 
-// The ganglion reads it and the document it generates does not emit it, so the proxy
-// appends it to the catalog as a suggestion rather than writing it into every member.
-const TUNABLE = "agents.defaults.max_tool_iterations";
 
 // A key neither catalog carries. Deliberately NOT one the proxy offers, so the row that
 // proposes a hand-typed path still has something to be about.
@@ -189,7 +190,8 @@ describe("BulkConfigPanel — the key list", () => {
     const el = await mount("picoclaw");
     expect(el.textContent).toContain(t.sectionEditable);
     expect(el.textContent).toContain(t.sectionManaged);
-    expect(rowFor(el, "model_list").textContent).not.toContain(t.managedSuffix);
+    // The row itself says only the key. Everything about who owns it is the heading's.
+    expect(rowFor(el, "model_list").textContent!.trim()).toBe("model_list");
     expect(sectionOf(el, "model_list")).toContain(t.sectionManaged);
     expect(sectionOf(el, "tools.web.brave.enabled")).toContain(t.sectionEditable);
   });

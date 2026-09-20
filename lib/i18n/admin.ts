@@ -695,10 +695,9 @@ const en = {
     keyLabel: "Which config.json key",
     keyJob: "A dotted path to one value, e.g. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
-    managedSuffix: "(owned by the proxy)",
     // The two groups the key list is drawn in. Said once over a group rather than
-    // once per row, which is what the suffix above used to be for — it is kept
-    // because the members panel still labels a single key with it.
+    // once per row, which is what the per-row suffix they replaced used to be:
+    // a dozen copies of one sentence down a narrow column.
     sectionEditable: "Yours to set",
     sectionEditableJob: "Keys an admin writes. A change here reaches every member you choose.",
     sectionManaged: "Injected by the proxy",
@@ -1510,7 +1509,6 @@ const pt: AdminDict = {
     keyLabel: "Qual chave do config.json",
     keyJob: "Um caminho pontilhado até um valor, ex. tools.web.brave.enabled.",
     keyPlaceholder: "tools.web.brave.enabled",
-    managedSuffix: "(pertence ao proxy)",
     sectionEditable: "Você define",
     sectionEditableJob:
       "Chaves que um admin escreve. Uma mudança aqui alcança todos os membros que você escolher.",
