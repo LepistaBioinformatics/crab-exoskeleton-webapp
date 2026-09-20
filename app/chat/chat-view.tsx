@@ -497,7 +497,25 @@ export default function ChatView({
   }, [sessionId]);
   // The sid shown before the current one, so its debounce can be parked when we
   // switch away.
-  const previousSidRef = useRef<string | undefined>(sessionId);
+  //
+  // UNDEFINED ON MOUNT, not `sessionId`, and the difference is a whole class of
+  // lost first message. Seeded with the current sid, the effect's own FIRST run
+  // parked the conversation it had just opened: landing-screen's `send` enqueues
+  // the burst, arms the 500ms debounce and writes the fragment; the fragment
+  // swaps the landing for this view, which mounts, reads previousSidRef ===
+  // sessionId and calls parkFlush on it. The timer died about a millisecond after
+  // it was armed, `pending` was left untouched, and the message pulsed forever
+  // with no POST behind it.
+  //
+  // It self-healed for anyone who typed again -- bumpFlush re-arms while pending
+  // is non-empty -- which is why this reads as intermittent and why nobody who
+  // was mid-conversation ever saw it. A member who sent one message and waited
+  // saw it hang.
+  //
+  // parkFlush already ignores an undefined sid, so there is nothing to park
+  // before a first conversation has been seen. That is the accurate statement:
+  // on mount there IS no previous conversation.
+  const previousSidRef = useRef<string | undefined>(undefined);
 
   useEffect(
     () => () => {

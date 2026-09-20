@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listProjects, type Project } from "@/lib/projects";
+import { listProjects, onProjectsUpdated, type Project } from "@/lib/projects";
 import type { Workspace } from "./fragment";
 
 // The workspace's projects, shared between the sidebar's projects section and the
@@ -15,6 +15,15 @@ import type { Workspace } from "./fragment";
 //
 // `reload` rather than a mutation API: the writes already go through lib/projects and
 // return the server's own row, so the honest refresh is to re-read.
+//
+// The `onProjectsUpdated` subscription lives HERE rather than in each consumer, which
+// is what actually makes the list shared -- and it is what this hook claimed and did
+// not do. Two components call it, the projects screen and the shell; the screen
+// reloaded its own copy after a create and the shell's went on describing the
+// workspace as it was before, so the breadcrumb would not name the project the member
+// had just been dropped into until the page was reloaded. The key is
+// tenant|subscription|role, which a create does not change, so nothing else was ever
+// going to re-read it.
 export function useProjects(workspace: Workspace | null): {
   projects: Project[];
   /** An error CODE, resolved to a sentence at render time so a locale switch re-renders it. */
@@ -70,6 +79,11 @@ export function useProjects(workspace: Workspace | null): {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  // A write anywhere re-reads here. `reload` is already keyed on the same scope and
+  // no-ops without a workspace, so a copy mounted on another scope costs one function
+  // call and asks nothing.
+  useEffect(() => onProjectsUpdated(() => void reload()), [reload]);
 
   return { projects, error, reload };
 }

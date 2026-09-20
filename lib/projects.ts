@@ -70,6 +70,31 @@ async function projectErrorCode(res: Response): Promise<string> {
   return errorCode(res);
 }
 
+// Every list of projects on screen has to change when one of them does.
+//
+// useProjects's doc comment has always claimed the list is "shared", and it is
+// not: it is an ordinary hook with its own useState, and two components call it
+// -- the projects screen and the shell, whose breadcrumb names the open project.
+// Creating a project reloaded the screen's copy and left the shell's untouched,
+// so the breadcrumb did not name the project the member had just been dropped
+// into until the page was reloaded. The list is keyed on tenant|subscription|role,
+// none of which a create changes, so nothing else was ever going to re-read it.
+//
+// The same event lib/chatSession uses for conversations, for the same reason it
+// gives: one listener refreshes everyone, so a write cannot reach one copy of
+// the list and miss another. Sharing the INVALIDATION rather than the state is
+// the smaller claim, and it is the one that makes the copies agree.
+const UPDATED_EVENT = "chat-projects-updated";
+
+export function onProjectsUpdated(listener: () => void): () => void {
+  window.addEventListener(UPDATED_EVENT, listener);
+  return () => window.removeEventListener(UPDATED_EVENT, listener);
+}
+
+function notifyUpdated(): void {
+  window.dispatchEvent(new Event(UPDATED_EVENT));
+}
+
 export async function listProjects(workspace: Workspace): Promise<Project[]> {
   const res = await fetch(`/api/projects?${workspaceQuery(workspace)}`);
   if (!res.ok) throw new Error(await projectErrorCode(res));
@@ -89,6 +114,7 @@ export async function createProject(
   });
   if (!res.ok) throw new Error(await projectErrorCode(res));
   const data = await res.json();
+  notifyUpdated();
   return fromApiRow(data.project ?? {});
 }
 
@@ -109,6 +135,7 @@ export async function updateProject(
   );
   if (!res.ok) throw new Error(await projectErrorCode(res));
   const data = await res.json();
+  notifyUpdated();
   return fromApiRow(data.project ?? {});
 }
 
@@ -120,4 +147,5 @@ export async function deleteProject(workspace: Workspace, id: string): Promise<v
     { method: "DELETE" },
   );
   if (!res.ok) throw new Error(await projectErrorCode(res));
+  notifyUpdated();
 }

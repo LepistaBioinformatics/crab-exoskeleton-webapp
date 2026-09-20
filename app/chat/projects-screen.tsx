@@ -93,7 +93,7 @@ export default function ProjectsScreen({
   // The shared hook, not a local fetch: the sidebar hides its Projects row on the same
   // `projects_unsupported` this screen goes silent for, and two fetches would let the
   // row and the screen disagree the moment one of them created or deleted something.
-  const { projects, error: loadError, reload: load } = useProjects(workspace);
+  const { projects, error: loadError } = useProjects(workspace);
   // Write failures are this screen's own; read failures come from the hook. Kept apart
   // so a failed save does not read as the list being unavailable.
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +130,9 @@ export default function ProjectsScreen({
         onBrowse(created.id);
       }
       setDraft(null);
-      await load();
+      // No reload here: lib/projects announces its own writes now, and this
+      // screen's copy of the list subscribes like every other. Re-reading here as
+      // well would be the second fetch of the same list for one create.
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown");
     } finally {
@@ -150,7 +152,6 @@ export default function ProjectsScreen({
       // that scopes itself to `p` can go on claiming to show them. This is the one
       // place the screen clears `p` — everywhere else FR-1.5 preserves it.
       if (browsedProject === target.id) onBrowse(null);
-      await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown");
     }
