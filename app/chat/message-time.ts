@@ -16,7 +16,7 @@
 
 /** One instant, rendered for a reader and for a machine. */
 export interface MessageTime {
-  /** Short, for the line under the message: "14:32", or "18 set". */
+  /** Date and time together: "19 de set. 14:32". */
   label: string;
   /** The whole instant, for the title attribute. */
   full: string;
@@ -44,13 +44,26 @@ export function messageTime(
   const d = new Date(createdAt);
   if (Number.isNaN(d.getTime())) return null;
 
-  const sameDay = d.toDateString() === now.toDateString();
+  // BOTH, ALWAYS. This read the clock for today and the day for anything older,
+  // which is the idiom a conversation LIST uses -- there, one line per
+  // conversation, the reader wants the freshest thing distinguishable at a
+  // glance. Inside a conversation the question is different: following a thread
+  // that ran across an evening and picked up the next morning, "14:32" alone
+  // cannot say which one, and the reader should not have to hover to find out.
+  //
+  // The YEAR appears only when it is not the current one. Carrying it on every
+  // message would double the label's width to disambiguate a case that almost
+  // never arises, and the full instant is in the title for when it does.
+  const sameYear = d.getFullYear() === now.getFullYear();
   return {
-    label: sameDay
-      ? d.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" })
-      : d.toLocaleDateString(tag, { day: "2-digit", month: "short" }),
-    // Always the whole thing, including on the same day: the title exists to
-    // answer the question the short label cannot.
+    label: d.toLocaleString(tag, {
+      day: "2-digit",
+      month: "short",
+      ...(sameYear ? {} : { year: "numeric" }),
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    // The whole thing, spelled out, for the title -- what the label abbreviates.
     full: d.toLocaleString(tag, { dateStyle: "long", timeStyle: "short" }),
     machine: d.toISOString(),
   };

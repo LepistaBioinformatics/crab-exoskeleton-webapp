@@ -4,17 +4,25 @@ import { messageTime } from "./message-time";
 const NOW = new Date("2026-09-19T21:00:00Z");
 
 describe("messageTime", () => {
-  it("shows the clock for something said today", () => {
+  // BOTH, on every message. A thread that ran across an evening and picked up
+  // the next morning cannot be followed on the clock alone.
+  it("carries the date and the time, today included", () => {
     const out = messageTime("2026-09-19T14:32:00Z", "en-US", NOW);
+    expect(out?.label).toMatch(/Sep/);
     expect(out?.label).toMatch(/\d{1,2}:\d{2}/);
-    expect(out?.label).not.toMatch(/Sep|set/);
   });
 
-  // A conversation that spans days is the case this exists for: "14:32" alone
-  // would say when, but not which day.
-  it("shows the day for something said before today", () => {
+  it("carries both for an older message too", () => {
     const out = messageTime("2026-09-17T14:32:00Z", "en-US", NOW);
     expect(out?.label).toMatch(/Sep/);
+    expect(out?.label).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  // The year would double the label's width to disambiguate a case that almost
+  // never arises, so it appears only when it actually disambiguates something.
+  it("leaves the year out this year and puts it in for another", () => {
+    expect(messageTime("2026-09-17T14:32:00Z", "en-US", NOW)?.label).not.toMatch(/202\d/);
+    expect(messageTime("2024-09-17T14:32:00Z", "en-US", NOW)?.label).toMatch(/2024/);
   });
 
   // The short label is for scanning; the title is for answering. So the full
