@@ -194,3 +194,24 @@ export function readRun(
     workspaceQuery(workspace, { run: basename }),
   );
 }
+
+/**
+ * Whether a task's last run ended badly.
+ *
+ * MATCHED EXACTLY against the one value the proxy writes, `"error"`
+ * (cron.StatusError), trimmed and case-folded. Everything else -- `"ok"`, a
+ * value picoclaw might write, anything a future version adds -- is not a
+ * failure, and is still displayed verbatim beside this.
+ *
+ * `lastStatus` was documented as opaque, on the honest grounds that no value had
+ * ever been observed. The ganglion's scheduler writes one now, which is what
+ * makes branching on it defensible -- and why this is a named predicate rather
+ * than an inline comparison: the day a second failing value exists, it is added
+ * here and nowhere else.
+ *
+ * It describes the MOST RECENT run only. The store records no per-run outcome,
+ * so a task that failed once and then succeeded reads as healthy, correctly.
+ */
+export function taskFailed(lastStatus: string | undefined): boolean {
+  return typeof lastStatus === "string" && lastStatus.trim().toLowerCase() === "error";
+}
