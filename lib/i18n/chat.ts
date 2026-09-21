@@ -126,6 +126,10 @@ const en = {
     viewRendered: "Rendered",
     viewSource: "Source",
     wrapLines: "Wrap long lines",
+    // The label on the panel that separates a markdown file's leading `---` block
+    // from the document. Useful above all when reviewing a SKILL.md, where the
+    // block decides whether the skill loads at all.
+    frontmatter: "Frontmatter",
     // The PDF pane draws its own pages rather than handing the file to the browser's
     // viewer — see `pdf-pane.tsx`. These are the two controls that came back with it.
     pdfPrev: "Previous page",
@@ -1006,6 +1010,7 @@ const pt: ChatDict = {
     viewRendered: "Renderizado",
     viewSource: "Código-fonte",
     wrapLines: "Quebrar linhas longas",
+    frontmatter: "Metadados",
     pdfPrev: "Página anterior",
     pdfNext: "Próxima página",
     pdfZoomIn: "Aproximar",
