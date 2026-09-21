@@ -17,6 +17,7 @@ import {
   toRows,
   rowRole,
   landingIndex,
+  compactedCount,
   type ChatMessage,
   type StepItem,
   type TurnEvent,
@@ -30,6 +31,7 @@ import {
   ChevronRight,
   Cpu,
   Reply,
+  Scissors,
   User,
   Users,
   Wrench,
@@ -140,6 +142,58 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
       </summary>
       {children}
     </details>
+  );
+}
+
+// THE COMPACTION DIVIDER. The agent's context was shortened; the transcript
+// above it was not, and saying so is most of this row's job -- a member who sees
+// "earlier messages are gone" over a conversation they can still scroll through
+// has been told their history was lost.
+//
+// Not a message band and not a step run. It carries no speaker, so it takes the
+// centred column and a rule rather than the padded band, and it stands apart
+// from a run of steps because it is not something the agent DID: it is
+// something that happened to the conversation while the agent worked.
+function CompactionRow({
+  m,
+  registerRef,
+  t,
+}: {
+  m: ChatMessage;
+  registerRef: (el: HTMLDivElement | null) => void;
+  t: ChatDict;
+}) {
+  const n = compactedCount(m);
+  // Zero means the record did not say how many. "0 messages" would claim
+  // something false about an event that did happen, so the count is left out.
+  const label =
+    n === 1
+      ? t.view.compactedOne
+      : n > 1
+        ? t.view.compactedOther.replace("{n}", String(n))
+        : t.view.compactedSome;
+  const detail = (m.events ?? []).find((e) => e.kind === "compact")?.detail ?? "";
+  return (
+    <div ref={registerRef} className={bandGap({ changed: true })}>
+      <div className="mx-auto w-full max-w-[720px] px-4 py-3">
+        <div className="flex items-center gap-2 text-xs text-fg-muted/70">
+          <span className="h-px flex-1 bg-rule" aria-hidden />
+          <Scissors size={12} aria-hidden />
+          <span>{label}</span>
+          <span className="h-px flex-1 bg-rule" aria-hidden />
+        </div>
+        <p className="mt-1 text-center text-[11px] text-fg-muted/60">{t.view.compactedKept}</p>
+        {detail && (
+          <div className="mt-1 flex justify-center">
+            <Disclosure label={t.view.compactedRecord}>
+              <p className="mt-1 whitespace-pre-wrap break-words text-center text-[11px] text-fg-muted/70">
+                {detail}
+              </p>
+            </Disclosure>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1066,6 +1120,18 @@ export default function ChatView({
                 const standalone =
                   (!prev || rowRole(prev) !== role) && (!next || rowRole(next) !== role);
 
+                if (r.row === "compaction") {
+                  return (
+                    <CompactionRow
+                      key={`compaction-${r.i}`}
+                      m={r.m}
+                      registerRef={(el) => {
+                        messageRefs.current[r.i] = el;
+                      }}
+                      t={t}
+                    />
+                  );
+                }
                 if (r.row === "steps") {
                   return (
                     <StepRun

@@ -529,6 +529,19 @@ const en = {
     // Labelled by what it DOES, not by where it goes ("bottom" names a scroll position;
     // the member is looking for the newest thing said).
     scrollToLatest: "Jump to the latest message",
+    // THE DIVIDER, and the distinction it exists to draw: the agent's context
+    // was shortened, the member's transcript was not. Said as what LEFT rather
+    // than as "compaction", which names the mechanism instead of the effect.
+    compactedOne: "1 earlier message is no longer in the agent's context",
+    compactedOther: "{n} earlier messages are no longer in the agent's context",
+    // Without a count -- a record that did not say how many. Rendering "0
+    // messages" would claim something false about an event that did happen.
+    compactedSome: "Earlier messages are no longer in the agent's context",
+    // The reassurance, and the reason this is a divider rather than a warning.
+    // Nothing the member can scroll to has been lost.
+    compactedKept: "Everything above is still here.",
+    // The harness's own note, collapsed.
+    compactedRecord: "what the harness recorded",
   },
   // background-turn-dock: the bar of conversations left running elsewhere.
   //
@@ -1290,6 +1303,11 @@ const pt: ChatDict = {
     eventDenied: "não aprovado",
     eventFailed: "falhou",
     scrollToLatest: "Ir para a mensagem mais recente",
+    compactedOne: "1 mensagem anterior saiu do contexto do agente",
+    compactedOther: "{n} mensagens anteriores saíram do contexto do agente",
+    compactedSome: "Mensagens anteriores saíram do contexto do agente",
+    compactedKept: "Tudo acima continua aqui.",
+    compactedRecord: "o que o harness registrou",
   },
   dock: {
     label: "Conversas rodando em segundo plano",
