@@ -11,6 +11,11 @@ interface HistoryResponse {
     // a plain answer. The model's own chain of thought rides separately.
     kind?: string;
     reasoning?: string;
+    // Declared so the filter above can read it. The object is re-serialised
+    // whole, so an undeclared field reaches the client either way -- but a
+    // filter that consults one it has not declared is a filter one rename away
+    // from silently dropping everything again.
+    events?: { kind: string; count?: number }[];
   }[];
 }
 
@@ -75,8 +80,18 @@ export async function GET(
   // attachment-only message survives (its "[anexo: …]" ref keeps the content
   // non-blank), and so does a reasoning-only step — it carries no text of its own
   // but the chain of thought it holds is the whole point of keeping it.
+  //
+  // AND SO DOES AN ENTRY CARRYING EVENTS, which this filter did not say until
+  // now. The harness writes two of those and neither has content by
+  // construction: the silent tool call (an iteration that ran tools and narrated
+  // nothing) and the compaction record. Both were dropped here, before
+  // `toRows` — which has handled the first since it was written — could ever see
+  // one. This clause is why the transcript can show what a turn DID.
   const messages = (data.messages ?? []).filter(
-    (m) => m.content.trim() !== "" || (m.reasoning ?? "").trim() !== "",
+    (m) =>
+      m.content.trim() !== "" ||
+      (m.reasoning ?? "").trim() !== "" ||
+      (m.events?.length ?? 0) > 0,
   );
   return NextResponse.json({ messages });
 }

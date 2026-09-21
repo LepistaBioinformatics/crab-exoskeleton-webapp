@@ -31,6 +31,8 @@ export interface TurnEvent {
    */
   status?: string;
   detail?: string;
+  /** How many of something: for "compact", the messages that were dropped. */
+  count?: number;
 }
 
 export interface ChatMessage {
@@ -48,7 +50,13 @@ export interface ChatMessage {
 /** One rendered row: a message, or a run of narration steps. */
 export type Row =
   | { row: "message"; m: ChatMessage; i: number }
-  | { row: "steps"; items: StepItem[] };
+  | { row: "steps"; items: StepItem[] }
+  /**
+   * The harness shortened the context window. Carries `m` like a message row so
+   * `rowRole` keeps working off one field; it is a separate variant because it
+   * is neither something anyone said nor work the agent did.
+   */
+  | { row: "compaction"; m: ChatMessage; i: number };
 
 /**
  * One step inside a run: the message that narrated it, plus the events of the
@@ -77,6 +85,13 @@ export interface StepItem {
 export function toRows(messages: ChatMessage[]): Row[] {
   const rows: Row[] = [];
   messages.forEach((m, i) => {
+    // BEFORE the step test, because a compaction record reaches us in the same
+    // shape as a silent tool call -- an entry with no content carrying events --
+    // and the only thing separating them is the kind the proxy assigned.
+    if (m.kind === KIND_COMPACTION) {
+      rows.push({ row: "compaction", m, i });
+      return;
+    }
     if (m.kind !== "step") {
       rows.push({ row: "message", m, i });
       return;
@@ -106,6 +121,23 @@ export function toRows(messages: ChatMessage[]): Row[] {
   return rows;
 }
 
+/**
+ * The kind the proxy stamps on the harness's record that it shortened the
+ * context window, and the event kind inside it.
+ */
+export const KIND_COMPACTION = "compaction";
+const EVENT_COMPACT = "compact";
+
+/**
+ * How many messages a compaction record says were dropped, or 0 when the record
+ * does not say. Zero is rendered as the divider without a count rather than as
+ * "0 messages", which would claim something false about a real event.
+ */
+export function compactedCount(m: ChatMessage): number {
+  const e = (m.events ?? []).find((ev) => ev.kind === EVENT_COMPACT);
+  return e?.count ?? 0;
+}
+
 /** A step that is only its iteration's events -- no narration of its own. */
 function isEventsOnly(m: ChatMessage): boolean {
   return m.content.trim() === "" && (m.events?.length ?? 0) > 0;
@@ -133,7 +165,11 @@ export function rowRole(r: Row): "user" | "assistant" {
  */
 export function landingIndex(messages: ChatMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].kind !== "step") return i;
+    // A compaction divider is skipped for the same reason a step is: opening a
+    // conversation on "12 earlier messages were compacted" lands the member on
+    // a note about the transcript instead of on the transcript.
+    const k = messages[i].kind;
+    if (k !== "step" && k !== KIND_COMPACTION) return i;
   }
   return messages.length - 1;
 }
