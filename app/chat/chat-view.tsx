@@ -30,8 +30,8 @@ import {
   Brain,
   ChevronRight,
   Cpu,
+  Gauge,
   Reply,
-  Scissors,
   User,
   Users,
   Wrench,
@@ -150,6 +150,16 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 // "earlier messages are gone" over a conversation they can still scroll through
 // has been told their history was lost.
 //
+// SO THE LINE LEADS WITH THE GAIN, not the departure. The first cut named the
+// mechanism's effect on the agent ("no longer in the agent's context"), which is
+// accurate and reads as damage; it is the member's conversation and from where
+// they sit nothing left it. What actually changed is that fewer messages travel
+// with each turn, so the replies after this point are cheaper and quicker.
+//
+// And the explanation is BEHIND A CLICK. Three sentences of mechanism printed
+// between two messages is a wall in the middle of a conversation; a member who
+// wants to know what happened asks, and gets it in their own words.
+//
 // Not a message band and not a step run. It carries no speaker, so it takes the
 // centred column and a rule rather than the padded band, and it stands apart
 // from a run of steps because it is not something the agent DID: it is
@@ -172,26 +182,48 @@ function CompactionRow({
       : n > 1
         ? t.view.compactedOther.replace("{n}", String(n))
         : t.view.compactedSome;
-  const detail = (m.events ?? []).find((e) => e.kind === "compact")?.detail ?? "";
+  // The harness's own note is NOT rendered. It is `Count` formatted into a
+  // sentence -- marker_test.go asserts the two agree -- so it carries nothing the
+  // count does not, in the register the member was reading past: brackets, "this
+  // window", "the full transcript is preserved". Every word below is composed
+  // here instead, from the one number the record actually holds.
   return (
     <div ref={registerRef} className={bandGap({ changed: true })}>
       <div className="mx-auto w-full max-w-[720px] px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-fg-muted/70">
-          <span className="h-px flex-1 bg-rule" aria-hidden />
-          <Scissors size={12} aria-hidden />
-          <span>{label}</span>
-          <span className="h-px flex-1 bg-rule" aria-hidden />
-        </div>
-        <p className="mt-1 text-center text-[11px] text-fg-muted/60">{t.view.compactedKept}</p>
-        {detail && (
-          <div className="mt-1 flex justify-center">
-            <Disclosure label={t.view.compactedRecord}>
-              <p className="mt-1 whitespace-pre-wrap break-words text-center text-[11px] text-fg-muted/70">
-                {detail}
-              </p>
-            </Disclosure>
+        {/* THE DIVIDER LINE IS THE BUTTON. Not `Disclosure`, which is shared with
+            the step run and the reasoning block and puts its summary on a line of
+            its own: under a rule that already reads as one status, a second line
+            asking "What happened here?" is a second thing to read for the same
+            event. The whole row toggles instead, and the chevron sits in the text
+            so the affordance is where the eye already is.
+
+            Still `<details>`/`<summary>`, for the reason Disclosure gives: the
+            keyboard operation and the expanded/collapsed announcement come for
+            free, and there is no state to drift out of sync with the DOM. */}
+        <details className="group">
+          <summary
+            title={t.view.compactedWhat}
+            className="flex cursor-pointer list-none items-center gap-2 text-xs text-fg-muted/70 hover:text-fg-muted [&::-webkit-details-marker]:hidden"
+          >
+            <span className="h-px flex-1 bg-rule" aria-hidden />
+            <Gauge size={12} aria-hidden />
+            <span>{label}</span>
+            <ChevronRight
+              size={12}
+              className="transition-transform group-open:rotate-90"
+              aria-hidden
+            />
+            <span className="h-px flex-1 bg-rule" aria-hidden />
+          </summary>
+          {/* Bounded and centred as a block, not as centred text: three sentences
+              of prose ragged on both edges across a 720px column is a shape
+              nobody reads. */}
+          <div className="mx-auto mt-2 max-w-[520px] space-y-1.5 text-[11px] leading-relaxed text-fg-muted/70">
+            <p>{t.view.compactedWhyLimit}</p>
+            <p>{t.view.compactedWhySaves}</p>
+            <p>{t.view.compactedWhyKept}</p>
           </div>
-        )}
+        </details>
       </div>
     </div>
   );
