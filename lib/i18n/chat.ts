@@ -264,6 +264,10 @@ const en = {
     allFinishedHint:
       "Turn off “Hide finished” to see past tasks and their results.",
     showMoreRuns: "Show {count} older run(s)",
+    // A task's heading can be a whole prompt. The toggle appears only when
+    // something is actually hidden.
+    showMore: "show more",
+    showLess: "show less",
     showFewerRuns: "Show fewer runs",
   },
   memoryGraph: {
@@ -887,6 +891,20 @@ const en = {
     iosHelpAfter:
       ". Safari has no install button of its own — that flow is the install.",
   },
+  // ganglion-approval-endpoint: the agent is asking permission and the turn is
+  // stopped until this is answered.
+  approval: {
+    title: "Your agent is asking permission",
+    what: "What it would run",
+    when: "When",
+    // A gated tool this client does not describe. The raw arguments are shown
+    // rather than hidden: the member is agreeing to something.
+    unknownTool: "It wants to use {tool}, with these arguments:",
+    note: "Nothing happens until you answer. If you leave this, it is refused after a few minutes.",
+    allow: "Allow",
+    refuse: "Refuse",
+    reasonPlaceholder: "Why not (optional) — your agent will read this",
+  },
   projects: {
     title: "Projects",
     hint: "A project keeps its own files, memory and instructions, and inherits this agent's model, skills and credentials.",
@@ -1137,6 +1155,8 @@ const pt: ChatDict = {
     allFinishedHint:
       "Desmarque “Ocultar concluídas” para ver as tarefas passadas e seus resultados.",
     showMoreRuns: "Mostrar {count} execução(ões) mais antiga(s)",
+    showMore: "ver mais",
+    showLess: "ver menos",
     showFewerRuns: "Mostrar menos execuções",
   },
   memoryGraph: {
@@ -1598,6 +1618,16 @@ const pt: ChatDict = {
     iosAddToHome: "Adicionar à Tela de Início",
     iosHelpAfter:
       ". O Safari não tem um botão de instalar próprio — esse é o fluxo de instalação.",
+  },
+  approval: {
+    title: "Seu agente está pedindo permissão",
+    what: "O que ele rodaria",
+    when: "Quando",
+    unknownTool: "Ele quer usar {tool}, com estes argumentos:",
+    note: "Nada acontece até você responder. Se deixar passar, é recusado depois de alguns minutos.",
+    allow: "Permitir",
+    refuse: "Recusar",
+    reasonPlaceholder: "Por que não (opcional) — seu agente vai ler isto",
   },
   projects: {
     title: "Projetos",

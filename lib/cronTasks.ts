@@ -1,12 +1,15 @@
 import type { Workspace } from "@/app/chat/fragment";
 import { getJson, workspaceQuery } from "@/lib/workspaceApi";
 
-// Read-only client for the agent's scheduled tasks (picoclaw cron jobs) and the
-// transcripts each execution leaves behind.
+// Read-only client for the agent's scheduled tasks and the transcripts each
+// execution leaves behind.
 //
-// Read-only deliberately: picoclaw owns the job store and holds the live schedule
-// in memory, so nothing here writes it. Creating and changing tasks is done by
-// asking the agent.
+// Read-only deliberately, and for two different reasons depending on the harness.
+// picoclaw owns its own job store and holds the live schedule in memory, so
+// nothing may write it from outside. The ganglion's store is the proxy's, and a
+// task there comes into being by asking the agent -- which stops and asks the
+// member to approve before it creates one. Either way, creating and changing
+// tasks is done in the conversation, not here.
 
 /**
  * When a task runs. Exactly one parameter is meaningful, selected by `kind`:
@@ -190,4 +193,25 @@ export function readRun(
     "/api/cron/runs",
     workspaceQuery(workspace, { run: basename }),
   );
+}
+
+/**
+ * Whether a task's last run ended badly.
+ *
+ * MATCHED EXACTLY against the one value the proxy writes, `"error"`
+ * (cron.StatusError), trimmed and case-folded. Everything else -- `"ok"`, a
+ * value picoclaw might write, anything a future version adds -- is not a
+ * failure, and is still displayed verbatim beside this.
+ *
+ * `lastStatus` was documented as opaque, on the honest grounds that no value had
+ * ever been observed. The ganglion's scheduler writes one now, which is what
+ * makes branching on it defensible -- and why this is a named predicate rather
+ * than an inline comparison: the day a second failing value exists, it is added
+ * here and nowhere else.
+ *
+ * It describes the MOST RECENT run only. The store records no per-run outcome,
+ * so a task that failed once and then succeeded reads as healthy, correctly.
+ */
+export function taskFailed(lastStatus: string | undefined): boolean {
+  return typeof lastStatus === "string" && lastStatus.trim().toLowerCase() === "error";
 }

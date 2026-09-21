@@ -12,6 +12,8 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
+import { messageTime } from "@/app/chat/message-time";
+import { BCP47 } from "@/lib/i18n/format";
 import { pickResumeCandidate } from "@/app/chat/conversation-filter";
 import {
   toRows,
@@ -55,7 +57,8 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
-import { useT } from "@/lib/i18n/context";
+import ApprovalCard from "@/app/chat/approval-card";
+import { useLocale, useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 import {
@@ -432,6 +435,11 @@ export default function ChatView({
   onRestartNeeded?: () => void;
 }) {
   const t = useT(chatCopy);
+  // The reader's own locale, for the timestamp under each message. Taken from
+  // the app's setting rather than the browser default, so a pt-BR reader on an
+  // en-US machine gets Portuguese dates beside Portuguese copy -- the same
+  // reason conversation-tree.tsx takes a BCP 47 tag rather than reading it.
+  const { locale } = useLocale();
   const err = useT(errorCopy);
   const router = useRouter();
   const fragment = useFragment();
@@ -1001,6 +1009,29 @@ export default function ChatView({
       <span className="select-none self-center pl-1 text-fg-muted" aria-hidden>
         {m.role === "user" ? <User size={15} /> : <Bot size={15} />}
       </span>
+      {/* WHEN IT WAS SAID, in the action row rather than under the text.
+          A timestamp on every message, always visible, is a column of noise that
+          hides the one you are actually looking for -- and it answers a question
+          the reader only sometimes has. Here it follows the buttons' own reveal:
+          hover on desktop, tap on mobile, because this fragment renders in both.
+          One rule, and no second mechanic to keep in step with the first.
+
+          BEFORE the message number, not after: the two are read together, and
+          the number is an index into this conversation while the time is a fact
+          about the message. The fact comes first. */}
+      {(() => {
+        const when = messageTime(m.created_at, BCP47[locale]);
+        if (!when) return null;
+        return (
+          <time
+            dateTime={when.machine}
+            title={when.full}
+            className="select-none self-center px-1 text-[11px] tabular-nums text-fg-muted"
+          >
+            {when.label}
+          </time>
+        );
+      })()}
       <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
         {index + 1}
       </span>
@@ -1284,6 +1315,15 @@ export default function ChatView({
                           <TurnSteering mode={steering} />
                         </div>
                       )}
+                      {/* ABOVE the arms for the same reason steering is, and a
+                          stronger one: the turn is STOPPED on this. Whatever the
+                          band below is narrating, nothing advances until the
+                          member answers or the harness's deadline refuses it.
+                          Mounted only while a turn is running, which is the only
+                          window a request can exist in. */}
+                      <div className="mb-2">
+                        <ApprovalCard workspace={workspace} />
+                      </div>
                       {revealed === "" ? (
                         // Before the first word: progress only. The two never
                         // share the band. A recovery REPLACES progress rather than

@@ -131,10 +131,17 @@ describe("landing accuracy — scheduled tasks", () => {
       return JSON.stringify(landingCopy[locale].scheduled).toLowerCase();
     }
 
-    // The panel is READ-ONLY. Creating, editing, enabling, disabling or deleting a task
-    // is done by asking the agent — writes were deliberately deferred because picoclaw
-    // holds the live schedule in memory and whether it reloads an externally edited
-    // store is unverified (.specs/features/scheduled-tasks/context.md, DEC-ST-02).
+    // The panel is READ-ONLY, and stays so. Creating, editing, enabling, disabling or
+    // deleting a task is done by asking the agent.
+    //
+    // The REASON changed under this assertion without the assertion changing, which is
+    // worth stating so nobody relaxes it by mistake. It was written when writes were
+    // deferred because picoclaw holds the live schedule in memory
+    // (.specs/features/scheduled-tasks/context.md, DEC-ST-02). A ganglion agent can now
+    // schedule its own work — with the member approving each one in the conversation —
+    // so "ask the agent" is true on both harnesses rather than only one. What still has
+    // no interface control is CREATING a task from the screen, and that is what this
+    // case guards.
     it(`[${locale}] never offers to create or manage tasks from the interface`, () => {
       for (const banned of [
         "create a task",

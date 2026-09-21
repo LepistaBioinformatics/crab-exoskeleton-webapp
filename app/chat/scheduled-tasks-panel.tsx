@@ -16,6 +16,7 @@ import {
   isFinished,
   listTasks,
   readRun,
+  taskFailed,
   type CronEntry,
   type CronRun,
   type CronSchedule,
@@ -30,6 +31,7 @@ import { Alert } from "@/components/ui/alert";
 import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
+import ClampedTitle from "@/app/chat/clamped-title";
 import { chatCopy } from "@/lib/i18n/chat";
 import { BCP47 } from "@/lib/i18n/format";
 import { useLocale, useT } from "@/lib/i18n/context";
@@ -68,11 +70,21 @@ const runRow = cva(
   "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-elevated",
 );
 
+// THE DOT IS THE GLANCE. A member scanning this list reads one mark per task, so
+// what the mark can say is the whole of what they learn without stopping.
+//
+// It said enabled-or-not, and nothing else -- so a task whose last run ended in
+// an error looked exactly like one that had just succeeded. A run failed, the
+// store recorded it, the panel rendered it as one more muted line among "last
+// run" and "next run", and nobody saw. `failed` wins over `enabled` because a
+// broken task that is still scheduled is the state worth interrupting for.
 const taskDot = cva("mt-1.5 size-2 shrink-0 rounded-full", {
   variants: {
     enabled: { true: "bg-accent", false: "border border-fg-muted bg-transparent" },
+    failed: { true: "bg-blocked", false: "" },
   },
-  defaultVariants: { enabled: true },
+  compoundVariants: [{ failed: true, class: "bg-blocked border-0" }],
+  defaultVariants: { enabled: true, failed: false },
 });
 
 // A switch, built here rather than in components/ui because it is the app's only
@@ -434,15 +446,32 @@ export default function ScheduledTasksPanel({
         {shownTasks?.map((task) => {
           const isOpen = expanded.has(task.id);
           return (
-            // Space, not a rule. A task is a heading with its runs under it; the gap
-            // between two of them is what says where one ends.
-            <section key={task.id} className="pb-3">
+            // A RULE, not just space. The gap was tried first, on the argument
+            // that a task is a heading with its runs under it -- but a task with
+            // several runs is tall, and the space between two of them reads as
+            // more of the same task rather than as a boundary. The line is what
+            // says where one ends.
+            //
+            // `first:` rather than a separator element, so the orphan sections
+            // below share the same rule without either list knowing about the
+            // other: the first orphan is not the parent's first child, so it
+            // correctly gets a line separating it from the last task.
+            <section key={task.id} className="border-t border-rule pt-3 first:border-t-0 first:pt-0 pb-3">
               <div className="flex items-start gap-2 px-3 py-2.5">
-                <span className={taskDot({ enabled: task.enabled })} aria-hidden />
+                <span
+                  className={taskDot({
+                    enabled: task.enabled,
+                    failed: taskFailed(task.state.lastStatus),
+                  })}
+                  aria-hidden
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="font-display text-sm font-semibold text-fg">
-                    {task.name || task.id}
-                  </p>
+                  <ClampedTitle
+                    text={task.name || task.id}
+                    className="font-display text-sm font-semibold text-fg"
+                    more={t.scheduledTasks.showMore}
+                    less={t.scheduledTasks.showLess}
+                  />
                   <p className="text-[11px] text-fg-muted">
                     {scheduleText(task.schedule)}
                     {!task.enabled && ` · ${t.scheduledTasks.disabled}`}
@@ -461,17 +490,38 @@ export default function ScheduledTasksPanel({
                         value={fmtInstant(task.state.nextRunAtMs)}
                       />
                     )}
-                    {task.state.lastStatus && (
-                      <Row
-                        label={t.scheduledTasks.lastStatus}
-                        value={task.state.lastStatus}
-                      />
-                    )}
+                    {/* A FAILURE READS AS ONE. These were `Row`s like every
+                        other, in the same muted 11px as "next run" -- so "status:
+                        error" and "next run: Saturday" carried identical weight,
+                        and the first one disappeared into the second.
+
+                        Only the failing case is loud. A successful run saying so
+                        quietly is right; it is the ordinary state. */}
+                    {task.state.lastStatus &&
+                      (taskFailed(task.state.lastStatus) ? (
+                        <div className="text-blocked">
+                          <Row
+                            label={t.scheduledTasks.lastStatus}
+                            value={task.state.lastStatus}
+                          />
+                        </div>
+                      ) : (
+                        <Row
+                          label={t.scheduledTasks.lastStatus}
+                          value={task.state.lastStatus}
+                        />
+                      ))}
                     {task.state.lastError && (
-                      <Row
-                        label={t.scheduledTasks.lastErrorLabel}
-                        value={task.state.lastError}
-                      />
+                      <div className="text-blocked">
+                        {/* The reason the run ended, which is the one line that
+                            tells a member whether to change the task or wait for
+                            the next run. Not clamped: an error nobody can read
+                            whole is an error nobody can act on. */}
+                        <Row
+                          label={t.scheduledTasks.lastErrorLabel}
+                          value={task.state.lastError}
+                        />
+                      </div>
                     )}
                     {task.payload.to && (
                       <p>
@@ -552,7 +602,7 @@ export default function ScheduledTasksPanel({
         })}
 
         {shownOrphans.map((group) => (
-          <section key={group.jobId} className="pb-3">
+          <section key={group.jobId} className="border-t border-rule pt-3 first:border-t-0 first:pt-0 pb-3">
             <div className="flex items-start gap-2 px-3 py-2.5">
               <AlertTriangle
                 size={14}
@@ -560,9 +610,14 @@ export default function ScheduledTasksPanel({
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="font-display text-sm font-semibold text-fg">
-                  {group.runs[0]?.prompt || t.scheduledTasks.removedTask}
-                </p>
+                {/* The orphan's heading is the PROMPT that produced it, which
+                    the store caps at eight kilobytes and nothing capped here. */}
+                <ClampedTitle
+                  text={group.runs[0]?.prompt || t.scheduledTasks.removedTask}
+                  className="font-display text-sm font-semibold text-fg"
+                  more={t.scheduledTasks.showMore}
+                  less={t.scheduledTasks.showLess}
+                />
                 <p className="text-[11px] text-fg-muted">
                   {t.scheduledTasks.removedTask} · {group.jobId}
                 </p>

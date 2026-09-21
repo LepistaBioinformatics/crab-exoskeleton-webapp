@@ -40,7 +40,21 @@ function horizontalRules(text: string): number {
 const PINNED: Record<string, { rules: number; why: string }> = {
   "unified-sidebar.tsx": { rules: 1, why: "the conversation list scrolls under the account footer" },
   "workspace-pane.tsx": { rules: 1, why: "the panel body scrolls under the pane header" },
-  "scheduled-tasks-panel.tsx": { rules: 1, why: "the task list scrolls under the pinned stack" },
+  // THREE, AND TWO OF THEM BREAK FR-1.0 ON PURPOSE. The first is the pinned
+  // stack the task list scrolls under, which the rule allows. The other two are
+  // SEPARATORS INSIDE A SCROLLING LIST -- exactly what this file exists to
+  // forbid, and what turn-dock.tsx's entry distinguishes itself from.
+  //
+  // Overridden by the project owner, on a report the principle's premise does
+  // not survive: "não dá pra saber onde começa uma e termina outra". Spacing
+  // works when the things being spaced are of similar height. A task carries its
+  // runs under it, so one task can be ten lines and the next two, and the gap
+  // between them reads as more of the same task rather than as a boundary.
+  //
+  // The alternative that would have kept the rule -- a surface per task instead
+  // of a line between them -- was not taken, because a line is what was asked
+  // for. Reversing this is two class strings and this comment.
+  "scheduled-tasks-panel.tsx": { rules: 3, why: "the pinned stack, plus a separator per task and per orphan" },
   "file-preview.tsx": { rules: 3, why: "the view tabs, the sheet tabs and the truncation notice" },
   // The PDF pane draws its own pages now — the browser's viewer, and the annotation tools
   // it ships that nothing here can save, went with the `<object>`. Its footer is the page

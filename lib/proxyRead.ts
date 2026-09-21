@@ -76,3 +76,68 @@ export async function proxyRead(
   }
   return NextResponse.json(await res.json());
 }
+
+/**
+ * POST to one of the proxy's member-facing write routes, with the same routing
+ * and authorization rules `proxyRead` establishes.
+ *
+ * A SIBLING RATHER THAN A FLAG, because the read helper is read-shaped by
+ * construction and adding a method parameter would make every existing caller a
+ * potential write. The parts that must not drift are shared by being written
+ * once in each: `role` selects the service path and never travels upstream,
+ * `tenant_id`/`subs_acc_id` are what the proxy authorizes against, and a 401
+ * clears the session.
+ *
+ * The body is forwarded verbatim. This layer does not validate it -- the proxy
+ * is the one that knows what a valid request is, and a second validator here
+ * would be a second thing to keep in step.
+ */
+export async function proxyWrite(
+  req: NextRequest,
+  upstreamPath: (role: string) => string,
+): Promise<NextResponse> {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "session_expired" }, { status: 401 });
+  }
+
+  const p = req.nextUrl.searchParams;
+  const role = p.get("role");
+  const tenantId = p.get("tenant_id");
+  const subsAccId = p.get("subs_acc_id");
+  if (!role || !isInstance(role) || !tenantId || !subsAccId) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  const project = p.get("project");
+  if (project) query.set("project", project);
+
+  const body = await req.text();
+  let res: Response;
+  try {
+    res = await fetchMycelium(`${upstreamPath(role)}?${query.toString()}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+  } catch (err) {
+    if (err instanceof MyceliumConnectivityError) {
+      return NextResponse.json({ error: "connectivity" }, { status: 502 });
+    }
+    throw err;
+  }
+
+  if (res.status === 401) {
+    await clearSession();
+    return NextResponse.json({ error: "session_expired" }, { status: 401 });
+  }
+  if (!res.ok) {
+    const { error, status } = await upstreamError(res);
+    return NextResponse.json({ error, status }, { status });
+  }
+  return NextResponse.json(await res.json().catch(() => ({})));
+}
