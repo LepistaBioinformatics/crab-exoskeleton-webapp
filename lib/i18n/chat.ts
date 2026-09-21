@@ -126,6 +126,10 @@ const en = {
     viewRendered: "Rendered",
     viewSource: "Source",
     wrapLines: "Wrap long lines",
+    // The label on the panel that separates a markdown file's leading `---` block
+    // from the document. Useful above all when reviewing a SKILL.md, where the
+    // block decides whether the skill loads at all.
+    frontmatter: "Frontmatter",
     // The PDF pane draws its own pages rather than handing the file to the browser's
     // viewer — see `pdf-pane.tsx`. These are the two controls that came back with it.
     pdfPrev: "Previous page",
@@ -529,19 +533,34 @@ const en = {
     // Labelled by what it DOES, not by where it goes ("bottom" names a scroll position;
     // the member is looking for the newest thing said).
     scrollToLatest: "Jump to the latest message",
-    // THE DIVIDER, and the distinction it exists to draw: the agent's context
-    // was shortened, the member's transcript was not. Said as what LEFT rather
-    // than as "compaction", which names the mechanism instead of the effect.
-    compactedOne: "1 earlier message is no longer in the agent's context",
-    compactedOther: "{n} earlier messages are no longer in the agent's context",
+    // THE DIVIDER, LED BY WHAT WAS GAINED. It used to say what LEFT -- "2 earlier
+    // messages are no longer in the agent's context" -- which reads as loss,
+    // printed across a conversation the member can still scroll through in full.
+    // What happened is the opposite of loss: fewer messages travel with each
+    // turn, so the replies after this point cost less and arrive sooner.
+    //
+    // The count stays because it is the one concrete number here. No token
+    // figure: the harness records how many MESSAGES it set aside and not how many
+    // tokens that saved, and a number invented for the sentence would be the only
+    // unverifiable thing on the screen.
+    compactedOne: "Tokens saved — 1 older message is out of the agent's active memory",
+    compactedOther: "Tokens saved — {n} older messages are out of the agent's active memory",
     // Without a count -- a record that did not say how many. Rendering "0
     // messages" would claim something false about an event that did happen.
-    compactedSome: "Earlier messages are no longer in the agent's context",
-    // The reassurance, and the reason this is a divider rather than a warning.
-    // Nothing the member can scroll to has been lost.
-    compactedKept: "Everything above is still here.",
-    // The harness's own note, collapsed.
-    compactedRecord: "what the harness recorded",
+    compactedSome: "Tokens saved — older messages are out of the agent's active memory",
+    // EVERYTHING ELSE IS BEHIND A CLICK. This is a status line in the middle of
+    // someone's conversation; three sentences of mechanism printed there is a
+    // wall between two messages. A member who wants to know asks.
+    compactedWhat: "What happened here?",
+    compactedWhyLimit:
+      "The agent re-reads this whole conversation before every reply, and there is a limit to how much it can hold at once.",
+    compactedWhySaves:
+      "To stay under that limit, the oldest messages stopped travelling with each turn. That is what makes the replies from here on cheaper and quicker.",
+    // THE REASSURANCE. Nothing the member can scroll to has been lost, and the
+    // agent can still go and find it -- which is the part that makes this an
+    // optimisation rather than forgetting.
+    compactedWhyKept:
+      "Nothing was deleted. The whole conversation is still on this screen and saved in full, and the agent can search back through it whenever it needs something from earlier.",
   },
   // background-turn-dock: the bar of conversations left running elsewhere.
   //
@@ -1006,6 +1025,7 @@ const pt: ChatDict = {
     viewRendered: "Renderizado",
     viewSource: "Código-fonte",
     wrapLines: "Quebrar linhas longas",
+    frontmatter: "Metadados",
     pdfPrev: "Página anterior",
     pdfNext: "Próxima página",
     pdfZoomIn: "Aproximar",
@@ -1303,11 +1323,18 @@ const pt: ChatDict = {
     eventDenied: "não aprovado",
     eventFailed: "falhou",
     scrollToLatest: "Ir para a mensagem mais recente",
-    compactedOne: "1 mensagem anterior saiu do contexto do agente",
-    compactedOther: "{n} mensagens anteriores saíram do contexto do agente",
-    compactedSome: "Mensagens anteriores saíram do contexto do agente",
-    compactedKept: "Tudo acima continua aqui.",
-    compactedRecord: "o que o harness registrou",
+    compactedOne: "Tokens economizados — 1 mensagem antiga saiu da memória ativa do agente",
+    compactedOther:
+      "Tokens economizados — {n} mensagens antigas saíram da memória ativa do agente",
+    compactedSome:
+      "Tokens economizados — mensagens antigas saíram da memória ativa do agente",
+    compactedWhat: "O que aconteceu aqui?",
+    compactedWhyLimit:
+      "O agente relê esta conversa inteira antes de cada resposta, e há um limite de quanto ele consegue segurar de uma vez.",
+    compactedWhySaves:
+      "Para caber nesse limite, as mensagens mais antigas deixaram de viajar junto a cada turno. É isso que torna as respostas daqui em diante mais baratas e mais rápidas.",
+    compactedWhyKept:
+      "Nada foi apagado. A conversa inteira continua nesta tela e salva por completo, e o agente pode buscar nela sempre que precisar de algo do começo.",
   },
   dock: {
     label: "Conversas rodando em segundo plano",

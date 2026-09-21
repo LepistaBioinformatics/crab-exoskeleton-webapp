@@ -175,6 +175,19 @@ interface ComposerProps {
 // The signature element: a large, inviting chat box with the send action as a
 // circular accent button, plus an attach menu (categories + "Outros") and
 // attached-file chips. Owns auto-grow and the autofocus-on-open behavior.
+/**
+ * Whether the device's primary pointer is coarse -- a touch screen.
+ *
+ * The query is named ONCE, here, because two places ask it for opposite reasons
+ * (a rendered placeholder, which needs hydration-safe state; a client-only
+ * effect, which needs the answer immediately) and a second copy of the string is
+ * how they come to disagree.
+ */
+function isCoarsePointer(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(pointer: coarse)").matches ?? false;
+}
+
 export default function Composer({
   onSend,
   onTyping,
@@ -298,12 +311,17 @@ export default function Composer({
 
   // Touch devices have no Shift key, so Enter must stay a newline there (send is
   // the button); only fine-pointer (desktop) gets Enter-to-send + the hint.
+  //
+  // STATE rather than a call at render time, because the server has no `window`
+  // and this decides a rendered placeholder -- reading it during render would be
+  // a hydration mismatch. `isCoarsePointer` exists for the places that run only
+  // on the client, where the state's initial `false` is a real race.
   const [coarsePointer, setCoarsePointer] = useState(false);
   // The field follows the browser locale so spell-check uses the matching
   // dictionary; no in-app language switch (that's a browser-side setting).
   const [locale, setLocale] = useState<string | undefined>(undefined);
   useEffect(() => {
-    setCoarsePointer(window.matchMedia?.("(pointer: coarse)").matches ?? false);
+    setCoarsePointer(isCoarsePointer());
     setLocale(navigator.language);
   }, []);
 
@@ -317,12 +335,30 @@ export default function Composer({
   // Opening a conversation puts the cursor in the field, so the member can start
   // typing without clicking.
   //
+  // NOT ON A TOUCH SCREEN. Focusing raises the soft keyboard, which takes half
+  // the viewport the moment a conversation opens -- before the member has read a
+  // word of it, and over the message they came back to look at. On a desktop the
+  // cursor costs nothing and saves a click; on a phone it is the whole screen.
+  //
+  // Read through `isCoarsePointer()` rather than the state beside it. The state
+  // is `false` on this effect's FIRST run -- the mount effect that resolves it
+  // has only scheduled the update -- so the guard would not hold on the run that
+  // matters.
+  //
+  // Gating on the state does happen to work today, and for a reason that has
+  // nothing to do with pointers: the same mount effect also resolves `locale`,
+  // the textarea is KEYED on it, so React discards the node this effect just
+  // focused and the re-run (locale is a dependency) then sees the right value.
+  // Checked, not assumed -- the test passes both ways. That is a coincidence of
+  // two unrelated features, and the query costs nothing to ask directly.
+  //
   // `locale` is a dependency because the field is KEYED on it (see the Textarea): the
   // mount effect above resolves navigator.language a tick later, which changes the key
   // and makes React replace the DOM node. This effect had already focused the node
   // being discarded, and without `locale` here it never re-ran — so the composer lost
   // focus on every mount, which is exactly what opening a chat does.
   useEffect(() => {
+    if (isCoarsePointer()) return;
     if (!loadingHistory) ref.current?.focus();
   }, [sessionId, loadingHistory, locale]);
 
@@ -606,13 +642,25 @@ export default function Composer({
                 return;
               }
             }
-            // Enter sends everywhere, touch included. It used to insert a
-            // newline on a coarse pointer, on the reasoning that a soft
-            // keyboard has no usable Shift+Enter -- but the far more common
-            // intent is to send, and a stray newline where a send was meant is
-            // the worse failure. Multi-line composing on touch is still
-            // available through the advanced markdown editor.
-            if (e.key === "Enter" && !e.shiftKey) {
+            // ENTER SENDS ON A FINE POINTER ONLY.
+            //
+            // This has been both ways. It was a newline on touch, then became a
+            // send everywhere on the reasoning that sending is the commoner
+            // intent and a stray newline is the worse mistake. That reasoning
+            // holds for a keyboard with a Shift key: there, Shift+Enter is the
+            // escape hatch and the placeholder names it.
+            //
+            // A soft keyboard has no usable Shift+Enter, so "Enter sends" left a
+            // phone with NO way to write a second paragraph at all -- the return
+            // key, the one key that means "new line" on every other app on the
+            // device, sent the message instead. The advanced markdown editor was
+            // the answer, and it is two taps and a modal away from a field the
+            // member is already typing in.
+            //
+            // So on touch the return key does what the device says it does, and
+            // the send button -- which is on screen, beside the field, and is the
+            // only send affordance a phone ever had -- sends.
+            if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
               e.preventDefault();
               if (canSend) submit();
             }

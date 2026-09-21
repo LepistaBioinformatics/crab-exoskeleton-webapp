@@ -30,8 +30,8 @@ import {
   Brain,
   ChevronRight,
   Cpu,
+  Gauge,
   Reply,
-  Scissors,
   User,
   Users,
   Wrench,
@@ -82,16 +82,20 @@ import TurnProgress, { TurnRecovery, TurnSteering } from "@/app/chat/turn-progre
 // because the file preview renders the same documents and was reading plain `--fg`: in
 // dark mode a markdown file was visibly cooler and brighter than the same markdown in
 // the transcript beside it.
-const messageBand = cva("group relative w-full text-reading-fg [container-type:inline-size]", {
+// `py-6` is on the BASE, not a variant and not a per-message call: the vertical
+// spacing of a message must not depend on who said it or on what happens to sit
+// next to it. See the note above `bandGap`.
+const messageBand = cva(
+  "group relative w-full py-6 text-reading-fg [container-type:inline-size]",
+  {
   variants: {
     role: {
-      // Vertical padding is applied per-message in the render (bandPad) since it
-      // depends on whether the message stands alone between the other speaker's.
       user: "bg-accent/8",
       assistant: "",
+      },
     },
   },
-});
+);
 
 // A small gap only when the speaker changes (distinct blocks); consecutive
 // same-speaker messages touch (no gap) so a run reads as one continuous block.
@@ -100,10 +104,24 @@ const bandGap = cva("", {
   defaultVariants: { changed: false },
 });
 
-// Band vertical padding, shared by both roles: roomy in a same-speaker run,
-// roomier still when a message stands alone between the other speaker's
-// messages. (Applied to the agent's bands too, matching the user's.)
-const bandPad = (standalone: boolean) => (standalone ? "py-10" : "py-6");
+// ONE PADDING FOR EVERY MESSAGE, and the asymmetry that is why.
+//
+// There used to be two -- `py-6` inside a same-speaker run, `py-10` for a message
+// standing alone between the other speaker's -- on the intent that an isolated
+// message should breathe. Both roles read the same helper, so it looked
+// symmetric. It was not.
+//
+// An agent turn is `user message -> steps -> answer`, and `rowRole` maps a steps
+// row to the assistant. So the answer always has a same-role neighbour and the
+// question never does: the member's message got `py-10` and the agent's reply
+// `py-6`, on every single turn where the agent narrated anything at all. The
+// rule was neutral; the shape of a turn is not.
+//
+// Uniform is the only version that cannot drift, because adjacent bands each
+// contribute their own padding: the gap between any two messages is now twice
+// this, whoever said them. `py-6` rather than `py-10` -- 48px between messages
+// is already generous, and at `py-10` an answer sits 80px from the narration
+// that produced it.
 
 
 // A message the composer is quoting (Telegram-style reply). Pico is text-only
@@ -150,6 +168,16 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 // "earlier messages are gone" over a conversation they can still scroll through
 // has been told their history was lost.
 //
+// SO THE LINE LEADS WITH THE GAIN, not the departure. The first cut named the
+// mechanism's effect on the agent ("no longer in the agent's context"), which is
+// accurate and reads as damage; it is the member's conversation and from where
+// they sit nothing left it. What actually changed is that fewer messages travel
+// with each turn, so the replies after this point are cheaper and quicker.
+//
+// And the explanation is BEHIND A CLICK. Three sentences of mechanism printed
+// between two messages is a wall in the middle of a conversation; a member who
+// wants to know what happened asks, and gets it in their own words.
+//
 // Not a message band and not a step run. It carries no speaker, so it takes the
 // centred column and a rule rather than the padded band, and it stands apart
 // from a run of steps because it is not something the agent DID: it is
@@ -172,26 +200,48 @@ function CompactionRow({
       : n > 1
         ? t.view.compactedOther.replace("{n}", String(n))
         : t.view.compactedSome;
-  const detail = (m.events ?? []).find((e) => e.kind === "compact")?.detail ?? "";
+  // The harness's own note is NOT rendered. It is `Count` formatted into a
+  // sentence -- marker_test.go asserts the two agree -- so it carries nothing the
+  // count does not, in the register the member was reading past: brackets, "this
+  // window", "the full transcript is preserved". Every word below is composed
+  // here instead, from the one number the record actually holds.
   return (
     <div ref={registerRef} className={bandGap({ changed: true })}>
       <div className="mx-auto w-full max-w-[720px] px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-fg-muted/70">
-          <span className="h-px flex-1 bg-rule" aria-hidden />
-          <Scissors size={12} aria-hidden />
-          <span>{label}</span>
-          <span className="h-px flex-1 bg-rule" aria-hidden />
-        </div>
-        <p className="mt-1 text-center text-[11px] text-fg-muted/60">{t.view.compactedKept}</p>
-        {detail && (
-          <div className="mt-1 flex justify-center">
-            <Disclosure label={t.view.compactedRecord}>
-              <p className="mt-1 whitespace-pre-wrap break-words text-center text-[11px] text-fg-muted/70">
-                {detail}
-              </p>
-            </Disclosure>
+        {/* THE DIVIDER LINE IS THE BUTTON. Not `Disclosure`, which is shared with
+            the step run and the reasoning block and puts its summary on a line of
+            its own: under a rule that already reads as one status, a second line
+            asking "What happened here?" is a second thing to read for the same
+            event. The whole row toggles instead, and the chevron sits in the text
+            so the affordance is where the eye already is.
+
+            Still `<details>`/`<summary>`, for the reason Disclosure gives: the
+            keyboard operation and the expanded/collapsed announcement come for
+            free, and there is no state to drift out of sync with the DOM. */}
+        <details className="group">
+          <summary
+            title={t.view.compactedWhat}
+            className="flex cursor-pointer list-none items-center gap-2 text-xs text-fg-muted/70 hover:text-fg-muted [&::-webkit-details-marker]:hidden"
+          >
+            <span className="h-px flex-1 bg-rule" aria-hidden />
+            <Gauge size={12} aria-hidden />
+            <span>{label}</span>
+            <ChevronRight
+              size={12}
+              className="transition-transform group-open:rotate-90"
+              aria-hidden
+            />
+            <span className="h-px flex-1 bg-rule" aria-hidden />
+          </summary>
+          {/* Bounded and centred as a block, not as centred text: three sentences
+              of prose ragged on both edges across a 720px column is a shape
+              nobody reads. */}
+          <div className="mx-auto mt-2 max-w-[520px] space-y-1.5 text-[11px] leading-relaxed text-fg-muted/70">
+            <p>{t.view.compactedWhyLimit}</p>
+            <p>{t.view.compactedWhySaves}</p>
+            <p>{t.view.compactedWhyKept}</p>
           </div>
-        )}
+        </details>
       </div>
     </div>
   );
@@ -1111,14 +1161,8 @@ export default function ChatView({
             <div className="w-full">
               {rows.map((r, ri) => {
                 const prev = rows[ri - 1];
-                const next = rows[ri + 1];
                 const role = rowRole(r);
                 const changed = Boolean(prev && rowRole(prev) !== role);
-                // A message with no same-role neighbor on either side stands alone
-                // (flanked by the other speaker, or at an edge), so it gets the
-                // roomier padding -- applied to both user and agent bands.
-                const standalone =
-                  (!prev || rowRole(prev) !== role) && (!next || rowRole(next) !== role);
 
                 if (r.row === "compaction") {
                   return (
@@ -1160,7 +1204,7 @@ export default function ChatView({
                     className={bandGap({ changed })}
                   >
                     <div
-                      className={`${messageBand({ role: m.role })} ${bandPad(standalone)}`}
+                      className={messageBand({ role: m.role })}
                       onClick={() => {
                         // A drag-to-select ends in a click here; don't hijack it
                         // (toggling state would drop the selection). Only the
@@ -1175,7 +1219,7 @@ export default function ChatView({
                             bottom-right, in the card's bottom padding (below the text) — the
                             same side of the message the mobile row already uses, so the two
                             placements no longer disagree about where a message's actions live.
-                            `bandPad` is symmetric (py-6 / py-10), so this sits exactly as far
+                            The band's padding is symmetric, so this sits exactly as far
                             from the text as it did above it. */}
                         <div className="absolute right-1.5 top-full mt-1 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           {renderActions(m, i)}
@@ -1223,12 +1267,12 @@ export default function ChatView({
                   // otherwise the newest thing on screen is a pending bubble.
                   ref={pending.length === 0 ? newestSentRef : undefined}
                 >
-                  <div className={`${messageBand({ role: "user" })} ${bandPad(false)}`}>
+                  <div className={messageBand({ role: "user" })}>
                     <div className="relative mx-auto w-full max-w-[720px] px-4">
                       <MessageContent content={parseAnexos(turn.activeUserMessage).text} />
                     </div>
                   </div>
-                  <div className={`${messageBand({ role: "assistant" })} ${bandPad(false)}`}>
+                  <div className={messageBand({ role: "assistant" })}>
                     <div className="relative mx-auto w-full max-w-[720px] px-4">
                       {/* ABOVE both arms, not inside either: the message was folded
                           into a turn that was already running, and that fact holds
@@ -1277,7 +1321,7 @@ export default function ChatView({
                   than a pending burst -- it is already on its way. */}
               {queue.map((content, i) => (
                 <div key={`queued-${i}`} className={bandGap({ changed: false })}>
-                  <div className={`${messageBand({ role: "user" })} origin-queued ${bandPad(false)}`}>
+                  <div className={`${messageBand({ role: "user" })} origin-queued`}>
                     <div className="relative mx-auto w-full max-w-[720px] px-4">
                       <MessageContent content={parseAnexos(content).text} />
                       <span className="mt-1 block text-xs text-fg-muted/70">{t.view.queued}</span>
@@ -1290,17 +1334,15 @@ export default function ChatView({
                   bar pulsing to signal "pending" until the batch flushes. */}
               {pending.map((content, i) => {
                 const { text, refs } = parseAnexos(content);
-                // All pending are the user's; a run touches, and a lone pending
-                // after an agent message stands alone (roomier padding).
+                // All pending are the user's; `changed` is the speaker-change gap.
                 const prevIsUser = i > 0 || messages[messages.length - 1]?.role === "user";
-                const alone = !prevIsUser && i === pending.length - 1;
                 return (
                   <div
                     key={`pending-${i}`}
                     className={bandGap({ changed: !prevIsUser })}
                     ref={i === pending.length - 1 ? newestSentRef : undefined}
                   >
-                    <div className={`${messageBand({ role: "user" })} origin-pulse ${bandPad(alone)}`}>
+                    <div className={`${messageBand({ role: "user" })} origin-pulse`}>
                       <div className="relative mx-auto w-full max-w-[720px] px-4">
                         {text && <MessageContent content={text} />}
                         {refs.length > 0 && (

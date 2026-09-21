@@ -18,6 +18,7 @@ import MessageContent, { MarkdownImageContext } from "@/app/chat/message-content
 import CodePane from "@/app/chat/code-pane";
 import PdfPane from "@/app/chat/pdf-pane";
 import { languageForFile } from "@/lib/code-highlight";
+import { split as splitFrontmatter, type FrontmatterRow } from "@/lib/frontmatter";
 import { SHEET_ROW_CAP, type SheetPreview } from "@/lib/sheet-preview";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -196,6 +197,20 @@ export default function FilePreview({
   // the markdown grammar and an html with xml, which is what the alias table already
   // says those extensions mean.
   const language = kind === "code" || asSource ? languageForFile(name) : null;
+  // FR-1. Split before rendering rather than teaching MessageContent about
+  // frontmatter: it also draws the transcript, the scheduled-tasks panel and the
+  // draft editor, and a message that opens with `---` is an ordinary thematic
+  // break there.
+  //
+  // Memoised because `text` is a whole file and this runs on every render of a
+  // pane that re-renders on scroll.
+  const doc = useMemo(
+    () =>
+      kind === "markdown" && text !== null
+        ? splitFrontmatter(text)
+        : { frontmatter: null, body: text ?? "" },
+    [kind, text],
+  );
   const tooLarge = needsBody && size != null && size > PREVIEW_TEXT_MAX;
   // Read out here, so the effect below depends on a STRING rather than on the copy
   // object — the same reason its other dependencies are `workspace`'s primitives.
@@ -461,8 +476,11 @@ export default function FilePreview({
             // `text-fg`, so in dark mode a markdown file rendered cooler and brighter
             // here than the same markdown in the transcript beside it.
             <div className="mx-auto max-w-[820px] px-6 py-5 text-reading-fg [container-type:inline-size]">
+              {doc.frontmatter !== null && (
+                <FrontmatterPanel rows={doc.frontmatter} label={t.preview.frontmatter} />
+              )}
               <MarkdownImageContext.Provider value={resolveImage}>
-                <MessageContent content={text} />
+                <MessageContent content={doc.body} />
               </MarkdownImageContext.Provider>
             </div>
           )}
@@ -644,6 +662,58 @@ export default function FilePreview({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The document's frontmatter, drawn as metadata.
+ *
+ * FR-4. The complaint this answers is not that the block was missing -- with
+ * remark-gfm alone a `---` fence is a thematic break and the lines under it become
+ * an <h2>, so `name: pdf description: ...` rendered as the largest text on the
+ * page, above the document's own title. It was already the most prominent thing
+ * there; what it was not was distinguishable from the document.
+ *
+ * So the panel deliberately drops the reading typography the column around it
+ * sets: a border, a label, and monospace rows. A reviewer has to be able to tell
+ * at a glance, without reading it, that this part is not the document.
+ *
+ * An EMPTY block still renders the panel. "There is a frontmatter block and it has
+ * no fields" is a different fact from "there is none", and for someone reviewing a
+ * skill it is the more interesting one -- the proxy rejects a SKILL.md whose
+ * `name` or `description` is missing.
+ */
+function FrontmatterPanel({ rows, label }: { rows: FrontmatterRow[]; label: string }) {
+  return (
+    // NO HAIRLINES INSIDE IT -- not under the label, not between the rows.
+    // `pane-weight.test.ts` states the rule this obeys: a horizontal rule survives
+    // only where content scrolls past it, and nothing in this panel scrolls. The
+    // outer box and the label's own weight carry the separation; row separators
+    // would be the decoration that rule exists to refuse.
+    <div className="mb-6 rounded-lg border border-rule bg-surface px-3 py-2.5">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        {label}
+      </div>
+      <dl>
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 py-0.5 font-mono text-xs"
+          >
+            {r.key === null ? (
+              // A line with no `key: value` shape, kept verbatim and spanning both
+              // columns. The Go readers drop it; a reviewer is looking for it.
+              <dd className="col-span-2 min-w-0 break-words text-fg-muted">{r.value}</dd>
+            ) : (
+              <>
+                <dt className="min-w-0 break-words text-fg-muted">{r.key}</dt>
+                <dd className="min-w-0 break-words text-fg">{r.value}</dd>
+              </>
+            )}
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
