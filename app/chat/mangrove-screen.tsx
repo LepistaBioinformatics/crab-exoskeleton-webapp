@@ -6,6 +6,7 @@ import { Check, Inbox, Send, ShieldQuestion, Trash2, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import DestinationScreen from "./destination-screen";
 import MangroveContent from "./mangrove-content";
+import MangrovePeople from "./mangrove-people";
 import { useMangrove } from "./use-mangrove";
 import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,9 @@ function scopeLabel(id: string): string {
 export default function MangroveScreen({ workspace }: { workspace: Workspace }) {
   const t = useT(chatCopy);
   const [reading, setReading] = useState<MangroveReading>("received");
+  // People is not a reading -- it does not come from the timeline and must not
+  // refetch it. Kept as its own flag so switching to it costs nothing.
+  const [onPeople, setOnPeople] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
@@ -97,23 +101,40 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
           <button
             key={r.key}
             type="button"
-            className={tab({ current: reading === r.key })}
-            aria-current={reading === r.key ? "page" : undefined}
-            onClick={() => setReading(r.key)}
+            className={tab({ current: !onPeople && reading === r.key })}
+            aria-current={!onPeople && reading === r.key ? "page" : undefined}
+            onClick={() => {
+              setOnPeople(false);
+              setReading(r.key);
+            }}
           >
             {r.label}
           </button>
         ))}
+        <button
+          type="button"
+          className={tab({ current: onPeople })}
+          aria-current={onPeople ? "page" : undefined}
+          onClick={() => setOnPeople(true)}
+        >
+          {t.mangrove.people}
+        </button>
       </nav>
 
-      {actionError && (
+      {onPeople && (
+        <div className="mt-6">
+          <MangrovePeople workspace={workspace} />
+        </div>
+      )}
+
+      {!onPeople && actionError && (
         <Alert severity="error" className="mt-4">
           {actionError}
         </Alert>
       )}
 
       {/* Unreachable is its own answer, with a way to try again. */}
-      {error && !off && (
+      {!onPeople && error && !off && (
         <Alert severity="error" className="mt-4">
           {error === "mangrove_unreachable" || error === "connectivity"
             ? t.mangrove.unreachable
@@ -124,7 +145,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
         </Alert>
       )}
 
-      {nothing && (
+      {!onPeople && nothing && (
         <div className="mt-8 text-sm text-fg-muted">
           <p>{t.mangrove.none}</p>
           <p className="mt-1">{t.mangrove.noneHint}</p>
@@ -132,7 +153,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
       )}
 
       {/* Held: addressed at this member, NOT yet in their agent's memory. */}
-      {held.length > 0 && (
+      {!onPeople && held.length > 0 && (
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
             <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
@@ -168,7 +189,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
       )}
 
       {/* Pending: only ever rendered for a governing role. */}
-      {pending.length > 0 && (
+      {!onPeople && pending.length > 0 && (
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
             <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
@@ -211,7 +232,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
         </section>
       )}
 
-      {claims.length > 0 && (
+      {!onPeople && claims.length > 0 && (
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
             <Send size={16} aria-hidden />{" "}

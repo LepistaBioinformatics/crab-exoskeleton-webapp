@@ -55,6 +55,26 @@ export interface MangroveTimeline {
   pending?: MangrovePending[];
 }
 
+/** One person the directory found. */
+export interface DirectoryEntry {
+  email: string;
+  /** Absent in strict mode -- address them by email instead. */
+  actorId?: string;
+}
+
+export interface DirectoryResult {
+  /** Which question this deployment's directory is able to answer. */
+  mode: "exact" | "prefix";
+  results: DirectoryEntry[];
+}
+
+/** Your own handles, to give to somebody whose deployment cannot search. */
+export interface MangroveIdentity {
+  email: string;
+  personId: string;
+  serviceId: string;
+}
+
 export interface MangroveCapabilities {
   /** May decide cross-scope publications into this subscription. */
   governs: boolean;
@@ -100,6 +120,22 @@ export function readTimeline(w: Workspace, reading: MangroveReading): Promise<Ma
 
 export function readCapabilities(w: Workspace): Promise<MangroveCapabilities> {
   return call<MangroveCapabilities>("capabilities", w);
+}
+
+/**
+ * Look somebody up.
+ *
+ * `q` is a whole email address unless the administrator enabled prefix search,
+ * which the answer's `mode` reports -- so the UI can say which question it is
+ * able to answer rather than leaving the member to infer it from empty results.
+ */
+export function findPeople(w: Workspace, q: string): Promise<DirectoryResult> {
+  return call<DirectoryResult>("directory", w, undefined, { q });
+}
+
+/** Your own ids. Always available, in either directory mode. */
+export function readIdentity(w: Workspace): Promise<MangroveIdentity> {
+  return call<MangroveIdentity>("identity", w);
 }
 
 /** Take something sent directly to you into your own agent's memory. */

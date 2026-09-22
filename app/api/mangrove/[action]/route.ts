@@ -24,6 +24,8 @@ import { fetchMycelium, isInstance, MyceliumConnectivityError } from "@/lib/myce
 const ACTIONS: Record<string, "GET" | "POST"> = {
   timeline: "GET",
   capabilities: "GET",
+  directory: "GET",
+  identity: "GET",
   admit: "POST",
   decide: "POST",
   revoke: "POST",
@@ -54,6 +56,10 @@ async function handle(req: NextRequest, action: string) {
   // what it allows.
   const reading = p.get("reading");
   if (reading) query.set("reading", reading);
+  // The directory's needle. Forwarded as given: what counts as a valid needle
+  // is the proxy's call, since only it knows which mode this deployment is in.
+  const q = p.get("q");
+  if (q) query.set("q", q);
 
   try {
     const res = await fetchMycelium(`/${role}/v1/mangrove/${action}?${query}`, {
