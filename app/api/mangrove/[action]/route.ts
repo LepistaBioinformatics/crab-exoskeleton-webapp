@@ -1,4 +1,4 @@
-// The reef's BFF. One route for all five actions, because they differ only in
+// The mangrove's BFF. One route for all five actions, because they differ only in
 // method and path segment and a file each would be five copies of the same
 // twelve lines.
 //
@@ -9,8 +9,8 @@
 // the proxy authorizes against.
 //
 // A 404 FROM UPSTREAM MEANS THE FEATURE IS OFF, not that something is missing.
-// The proxy does not register these routes when the reef is unconfigured, so a
-// 404 is an operator's choice rather than a fault — it comes back as `reef_off`
+// The proxy does not register these routes when the mangrove is unconfigured, so a
+// 404 is an operator's choice rather than a fault — it comes back as `mangrove_off`
 // and the tab hides itself. Conflating it with a real error would put a broken
 // looking tab in front of every member of every deployment that never enabled
 // this.
@@ -49,14 +49,14 @@ async function handle(req: NextRequest, action: string) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
-  // `reading` is the only extra the reef takes, and it is an enum upstream --
+  // `reading` is the only extra the mangrove takes, and it is an enum upstream --
   // passing it through unchecked is safe and keeps the allowlist honest about
   // what it allows.
   const reading = p.get("reading");
   if (reading) query.set("reading", reading);
 
   try {
-    const res = await fetchMycelium(`/${role}/v1/reef/${action}?${query}`, {
+    const res = await fetchMycelium(`/${role}/v1/mangrove/${action}?${query}`, {
       method,
       headers: {
         Authorization: `Bearer ${session.token}`,
@@ -70,17 +70,17 @@ async function handle(req: NextRequest, action: string) {
       return NextResponse.json({ error: "session_expired" }, { status: 401 });
     }
     if (res.status === 404) {
-      // The operator did not enable the reef. Not a fault.
-      return NextResponse.json({ error: "reef_off" }, { status: 404 });
+      // The operator did not enable the mangrove. Not a fault.
+      return NextResponse.json({ error: "mangrove_off" }, { status: 404 });
     }
     if (res.status === 502) {
       // Configured but unreachable -- a DIFFERENT state from "nothing shared
       // yet" and from "switched off", and the screen renders all three
       // differently.
-      return NextResponse.json({ error: "reef_unreachable" }, { status: 502 });
+      return NextResponse.json({ error: "mangrove_unreachable" }, { status: 502 });
     }
     if (!res.ok) {
-      // A refusal keeps its body: the reef names the addressee that was out of
+      // A refusal keeps its body: the mangrove names the addressee that was out of
       // reach, and a member who cannot see which one cannot fix it.
       const body = await res.text();
       return new NextResponse(body, {

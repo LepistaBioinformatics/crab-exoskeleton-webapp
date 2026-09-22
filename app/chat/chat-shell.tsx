@@ -28,7 +28,7 @@ import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
 import WorkspaceGrid from "./workspace-grid";
 import ProjectsScreen from "./projects-screen";
-import ReefScreen from "./reef-screen";
+import MangroveScreen from "./mangrove-screen";
 import LandingScreen from "./landing-screen";
 import WorkspaceScreen from "./workspace-screen";
 import RestartBanner from "./restart-banner";
@@ -422,8 +422,8 @@ export default function ChatShell({ email }: { email: string }) {
                 onBrowse={(id) => setFragmentProject(id)}
               />
             )}
-            {centre.kind === "destination" && workspace && centre.at === "reef" && (
-              <ReefScreen workspace={workspace} />
+            {centre.kind === "destination" && workspace && centre.at === "mangrove" && (
+              <MangroveScreen workspace={workspace} />
             )}
             {/* A place before a conversation is chosen: the agent's root and a
                 project's root alike. It replaced an empty transcript, and the effect
