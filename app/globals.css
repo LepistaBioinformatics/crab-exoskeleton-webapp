@@ -522,6 +522,63 @@
 }
 
 /* Respect reduced-motion everywhere without policing each transition. */
+/* THE BOTTOM SHEET RISING AND FALLING.
+ *
+ * A sheet that appears in one frame reads as a new screen rather than as a layer
+ * over the one behind it, which is the whole distinction it exists to draw --
+ * the page stays visible above it because the reader has not gone anywhere.
+ * Movement from the bottom edge is what says where it came from and where it
+ * will go back to.
+ *
+ * `forwards` on the exit, and only `to` declared, for paneClose's reason: the
+ * implicit `from` is the element's own resting position, and the fill holds it
+ * off-screen for the frame between the animation ending and React removing the
+ * node -- without it the sheet snaps back into view for one frame before it
+ * disappears.
+ *
+ * Out is quicker than in (180ms against 220ms) and eased the other way. Leaving
+ * should not make the reader wait for a decision they have already made.
+ *
+ * Auto-neutralized by the reduced-motion guard below, which is also what makes
+ * the unmount immediate for those members -- `animationend` fires at once. */
+@keyframes sheetRise {
+  from {
+    transform: translateY(100%);
+  }
+}
+.sheet-rise {
+  animation: sheetRise 220ms ease-out;
+}
+
+@keyframes sheetFall {
+  to {
+    transform: translateY(100%);
+  }
+}
+.sheet-fall {
+  animation: sheetFall 180ms ease-in forwards;
+}
+
+/* The backdrop fades with it. A sheet that slides over an already-dark screen
+ * reads as the room going dark first and the panel arriving second. */
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+}
+.backdrop-in {
+  animation: backdropIn 220ms ease-out;
+}
+
+@keyframes backdropOut {
+  to {
+    opacity: 0;
+  }
+}
+.backdrop-out {
+  animation: backdropOut 180ms ease-in forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

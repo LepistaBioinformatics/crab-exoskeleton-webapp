@@ -101,12 +101,13 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
           the reason typography settles around 65-75 characters. max-w-3xl is
           that measure at this font size.
 
-          AND HALF A VIEWPORT OF PADDING UNDER IT. Without it the last memory
+          AND A WHOLE VIEWPORT OF PADDING UNDER IT. Without it the last memory
           sits against the bottom edge, so reading it means scrolling it to the
           very end of the scroll range and then reading at the rim of the screen.
           The padding is part of the scrollable area, so the last card comes to
-          rest in the middle where it can be read. */}
-      <div className="max-w-3xl pb-[50vh]">
+          rest wherever the reader stops, rather than only at the very bottom
+          of the range. */}
+      <div className="max-w-3xl pb-[100vh]">
           <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
 
         <nav className="mt-4 flex gap-1" aria-label={t.mangrove.title}>

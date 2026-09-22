@@ -83,20 +83,56 @@ describe("cutting long content", () => {
     expect(sheet!.textContent).toContain("soil-ph");
   });
 
-  it("closes on Escape", async () => {
-    await render({ content: long, title: "soil-ph" });
+  // THE SHEET LEAVES ON ITS OWN ANIMATION, not on the keypress. Between Escape
+  // and `animationend` it is still mounted and playing the exit -- which is the
+  // whole point of animating it, and the reason this asserts both halves.
+  async function openSheet() {
     const button = Array.from(host!.querySelectorAll("button")).find((b) =>
       b.textContent?.includes(en.mangrove.showMore),
     );
     await act(async () => {
       button!.click();
     });
-    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+    return document.querySelector('[role="dialog"]') as HTMLElement;
+  }
+
+  it("plays the exit before it leaves the tree", async () => {
+    await render({ content: long, title: "soil-ph" });
+    const sheet = await openSheet();
+    expect(sheet).toBeTruthy();
+    expect(sheet.className).toContain("sheet-rise");
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
+    // Still there, now on its way out.
+    const leaving = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(leaving).toBeTruthy();
+    expect(leaving.className).toContain("sheet-fall");
+
+    await act(async () => {
+      leaving.dispatchEvent(new Event("animationend", { bubbles: true }));
+    });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  // Anything inside that animates -- a spinner, a highlighted code block --
+  // bubbles its own animationend through the sheet. One of those must not drop
+  // it mid-slide.
+  it("ignores an animation that finished inside it", async () => {
+    await render({ content: long, title: "soil-ph" });
+    await openSheet();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    const leaving = document.querySelector('[role="dialog"]') as HTMLElement;
+    const inner = leaving.querySelector("div")!;
+
+    await act(async () => {
+      inner.dispatchEvent(new Event("animationend", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   });
 
   // Scroll is locked while the sheet is open, then handed back exactly as it
@@ -113,8 +149,18 @@ describe("cutting long content", () => {
     });
     expect(document.body.style.overflow).toBe("hidden");
 
+    // The lock is held for as long as the sheet is on screen, INCLUDING while it
+    // leaves -- releasing it at the keypress would let the page jump behind a
+    // sheet that is still sliding away.
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(document.body.style.overflow).toBe("hidden");
+
+    await act(async () => {
+      document
+        .querySelector('[role="dialog"]')!
+        .dispatchEvent(new Event("animationend", { bubbles: true }));
     });
     expect(document.body.style.overflow).toBe(before);
   });
