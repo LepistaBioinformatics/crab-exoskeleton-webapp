@@ -1,6 +1,6 @@
 "use client";
 
-import { Folders, type LucideIcon } from "lucide-react";
+import { Folders, Share2, type LucideIcon } from "lucide-react";
 import { cva } from "class-variance-authority";
 import {
   SECTIONS,
@@ -10,6 +10,7 @@ import {
 } from "./workspace-sections";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
+import type { Destination } from "./destination";
 
 // WHERE THE MEMBER CAN GO, listed once.
 //
@@ -27,7 +28,10 @@ import { useT } from "@/lib/i18n/context";
 // which a destination never did: pressing the one already open closes the pane.
 
 /** One row, and which of the two things a click on it means. */
-export type DestinationRow = { kind: "projects" } | { kind: "section"; section: Section };
+export type DestinationRow =
+  | { kind: "projects" }
+  | { kind: "reef" }
+  | { kind: "section"; section: Section };
 
 // Projects first, then the workspace's own sections in the order that module already
 // owns. Spelling the five out again here is how the sidebar and the collapsed rail
@@ -35,6 +39,12 @@ export type DestinationRow = { kind: "projects" } | { kind: "section"; section: 
 // exists — so the rail reads THIS list rather than building a second one.
 export const DESTINATION_ROWS: DestinationRow[] = [
   { kind: "projects" },
+  // The reef sits with Projects rather than with the five sections, and the
+  // distinction is the one this file already draws: a section is scoped BY a
+  // workspace and opens beside a conversation, while these replace the centre.
+  // The reef spans subscriptions and tenants and is not read alongside one
+  // conversation, so it is a destination.
+  { kind: "reef" },
   ...SECTION_ORDER.map((section) => ({ kind: "section", section }) as const),
 ];
 
@@ -42,15 +52,21 @@ export const DESTINATION_ROWS: DestinationRow[] = [
 // what the other five are scoped BY. So its label and glyph are named here, and the
 // five keep coming from the module that owns them.
 export function rowKey(row: DestinationRow): string {
-  return row.kind === "projects" ? "projects" : row.section;
+  if (row.kind === "projects") return "projects";
+  if (row.kind === "reef") return "reef";
+  return row.section;
 }
 
 export function rowLabel(row: DestinationRow, t: ChatDict): string {
-  return row.kind === "projects" ? t.projects.title : SECTIONS[row.section].label(t);
+  if (row.kind === "projects") return t.projects.title;
+  if (row.kind === "reef") return t.reef.title;
+  return SECTIONS[row.section].label(t);
 }
 
 export function rowIcon(row: DestinationRow): LucideIcon {
-  return row.kind === "projects" ? Folders : SECTIONS[row.section].Icon;
+  if (row.kind === "projects") return Folders;
+  if (row.kind === "reef") return Share2;
+  return SECTIONS[row.section].Icon;
 }
 
 /**
@@ -64,7 +80,9 @@ export function rowIcon(row: DestinationRow): LucideIcon {
  * four lines beside five one-line neighbours.
  */
 export function rowBlurb(row: DestinationRow, t: ChatDict): string {
-  return row.kind === "projects" ? t.projects.blurb : SECTIONS[row.section].blurb(t);
+  if (row.kind === "projects") return t.projects.blurb;
+  if (row.kind === "reef") return t.reef.blurb;
+  return SECTIONS[row.section].blurb(t);
 }
 
 const row = cva(
@@ -84,17 +102,25 @@ const row = cva(
 );
 
 export default function SidebarDestinations({
-  projectsOpen,
+  openDestination,
   openSection,
-  onProjects,
+  onDestination,
   onSection,
   hideProjects = false,
 }: {
-  /** The centre pane is showing the projects screen -- the fragment's `v`. */
-  projectsOpen: boolean;
+  /**
+   * The destination the centre pane is showing, or null -- the fragment's `v`.
+   *
+   * IT IS THE DESTINATION, NOT A BOOLEAN, and that distinction arrived with the
+   * second one. `projectsOpen: boolean` was right while `Destination` had a
+   * single value and became a bug the moment it had two: every destination lit
+   * the Projects row, because "a destination is open" and "Projects is open"
+   * were the same expression.
+   */
+  openDestination: Destination | null;
   /** The section open in the pane beside the conversation, or null -- the fragment's `rs`. */
   openSection: Section | null;
-  onProjects: () => void;
+  onDestination: (to: Destination) => void;
   /**
    * The section the pane should show next, or null to close it. The TOGGLE is decided
    * here rather than by the caller, with `nextSidebarValue`, because the collapsed rail
@@ -121,22 +147,24 @@ export default function SidebarDestinations({
           const Icon = rowIcon(entry);
           const name = rowLabel(entry, t);
           const here =
-            entry.kind === "projects" ? projectsOpen : openSection === entry.section;
+            entry.kind === "section"
+              ? openSection === entry.section
+              : openDestination === entry.kind;
           return (
             <li key={rowKey(entry)}>
               <button
                 type="button"
                 onClick={() =>
-                  entry.kind === "projects"
-                    ? onProjects()
-                    : onSection(nextSidebarValue(openSection, entry.section))
+                  entry.kind === "section"
+                    ? onSection(nextSidebarValue(openSection, entry.section))
+                    : onDestination(entry.kind)
                 }
                 // `page` for Projects, `true` for a section, and the difference is the
                 // whole change: `page` is the value the spec reserves for the
                 // destination within this document that the member is ON, and a pane
                 // open beside the conversation is not where they are. Both can be
                 // marked at once, which is exactly the coexistence being asserted.
-                aria-current={here ? (entry.kind === "projects" ? "page" : true) : undefined}
+                aria-current={here ? (entry.kind === "section" ? true : "page") : undefined}
                 className={row({ current: here })}
               >
                 <Icon size={16} className="shrink-0" aria-hidden />

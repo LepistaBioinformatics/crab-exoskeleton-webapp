@@ -14,14 +14,19 @@ const labels = [
 function list(props: Partial<Parameters<typeof SidebarDestinations>[0]> = {}) {
   return renderToStaticMarkup(
     <SidebarDestinations
-      projectsOpen={false}
+      openDestination={null}
       openSection={null}
-      onProjects={() => {}}
+      onDestination={() => {}}
       onSection={() => {}}
       {...props}
     />,
   );
 }
+
+// The centre-pane destinations, in the order the rail and the sidebar both show
+// them. Named here so the three assertions below say "the destinations" rather
+// than "one" or "two", and a third one is a single edit.
+const DESTINATIONS = ["projects", "reef"] as const;
 
 describe("SidebarDestinations", () => {
   it("renders one named row per entry, projects first and then SECTION_ORDER", () => {
@@ -35,8 +40,11 @@ describe("SidebarDestinations", () => {
   // them so. A sixth section added to `workspace-sections.ts` and forgotten here would
   // be unreachable from the only surface that offers a way in, and nothing else in the
   // suite would notice.
-  it("renders exactly as many rows as there are sections, plus projects", () => {
-    expect(DESTINATION_ROWS).toHaveLength(SECTION_ORDER.length + 1);
+  it("renders exactly as many rows as there are sections, plus the destinations", () => {
+    // Two destinations now -- projects and the reef -- ahead of the five
+    // sections. Counted as `DESTINATIONS.length` rather than a literal so a
+    // third one updates this in one place.
+    expect(DESTINATION_ROWS).toHaveLength(SECTION_ORDER.length + DESTINATIONS.length);
     expect(list().split("<li>").length - 1).toBe(DESTINATION_ROWS.length);
   });
 
@@ -52,7 +60,7 @@ describe("SidebarDestinations", () => {
 // marked" would have forbidden exactly the coexistence this list was corrected for.
 describe("which rows are marked, and how", () => {
   it("marks Projects as the page, because that is where the member is", () => {
-    const html = list({ projectsOpen: true });
+    const html = list({ openDestination: "projects" });
     expect(html).toContain('aria-current="page"');
     const marked = html.indexOf('aria-current="page"');
     const label = html.indexOf(`>${en.projects.title}</span>`);
@@ -73,7 +81,7 @@ describe("which rows are marked, and how", () => {
   });
 
   it("marks both at once, which is the state the pane exists for", () => {
-    const html = list({ projectsOpen: true, openSection: "graph" });
+    const html = list({ openDestination: "projects", openSection: "graph" });
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('aria-current="true"');
   });
@@ -85,7 +93,11 @@ describe("an agent whose proxy has no projects", () => {
   it("omits the projects row", () => {
     const html = list({ hideProjects: true });
     expect(html).not.toContain(`>${en.projects.title}</span>`);
-    expect(html.split("<li>").length - 1).toBe(SECTION_ORDER.length);
+    // Only PROJECTS is hidden. The reef has its own switch -- an operator who
+    // never enabled it gets no rows from the screen itself -- so hiding one
+    // must not hide the other.
+    expect(html.split("<li>").length - 1).toBe(SECTION_ORDER.length + DESTINATIONS.length - 1);
+    expect(html).toContain(`>${en.reef.title}</span>`);
   });
 });
 
@@ -94,10 +106,14 @@ describe("an agent whose proxy has no projects", () => {
 // what belongs here is that the list this component renders and the list the rail reads
 // are literally the same array, in the same order.
 describe("the rows the rail reads", () => {
-  it("carries every section, in SECTION_ORDER, after projects", () => {
-    expect(DESTINATION_ROWS[0]).toEqual({ kind: "projects" });
+  it("carries every section, in SECTION_ORDER, after the destinations", () => {
+    expect(DESTINATION_ROWS.slice(0, DESTINATIONS.length).map((r) => r.kind)).toEqual(
+      DESTINATIONS,
+    );
     expect(
-      DESTINATION_ROWS.slice(1).map((r) => (r.kind === "section" ? r.section : null)),
+      DESTINATION_ROWS.slice(DESTINATIONS.length).map((r) =>
+        r.kind === "section" ? r.section : null,
+      ),
     ).toEqual(SECTION_ORDER);
   });
 });

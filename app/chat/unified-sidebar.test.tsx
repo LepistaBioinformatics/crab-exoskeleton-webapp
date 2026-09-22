@@ -23,9 +23,9 @@ function render(over: Partial<Parameters<typeof UnifiedSidebar>[0]> = {}) {
       email="member@example.com"
       workspace={workspace}
       project={null}
-      projectsOpen={false}
+      openDestination={null}
       openSection={null}
-      onProjects={() => {}}
+      onDestination={() => {}}
       onSection={() => {}}
       onNewChat={() => {}}
       {...over}
@@ -54,7 +54,7 @@ describe("UnifiedSidebar", () => {
   // `page` is where the member IS; `true` is what is open beside them, and both holding
   // at once is the coexistence the pane was restored for.
   it("marks the projects row as the page and an open section only as current", () => {
-    expect(render({ projectsOpen: true })).toContain('aria-current="page"');
+    expect(render({ openDestination: "projects" })).toContain('aria-current="page"');
     expect(render({ openSection: "files" })).toContain('aria-current="true"');
     expect(render({ openSection: "files" })).not.toContain('aria-current="page"');
     expect(render()).not.toContain("aria-current");
