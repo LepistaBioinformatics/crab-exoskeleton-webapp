@@ -1,6 +1,6 @@
-// The mangrove's BFF. One route for all five actions, because they differ only in
-// method and path segment and a file each would be five copies of the same
-// twelve lines.
+// The mangrove's BFF. One route for every action, because they differ only in
+// method and path segment and a file each would be one copy per action of the
+// same twelve lines.
 //
 // THE SESSION TOKEN NEVER REACHES THE BROWSER. It lives in an httpOnly cookie
 // and is attached here, server-side, exactly as every other proxy read in this
@@ -29,6 +29,7 @@ const ACTIONS: Record<string, "GET" | "POST"> = {
   admit: "POST",
   decide: "POST",
   revoke: "POST",
+  publish: "POST",
 };
 
 async function handle(req: NextRequest, action: string) {

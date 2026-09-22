@@ -42,6 +42,10 @@ const SHARED = new Set([
   "chat.search.tag",
   // Two interpolations and a separator -- there is no word in it to translate.
   "chat.mangrove.sheetFrom",
+  // The format's own name. Portuguese writes "markdown" unchanged -- the editor's
+  // heading beside it is translated ("Editor markdown"), which is what makes this
+  // one a shared name rather than a forgotten string.
+  "chat.mangrove.formatMarkdown",
   "chat.enrichment.tagsOne",
   "chat.enrichment.tagsOther",
   // "cron" and "status" are loanwords Portuguese uses unchanged, and the third is

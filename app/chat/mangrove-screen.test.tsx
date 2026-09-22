@@ -18,6 +18,8 @@ const readCapabilities = vi.fn();
 const admit = vi.fn();
 const decide = vi.fn();
 const revoke = vi.fn();
+const publish = vi.fn();
+const findPeople = vi.fn();
 
 vi.mock("@/lib/mangrove", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/mangrove")>();
@@ -28,6 +30,8 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
     admit: (...a: unknown[]) => admit(...a),
     decide: (...a: unknown[]) => decide(...a),
     revoke: (...a: unknown[]) => revoke(...a),
+    publish: (...a: unknown[]) => publish(...a),
+    findPeople: (...a: unknown[]) => findPeople(...a),
   };
 });
 
@@ -134,4 +138,102 @@ describe("the mangrove tab", () => {
     expect(html).toContain("(bot)");
   });
 
+  // Compose is a flag beside People, NOT a reading. Made a member of the union
+  // it would refetch the timeline to render a blank form, and nothing else in
+  // this suite would notice.
+  it("asks the timeline nothing when the compose tab is opened", async () => {
+    readTimeline.mockResolvedValue({ reading: "received", claims: [], held: [] });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    const before = readTimeline.mock.calls.length;
+
+    const composeTab = [...host!.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === en.mangrove.compose,
+    )!;
+    await act(async () => {
+      composeTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host!.textContent).toContain(en.mangrove.composeHint);
+    expect(readTimeline.mock.calls.length).toBe(before);
+    // And the reading it was on is not rendering underneath the form.
+    expect(host!.textContent).not.toContain(en.mangrove.none);
+  });
+
+  // A cross-scope publication is delivered to nobody until it is decided, so it
+  // turns up in no reading. Saying "shared" would be a lie the member has no way
+  // of catching.
+  it("says a publication is waiting on a decision, rather than that it was shared", async () => {
+    readTimeline.mockResolvedValue({ reading: "received", claims: [], held: [] });
+    readCapabilities.mockResolvedValue({ governs: true, tenantLicensed: false });
+    publish.mockResolvedValue({ activity: {}, pending: true });
+
+    await render();
+    await clickText(en.mangrove.compose);
+    await write();
+    const before = readTimeline.mock.calls.length;
+    await act(async () => {
+      host!
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(host!.textContent).toContain(en.mangrove.publishedPending);
+    expect(host!.textContent).not.toContain(en.mangrove.publishedOk);
+    // And the member is left where what they wrote will appear.
+    expect(readTimeline).toHaveBeenCalledWith(expect.anything(), "published");
+    // EXACTLY ONE refetch. A reload bound to the reading being left, fired
+    // beside the reading change, is two in flight at once -- and the slower one
+    // wins, which is this tab showing the received list under "Published".
+    expect(readTimeline.mock.calls.length).toBe(before + 1);
+  });
+
+  it("says plainly that a publication landed", async () => {
+    readTimeline.mockResolvedValue({ reading: "received", claims: [], held: [] });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    publish.mockResolvedValue({ activity: {}, pending: false });
+
+    await render();
+    await clickText(en.mangrove.compose);
+    await write();
+    await act(async () => {
+      host!
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(host!.textContent).toContain(en.mangrove.publishedOk);
+  });
+
 });
+
+/** Click the tab (or button) whose whole label is this. */
+async function clickText(label: string) {
+  const el = [...host!.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
+  await act(async () => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+/** Fill the compose form's two required fields. */
+async function write() {
+  const cell = host!.querySelector<HTMLInputElement>(
+    `[placeholder="${en.mangrove.cellPlaceholder}"]`,
+  )!;
+  const body = host!.querySelector("textarea")!;
+  for (const [el, value] of [
+    [cell, "soil-ph"],
+    [body, "pH 5.2 after liming."],
+  ] as const) {
+    const proto =
+      el instanceof HTMLTextAreaElement
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")!.set!;
+    await act(async () => {
+      setter.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+}

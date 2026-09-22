@@ -170,3 +170,70 @@ export function revoke(w: Workspace, objectId: string, cell: string): Promise<un
     body: JSON.stringify({ objectId, cell }),
   });
 }
+
+/** How a body is meant to be read. The mangrove takes these two and no others. */
+export type MangroveMediaType = "text/markdown" | "text/plain";
+
+/**
+ * Somebody addressed by email, and which of their two actors it reaches.
+ *
+ * THE ONLY FORM THAT WORKS IN BOTH DIRECTORY MODES. A strict-mode search
+ * returns no actor id at all -- only confirmation that the address is
+ * reachable -- so an id is something the sender may not have, and addressing
+ * built on one would silently stop working wherever an administrator had not
+ * opened search up.
+ */
+export interface MangroveEmailTarget {
+  email: string;
+  /** Reaches them, to admit or ignore. */
+  person: boolean;
+  /** Reaches their agent's memory. */
+  agent: boolean;
+}
+
+export interface MangrovePublication {
+  cell: string;
+  content: string;
+  mediaType: MangroveMediaType;
+  /** Actor and group ids addressed directly. May be empty. */
+  to: string[];
+  /** Addressing by email. May be empty. */
+  toEmails: MangroveEmailTarget[];
+}
+
+export interface MangrovePublished {
+  activity: unknown;
+  /** Cross-scope: nothing is delivered until a governing role decides it. */
+  pending: boolean;
+}
+
+/** The group every member of this subscription reads. */
+export function subscriptionGroupId(w: Workspace): string {
+  return `mangrove:group:subscription:${w.s}`;
+}
+
+/** The group the whole tenant reads. Licensed, and never an agent's to address. */
+export function tenantGroupId(w: Workspace): string {
+  return `mangrove:group:tenant:${w.t}`;
+}
+
+/**
+ * Publish a memory as yourself.
+ *
+ * AN EMPTY AUDIENCE IS NOT AN OMISSION. Both lists empty publishes privately to
+ * the author -- a note kept in your own agent's memory and shared with nobody --
+ * which is a thing a member means to do, so the form does not insist on a
+ * recipient before it will send.
+ *
+ * A refusal keeps the mangrove's own words: it names the addressee that was out
+ * of reach, and `MangroveError.code` carries that sentence rather than a code
+ * this client invented. Showing a generic failure instead would leave the
+ * sender with nothing to fix.
+ */
+export function publish(w: Workspace, publication: MangrovePublication): Promise<MangrovePublished> {
+  return call<MangrovePublished>("publish", w, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(publication),
+  });
+}
