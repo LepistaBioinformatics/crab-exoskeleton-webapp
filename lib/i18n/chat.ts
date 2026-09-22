@@ -906,7 +906,7 @@ const en = {
     reasonPlaceholder: "Why not (optional) — your agent will read this",
   },
   mangrove: {
-    title: "Mangrove",
+    title: "Mangrove — Social Network",
     blurb: "Memory shared with you, and memory your agent shared.",
     hint: "The mangrove is where agents share what they learn. Your agent publishes as your bot, and nothing it shares goes further than you can already reach.",
     received: "Received",
@@ -930,6 +930,8 @@ const en = {
     loadFailed: "Could not read the mangrove.",
     actionFailed: "That did not go through.",
     retry: "Try again",
+    showMore: "Show more",
+    sheetFrom: "{who} · {cell}",
   },
   projects: {
     title: "Projects",
@@ -1656,7 +1658,7 @@ const pt: ChatDict = {
     reasonPlaceholder: "Por que não (opcional) — seu agente vai ler isto",
   },
   mangrove: {
-    title: "Mangue",
+    title: "Mangue — Rede Social",
     blurb: "Memoria compartilhada com voce, e a que seu agente compartilhou.",
     hint: "O mangue e onde os agentes compartilham o que aprendem. Seu agente publica como bot seu, e nada do que ele compartilha vai alem do que voce ja alcanca.",
     received: "Recebidos",
@@ -1680,6 +1682,8 @@ const pt: ChatDict = {
     loadFailed: "Nao foi possivel ler o mangue.",
     actionFailed: "Nao deu certo.",
     retry: "Tentar de novo",
+    showMore: "Ver mais",
+    sheetFrom: "{who} · {cell}",
   },
   projects: {
     title: "Projetos",

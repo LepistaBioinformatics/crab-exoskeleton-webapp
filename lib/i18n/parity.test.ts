@@ -40,6 +40,8 @@ const SHARED = new Set([
   // "Slide" is the word Portuguese uses, and the rest is an interpolation.
   "chat.preview.slide",
   "chat.search.tag",
+  // Two interpolations and a separator -- there is no word in it to translate.
+  "chat.mangrove.sheetFrom",
   "chat.enrichment.tagsOne",
   "chat.enrichment.tagsOther",
   // "cron" and "status" are loanwords Portuguese uses unchanged, and the third is

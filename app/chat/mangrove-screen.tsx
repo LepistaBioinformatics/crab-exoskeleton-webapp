@@ -5,6 +5,7 @@ import { cva } from "class-variance-authority";
 import { Check, Inbox, Send, ShieldQuestion, Trash2, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import DestinationScreen from "./destination-screen";
+import MangroveContent from "./mangrove-content";
 import { useMangrove } from "./use-mangrove";
 import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
 import { Button } from "@/components/ui/button";
@@ -143,7 +144,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                 <p className="text-xs text-fg-muted">
                   {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
                 </p>
-                <p className="mt-1 text-sm text-fg">{h.object.content}</p>
+                <div className="mt-1 text-sm text-fg">
+                  <MangroveContent
+                    content={h.object.content ?? ""}
+                    title={h.object.cell}
+                    subtitle={t.mangrove.sheetFrom
+                      .replace("{who}", actorLabel(h.from))
+                      .replace("{cell}", h.object.cell)}
+                  />
+                </div>
                 <Button
                   className="mt-2"
                   size="sm"
@@ -170,7 +179,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                 <p className="text-xs text-fg-muted">
                   {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
                 </p>
-                <p className="mt-1 text-sm text-fg">{p.object.content}</p>
+                <div className="mt-1 text-sm text-fg">
+                  <MangroveContent
+                    content={p.object.content ?? ""}
+                    title={p.object.cell}
+                    subtitle={t.mangrove.sheetFrom
+                      .replace("{who}", actorLabel(p.author))
+                      .replace("{cell}", p.object.cell)}
+                  />
+                </div>
                 <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"
@@ -212,9 +229,16 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                   {/* Weight of evidence, never a verdict. */}
                   {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
                 </p>
-                <p className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
-                  {c.object.content}
-                </p>
+                <div className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
+                  <MangroveContent
+                    content={c.object.content ?? ""}
+                    mediaType={c.object.mediaType}
+                    title={c.cell}
+                    subtitle={t.mangrove.sheetFrom
+                      .replace("{who}", actorLabel(c.author))
+                      .replace("{cell}", c.cell)}
+                  />
+                </div>
                 {reading === "published" && !c.deleted && (
                   <Button
                     className="mt-2"
