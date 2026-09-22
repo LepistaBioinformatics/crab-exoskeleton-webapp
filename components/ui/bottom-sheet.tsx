@@ -84,7 +84,12 @@ export function BottomSheet({
         </header>
         {/* The only scroll container. The sheet itself never scrolls, so the
             header stays put while a long memory moves under it. */}
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        {/* The same reading column the screen uses. A sheet spans the whole
+            viewport, and prose across 1900px is the problem this was opened to
+            escape. pb-16 keeps the last line off the rim. */}
+        <div className="overflow-y-auto px-5 py-4">
+          <div className="mx-auto max-w-3xl pb-16">{children}</div>
+        </div>
       </section>
     </div>,
     document.body,

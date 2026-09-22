@@ -94,195 +94,209 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
 
   return (
     <DestinationScreen title={t.mangrove.title}>
-      <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
+      {/* A READING COLUMN, not the frame's full width.
+          DestinationScreen is max-w-6xl because Projects is a grid of cards and
+          a grid wants the room. This screen is prose somebody's agent wrote, and
+          prose at 1150px is a line the eye loses its place in on the way back --
+          the reason typography settles around 65-75 characters. max-w-3xl is
+          that measure at this font size.
 
-      <nav className="mt-4 flex gap-1" aria-label={t.mangrove.title}>
-        {readings.map((r) => (
+          AND HALF A VIEWPORT OF PADDING UNDER IT. Without it the last memory
+          sits against the bottom edge, so reading it means scrolling it to the
+          very end of the scroll range and then reading at the rim of the screen.
+          The padding is part of the scrollable area, so the last card comes to
+          rest in the middle where it can be read. */}
+      <div className="max-w-3xl pb-[50vh]">
+          <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
+
+        <nav className="mt-4 flex gap-1" aria-label={t.mangrove.title}>
+          {readings.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              className={tab({ current: !onPeople && reading === r.key })}
+              aria-current={!onPeople && reading === r.key ? "page" : undefined}
+              onClick={() => {
+                setOnPeople(false);
+                setReading(r.key);
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
           <button
-            key={r.key}
             type="button"
-            className={tab({ current: !onPeople && reading === r.key })}
-            aria-current={!onPeople && reading === r.key ? "page" : undefined}
-            onClick={() => {
-              setOnPeople(false);
-              setReading(r.key);
-            }}
+            className={tab({ current: onPeople })}
+            aria-current={onPeople ? "page" : undefined}
+            onClick={() => setOnPeople(true)}
           >
-            {r.label}
+            {t.mangrove.people}
           </button>
-        ))}
-        <button
-          type="button"
-          className={tab({ current: onPeople })}
-          aria-current={onPeople ? "page" : undefined}
-          onClick={() => setOnPeople(true)}
-        >
-          {t.mangrove.people}
-        </button>
-      </nav>
+        </nav>
 
-      {onPeople && (
-        <div className="mt-6">
-          <MangrovePeople workspace={workspace} />
-        </div>
-      )}
+        {onPeople && (
+          <div className="mt-6">
+            <MangrovePeople workspace={workspace} />
+          </div>
+        )}
 
-      {!onPeople && actionError && (
-        <Alert severity="error" className="mt-4">
-          {actionError}
-        </Alert>
-      )}
+        {!onPeople && actionError && (
+          <Alert severity="error" className="mt-4">
+            {actionError}
+          </Alert>
+        )}
 
-      {/* Unreachable is its own answer, with a way to try again. */}
-      {!onPeople && error && !off && (
-        <Alert severity="error" className="mt-4">
-          {error === "mangrove_unreachable" || error === "connectivity"
-            ? t.mangrove.unreachable
-            : t.mangrove.loadFailed}{" "}
-          <Button variant="text" size="sm" onClick={() => void reload()}>
-            {t.mangrove.retry}
-          </Button>
-        </Alert>
-      )}
+        {/* Unreachable is its own answer, with a way to try again. */}
+        {!onPeople && error && !off && (
+          <Alert severity="error" className="mt-4">
+            {error === "mangrove_unreachable" || error === "connectivity"
+              ? t.mangrove.unreachable
+              : t.mangrove.loadFailed}{" "}
+            <Button variant="text" size="sm" onClick={() => void reload()}>
+              {t.mangrove.retry}
+            </Button>
+          </Alert>
+        )}
 
-      {!onPeople && nothing && (
-        <div className="mt-8 text-sm text-fg-muted">
-          <p>{t.mangrove.none}</p>
-          <p className="mt-1">{t.mangrove.noneHint}</p>
-        </div>
-      )}
+        {!onPeople && nothing && (
+          <div className="mt-8 text-sm text-fg-muted">
+            <p>{t.mangrove.none}</p>
+            <p className="mt-1">{t.mangrove.noneHint}</p>
+          </div>
+        )}
 
-      {/* Held: addressed at this member, NOT yet in their agent's memory. */}
-      {!onPeople && held.length > 0 && (
-        <section className="mt-6">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-            <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
-          </h2>
-          <p className="mt-1 text-xs text-fg-muted">{t.mangrove.heldHint}</p>
-          <ul className="mt-3 flex flex-col gap-2">
-            {held.map((h) => (
-              <li key={h.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
-                <p className="text-xs text-fg-muted">
-                  {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
-                </p>
-                <div className="mt-1 text-sm text-fg">
-                  <MangroveContent
-                    content={h.object.content ?? ""}
-                    title={h.object.cell}
-                    subtitle={t.mangrove.sheetFrom
-                      .replace("{who}", actorLabel(h.from))
-                      .replace("{cell}", h.object.cell)}
-                  />
-                </div>
-                <Button
-                  className="mt-2"
-                  size="sm"
-                  disabled={busy === h.activityId}
-                  onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
-                >
-                  {t.mangrove.admit}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Pending: only ever rendered for a governing role. */}
-      {!onPeople && pending.length > 0 && (
-        <section className="mt-6">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-            <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
-          </h2>
-          <ul className="mt-3 flex flex-col gap-2">
-            {pending.map((p) => (
-              <li key={p.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
-                <p className="text-xs text-fg-muted">
-                  {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
-                </p>
-                <div className="mt-1 text-sm text-fg">
-                  <MangroveContent
-                    content={p.object.content ?? ""}
-                    title={p.object.cell}
-                    subtitle={t.mangrove.sheetFrom
-                      .replace("{who}", actorLabel(p.author))
-                      .replace("{cell}", p.object.cell)}
-                  />
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={busy === p.activityId}
-                    onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, true))}
-                  >
-                    <Check size={14} aria-hidden /> {t.mangrove.accept}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="text"
-                    disabled={busy === p.activityId}
-                    onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, false))}
-                  >
-                    <X size={14} aria-hidden /> {t.mangrove.reject}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {!onPeople && claims.length > 0 && (
-        <section className="mt-6">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-            <Send size={16} aria-hidden />{" "}
-            {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
-          </h2>
-          <ul className="mt-3 flex flex-col gap-2">
-            {claims.map((c) => (
-              <li
-                key={`${c.cell}:${c.author}`}
-                className="rounded-xl border border-rule-strong bg-surface p-3"
-              >
-                <p className="text-xs text-fg-muted">
-                  {c.cell} · {actorLabel(c.author)}
-                  {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
-                  {/* Weight of evidence, never a verdict. */}
-                  {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
-                </p>
-                <div className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
-                  <MangroveContent
-                    content={c.object.content ?? ""}
-                    mediaType={c.object.mediaType}
-                    title={c.cell}
-                    subtitle={t.mangrove.sheetFrom
-                      .replace("{who}", actorLabel(c.author))
-                      .replace("{cell}", c.cell)}
-                  />
-                </div>
-                {reading === "published" && !c.deleted && (
+        {/* Held: addressed at this member, NOT yet in their agent's memory. */}
+        {!onPeople && held.length > 0 && (
+          <section className="mt-6">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
+              <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
+            </h2>
+            <p className="mt-1 text-xs text-fg-muted">{t.mangrove.heldHint}</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {held.map((h) => (
+                <li key={h.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
+                  <p className="text-xs text-fg-muted">
+                    {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
+                  </p>
+                  <div className="mt-1 text-sm text-fg">
+                    <MangroveContent
+                      content={h.object.content ?? ""}
+                      title={h.object.cell}
+                      subtitle={t.mangrove.sheetFrom
+                        .replace("{who}", actorLabel(h.from))
+                        .replace("{cell}", h.object.cell)}
+                    />
+                  </div>
                   <Button
                     className="mt-2"
                     size="sm"
-                    variant="text"
-                    disabled={busy === c.object.id}
-                    onClick={() =>
-                      void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
-                    }
+                    disabled={busy === h.activityId}
+                    onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
                   >
-                    <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
+                    {t.mangrove.admit}
                   </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {reading === "published" && claims.length > 0 && (
-            // Said plainly, because the alternative is a member believing a
-            // revoke recalled something. ActivityPub cannot un-deliver.
-            <p className="mt-3 text-xs text-fg-muted">{t.mangrove.revokeNote}</p>
-          )}
-        </section>
-      )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Pending: only ever rendered for a governing role. */}
+        {!onPeople && pending.length > 0 && (
+          <section className="mt-6">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
+              <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {pending.map((p) => (
+                <li key={p.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
+                  <p className="text-xs text-fg-muted">
+                    {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
+                  </p>
+                  <div className="mt-1 text-sm text-fg">
+                    <MangroveContent
+                      content={p.object.content ?? ""}
+                      title={p.object.cell}
+                      subtitle={t.mangrove.sheetFrom
+                        .replace("{who}", actorLabel(p.author))
+                        .replace("{cell}", p.object.cell)}
+                    />
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy === p.activityId}
+                      onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, true))}
+                    >
+                      <Check size={14} aria-hidden /> {t.mangrove.accept}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="text"
+                      disabled={busy === p.activityId}
+                      onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, false))}
+                    >
+                      <X size={14} aria-hidden /> {t.mangrove.reject}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {!onPeople && claims.length > 0 && (
+          <section className="mt-6">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
+              <Send size={16} aria-hidden />{" "}
+              {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {claims.map((c) => (
+                <li
+                  key={`${c.cell}:${c.author}`}
+                  className="rounded-xl border border-rule-strong bg-surface p-3"
+                >
+                  <p className="text-xs text-fg-muted">
+                    {c.cell} · {actorLabel(c.author)}
+                    {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
+                    {/* Weight of evidence, never a verdict. */}
+                    {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
+                  </p>
+                  <div className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
+                    <MangroveContent
+                      content={c.object.content ?? ""}
+                      mediaType={c.object.mediaType}
+                      title={c.cell}
+                      subtitle={t.mangrove.sheetFrom
+                        .replace("{who}", actorLabel(c.author))
+                        .replace("{cell}", c.cell)}
+                    />
+                  </div>
+                  {reading === "published" && !c.deleted && (
+                    <Button
+                      className="mt-2"
+                      size="sm"
+                      variant="text"
+                      disabled={busy === c.object.id}
+                      onClick={() =>
+                        void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
+                      }
+                    >
+                      <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {reading === "published" && claims.length > 0 && (
+              // Said plainly, because the alternative is a member believing a
+              // revoke recalled something. ActivityPub cannot un-deliver.
+              <p className="mt-3 text-xs text-fg-muted">{t.mangrove.revokeNote}</p>
+            )}
+          </section>
+        )}
+      </div>
     </DestinationScreen>
   );
 }
