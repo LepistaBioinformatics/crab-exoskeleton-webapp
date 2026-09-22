@@ -114,6 +114,87 @@ describe("the mangrove tab", () => {
     expect(html).toContain(en.mangrove.pending);
   });
 
+  // Revoke destroys, cannot be undone, and used to sit one click from the
+  // content it destroys. These two assert the guard AND that the guard did not
+  // become a way of hiding the control: in jsdom a closed <details> keeps its
+  // contents in the DOM, so "the button still works" would pass even if it had
+  // been removed from the page entirely. The structure is what has to be pinned.
+  it("keeps revoke behind an advanced-options disclosure, off to the side", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "published",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:alice:person",
+          object: { id: "mangrove:obj:9", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+        },
+      ],
+      held: [],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    await act(async () => {
+      const tab = [...host!.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === en.mangrove.published,
+      );
+      tab!.click();
+    });
+
+    const details = host!.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details!.querySelector("summary")?.textContent).toContain(en.mangrove.advanced);
+    expect(details!.open).toBe(false);
+
+    // The control is INSIDE the disclosure, not merely somewhere on the page.
+    const revokeButton = [...host!.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes(en.mangrove.revoke),
+    );
+    expect(revokeButton).toBeDefined();
+    expect(details!.contains(revokeButton!)).toBe(true);
+  });
+
+  it("still revokes the right claim once the disclosure is opened", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "published",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:alice:person",
+          object: { id: "mangrove:obj:9", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+        },
+      ],
+      held: [],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    revoke.mockResolvedValue({});
+
+    await render();
+    await act(async () => {
+      const tab = [...host!.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === en.mangrove.published,
+      );
+      tab!.click();
+    });
+    await act(async () => {
+      host!.querySelector("details")!.open = true;
+      const b = [...host!.querySelectorAll("button")].find((x) =>
+        x.textContent?.includes(en.mangrove.revoke),
+      );
+      b!.click();
+    });
+
+    expect(revoke).toHaveBeenCalledWith(workspace, "mangrove:obj:9", "soil-ph");
+  });
+
   it("shows a directly shared item as HELD, with a way to admit it", async () => {
     readTimeline.mockResolvedValue({
       reading: "received",
