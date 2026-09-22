@@ -340,17 +340,30 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                     />
                   </div>
                   {reading === "published" && !c.deleted && (
-                    <Button
-                      className="mt-2"
-                      size="sm"
-                      variant="text"
-                      disabled={busy === c.object.id}
-                      onClick={() =>
-                        void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
-                      }
-                    >
-                      <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
-                    </Button>
+                    // Revoke is destructive and irreversible, and it sat one
+                    // click from the content it destroys. Behind a disclosure
+                    // and off to the side, it stops being something you reach
+                    // for while meaning to do something else -- without being
+                    // hidden, which would be its own kind of trap.
+                    <div className="mt-2 flex justify-end">
+                      <details className="w-fit text-right">
+                        <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg">
+                          {t.mangrove.advanced}
+                        </summary>
+                        <div className="mt-1 flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="text"
+                            disabled={busy === c.object.id}
+                            onClick={() =>
+                              void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
+                            }
+                          >
+                            <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
+                          </Button>
+                        </div>
+                      </details>
+                    </div>
                   )}
                 </li>
               ))}
