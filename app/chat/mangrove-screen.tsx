@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cva } from "class-variance-authority";
 import { Check, Inbox, Send, ShieldQuestion, Trash2, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import DestinationScreen from "./destination-screen";
-import MangroveContent from "./mangrove-content";
+import MangrovePost from "./mangrove-post";
 import MangrovePeople from "./mangrove-people";
 import MangroveCompose from "./mangrove-compose";
 import { useMangrove } from "./use-mangrove";
 import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
+import { subscribeToShareRequests, takePendingShare, type MangroveShare } from "./mangrove-share-bus";
+import type { MangroveReference } from "@/lib/chatReference";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -28,6 +30,14 @@ import { useT } from "@/lib/i18n/context";
 // one -- making it a member of the union would refetch the timeline to render a
 // blank form. Both flags are read through ONE derived `onTimeline`, so no
 // section can be left rendering under the form because a guard was missed.
+//
+// AND A SHARE ARRIVES FROM OUTSIDE THIS SCREEN. The files tab and the knowledge
+// graph both offer "share this in the mangrove", and both live in the pane BESIDE the
+// conversation while this screen replaces the centre — so the request travels over
+// `mangrove-share-bus` and lands here, opening the composer with the thing already
+// attached. It has to be drained two ways: the slot for the share that arrived before
+// this screen existed (which is every FIRST share), the subscription for one made while
+// it is already open.
 //
 // AND "NOTHING YET" IS NOT "IT IS DOWN". An empty reading is a normal state and
 // renders as prose; an unreachable service renders as an error with a retry.
@@ -60,7 +70,17 @@ function scopeLabel(id: string): string {
   return actorLabel(id);
 }
 
-export default function MangroveScreen({ workspace }: { workspace: Workspace }) {
+export default function MangroveScreen({
+  workspace,
+  onReference,
+}: {
+  workspace: Workspace;
+  /**
+   * Puts a memory in the composer's context slot, the same slot the graph panel fills.
+   * Absent where there is no conversation to reference into.
+   */
+  onReference?: (ref: MangroveReference) => void;
+}) {
   const t = useT(chatCopy);
   const [reading, setReading] = useState<MangroveReading>("received");
   // People is not a reading -- it does not come from the timeline and must not
@@ -73,8 +93,25 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
   const [publishedPending, setPublishedPending] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // What the member arrived here to share, if they arrived from somewhere else.
+  const [attachment, setAttachment] = useState<MangroveShare | null>(null);
   const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
   const onTimeline = !onPeople && !onCompose;
+
+  // ABOVE the early return below, because hooks are. Both halves open the composer, so
+  // a share made from the files pane while this screen is already on it behaves exactly
+  // like one that put the member here.
+  useEffect(() => {
+    const take = (share: MangroveShare) => {
+      setAttachment(share);
+      setOnPeople(false);
+      setPublishedPending(null);
+      setOnCompose(true);
+    };
+    const waiting = takePendingShare();
+    if (waiting) take(waiting);
+    return subscribeToShareRequests(take);
+  }, []);
 
   // The operator never enabled the mangrove. Render NOTHING — not an error, not an
   // empty state with a dead button.
@@ -181,9 +218,14 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
             <MangroveCompose
               workspace={workspace}
               caps={caps}
+              attachment={attachment}
+              onRemoveAttachment={() => setAttachment(null)}
               onPublished={(pending) => {
                 setPublishedPending(pending);
                 setOnCompose(false);
+                // Dropped on the way out, or the next thing the member writes would be
+                // sent as the file they just shared.
+                setAttachment(null);
                 // What was just written belongs to "Published", so that is where
                 // the member is left.
                 //
@@ -245,12 +287,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                     {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
                   </p>
                   <div className="mt-1 text-sm text-fg">
-                    <MangroveContent
-                      content={h.object.content ?? ""}
+                    <MangrovePost
+                      workspace={workspace}
+                      object={h.object}
+                      author={actorLabel(h.from)}
                       title={h.object.cell}
                       subtitle={t.mangrove.sheetFrom
                         .replace("{who}", actorLabel(h.from))
                         .replace("{cell}", h.object.cell)}
+                      onReference={onReference}
                     />
                   </div>
                   <Button
@@ -280,9 +325,16 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                     {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
                   </p>
                   <div className="mt-1 text-sm text-fg">
-                    <MangroveContent
-                      content={p.object.content ?? ""}
+                    {/* A fragment renders as one here too: deciding whether a whole
+                        subscription should receive it means reading what is in it. What
+                        is NOT offered is merging it — that is a thing to do once it has
+                        been accepted, not while deciding. */}
+                    <MangrovePost
+                      workspace={workspace}
+                      object={p.object}
+                      author={actorLabel(p.author)}
                       title={p.object.cell}
+                      canMerge={false}
                       subtitle={t.mangrove.sheetFrom
                         .replace("{who}", actorLabel(p.author))
                         .replace("{cell}", p.object.cell)}
@@ -330,13 +382,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
                     {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
                   </p>
                   <div className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
-                    <MangroveContent
-                      content={c.object.content ?? ""}
-                      mediaType={c.object.mediaType}
+                    <MangrovePost
+                      workspace={workspace}
+                      object={c.object}
+                      author={actorLabel(c.author)}
                       title={c.cell}
                       subtitle={t.mangrove.sheetFrom
                         .replace("{who}", actorLabel(c.author))
                         .replace("{cell}", c.cell)}
+                      onReference={onReference}
                     />
                   </div>
                   {reading === "published" && !c.deleted && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Send, X } from "lucide-react";
+import { FileText, Network, Search, Send, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,9 @@ import {
   type MangroveCapabilities,
   type MangroveEmailTarget,
   type MangroveMediaType,
+  type MangrovePublication,
 } from "@/lib/mangrove";
+import type { MangroveShare } from "./mangrove-share-bus";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
 
@@ -40,6 +42,13 @@ import { useT } from "@/lib/i18n/context";
 // AND NO AUDIENCE IS A REAL ANSWER. Both lists empty publishes privately to the
 // author: a note this member's own agent keeps and nobody else sees. The form
 // says so rather than blocking the button until somebody is picked.
+//
+// AN ATTACHMENT REPLACES THE BODY, IT DOES NOT SIT BESIDE IT. The mangrove takes
+// exactly one of prose, a file and a set of entities, and refuses zero or two with a
+// 400 -- which a member would meet only after writing something and pressing Share.
+// So when a file or a selection arrives from the files tab or the graph, the cell and
+// body fields are not disabled, they are GONE: what is left on screen is what will be
+// sent, and the way to write prose instead is to remove the attachment.
 
 const selectClass =
   "h-9 rounded-lg border border-rule-strong bg-elevated px-2 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
@@ -77,11 +86,21 @@ function failureText(code: string, t: (typeof chatCopy)["en"]): string {
 export default function MangroveCompose({
   workspace,
   caps,
+  attachment,
+  onRemoveAttachment,
   onPublished,
 }: {
   workspace: Workspace;
   /** Null while the tab is still loading them: no group option until they arrive. */
   caps: MangroveCapabilities | null;
+  /**
+   * A file or a graph selection the member arrived here WITH, from the files tab or
+   * the knowledge graph. Owned by the screen rather than by this form: the member
+   * lands on the composer because of it, so it exists before the form is mounted.
+   */
+  attachment: MangroveShare | null;
+  /** Take the attachment off and give the prose fields back. */
+  onRemoveAttachment: () => void;
   onPublished: (pending: boolean) => void;
 }) {
   const t = useT(chatCopy);
@@ -134,13 +153,16 @@ export default function MangroveCompose({
         ...(toSubscription ? [subscriptionGroupId(workspace)] : []),
         ...(toTenant ? [tenantGroupId(workspace)] : []),
       ];
-      const out = await publish(workspace, {
-        cell: cell.trim(),
-        content,
-        mediaType,
-        to,
-        toEmails: targets(recipients),
-      });
+      const audience = { to, toEmails: targets(recipients) };
+      // ONE of three, decided here and nowhere else. The union refuses a second kind
+      // at compile time, so there is no branch in which a body rides along with a file.
+      const publication: MangrovePublication =
+        attachment?.kind === "file"
+          ? { file: attachment.path, ...audience }
+          : attachment?.kind === "entities"
+            ? { entities: attachment.names, ...audience }
+            : { cell: cell.trim(), content, mediaType, ...audience };
+      const out = await publish(workspace, publication);
       onPublished(out.pending);
     } catch (err) {
       setError(failureText(err instanceof MangroveError ? err.code : "unknown", t));
@@ -149,7 +171,12 @@ export default function MangroveCompose({
     }
   };
 
-  const ready = cell.trim().length > 0 && content.trim().length > 0 && !sending;
+  // With something attached there is nothing left to fill in: the audience is optional
+  // and the content is already chosen, so the only thing that can hold Share back is a
+  // send already in flight.
+  const ready = attachment
+    ? !sending
+    : cell.trim().length > 0 && content.trim().length > 0 && !sending;
   const anyGroup = Boolean(caps?.governs) || Boolean(caps?.tenantLicensed);
 
   return (
@@ -160,47 +187,98 @@ export default function MangroveCompose({
         if (ready) void send();
       }}
     >
-      <p className="text-sm text-fg-muted">{t.mangrove.composeHint}</p>
+      <p className="text-sm text-fg-muted">
+        {attachment ? t.mangrove.attachedHint : t.mangrove.composeHint}
+      </p>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-fg">{t.mangrove.cellLabel}</span>
-        <span className="text-xs text-fg-muted">{t.mangrove.cellHint}</span>
-        <Input
-          className="mt-1"
-          value={cell}
-          onChange={(e) => setCell(e.target.value)}
-          placeholder={t.mangrove.cellPlaceholder}
-        />
-      </label>
+      {attachment ? (
+        /* WHAT WILL BE SENT, and the only thing that will be. No cell field: the
+           mangrove derives the cell for both of these kinds, so a field here would be
+           asking for something that is thrown away. */
+        <section className="rounded-xl border border-rule-strong bg-surface p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-medium text-fg">
+                {attachment.kind === "file" ? (
+                  <FileText size={14} aria-hidden />
+                ) : (
+                  <Network size={14} aria-hidden />
+                )}
+                {attachment.kind === "file"
+                  ? t.mangrove.attachedFile
+                  : attachment.names.length === 1
+                    ? t.mangrove.attachedEntitiesOne
+                    : t.mangrove.attachedEntitiesMany.replace(
+                        "{count}",
+                        String(attachment.names.length),
+                      )}
+              </p>
+              <p
+                className="mt-1 truncate text-sm text-fg-muted"
+                title={attachment.kind === "file" ? attachment.path : attachment.names.join(", ")}
+              >
+                {attachment.kind === "file" ? attachment.name : attachment.names.join(", ")}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="text"
+              aria-label={t.mangrove.removeAttachment}
+              onClick={onRemoveAttachment}
+            >
+              <X size={14} aria-hidden /> {t.mangrove.removeAttachment}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-fg-muted">
+            {attachment.kind === "file"
+              ? t.mangrove.attachedFileHint
+              : t.mangrove.attachedEntitiesHint}
+          </p>
+        </section>
+      ) : (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-fg">{t.mangrove.cellLabel}</span>
+            <span className="text-xs text-fg-muted">{t.mangrove.cellHint}</span>
+            <Input
+              className="mt-1"
+              value={cell}
+              onChange={(e) => setCell(e.target.value)}
+              placeholder={t.mangrove.cellPlaceholder}
+            />
+          </label>
 
-      <div className="flex flex-col gap-1">
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
-          <Textarea
-            className="mt-1 min-h-40 rounded-lg border border-brand bg-elevated px-3 py-2"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder={t.mangrove.bodyPlaceholder}
-          />
-        </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
+              <Textarea
+                className="mt-1 min-h-40 rounded-lg border border-brand bg-elevated px-3 py-2"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={t.mangrove.bodyPlaceholder}
+              />
+            </label>
 
-        {/* The media type travels with the memory. The preview renderer reads it
-            and only sniffs the body when it is absent, so saying "plain text"
-            here is what stops a body full of asterisks being rendered as
-            emphasis for every reader afterwards. */}
-        <label className="mt-2 flex items-center gap-2">
-          <span className="text-sm text-fg-muted">{t.mangrove.formatLabel}</span>
-          <select
-            className={selectClass}
-            value={mediaType}
-            aria-label={t.mangrove.formatLabel}
-            onChange={(e) => setMediaType(e.target.value as MangroveMediaType)}
-          >
-            <option value="text/markdown">{t.mangrove.formatMarkdown}</option>
-            <option value="text/plain">{t.mangrove.formatPlain}</option>
-          </select>
-        </label>
-      </div>
+            {/* The media type travels with the memory. The preview renderer reads it
+                and only sniffs the body when it is absent, so saying "plain text"
+                here is what stops a body full of asterisks being rendered as
+                emphasis for every reader afterwards. */}
+            <label className="mt-2 flex items-center gap-2">
+              <span className="text-sm text-fg-muted">{t.mangrove.formatLabel}</span>
+              <select
+                className={selectClass}
+                value={mediaType}
+                aria-label={t.mangrove.formatLabel}
+                onChange={(e) => setMediaType(e.target.value as MangroveMediaType)}
+              >
+                <option value="text/markdown">{t.mangrove.formatMarkdown}</option>
+                <option value="text/plain">{t.mangrove.formatPlain}</option>
+              </select>
+            </label>
+          </div>
+        </>
+      )}
 
       <section>
         <h3 className="text-sm font-medium text-fg">{t.mangrove.audienceLabel}</h3>

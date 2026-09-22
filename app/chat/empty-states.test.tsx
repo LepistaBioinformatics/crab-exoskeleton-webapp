@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
-import { BrowseList, RecentList, SearchList } from "./memory-graph-views";
+import {
+  BrowseList,
+  RecentList,
+  SearchList,
+  type RowSelection,
+} from "./memory-graph-views";
 import MemoryGraphView from "./memory-graph-view";
 import { MAP_TOOLS_DEFAULTS } from "./use-map-tools";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -27,6 +32,14 @@ import type { RecentChanges, SummaryGraph } from "@/lib/memoryGraph";
 // Listing them is the point: a test that silently skipped them would read as coverage.
 
 const g = chatCopy.en.memoryGraph;
+
+// Nothing ticked. These cases are about the empty branches of each list, not about the
+// multi-select, which is asserted in memory-graph-views.test.tsx and graph-multi-select.
+const noSelection: RowSelection = {
+  checked: new Set<string>(),
+  onToggle: () => {},
+  label: g.selection.selectEntity,
+};
 
 const MARKER = "data-empty-state";
 
@@ -59,6 +72,7 @@ function browse(graph: SummaryGraph, typeFilter: string | null = null) {
     <BrowseList
       graph={graph}
       selected={null}
+      selection={noSelection}
       onSelect={() => {}}
       emptyTitle={g.empty.title}
       emptyBody={g.empty.body}
@@ -134,6 +148,7 @@ describe("the knowledge graph's empty branches all render one component", () => 
       <SearchList
         hits={{ entities: [], relations: [] }}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         noResults={g.noResults}
         noResultsHint={g.noResultsHint}

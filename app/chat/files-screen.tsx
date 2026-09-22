@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Waves,
 } from "lucide-react";
 import { cva } from "class-variance-authority";
 import {
@@ -36,7 +37,9 @@ import {
   type Attachment,
 } from "@/lib/media";
 import { FileThumb, formatSize } from "@/app/chat/file-visuals";
-import type { Workspace } from "./fragment";
+import { setDestination, type Workspace } from "./fragment";
+import { requestMangroveShare } from "./mangrove-share-bus";
+import { useMangroveEnabled } from "./use-mangrove";
 import FilePreview from "@/app/chat/file-preview";
 import { subscribeToPreviewRequests, takePendingPreview } from "@/app/chat/media-preview-bus";
 import { subscribeToMediaChanged } from "@/app/chat/media-refresh-bus";
@@ -181,6 +184,12 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
   // The file the preview overlay is showing, or null. Held here rather than per row so
   // only one can ever be open.
   const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
+
+  // The mangrove's share action, ABSENT rather than disabled where there is no
+  // mangrove — the rule every other affordance of that feature follows. Null while the
+  // answer is still in flight, so the control arrives once or not at all rather than
+  // appearing a beat after the listing.
+  const mangroveOn = useMangroveEnabled(workspace);
 
   // Changing workspace CLOSES the open document.
   //
@@ -719,6 +728,25 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
             a narrow desktop window does not. Reserving the space already means showing
             them costs no layout. */}
         <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          {mangroveOn === true && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={`${t.mangrove.shareFile} ${node.leaf}`}
+              title={t.mangrove.shareFile}
+              onClick={() => {
+                // The PATH is what the proxy resolves; the leaf is only what the
+                // composer shows. The two differ for every file inside a folder.
+                requestMangroveShare({ kind: "file", path: f.path, name: node.leaf });
+                // The composer is a centre destination and this pane is beside the
+                // conversation, so the share is parked on the bus first and collected
+                // by the screen this navigation mounts.
+                setDestination("mangrove");
+              }}
+            >
+              <Waves size={14} aria-hidden />
+            </IconButton>
+          )}
           <IconButton
             variant="ghost"
             size="sm"

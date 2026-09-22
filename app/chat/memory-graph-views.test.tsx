@@ -6,6 +6,7 @@ import {
   RecentList,
   RelationLine,
   SearchList,
+  type RowSelection,
 } from "./memory-graph-views";
 import { chatCopy } from "@/lib/i18n/chat";
 import type { Entity, RecentChanges, Relation, SummaryGraph } from "@/lib/memoryGraph";
@@ -19,6 +20,14 @@ import type { Entity, RecentChanges, Relation, SummaryGraph } from "@/lib/memory
 
 const t = chatCopy.en;
 const g = t.memoryGraph;
+
+// The default for cases that are not about the multi-select. The ones that are pass their
+// own set instead.
+const noSelection: RowSelection = {
+  checked: new Set<string>(),
+  onToggle: () => {},
+  label: g.selection.selectEntity,
+};
 
 // renderToStaticMarkup HTML-escapes text, so copy containing an apostrophe comes
 // back as `&#x27;`. Unescape rather than rewrite the copy to suit the test — the
@@ -55,6 +64,7 @@ function browse(over: Partial<Parameters<typeof BrowseList>[0]> = {}) {
     <BrowseList
       graph={summary}
       selected={null}
+      selection={noSelection}
       onSelect={() => {}}
       emptyTitle={g.empty.title}
       emptyBody={g.empty.body}
@@ -118,6 +128,7 @@ describe("SearchList", () => {
       <SearchList
         hits={{ entities: [hit], relations: [] }}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         noResults={g.noResults}
       />,
@@ -132,6 +143,7 @@ describe("SearchList", () => {
       <SearchList
         hits={{ entities: [], relations: [] }}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         noResults={g.noResults}
       />,
@@ -404,6 +416,7 @@ describe("BrowseList type filter", () => {
       <BrowseList
         graph={mixed}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         emptyTitle={g.empty.title}
         emptyBody={g.empty.body}
@@ -439,6 +452,7 @@ describe("BrowseList type filter", () => {
       <BrowseList
         graph={{ ...mixed, entities: [mixed.entities[1], mixed.entities[2]] }}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         emptyTitle={g.empty.title}
         emptyBody={g.empty.body}
@@ -463,6 +477,7 @@ describe("BrowseList type filter", () => {
       <BrowseList
         graph={mixed}
         selected={null}
+        selection={noSelection}
         onSelect={() => {}}
         emptyTitle={g.empty.title}
         emptyBody={g.empty.body}
@@ -525,5 +540,62 @@ describe("EntityDetail chrome", () => {
     expect(html).toContain("border-accent/60");
     expect(html).toContain("shadow-");
     expect(html).not.toContain("bg-elevated");
+  });
+});
+
+// The multi-select is a SECOND selection, beside the `selected` the detail pane reads.
+// These assert what the markup promises a screen reader and a keyboard: one checkbox per
+// row, a name in every accessible name, and both lists reading the SAME set of names —
+// the browse list holds `SummaryEntity`, the search list holds `Entity`, and `name` is
+// the only field they agree on.
+describe("the multi-select tick", () => {
+  const hit: Entity = {
+    name: "ledger",
+    entityType: "system",
+    observations: [{ content: "written in Rust", timestamp: 1_700_000_000_000 }],
+  };
+
+  function search(checked: ReadonlySet<string>) {
+    return renderToStaticMarkup(
+      <SearchList
+        hits={{ entities: [hit], relations: [] }}
+        selected={null}
+        selection={{ ...noSelection, checked }}
+        onSelect={() => {}}
+        noResults={g.noResults}
+      />,
+    );
+  }
+
+  it("gives every browse row a checkbox named after its entity", () => {
+    const html = browse();
+    expect(html).toContain('role="checkbox"');
+    expect(text(html)).toContain(
+      g.selection.selectEntity.replace("{name}", "ledger"),
+    );
+    expect(text(html)).toContain(
+      g.selection.selectEntity.replace("{name}", "empty-one"),
+    );
+    // Nothing ticked, so every row says so rather than saying nothing.
+    expect(html).not.toContain('aria-checked="true"');
+  });
+
+  it("marks a checked browse row aria-checked and leaves the others alone", () => {
+    const html = browse({ selection: { ...noSelection, checked: new Set(["ledger"]) } });
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-checked="false"');
+  });
+
+  // The tick opening the detail pane instead of adding to the set, or the row doing both,
+  // is the failure this shape exists to prevent: a button inside a button is invalid HTML
+  // and the inner click would reach the outer handler.
+  it("keeps the tick out of the row button that opens the detail pane", () => {
+    const html = browse();
+    expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/);
+  });
+
+  it("ticks search rows from the same set of names", () => {
+    expect(search(new Set(["ledger"]))).toContain('aria-checked="true"');
+    expect(search(new Set(["something else"]))).toContain('aria-checked="false"');
   });
 });

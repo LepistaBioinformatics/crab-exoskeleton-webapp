@@ -30,6 +30,10 @@ const ACTIONS: Record<string, "GET" | "POST"> = {
   decide: "POST",
   revoke: "POST",
   publish: "POST",
+  // Takes a graph fragment somebody shared into the caller's own memory. A POST
+  // with a JSON body and a JSON answer, so it belongs here; the file DOWNLOAD that
+  // arrived with it does not, and has a route of its own beside this one.
+  merge: "POST",
 };
 
 async function handle(req: NextRequest, action: string) {
@@ -52,6 +56,17 @@ async function handle(req: NextRequest, action: string) {
   }
 
   const query = new URLSearchParams({ tenant_id: tenantId, subs_acc_id: subsAccId });
+  // The project, for the two actions that resolve something a project OWNS.
+  //
+  // Reading the mangrove does not take it -- the network is per subscription and
+  // a timeline is the same timeline whichever project is open. But a file path
+  // and an entity name are resolved against a WORKSPACE, and each project is a
+  // separate one. Forwarded only where it means something, so a read cannot
+  // acquire a scope it has no use for.
+  const project = p.get("project");
+  if (project && (action === "publish" || action === "merge")) {
+    query.set("project", project);
+  }
   // `reading` is the only extra the mangrove takes, and it is an enum upstream --
   // passing it through unchecked is safe and keeps the allowlist honest about
   // what it allows.

@@ -342,6 +342,23 @@ const en = {
     referenceEntity: "Reference this entity in the chat",
     referencedEntity: "Referenced entity",
     markerEntity: "graph entity",
+    // Ticking several entities at once, which is a different act from opening one: the
+    // row click still opens the detail pane, the tick beside it only adds to this set.
+    selection: {
+      // `{name}` is the entity, and it is what makes forty identical ticks tell a screen
+      // reader which row it is on.
+      selectEntity: "Select {name}",
+      one: "1 entity selected",
+      many: "{count} entities selected",
+      // A checked entity the current filter, search or tab is not showing. It stays
+      // checked — the member chose it — so the count is what keeps it from being a
+      // surprise later.
+      hidden: "{count} not in view",
+      // Into the mangrove. Absent where this deployment has no mangrove, so the string
+      // is only ever read where the feature exists.
+      share: "Share in the mangrove",
+      clear: "Clear selection",
+    },
     empty: {
       title: "Nothing learned yet",
       body: "The agent builds this as you talk to it. Ask it to remember something and it will show up here.",
@@ -976,6 +993,38 @@ const en = {
     publishFailed: "Could not share that right now.",
     publishedOk: "Shared.",
     publishedPending: "Sent for a decision. It reaches the group once whoever governs it accepts.",
+    // Sharing something that is not prose: a workspace file, or entities out of the
+    // knowledge graph. The mangrove takes exactly one kind per publication, so these
+    // REPLACE the cell and body fields rather than sitting beside them.
+    attachedHint: "Choose who reads this. Choose nobody and it stays in your own agent's memory.",
+    attachedFile: "Sharing a file",
+    attachedFileHint: "Your agent reads the file and sends it. Nothing is uploaded from this browser.",
+    attachedEntitiesOne: "Sharing 1 entity from your memory graph",
+    attachedEntitiesMany: "Sharing {count} entities from your memory graph",
+    attachedEntitiesHint: "The relations between them go too.",
+    removeAttachment: "Remove",
+    shareFile: "Share in the mangrove",
+    // A shared piece of somebody's knowledge graph. Shown as what it is — names and
+    // counts — because the body underneath is JSON, and JSON says nothing about whether
+    // this is worth taking.
+    fragmentTitle: "A piece of a memory graph",
+    fragmentCounts: "{entities} entities · {observations} observations · {relations} relations",
+    fragmentMore: "+{count} more",
+    merge: "Merge into my memory",
+    merging: "Merging…",
+    merged: "Added {entities} entities, {observations} observations and {relations} relations.",
+    // Zero of all three. A real outcome, and said out loud: a control that simply
+    // stopped being busy would read as a failure.
+    mergedNothing: "Nothing new — your agent already knew all of this.",
+    mergeFailed: "Could not merge that right now.",
+    downloadFile: "Download",
+    downloading: "Downloading…",
+    downloadFailed: "Could not download that right now.",
+    reference: "Reference in chat",
+    // The composer it filled is not on this screen, so the click needs an answer here.
+    referenced: "Added to your next message.",
+    referencedPost: "Referenced memory",
+    markerPost: "mangrove memory",
   },
   projects: {
     title: "Projects",
@@ -1283,6 +1332,14 @@ const pt: ChatDict = {
     referenceEntity: "Referenciar esta entidade no chat",
     referencedEntity: "Entidade referenciada",
     markerEntity: "entidade do grafo",
+    selection: {
+      selectEntity: "Selecionar {name}",
+      one: "1 entidade selecionada",
+      many: "{count} entidades selecionadas",
+      hidden: "{count} fora da visão",
+      share: "Compartilhar no mangue",
+      clear: "Limpar seleção",
+    },
     empty: {
       title: "Nada aprendido ainda",
       body: "O agente constrói isso conversando com você. Peça para ele lembrar de algo e vai aparecer aqui.",
@@ -1772,6 +1829,29 @@ const pt: ChatDict = {
     publishFailed: "Não foi possível compartilhar agora.",
     publishedOk: "Compartilhado.",
     publishedPending: "Enviado para decisão. Chega ao grupo quando quem o governa aceitar.",
+    attachedHint: "Escolha quem lê isto. Sem escolher ninguém, fica só na memória do seu agente.",
+    attachedFile: "Compartilhando um arquivo",
+    attachedFileHint: "Seu agente lê o arquivo e o envia. Nada sobe deste navegador.",
+    attachedEntitiesOne: "Compartilhando 1 entidade do seu grafo de memória",
+    attachedEntitiesMany: "Compartilhando {count} entidades do seu grafo de memória",
+    attachedEntitiesHint: "As relações entre elas vão junto.",
+    removeAttachment: "Remover",
+    shareFile: "Compartilhar no mangue",
+    fragmentTitle: "Um pedaço de um grafo de memória",
+    fragmentCounts: "{entities} entidades · {observations} observações · {relations} relações",
+    fragmentMore: "+{count} a mais",
+    merge: "Juntar à minha memória",
+    merging: "Juntando…",
+    merged: "Entraram {entities} entidades, {observations} observações e {relations} relações.",
+    mergedNothing: "Nada novo — seu agente já sabia de tudo isso.",
+    mergeFailed: "Não foi possível juntar agora.",
+    downloadFile: "Baixar",
+    downloading: "Baixando…",
+    downloadFailed: "Não foi possível baixar agora.",
+    reference: "Citar na conversa",
+    referenced: "Adicionado à sua próxima mensagem.",
+    referencedPost: "Memória citada",
+    markerPost: "memória do mangue",
   },
   projects: {
     title: "Projetos",
