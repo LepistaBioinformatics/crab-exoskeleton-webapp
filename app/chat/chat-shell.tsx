@@ -28,6 +28,7 @@ import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
 import WorkspaceGrid from "./workspace-grid";
 import ProjectsScreen from "./projects-screen";
+import ReefScreen from "./reef-screen";
 import LandingScreen from "./landing-screen";
 import WorkspaceScreen from "./workspace-screen";
 import RestartBanner from "./restart-banner";
@@ -268,11 +269,11 @@ export default function ChatShell({ email }: { email: string }) {
         Icon: rowIcon(r),
         label: rowLabel(r, t),
         blurb: rowBlurb(r, t),
-        active: r.kind === "projects" ? destination !== null : openSection === r.section,
+        active: r.kind === "section" ? openSection === r.section : destination === r.kind,
         onSelect: () =>
-          r.kind === "projects"
-            ? setDestination("projects")
-            : setRightSidebar(nextSidebarValue(openSection, r.section)),
+          r.kind === "section"
+            ? setRightSidebar(nextSidebarValue(openSection, r.section))
+            : setDestination(r.kind),
       }))
     : [];
 
@@ -333,10 +334,10 @@ export default function ChatShell({ email }: { email: string }) {
             email={email}
             workspace={workspace}
             project={project}
-            projectsOpen={destination !== null}
+            openDestination={destination}
             openSection={openSection}
             hideProjects={hideProjects}
-            onProjects={() => setDestination("projects")}
+            onDestination={(to) => setDestination(to)}
             onSection={setRightSidebar}
             onNewChat={newChat}
             onConversationSelect={closeDrawer}
@@ -414,12 +415,15 @@ export default function ChatShell({ email }: { email: string }) {
                 It is also the only way back in, which is why the breadcrumb's root
                 segment keeps its link however short the path is. */}
             {centre.kind === "agents" && <WorkspaceGrid />}
-            {centre.kind === "destination" && workspace && (
+            {centre.kind === "destination" && workspace && centre.at === "projects" && (
               <ProjectsScreen
                 workspace={workspace}
                 browsedProject={project}
                 onBrowse={(id) => setFragmentProject(id)}
               />
+            )}
+            {centre.kind === "destination" && workspace && centre.at === "reef" && (
+              <ReefScreen workspace={workspace} />
             )}
             {/* A place before a conversation is chosen: the agent's root and a
                 project's root alike. It replaced an empty transcript, and the effect

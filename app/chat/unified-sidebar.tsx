@@ -7,6 +7,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import LogoutButton from "./logout-button";
 import HistorySidebar from "./history-sidebar";
+import type { Destination } from "./destination";
 import SidebarDestinations from "./sidebar-destinations";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
@@ -34,9 +35,9 @@ export default function UnifiedSidebar({
   email,
   workspace,
   project,
-  projectsOpen,
+  openDestination,
   openSection,
-  onProjects,
+  onDestination,
   onSection,
   onNewChat,
   onConversationSelect,
@@ -50,10 +51,10 @@ export default function UnifiedSidebar({
   /** agent-projects: the project being browsed, from the fragment's `p`. */
   project: string | null;
   /** The centre pane is showing the projects screen -- the fragment's `v`. */
-  projectsOpen: boolean;
+  openDestination: Destination | null;
   /** The section open in the pane beside the conversation, or null -- the fragment's `rs`. */
   openSection: Section | null;
-  onProjects: () => void;
+  onDestination: (to: Destination) => void;
   /** The section the pane should show next, or null to close it. */
   onSection: (next: Section | null) => void;
   onNewChat: () => void;
@@ -125,11 +126,11 @@ export default function UnifiedSidebar({
               same one the rail appears at, which is what makes the swap exact. */}
           <div className={showDestinations ? undefined : "md:hidden"}>
             <SidebarDestinations
-              projectsOpen={projectsOpen}
+              openDestination={openDestination}
               openSection={openSection}
               hideProjects={hideProjects}
-              onProjects={() => {
-                onProjects();
+              onDestination={(to) => {
+                onDestination(to);
                 onConversationSelect?.();
               }}
               onSection={(next) => {

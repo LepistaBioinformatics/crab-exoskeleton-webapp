@@ -18,7 +18,7 @@ import type { Workspace } from "./fragment";
 // React-free so it can be tested without mounting anything (the suite runs
 // `environment: "node"`).
 
-export type Destination = "projects";
+export type Destination = "projects" | "reef";
 
 /**
  * The fragment's `v` as a Destination, or null.
@@ -33,7 +33,11 @@ export type Destination = "projects";
  * still carries.
  */
 export function asDestination(value: string | null | undefined): Destination | null {
-  return value === "projects" ? "projects" : null;
+  // A SECOND ACCEPTED VALUE DOES NOT MAKE THE CHECK REDUNDANT, and the reason is
+  // the one the comment above gives: what this refuses is every OTHER string,
+  // including the five section names a link written against the one-key model
+  // still carries. Listing the values rather than casting is the whole point.
+  return value === "projects" || value === "reef" ? value : null;
 }
 
 export type Centre =
