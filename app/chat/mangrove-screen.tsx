@@ -7,6 +7,7 @@ import type { Workspace } from "./fragment";
 import DestinationScreen from "./destination-screen";
 import MangroveContent from "./mangrove-content";
 import MangrovePeople from "./mangrove-people";
+import MangroveCompose from "./mangrove-compose";
 import { useMangrove } from "./use-mangrove";
 import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,12 @@ import { useT } from "@/lib/i18n/context";
 // wrong model of who decides — so the tab does not show a "Pending decisions"
 // button to a member who cannot make one. Whether they can is a mycelium role,
 // which only the proxy can resolve, which is why /v1/mangrove/capabilities exists.
+//
+// COMPOSE IS A FLAG BESIDE PEOPLE, not a fourth reading. A reading is a
+// question put to the timeline, and opening a form to write something is not
+// one -- making it a member of the union would refetch the timeline to render a
+// blank form. Both flags are read through ONE derived `onTimeline`, so no
+// section can be left rendering under the form because a guard was missed.
 //
 // AND "NOTHING YET" IS NOT "IT IS DOWN". An empty reading is a normal state and
 // renders as prose; an unreachable service renders as an error with a retry.
@@ -59,9 +66,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
   // People is not a reading -- it does not come from the timeline and must not
   // refetch it. Kept as its own flag so switching to it costs nothing.
   const [onPeople, setOnPeople] = useState(false);
+  const [onCompose, setOnCompose] = useState(false);
+  // What the last publish did: delivered, or sent for somebody's decision. The
+  // two are not the same answer -- a cross-scope publication appears in no
+  // reading at all until whoever governs that scope accepts it.
+  const [publishedPending, setPublishedPending] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
+  const onTimeline = !onPeople && !onCompose;
 
   // The operator never enabled the mangrove. Render NOTHING — not an error, not an
   // empty state with a dead button.
@@ -115,10 +128,15 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
             <button
               key={r.key}
               type="button"
-              className={tab({ current: !onPeople && reading === r.key })}
-              aria-current={!onPeople && reading === r.key ? "page" : undefined}
+              className={tab({ current: onTimeline && reading === r.key })}
+              aria-current={onTimeline && reading === r.key ? "page" : undefined}
               onClick={() => {
                 setOnPeople(false);
+                setOnCompose(false);
+                // The notice is about the publish that just happened; leaving it
+                // pinned over a reading the member navigated to would make it
+                // look like a property of that reading.
+                setPublishedPending(null);
                 setReading(r.key);
               }}
             >
@@ -129,9 +147,26 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
             type="button"
             className={tab({ current: onPeople })}
             aria-current={onPeople ? "page" : undefined}
-            onClick={() => setOnPeople(true)}
+            onClick={() => {
+              setOnCompose(false);
+              setPublishedPending(null);
+              setOnPeople(true);
+            }}
           >
             {t.mangrove.people}
+          </button>
+          {/* Its own flag: opening the form asks the timeline nothing. */}
+          <button
+            type="button"
+            className={tab({ current: onCompose })}
+            aria-current={onCompose ? "page" : undefined}
+            onClick={() => {
+              setOnPeople(false);
+              setPublishedPending(null);
+              setOnCompose(true);
+            }}
+          >
+            {t.mangrove.compose}
           </button>
         </nav>
 
@@ -141,14 +176,44 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
           </div>
         )}
 
-        {!onPeople && actionError && (
+        {onCompose && (
+          <div className="mt-6">
+            <MangroveCompose
+              workspace={workspace}
+              caps={caps}
+              onPublished={(pending) => {
+                setPublishedPending(pending);
+                setOnCompose(false);
+                // What was just written belongs to "Published", so that is where
+                // the member is left.
+                //
+                // ONE FETCH, NOT TWO. `reload` is bound to the reading that is
+                // current now, so calling it AND changing the reading starts a
+                // fetch for each and lets the slower one win -- which is a member
+                // landing on "Published" and reading their received list. The
+                // reading change refetches by itself; the explicit reload is only
+                // for the case where there is no change to react to.
+                if (reading === "published") void reload();
+                else setReading("published");
+              }}
+            />
+          </div>
+        )}
+
+        {onTimeline && publishedPending !== null && (
+          <Alert className="mt-4">
+            {publishedPending ? t.mangrove.publishedPending : t.mangrove.publishedOk}
+          </Alert>
+        )}
+
+        {onTimeline && actionError && (
           <Alert severity="error" className="mt-4">
             {actionError}
           </Alert>
         )}
 
         {/* Unreachable is its own answer, with a way to try again. */}
-        {!onPeople && error && !off && (
+        {onTimeline && error && !off && (
           <Alert severity="error" className="mt-4">
             {error === "mangrove_unreachable" || error === "connectivity"
               ? t.mangrove.unreachable
@@ -159,7 +224,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
           </Alert>
         )}
 
-        {!onPeople && nothing && (
+        {onTimeline && nothing && (
           <div className="mt-8 text-sm text-fg-muted">
             <p>{t.mangrove.none}</p>
             <p className="mt-1">{t.mangrove.noneHint}</p>
@@ -167,7 +232,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
         )}
 
         {/* Held: addressed at this member, NOT yet in their agent's memory. */}
-        {!onPeople && held.length > 0 && (
+        {onTimeline && held.length > 0 && (
           <section className="mt-6">
             <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
               <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
@@ -203,7 +268,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
         )}
 
         {/* Pending: only ever rendered for a governing role. */}
-        {!onPeople && pending.length > 0 && (
+        {onTimeline && pending.length > 0 && (
           <section className="mt-6">
             <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
               <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
@@ -246,7 +311,7 @@ export default function MangroveScreen({ workspace }: { workspace: Workspace }) 
           </section>
         )}
 
-        {!onPeople && claims.length > 0 && (
+        {onTimeline && claims.length > 0 && (
           <section className="mt-6">
             <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
               <Send size={16} aria-hidden />{" "}
