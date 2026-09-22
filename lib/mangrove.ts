@@ -1,5 +1,5 @@
-// The reef: memory this member's agent shared, and memory others shared with
-// them. EXPERIMENTAL — see crab-reef-network's README.
+// The mangrove: memory this member's agent shared, and memory others shared with
+// them. EXPERIMENTAL — see crab-mangrove-network's README.
 //
 // THREE ANSWERS THAT MUST NOT COLLAPSE INTO ONE. A reading can come back empty,
 // the service can be unreachable, or the whole feature can be switched off in
@@ -9,18 +9,18 @@
 // and must never be dressed as a failure; the third means the tab should not be
 // there at all.
 //
-// `reef_off` is how the last one arrives: the proxy does not register the
-// routes when the reef is unconfigured, so the BFF sees a 404 and says so. That
+// `mangrove_off` is how the last one arrives: the proxy does not register the
+// routes when the mangrove is unconfigured, so the BFF sees a 404 and says so. That
 // is the same shape `projects_unsupported` already uses to hide a feature a
 // harness predates, and for the same reason — an affordance that renders and
 // then refuses teaches the wrong thing.
 
 import type { Workspace } from "@/app/chat/fragment";
 
-export type ReefReading = "received" | "published" | "pending";
+export type MangroveReading = "received" | "published" | "pending";
 
 /** One author's current position on one cell. */
-export interface ReefClaim {
+export interface MangroveClaim {
   cell: string;
   author: string;
   object: { id: string; type: string; cell: string; content?: string; mediaType?: string };
@@ -32,7 +32,7 @@ export interface ReefClaim {
 }
 
 /** Addressed at this member, and NOT yet in their agent's memory. */
-export interface ReefHeld {
+export interface MangroveHeld {
   activityId: string;
   from: string;
   object: { id: string; type: string; cell: string; content?: string };
@@ -40,7 +40,7 @@ export interface ReefHeld {
 }
 
 /** A cross-scope publication waiting on a governing role. */
-export interface ReefPending {
+export interface MangrovePending {
   activityId: string;
   author: string;
   scope: string;
@@ -48,21 +48,21 @@ export interface ReefPending {
   published: string;
 }
 
-export interface ReefTimeline {
-  reading: ReefReading;
-  claims?: ReefClaim[];
-  held?: ReefHeld[];
-  pending?: ReefPending[];
+export interface MangroveTimeline {
+  reading: MangroveReading;
+  claims?: MangroveClaim[];
+  held?: MangroveHeld[];
+  pending?: MangrovePending[];
 }
 
-export interface ReefCapabilities {
+export interface MangroveCapabilities {
   /** May decide cross-scope publications into this subscription. */
   governs: boolean;
   /** May address the whole tenant. Never true for an agent. */
   tenantLicensed: boolean;
 }
 
-export class ReefError extends Error {
+export class MangroveError extends Error {
   constructor(public code: string) {
     super(code);
   }
@@ -80,7 +80,7 @@ async function call<T>(
 ): Promise<T> {
   const query = workspaceQuery(w);
   for (const [k, v] of Object.entries(extra ?? {})) query.set(k, v);
-  const res = await fetch(`/api/reef/${path}?${query}`, init);
+  const res = await fetch(`/api/mangrove/${path}?${query}`, init);
   if (!res.ok) {
     let code = `http_${res.status}`;
     try {
@@ -89,17 +89,17 @@ async function call<T>(
     } catch {
       // A body that is not JSON tells us nothing the status has not already.
     }
-    throw new ReefError(code);
+    throw new MangroveError(code);
   }
   return (await res.json()) as T;
 }
 
-export function readTimeline(w: Workspace, reading: ReefReading): Promise<ReefTimeline> {
-  return call<ReefTimeline>("timeline", w, undefined, { reading });
+export function readTimeline(w: Workspace, reading: MangroveReading): Promise<MangroveTimeline> {
+  return call<MangroveTimeline>("timeline", w, undefined, { reading });
 }
 
-export function readCapabilities(w: Workspace): Promise<ReefCapabilities> {
-  return call<ReefCapabilities>("capabilities", w);
+export function readCapabilities(w: Workspace): Promise<MangroveCapabilities> {
+  return call<MangroveCapabilities>("capabilities", w);
 }
 
 /** Take something sent directly to you into your own agent's memory. */

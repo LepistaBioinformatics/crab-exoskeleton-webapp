@@ -30,7 +30,7 @@ import type { Destination } from "./destination";
 /** One row, and which of the two things a click on it means. */
 export type DestinationRow =
   | { kind: "projects" }
-  | { kind: "reef" }
+  | { kind: "mangrove" }
   | { kind: "section"; section: Section };
 
 // Projects first, then the workspace's own sections in the order that module already
@@ -39,12 +39,12 @@ export type DestinationRow =
 // exists — so the rail reads THIS list rather than building a second one.
 export const DESTINATION_ROWS: DestinationRow[] = [
   { kind: "projects" },
-  // The reef sits with Projects rather than with the five sections, and the
+  // The mangrove sits with Projects rather than with the five sections, and the
   // distinction is the one this file already draws: a section is scoped BY a
   // workspace and opens beside a conversation, while these replace the centre.
-  // The reef spans subscriptions and tenants and is not read alongside one
+  // The mangrove spans subscriptions and tenants and is not read alongside one
   // conversation, so it is a destination.
-  { kind: "reef" },
+  { kind: "mangrove" },
   ...SECTION_ORDER.map((section) => ({ kind: "section", section }) as const),
 ];
 
@@ -53,19 +53,19 @@ export const DESTINATION_ROWS: DestinationRow[] = [
 // five keep coming from the module that owns them.
 export function rowKey(row: DestinationRow): string {
   if (row.kind === "projects") return "projects";
-  if (row.kind === "reef") return "reef";
+  if (row.kind === "mangrove") return "mangrove";
   return row.section;
 }
 
 export function rowLabel(row: DestinationRow, t: ChatDict): string {
   if (row.kind === "projects") return t.projects.title;
-  if (row.kind === "reef") return t.reef.title;
+  if (row.kind === "mangrove") return t.mangrove.title;
   return SECTIONS[row.section].label(t);
 }
 
 export function rowIcon(row: DestinationRow): LucideIcon {
   if (row.kind === "projects") return Folders;
-  if (row.kind === "reef") return Share2;
+  if (row.kind === "mangrove") return Share2;
   return SECTIONS[row.section].Icon;
 }
 
@@ -81,7 +81,7 @@ export function rowIcon(row: DestinationRow): LucideIcon {
  */
 export function rowBlurb(row: DestinationRow, t: ChatDict): string {
   if (row.kind === "projects") return t.projects.blurb;
-  if (row.kind === "reef") return t.reef.blurb;
+  if (row.kind === "mangrove") return t.mangrove.blurb;
   return SECTIONS[row.section].blurb(t);
 }
 

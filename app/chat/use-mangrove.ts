@@ -5,23 +5,23 @@ import type { Workspace } from "./fragment";
 import {
   readCapabilities,
   readTimeline,
-  ReefError,
-  type ReefCapabilities,
-  type ReefReading,
-  type ReefTimeline,
-} from "@/lib/reef";
+  MangroveError,
+  type MangroveCapabilities,
+  type MangroveReading,
+  type MangroveTimeline,
+} from "@/lib/mangrove";
 
 /**
- * The reef's data for one workspace and one reading.
+ * The mangrove's data for one workspace and one reading.
  *
  * FOUR STATES, NOT TWO. `loading` is not `empty`, and neither is an error; and
- * `off` is not an error at all. A deployment that never enabled the reef must
+ * `off` is not an error at all. A deployment that never enabled the mangrove must
  * see the tab disappear, not a tab that loads and then apologises — the same
  * treatment `projects_unsupported` gets, for the same reason.
  */
-export function useReef(workspace: Workspace | null, reading: ReefReading) {
-  const [timeline, setTimeline] = useState<ReefTimeline | null>(null);
-  const [caps, setCaps] = useState<ReefCapabilities | null>(null);
+export function useMangrove(workspace: Workspace | null, reading: MangroveReading) {
+  const [timeline, setTimeline] = useState<MangroveTimeline | null>(null);
+  const [caps, setCaps] = useState<MangroveCapabilities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +38,7 @@ export function useReef(workspace: Workspace | null, reading: ReefReading) {
       setError(null);
     } catch (err) {
       setTimeline(null);
-      setError(err instanceof ReefError ? err.code : "unknown");
+      setError(err instanceof MangroveError ? err.code : "unknown");
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,7 @@ export function useReef(workspace: Workspace | null, reading: ReefReading) {
     error,
     loading,
     reload: load,
-    /** The operator never switched the reef on. Hide the tab, do not explain it. */
-    off: error === "reef_off",
+    /** The operator never switched the mangrove on. Hide the tab, do not explain it. */
+    off: error === "mangrove_off",
   };
 }

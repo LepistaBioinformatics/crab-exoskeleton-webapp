@@ -5,20 +5,20 @@ import { cva } from "class-variance-authority";
 import { Check, Inbox, Send, ShieldQuestion, Trash2, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import DestinationScreen from "./destination-screen";
-import { useReef } from "./use-reef";
-import { admit, decide, revoke, type ReefReading } from "@/lib/reef";
+import { useMangrove } from "./use-mangrove";
+import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
 
-// The member's window onto the reef.
+// The member's window onto the mangrove.
 //
 // THREE READINGS, AND THE THIRD IS ABSENT RATHER THAN EMPTY for somebody who
 // governs nothing. An affordance that renders and then refuses teaches the
 // wrong model of who decides — so the tab does not show a "Pending decisions"
 // button to a member who cannot make one. Whether they can is a mycelium role,
-// which only the proxy can resolve, which is why /v1/reef/capabilities exists.
+// which only the proxy can resolve, which is why /v1/mangrove/capabilities exists.
 //
 // AND "NOTHING YET" IS NOT "IT IS DOWN". An empty reading is a normal state and
 // renders as prose; an unreachable service renders as an error with a retry.
@@ -37,28 +37,28 @@ const tab = cva(
   },
 );
 
-/** An actor id is `reef:actor:<accId>:person|service`. Show the tail, which is
+/** An actor id is `mangrove:actor:<accId>:person|service`. Show the tail, which is
  *  the part a member can tell apart at a glance. */
 function actorLabel(id: string): string {
-  const m = /^reef:actor:(.+):(person|service)$/.exec(id);
+  const m = /^mangrove:actor:(.+):(person|service)$/.exec(id);
   if (!m) return id;
   return m[2] === "service" ? `${m[1]} (bot)` : m[1];
 }
 
 function scopeLabel(id: string): string {
-  if (id.startsWith("reef:group:subscription:")) return "subscription";
-  if (id.startsWith("reef:group:tenant:")) return "tenant";
+  if (id.startsWith("mangrove:group:subscription:")) return "subscription";
+  if (id.startsWith("mangrove:group:tenant:")) return "tenant";
   return actorLabel(id);
 }
 
-export default function ReefScreen({ workspace }: { workspace: Workspace }) {
+export default function MangroveScreen({ workspace }: { workspace: Workspace }) {
   const t = useT(chatCopy);
-  const [reading, setReading] = useState<ReefReading>("received");
+  const [reading, setReading] = useState<MangroveReading>("received");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { timeline, caps, error, loading, reload, off } = useReef(workspace, reading);
+  const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
 
-  // The operator never enabled the reef. Render NOTHING — not an error, not an
+  // The operator never enabled the mangrove. Render NOTHING — not an error, not an
   // empty state with a dead button.
   if (off) return null;
 
@@ -69,17 +69,17 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
       await fn();
       await reload();
     } catch {
-      setActionError(t.reef.actionFailed);
+      setActionError(t.mangrove.actionFailed);
     } finally {
       setBusy(null);
     }
   };
 
-  const readings: { key: ReefReading; label: string }[] = [
-    { key: "received", label: t.reef.received },
-    { key: "published", label: t.reef.published },
+  const readings: { key: MangroveReading; label: string }[] = [
+    { key: "received", label: t.mangrove.received },
+    { key: "published", label: t.mangrove.published },
     // ABSENT, not disabled, for somebody with no governing role.
-    ...(caps?.governs ? [{ key: "pending" as ReefReading, label: t.reef.pending }] : []),
+    ...(caps?.governs ? [{ key: "pending" as MangroveReading, label: t.mangrove.pending }] : []),
   ];
 
   const claims = timeline?.claims ?? [];
@@ -88,10 +88,10 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
   const nothing = !loading && !error && claims.length === 0 && held.length === 0 && pending.length === 0;
 
   return (
-    <DestinationScreen title={t.reef.title}>
-      <p className="text-sm text-fg-muted">{t.reef.hint}</p>
+    <DestinationScreen title={t.mangrove.title}>
+      <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
 
-      <nav className="mt-4 flex gap-1" aria-label={t.reef.title}>
+      <nav className="mt-4 flex gap-1" aria-label={t.mangrove.title}>
         {readings.map((r) => (
           <button
             key={r.key}
@@ -114,19 +114,19 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
       {/* Unreachable is its own answer, with a way to try again. */}
       {error && !off && (
         <Alert severity="error" className="mt-4">
-          {error === "reef_unreachable" || error === "connectivity"
-            ? t.reef.unreachable
-            : t.reef.loadFailed}{" "}
+          {error === "mangrove_unreachable" || error === "connectivity"
+            ? t.mangrove.unreachable
+            : t.mangrove.loadFailed}{" "}
           <Button variant="text" size="sm" onClick={() => void reload()}>
-            {t.reef.retry}
+            {t.mangrove.retry}
           </Button>
         </Alert>
       )}
 
       {nothing && (
         <div className="mt-8 text-sm text-fg-muted">
-          <p>{t.reef.none}</p>
-          <p className="mt-1">{t.reef.noneHint}</p>
+          <p>{t.mangrove.none}</p>
+          <p className="mt-1">{t.mangrove.noneHint}</p>
         </div>
       )}
 
@@ -134,14 +134,14 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
       {held.length > 0 && (
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-            <Inbox size={16} aria-hidden /> {t.reef.heldTitle}
+            <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
           </h2>
-          <p className="mt-1 text-xs text-fg-muted">{t.reef.heldHint}</p>
+          <p className="mt-1 text-xs text-fg-muted">{t.mangrove.heldHint}</p>
           <ul className="mt-3 flex flex-col gap-2">
             {held.map((h) => (
               <li key={h.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
                 <p className="text-xs text-fg-muted">
-                  {t.reef.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
+                  {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
                 </p>
                 <p className="mt-1 text-sm text-fg">{h.object.content}</p>
                 <Button
@@ -150,7 +150,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
                   disabled={busy === h.activityId}
                   onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
                 >
-                  {t.reef.admit}
+                  {t.mangrove.admit}
                 </Button>
               </li>
             ))}
@@ -162,13 +162,13 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
       {pending.length > 0 && (
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-            <ShieldQuestion size={16} aria-hidden /> {t.reef.pendingTitle}
+            <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
           </h2>
           <ul className="mt-3 flex flex-col gap-2">
             {pending.map((p) => (
               <li key={p.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
                 <p className="text-xs text-fg-muted">
-                  {t.reef.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
+                  {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
                 </p>
                 <p className="mt-1 text-sm text-fg">{p.object.content}</p>
                 <div className="mt-2 flex gap-2">
@@ -177,7 +177,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
                     disabled={busy === p.activityId}
                     onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, true))}
                   >
-                    <Check size={14} aria-hidden /> {t.reef.accept}
+                    <Check size={14} aria-hidden /> {t.mangrove.accept}
                   </Button>
                   <Button
                     size="sm"
@@ -185,7 +185,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
                     disabled={busy === p.activityId}
                     onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, false))}
                   >
-                    <X size={14} aria-hidden /> {t.reef.reject}
+                    <X size={14} aria-hidden /> {t.mangrove.reject}
                   </Button>
                 </div>
               </li>
@@ -198,7 +198,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
         <section className="mt-6">
           <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
             <Send size={16} aria-hidden />{" "}
-            {reading === "published" ? t.reef.publishedTitle : t.reef.receivedTitle}
+            {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
           </h2>
           <ul className="mt-3 flex flex-col gap-2">
             {claims.map((c) => (
@@ -210,7 +210,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
                   {c.cell} · {actorLabel(c.author)}
                   {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
                   {/* Weight of evidence, never a verdict. */}
-                  {c.evidence > 0 && ` · ${t.reef.evidence.replace("{n}", String(c.evidence))}`}
+                  {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
                 </p>
                 <p className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
                   {c.object.content}
@@ -225,7 +225,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
                       void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
                     }
                   >
-                    <Trash2 size={14} aria-hidden /> {t.reef.revoke}
+                    <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
                   </Button>
                 )}
               </li>
@@ -234,7 +234,7 @@ export default function ReefScreen({ workspace }: { workspace: Workspace }) {
           {reading === "published" && claims.length > 0 && (
             // Said plainly, because the alternative is a member believing a
             // revoke recalled something. ActivityPub cannot un-deliver.
-            <p className="mt-3 text-xs text-fg-muted">{t.reef.revokeNote}</p>
+            <p className="mt-3 text-xs text-fg-muted">{t.mangrove.revokeNote}</p>
           )}
         </section>
       )}
