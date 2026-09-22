@@ -16,6 +16,7 @@ import {
   Reply,
   Square,
   Table2,
+  Waves,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -56,6 +57,7 @@ const REFERENCE_ICON: Record<ChatReference["kind"], typeof CalendarClock> = {
   task: CalendarClock,
   run: CalendarClock,
   entity: Network,
+  mangrove: Waves,
 };
 
 /**

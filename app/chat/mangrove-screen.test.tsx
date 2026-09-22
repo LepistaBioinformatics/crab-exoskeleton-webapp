@@ -20,6 +20,8 @@ const decide = vi.fn();
 const revoke = vi.fn();
 const publish = vi.fn();
 const findPeople = vi.fn();
+const mergeFragment = vi.fn();
+const downloadBlob = vi.fn();
 
 vi.mock("@/lib/mangrove", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/mangrove")>();
@@ -32,11 +34,15 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
     revoke: (...a: unknown[]) => revoke(...a),
     publish: (...a: unknown[]) => publish(...a),
     findPeople: (...a: unknown[]) => findPeople(...a),
+    mergeFragment: (...a: unknown[]) => mergeFragment(...a),
+    downloadBlob: (...a: unknown[]) => downloadBlob(...a),
   };
 });
 
 import MangroveScreen from "./mangrove-screen";
-import { MangroveError } from "@/lib/mangrove";
+import { requestMangroveShare, takePendingShare } from "./mangrove-share-bus";
+import { GRAPH_FRAGMENT_MEDIA_TYPE, MangroveError } from "@/lib/mangrove";
+import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { chatCopy } from "@/lib/i18n/chat";
 
 const en = chatCopy.en;
@@ -46,12 +52,16 @@ const workspace = { t: "t1", s: "s1", r: "alpha" as const };
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
+const referenced: ChatReference[] = [];
+
 async function render() {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<MangroveScreen workspace={workspace} />);
+    root!.render(
+      <MangroveScreen workspace={workspace} onReference={(ref) => referenced.push(ref)} />,
+    );
   });
   return host.innerHTML;
 }
@@ -61,6 +71,10 @@ afterEach(() => {
   host?.remove();
   root = null;
   host = null;
+  referenced.length = 0;
+  // The bus parks a share until somebody takes it, so one left behind by a test would
+  // open the next test's composer.
+  takePendingShare();
   vi.clearAllMocks();
 });
 
@@ -236,4 +250,207 @@ async function write() {
       el.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
+}
+
+// What a timeline object can now BE, and the three readings of it that must not collapse
+// into one. A file has no body, a fragment's body is JSON, and prose is prose — a screen
+// that only looked at `content` would show the first as an empty memory and the second as
+// a wall of braces.
+
+const FRAGMENT_BODY = JSON.stringify({
+  entities: [
+    {
+      name: "Rhizophora",
+      entityType: "species",
+      observations: [
+        { content: "salt-tolerant", timestamp: 1 },
+        { content: "prop roots", timestamp: 2 },
+      ],
+    },
+    { name: "Mangrove", entityType: "habitat", observations: [{ content: "tidal", timestamp: 3 }] },
+  ],
+  relations: [{ from: "Rhizophora", to: "Mangrove", relationType: "grows_in" }],
+});
+
+function claimOf(object: Record<string, unknown>) {
+  return {
+    reading: "received",
+    claims: [
+      {
+        cell: (object.cell as string) ?? "soil-ph",
+        author: "mangrove:actor:bob:service",
+        object,
+        published: "2026-09-22T10:00:00Z",
+        deleted: false,
+        evidence: 0,
+        audience: [],
+      },
+    ],
+    held: [],
+  };
+}
+
+describe("a shared graph fragment", () => {
+  const FRAGMENT = {
+    id: "mangrove:obj:frag",
+    type: "MemoryNote",
+    cell: "mangroves",
+    mediaType: GRAPH_FRAGMENT_MEDIA_TYPE,
+    content: FRAGMENT_BODY,
+  };
+
+  it("renders the entity names and the counts, not the JSON", async () => {
+    readTimeline.mockResolvedValue(claimOf(FRAGMENT));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    const text = host!.textContent!;
+    expect(text).toContain(en.mangrove.fragmentTitle);
+    expect(text).toContain("Rhizophora");
+    expect(text).toContain("Mangrove");
+    // 2 entities, 3 observations between them, 1 relation.
+    expect(text).toContain(
+      en.mangrove.fragmentCounts
+        .replace("{entities}", "2")
+        .replace("{observations}", "3")
+        .replace("{relations}", "1"),
+    );
+    // The body itself is nowhere on screen: a reader deciding whether to merge is
+    // served by names and counts, not by the serialization they arrived in.
+    expect(text).not.toContain("entityType");
+    expect(text).not.toContain("prop roots");
+  });
+
+  it("falls back to showing the body when it does not parse", async () => {
+    readTimeline.mockResolvedValue(
+      claimOf({ ...FRAGMENT, content: "{ truncated" }),
+    );
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    // No claim about entities it could not read -- and the bytes, whatever they are.
+    expect(host!.textContent).not.toContain(en.mangrove.fragmentTitle);
+    expect(host!.textContent).toContain("truncated");
+  });
+
+  it("reports the three counts a merge landed", async () => {
+    readTimeline.mockResolvedValue(claimOf(FRAGMENT));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    mergeFragment.mockResolvedValue({
+      entitiesCreated: 2,
+      observationsAdded: 3,
+      relationsCreated: 1,
+    });
+
+    await render();
+    await clickText(en.mangrove.merge);
+
+    expect(mergeFragment).toHaveBeenCalledWith(expect.anything(), "mangrove:obj:frag");
+    expect(host!.textContent).toContain(
+      en.mangrove.merged
+        .replace("{entities}", "2")
+        .replace("{observations}", "3")
+        .replace("{relations}", "1"),
+    );
+  });
+
+  it("says so when a merge landed nothing at all", async () => {
+    readTimeline.mockResolvedValue(claimOf(FRAGMENT));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    mergeFragment.mockResolvedValue({
+      entitiesCreated: 0,
+      observationsAdded: 0,
+      relationsCreated: 0,
+    });
+
+    await render();
+    await clickText(en.mangrove.merge);
+
+    // A control that merely stopped being busy would read as a failure.
+    expect(host!.textContent).toContain(en.mangrove.mergedNothing);
+  });
+});
+
+describe("a shared file", () => {
+  const FILE = {
+    id: "mangrove:obj:file",
+    type: "MemoryNote",
+    cell: "q2-report",
+    blob: "a".repeat(64),
+    fileName: "q2.pdf",
+    size: 2048,
+  };
+
+  it("offers the bytes by name and size, rather than an empty memory", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    expect(host!.textContent).toContain("q2.pdf");
+    expect(host!.textContent).toContain("2 KB");
+    expect(host!.textContent).toContain(en.mangrove.downloadFile);
+  });
+
+  it("downloads by DIGEST, which is the only handle the bytes have", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    downloadBlob.mockResolvedValue(undefined);
+
+    await render();
+    await clickLabel(`${en.mangrove.downloadFile} — q2.pdf`);
+
+    expect(downloadBlob).toHaveBeenCalledWith(expect.anything(), FILE.blob, "q2.pdf");
+  });
+});
+
+describe("referencing a memory in the chat", () => {
+  const PROSE = {
+    id: "mangrove:obj:prose",
+    type: "MemoryNote",
+    cell: "soil-ph",
+    content: "pH 5.2 after liming.",
+    mediaType: "text/markdown",
+  };
+
+  it("hands up the OBJECT ID, which is what the agent resolves", async () => {
+    readTimeline.mockResolvedValue(claimOf(PROSE));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    await clickLabel(`${en.mangrove.reference} — soil-ph`);
+
+    expect(referenced).toEqual([
+      { kind: "mangrove", objectId: "mangrove:obj:prose", cell: "soil-ph", author: "bob (bot)" },
+    ]);
+    // The marker that actually travels carries it too -- a chip with the id and a
+    // message without one would leave the agent nothing to look up.
+    expect(buildReferenceMarker(referenced[0], en)).toContain("mangrove:obj:prose");
+    // And the click is answered on THIS screen, because the composer it filled is not
+    // on it.
+    expect(host!.textContent).toContain(en.mangrove.referenced);
+  });
+});
+
+describe("a share asked for from somewhere else", () => {
+  it("opens the composer with the file already attached", async () => {
+    readTimeline.mockResolvedValue({ reading: "received", claims: [], held: [] });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    // Published BEFORE this screen exists, which is the real sequence: the files pane
+    // is beside the conversation and the click is what navigates here.
+    requestMangroveShare({ kind: "file", path: "reports/q2.pdf", name: "q2.pdf" });
+
+    await render();
+    expect(host!.textContent).toContain(en.mangrove.attachedFile);
+    expect(host!.textContent).toContain("q2.pdf");
+    // And the prose form is not underneath it.
+    expect(host!.querySelector("textarea")).toBeNull();
+  });
+});
+
+/** Click the control whose accessible name is this. */
+async function clickLabel(label: string) {
+  const el = host!.querySelector(`[aria-label="${label}"]`)!;
+  await act(async () => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
 }

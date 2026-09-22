@@ -423,7 +423,7 @@ export default function ChatShell({ email }: { email: string }) {
               />
             )}
             {centre.kind === "destination" && workspace && centre.at === "mangrove" && (
-              <MangroveScreen workspace={workspace} />
+              <MangroveScreen workspace={workspace} onReference={setChatRef} />
             )}
             {/* A place before a conversation is chosen: the agent's root and a
                 project's root alike. It replaced an empty transcript, and the effect

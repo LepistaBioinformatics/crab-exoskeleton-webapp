@@ -16,14 +16,75 @@
 // then refuses teaches the wrong thing.
 
 import type { Workspace } from "@/app/chat/fragment";
+import type { Entity, Relation } from "@/lib/memoryGraph";
 
 export type MangroveReading = "received" | "published" | "pending";
+
+/**
+ * One shared memory, whatever kind it is.
+ *
+ * THREE KINDS ARRIVE THROUGH THE SAME FIELDS, and which one this is has to be read
+ * off the object rather than asked for: prose carries `content`; a file carries
+ * `blob` (its sha-256) with `fileName` and `size` and no content at all; a graph
+ * fragment carries `content` that is JSON, labelled with
+ * GRAPH_FRAGMENT_MEDIA_TYPE. A reader that only looks at `content` shows a file as
+ * an empty memory and a fragment as a wall of braces.
+ */
+export interface MangroveObject {
+  id: string;
+  type: string;
+  cell: string;
+  content?: string;
+  mediaType?: string;
+  /** sha-256, hex. Present only for a file, and the handle the blob route takes. */
+  blob?: string;
+  /** What the sender called the file. Absent means fall back to the digest. */
+  fileName?: string;
+  /** The file's size in bytes. */
+  size?: number;
+}
+
+/** The media type a graph fragment is labelled with. */
+export const GRAPH_FRAGMENT_MEDIA_TYPE = "application/vnd.mangrove.graph+json";
+
+/**
+ * A fragment's decoded body: entities and the relations among them, in exactly the
+ * shape `lib/memoryGraph.ts` already speaks.
+ */
+export interface GraphFragment {
+  entities: Entity[];
+  relations: Relation[];
+}
+
+/**
+ * A fragment's body, or null when it is not one.
+ *
+ * NEVER THROWS. The JSON was written by another tenant's agent and travelled through
+ * a network this deployment does not own, so a body that is truncated, empty or not
+ * an object at all is an ordinary thing to receive — and the caller has a perfectly
+ * good answer for null, which is to render it as the text it turned out to be.
+ */
+export function parseGraphFragment(object: MangroveObject): GraphFragment | null {
+  if (object.mediaType !== GRAPH_FRAGMENT_MEDIA_TYPE) return null;
+  if (!object.content) return null;
+  try {
+    const parsed = JSON.parse(object.content) as Partial<GraphFragment>;
+    if (!Array.isArray(parsed?.entities)) return null;
+    return {
+      entities: parsed.entities,
+      // Relations are optional in practice: one entity extracted on its own has none.
+      relations: Array.isArray(parsed.relations) ? parsed.relations : [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** One author's current position on one cell. */
 export interface MangroveClaim {
   cell: string;
   author: string;
-  object: { id: string; type: string; cell: string; content?: string; mediaType?: string };
+  object: MangroveObject;
   published: string;
   deleted: boolean;
   /** Distinct actors who endorsed this. Weight of evidence, never a verdict. */
@@ -35,7 +96,7 @@ export interface MangroveClaim {
 export interface MangroveHeld {
   activityId: string;
   from: string;
-  object: { id: string; type: string; cell: string; content?: string };
+  object: MangroveObject;
   published: string;
 }
 
@@ -44,7 +105,7 @@ export interface MangrovePending {
   activityId: string;
   author: string;
   scope: string;
-  object: { id: string; type: string; cell: string; content?: string };
+  object: MangroveObject;
   published: string;
 }
 
@@ -90,6 +151,21 @@ export class MangroveError extends Error {
 
 function workspaceQuery(w: Workspace): URLSearchParams {
   return new URLSearchParams({ role: w.r, tenant_id: w.t, subs_acc_id: w.s });
+}
+
+/**
+ * The same query plus the project, for the calls that resolve something the
+ * project OWNS.
+ *
+ * Reading the mangrove does not take it: the network is per subscription, and a
+ * timeline is the same timeline whichever project the member is looking at. But
+ * a file path and an entity name are resolved against a workspace, and each
+ * project is a separate one -- so publishing a file or a fragment, and merging a
+ * fragment back, have to say which. Without it the proxy would resolve the name
+ * against the MAIN workspace: a 404, or silently the wrong file of the same name.
+ */
+function projectExtra(w: Workspace): Record<string, string> {
+  return w.p ? { project: w.p } : {};
 }
 
 async function call<T>(
@@ -191,15 +267,65 @@ export interface MangroveEmailTarget {
   agent: boolean;
 }
 
-export interface MangrovePublication {
-  cell: string;
-  content: string;
-  mediaType: MangroveMediaType;
+/** Who a publication reaches. The same two fields whatever is being published. */
+export interface MangroveAudience {
   /** Actor and group ids addressed directly. May be empty. */
   to: string[];
   /** Addressing by email. May be empty. */
   toEmails: MangroveEmailTarget[];
 }
+
+/**
+ * EXACTLY ONE OF THREE CONTENTS, and the union is what says so before the request
+ * is built.
+ *
+ * The mangrove refuses zero and refuses two, with one sentence for both -- which is
+ * a 400 the member discovers after writing something and pressing Share. A union
+ * makes the second half unrepresentable here instead: the `?: never` fields are
+ * what stop an object literal carrying a body AND a file, since TypeScript's excess
+ * property check otherwise allows any key that exists in ANY member of a union.
+ */
+export interface MangroveProse extends MangroveAudience {
+  cell: string;
+  content: string;
+  mediaType: MangroveMediaType;
+  file?: never;
+  entities?: never;
+}
+
+/**
+ * A file out of the member's own workspace, named by the path the files tab holds.
+ *
+ * THE BROWSER UPLOADS NOTHING. The proxy reads the file itself and streams it into
+ * the mangrove, so what travels from here is the path and nothing else -- and the
+ * cell is the proxy's to derive, which is why there is no room for one.
+ */
+export interface MangroveFilePublication extends MangroveAudience {
+  file: string;
+  cell?: never;
+  content?: never;
+  mediaType?: never;
+  entities?: never;
+}
+
+/**
+ * Entities out of the agent's knowledge graph, by name.
+ *
+ * The proxy extracts those entities AND the relations among them, so sharing two
+ * names that are linked shares the link. The cell is derived, as it is for a file.
+ */
+export interface MangroveEntitiesPublication extends MangroveAudience {
+  entities: string[];
+  cell?: never;
+  content?: never;
+  mediaType?: never;
+  file?: never;
+}
+
+export type MangrovePublication =
+  | MangroveProse
+  | MangroveFilePublication
+  | MangroveEntitiesPublication;
 
 export interface MangrovePublished {
   activity: unknown;
@@ -231,9 +357,86 @@ export function tenantGroupId(w: Workspace): string {
  * sender with nothing to fix.
  */
 export function publish(w: Workspace, publication: MangrovePublication): Promise<MangrovePublished> {
-  return call<MangrovePublished>("publish", w, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(publication),
-  });
+  return call<MangrovePublished>(
+    "publish",
+    w,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(publication),
+    },
+    projectExtra(w),
+  );
+}
+
+
+/**
+ * What a merge put into the member's own graph.
+ *
+ * Three counts, and all three can be zero: merging a fragment whose every entity
+ * and observation is already known lands nothing. That is a real outcome and the
+ * screen says so, rather than reporting success over an empty result.
+ */
+export interface MangroveMerge {
+  entitiesCreated: number;
+  observationsAdded: number;
+  relationsCreated: number;
+}
+
+/** Take a graph fragment into this member's own agent's memory. */
+export function mergeFragment(w: Workspace, objectId: string): Promise<MangroveMerge> {
+  return call<MangroveMerge>(
+    "merge",
+    w,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ objectId }),
+    },
+    projectExtra(w),
+  );
+}
+
+/**
+ * Where a published file's bytes are.
+ *
+ * Its own BFF route rather than the action one every call above goes through: that
+ * route parses JSON and re-serializes it, and these bytes are not JSON. The same
+ * split `/api/media/download` already makes, for the same reason.
+ */
+export function blobUrl(w: Workspace, blob: string): string {
+  const query = workspaceQuery(w);
+  query.set("blob", blob);
+  return `/api/mangrove/blob?${query}`;
+}
+
+/**
+ * Save a published file to disk.
+ *
+ * Fetch-then-anchor rather than navigating at the URL, exactly as `downloadMedia`
+ * does: a navigation would put the download in session history and would lose the
+ * failure, and a failure here is something the screen has to be able to say.
+ */
+export async function downloadBlob(w: Workspace, blob: string, fileName?: string): Promise<void> {
+  const res = await fetch(blobUrl(w, blob));
+  if (!res.ok) {
+    let code = `http_${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body?.error === "string") code = body.error;
+    } catch {
+      // Not JSON: the status is all there is to report.
+    }
+    throw new MangroveError(code);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  // The digest is a usable name when the sender gave none -- an empty `download`
+  // would let the browser invent one from the URL, which is the route path.
+  a.download = fileName || blob;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

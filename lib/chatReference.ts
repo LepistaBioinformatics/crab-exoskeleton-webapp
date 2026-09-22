@@ -28,7 +28,27 @@ export interface EntityReference {
   relations: number;
 }
 
-export type ChatReference = TaskReference | EntityReference;
+/**
+ * One memory off the mangrove's timeline.
+ *
+ * THE OBJECT ID IS THE PAYLOAD, and it is the reason this kind exists rather than the
+ * member copying the text out. The agent resolves it through `mangrove_timeline` and
+ * reads the memory itself — including the two kinds that have no text to copy: a
+ * published FILE, whose body is bytes behind a digest, and a graph FRAGMENT, whose body
+ * is JSON that means nothing pasted into a sentence.
+ *
+ * `cell` and `author` are here for the chip the member reads, never for the agent to
+ * look anything up by: two authors can hold a position on one cell, so the pair is not
+ * an identity and the id is.
+ */
+export interface MangroveReference {
+  kind: "mangrove";
+  objectId: string;
+  cell: string;
+  author: string;
+}
+
+export type ChatReference = TaskReference | EntityReference | MangroveReference;
 
 /** The chip's heading and one-line detail. */
 export function referenceChip(
@@ -51,6 +71,11 @@ export function referenceChip(
         title: t.memoryGraph.referencedEntity,
         preview: `${ref.name} · ${ref.entityType}`,
       };
+    case "mangrove":
+      return {
+        title: t.mangrove.referencedPost,
+        preview: `${ref.cell} · ${ref.author}`,
+      };
   }
 }
 
@@ -71,5 +96,10 @@ export function buildReferenceMarker(ref: ChatReference, t: ChatDict): string {
     // read the observations rather than being handed a stale copy of them.
     case "entity":
       return `[${t.memoryGraph.markerEntity}: "${ref.name}" (${ref.entityType}) — ${ref.observations} ${t.memoryGraph.observations}, ${ref.relations} ${t.memoryGraph.relations}]`;
+    // The OBJECT ID is what makes this resolvable: the agent looks the memory up with
+    // mangrove_timeline rather than being handed a copy of it, which is the same rule the
+    // entity marker follows and the only one that works for a file or a fragment.
+    case "mangrove":
+      return `[${t.mangrove.markerPost}: "${ref.cell}" (${ref.objectId}) — ${t.mangrove.from.replace("{who}", ref.author)}]`;
   }
 }

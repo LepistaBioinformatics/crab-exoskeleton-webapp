@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Archive,
   AtSign,
+  Check,
   Clock,
   Filter,
   GitMerge,
@@ -50,6 +51,60 @@ const row = cva(
   },
 );
 
+// The multi-select tick beside a row. A BUTTON with role="checkbox", not an
+// <input type="checkbox">: this app has no checkbox primitive, and a button is already
+// focusable and operable with both Enter and Space — the input would only add a styling
+// fight for the same behaviour. `aria-checked` plus a per-row accessible name is what
+// makes it announce as a checkbox rather than as one of forty identical buttons.
+const check = cva(
+  "mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+  {
+    variants: {
+      checked: {
+        true: "border-accent bg-accent/20 text-accent",
+        false: "border-rule-strong text-fg-muted hover:border-accent/60",
+      },
+    },
+    defaultVariants: { checked: false },
+  },
+);
+
+/**
+ * The multi-select, as both lists take it.
+ *
+ * One prop rather than three, the way MemoryGraphView already takes `filter` — these
+ * components were at twenty label props before this, and a second wave of individual
+ * props is how a component stops being readable.
+ */
+export interface RowSelection {
+  checked: ReadonlySet<string>;
+  onToggle: (name: string) => void;
+  /** Contains `{name}`: a column of bare "Select" buttons tells a screen reader nothing. */
+  label: string;
+}
+
+function EntityCheck({
+  name,
+  selection,
+}: {
+  name: string;
+  selection: RowSelection;
+}) {
+  const isChecked = selection.checked.has(name);
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={isChecked}
+      aria-label={selection.label.replace("{name}", name)}
+      onClick={() => selection.onToggle(name)}
+      className={check({ checked: isChecked })}
+    >
+      <Check size={11} className={isChecked ? "" : "opacity-0"} aria-hidden />
+    </button>
+  );
+}
+
 // The type chips. Only rendered when there is more than one type — with a single type
 // the row is a control that can only ever say what the list already says.
 const chip = cva(
@@ -69,6 +124,7 @@ const chip = cva(
 export function BrowseList({
   graph,
   selected,
+  selection,
   onSelect,
   emptyTitle,
   emptyBody,
@@ -81,7 +137,10 @@ export function BrowseList({
   noneOfTypeHint,
 }: {
   graph: SummaryGraph;
+  /** Which entity the detail pane is showing. Not the multi-select — see `selection`. */
   selected: string | null;
+  /** The multi-select the member ticks. Independent of `selected`. */
+  selection: RowSelection;
   onSelect: (name: string) => void;
   emptyTitle: string;
   emptyBody: string;
@@ -159,10 +218,15 @@ export function BrowseList({
         // rather than padding the ends of the list.
         <ul className="space-y-1 px-2">
           {shown.map((e) => (
-            <li key={e.name}>
+            // The tick is a SIBLING of the row button, never a child of it. A button
+            // inside a button is invalid HTML, and the sibling is also what keeps the row
+            // click opening the detail pane: the tick's click never reaches the row, so
+            // there is no stopPropagation for a later reader to delete by accident.
+            <li key={e.name} className="flex items-start gap-1">
+              <EntityCheck name={e.name} selection={selection} />
               <button
                 type="button"
-                className={row({ selected: selected === e.name })}
+                className={`${row({ selected: selected === e.name })} min-w-0 flex-1`}
                 onClick={() => onSelect(e.name)}
                 aria-expanded={selected === e.name}
               >
@@ -198,12 +262,15 @@ export function BrowseList({
 export function SearchList({
   hits,
   selected,
+  selection,
   onSelect,
   noResults,
   noResultsHint,
 }: {
   hits: FullGraph;
   selected: string | null;
+  /** The same set the browse list ticks into — both lists key on the entity name. */
+  selection: RowSelection;
   onSelect: (name: string) => void;
   noResults: string;
   noResultsHint?: string;
@@ -214,10 +281,11 @@ export function SearchList({
   return (
     <ul className="space-y-1 px-2">
       {hits.entities.map((e) => (
-        <li key={e.name}>
+        <li key={e.name} className="flex items-start gap-1">
+          <EntityCheck name={e.name} selection={selection} />
           <button
             type="button"
-            className={row({ selected: selected === e.name })}
+            className={`${row({ selected: selected === e.name })} min-w-0 flex-1`}
             onClick={() => onSelect(e.name)}
             aria-expanded={selected === e.name}
           >

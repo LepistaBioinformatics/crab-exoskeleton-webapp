@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Clock, Network, Search, Share2 } from "lucide-react";
+import { Clock, Network, Search, Share2, Waves } from "lucide-react";
 import {
   openNodes,
   readGraph,
@@ -15,12 +15,15 @@ import {
   type Relation,
   type SummaryGraph,
 } from "@/lib/memoryGraph";
-import { setFragmentSid, type Workspace } from "./fragment";
+import { setDestination, setFragmentSid, type Workspace } from "./fragment";
 import type { EntityReference } from "@/lib/chatReference";
 import { listConversations, type ConversationSummary } from "@/lib/chatSession";
 import MemoryGraphView from "./memory-graph-view";
 import { MAX_NODES } from "./graph-elements";
 import { useMapTools } from "./use-map-tools";
+import { countHiddenChecked, useGraphSelection } from "./use-graph-selection";
+import { requestMangroveShare } from "./mangrove-share-bus";
+import { useMangroveEnabled } from "./use-mangrove";
 import {
   BrowseList,
   EntityDetail,
@@ -114,6 +117,15 @@ export default function MemoryGraphPanel({
   const [recent, setRecent] = useState<RecentChanges | null>(null);
   const [detail, setDetail] = useState<FullGraph | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // The multi-select, beside `selected` and not instead of it: `selected` is the one
+  // entity the detail pane is showing, this is the set the member ticked to act on
+  // several. See use-graph-selection.ts for why a checked name outlives a filter.
+  const { checked, toggle: toggleChecked, clear: clearChecked } =
+    useGraphSelection();
+  // Sharing the selection into the mangrove. ABSENT where there is no mangrove, the way
+  // every other affordance of that feature is — a control that renders and then refuses
+  // teaches the wrong thing about who can reach what.
+  const mangroveOn = useMangroveEnabled(workspace);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,10 +196,14 @@ export default function MemoryGraphPanel({
     setQuery("");
     setError(null);
     setTypeFilter(null);
+    // The multi-select goes too, and this is the one place it is dropped without the member
+    // asking. Graphs are per (member, agent, project), so a name ticked in one workspace
+    // names nothing in the next — carrying it over would be carrying a ghost.
+    clearChecked();
     // The tools go too. A relation-type filter naming a type the NEXT workspace's graph does
     // not have would silently hide every edge, and read as "this agent has no relations".
     resetTools();
-  }, [resetTools]);
+  }, [resetTools, clearChecked]);
 
   // A workspace switch invalidates everything: graphs are per (member, agent) —
   // and per PROJECT, since each project agent has its own memory-graph MCP server
@@ -398,6 +414,34 @@ export default function MemoryGraphPanel({
     (e) => e.name === selected,
   );
 
+  // How much of the selection the list is not showing. Browse re-applies the same type
+  // filter the list does — including the `|| "unknown"` normalisation, without which a
+  // member filtered to that type would be told every checked name is hidden. One
+  // duplicated line beats a shared helper the two sides would then have to keep agreeing
+  // on.
+  //
+  // Only the two LIST tabs can answer this. The map has the same entities on screen as
+  // nodes and Recent shows a different projection, so "not in view" there would be a
+  // claim about the wrong thing — the ticks are absent, not the entities. The COUNT still
+  // renders on every tab, and that is what keeps a selection from going quiet.
+  const hiddenChecked =
+    mode === "browse"
+      ? countHiddenChecked(
+          checked,
+          (graph?.entities ?? [])
+            .filter((e) => !typeFilter || (e.type || "unknown") === typeFilter)
+            .map((e) => e.name),
+        )
+      : mode === "search"
+        ? countHiddenChecked(checked, (hits?.entities ?? []).map((e) => e.name))
+        : 0;
+
+  const selection = {
+    checked,
+    onToggle: toggleChecked,
+    label: t.memoryGraph.selection.selectEntity,
+  };
+
   // The selected entity's edges come from the list already in hand. open_nodes filters
   // relations to those with BOTH endpoints among the names requested, so asking for a
   // single entity returns an empty relation set every time.
@@ -492,6 +536,54 @@ export default function MemoryGraphPanel({
         </form>
       )}
 
+      {/* OUTSIDE the scrolling list below, and outside the tab switch: a checked entity
+          that a filter, a search or another tab stopped showing is still checked, and this
+          bar is the only thing on screen that says so. Inside the scroll area it would
+          leave with the rows it is describing. */}
+      {checked.size > 0 && (
+        <div className="flex shrink-0 items-center gap-2 px-3 pt-2 text-[11px]">
+          <span className="font-medium text-fg">
+            {checked.size === 1
+              ? t.memoryGraph.selection.one
+              : t.memoryGraph.selection.many.replace(
+                  "{count}",
+                  String(checked.size),
+                )}
+          </span>
+          {hiddenChecked > 0 && (
+            <span className="truncate text-fg-muted">
+              {t.memoryGraph.selection.hidden.replace(
+                "{count}",
+                String(hiddenChecked),
+              )}
+            </span>
+          )}
+          {mangroveOn === true && (
+            <button
+              type="button"
+              // The names, not the entities: the mangrove extracts them itself, along
+              // with the relations among them, so what travels is the same key the graph
+              // is indexed by everywhere else in this panel.
+              onClick={() => {
+                requestMangroveShare({ kind: "entities", names: [...checked] });
+                setDestination("mangrove");
+              }}
+              className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
+            >
+              <Waves size={12} aria-hidden />
+              {t.memoryGraph.selection.share}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={clearChecked}
+            className={`${mangroveOn === true ? "" : "ml-auto "}shrink-0 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg`}
+          >
+            {t.memoryGraph.selection.clear}
+          </button>
+        </div>
+      )}
+
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
         {error && (
           <div className="px-3 pb-2">
@@ -509,6 +601,7 @@ export default function MemoryGraphPanel({
               <BrowseList
                 graph={graph}
                 selected={selected}
+                selection={selection}
                 onSelect={select}
                 emptyTitle={t.memoryGraph.empty.title}
                 emptyBody={t.memoryGraph.empty.body}
@@ -575,6 +668,7 @@ export default function MemoryGraphPanel({
               <SearchList
                 hits={hits}
                 selected={selected}
+                selection={selection}
                 onSelect={select}
                 noResults={t.memoryGraph.noResults}
                 noResultsHint={t.memoryGraph.noResultsHint}

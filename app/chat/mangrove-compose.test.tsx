@@ -27,6 +27,7 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
 });
 
 import MangroveCompose from "./mangrove-compose";
+import type { MangroveShare } from "./mangrove-share-bus";
 import { MangroveError, type MangroveCapabilities, type MangrovePublication } from "@/lib/mangrove";
 import { chatCopy } from "@/lib/i18n/chat";
 
@@ -39,7 +40,12 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 const published: boolean[] = [];
 
-async function render(caps: MangroveCapabilities | null = NO_CAPS) {
+const removed: number[] = [];
+
+async function render(
+  caps: MangroveCapabilities | null = NO_CAPS,
+  attachment: MangroveShare | null = null,
+) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -48,6 +54,8 @@ async function render(caps: MangroveCapabilities | null = NO_CAPS) {
       <MangroveCompose
         workspace={workspace}
         caps={caps}
+        attachment={attachment}
+        onRemoveAttachment={() => removed.push(1)}
         onPublished={(pending) => published.push(pending)}
       />,
     );
@@ -126,6 +134,7 @@ afterEach(() => {
   root = null;
   host = null;
   published.length = 0;
+  removed.length = 0;
   vi.clearAllMocks();
 });
 
@@ -291,5 +300,84 @@ describe("a refusal", () => {
     await send();
 
     expect(el.textContent).toContain(en.mangrove.unreachable);
+  });
+});
+
+
+// Sharing something that is NOT prose.
+//
+// The mangrove takes exactly one of a body, a file and a set of entities, and answers
+// zero or two with a 400. What these assert is that the second half is unreachable from
+// here: an attachment takes the prose fields off the screen, so there is no state in
+// which the request carries both — and the field that DOES go is the one the proxy
+// resolves, which for a file is the path and never the display name.
+describe("a file attached from the files tab", () => {
+  const FILE: MangroveShare = { kind: "file", path: "reports/q2.pdf", name: "q2.pdf" };
+
+  it("takes the cell and body fields off the screen", async () => {
+    const el = await render(NO_CAPS, FILE);
+    expect(el.querySelector("textarea")).toBeNull();
+    expect(
+      el.querySelector(`[placeholder="${en.mangrove.cellPlaceholder}"]`),
+    ).toBeNull();
+    expect(el.textContent).toContain(en.mangrove.attachedFile);
+    expect(el.textContent).toContain("q2.pdf");
+  });
+
+  it("sends the PATH as `file`, and no content at all", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: false });
+    await render(NO_CAPS, FILE);
+    await send();
+
+    const out = sent();
+    expect(out.file).toBe("reports/q2.pdf");
+    // The three the mangrove refuses together.
+    expect(out.content).toBeUndefined();
+    expect(out.cell).toBeUndefined();
+    expect(out.entities).toBeUndefined();
+    expect(published).toEqual([false]);
+  });
+
+  it("sends with nobody chosen, because the audience is still optional", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: false });
+    await render(NO_CAPS, FILE);
+    await send();
+    expect(sent().to).toEqual([]);
+    expect(sent().toEmails).toEqual([]);
+  });
+
+  it("offers a way back to writing prose", async () => {
+    await render(NO_CAPS, FILE);
+    await click(byLabel(en.mangrove.removeAttachment));
+    expect(removed).toEqual([1]);
+  });
+});
+
+describe("entities attached from the knowledge graph", () => {
+  const ENTITIES: MangroveShare = { kind: "entities", names: ["Rhizophora", "Mangrove"] };
+
+  it("sends the names as `entities`, and nothing else", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: false });
+    const el = await render(NO_CAPS, ENTITIES);
+    expect(el.textContent).toContain(
+      en.mangrove.attachedEntitiesMany.replace("{count}", "2"),
+    );
+    await send();
+
+    const out = sent();
+    expect(out.entities).toEqual(["Rhizophora", "Mangrove"]);
+    expect(out.content).toBeUndefined();
+    expect(out.file).toBeUndefined();
+    expect(out.cell).toBeUndefined();
+  });
+
+  it("still addresses a group when one was chosen", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: true });
+    await render({ governs: true, tenantLicensed: false }, ENTITIES);
+    await checkbox(en.mangrove.groupSubscription);
+    await send();
+
+    expect(sent().to).toEqual(["mangrove:group:subscription:s1"]);
+    expect(sent().entities).toEqual(["Rhizophora", "Mangrove"]);
   });
 });
