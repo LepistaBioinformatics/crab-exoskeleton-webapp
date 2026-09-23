@@ -479,6 +479,45 @@ export function blobUrl(w: Workspace, blob: string): string {
 }
 
 /**
+ * The bytes, or the reason there are none.
+ *
+ * Shared by the two things a member can do with a published file -- take it to
+ * their machine and take it into their workspace -- so a refusal reads the same
+ * way whichever of the two they pressed. The blob route answers a failure as JSON
+ * even though a success is not JSON at all, which is what makes this readable.
+ */
+async function fetchBlob(w: Workspace, blob: string): Promise<Response> {
+  const res = await fetch(blobUrl(w, blob));
+  if (res.ok) return res;
+  let code = `http_${res.status}`;
+  try {
+    const body = await res.json();
+    if (typeof body?.error === "string") code = body.error;
+  } catch {
+    // Not JSON: the status is all there is to report.
+  }
+  throw new MangroveError(code);
+}
+
+/**
+ * The same bytes as a `File`, ready to be uploaded somewhere else.
+ *
+ * SAVING A PUBLISHED FILE INTO A WORKSPACE GOES THROUGH THE BROWSER, on purpose.
+ * The blob route and `/api/media` both already exist and both already authorize
+ * this member; the alternative is a new proxy route copying blob to workspace,
+ * with a gateway entry and a reachability check of its own, for what two routes
+ * already do. What it costs is the round trip, and a published blob is capped at
+ * 10 MB, so the cost is bounded.
+ *
+ * The name is the sender's, falling back to the digest -- the same fallback
+ * `downloadBlob` writes into the anchor, and the name `StoreMedia` keys on.
+ */
+export async function blobFile(w: Workspace, blob: string, fileName?: string): Promise<File> {
+  const bytes = await (await fetchBlob(w, blob)).blob();
+  return new File([bytes], fileName || blob, { type: bytes.type });
+}
+
+/**
  * Save a published file to disk.
  *
  * Fetch-then-anchor rather than navigating at the URL, exactly as `downloadMedia`
@@ -486,17 +525,7 @@ export function blobUrl(w: Workspace, blob: string): string {
  * failure, and a failure here is something the screen has to be able to say.
  */
 export async function downloadBlob(w: Workspace, blob: string, fileName?: string): Promise<void> {
-  const res = await fetch(blobUrl(w, blob));
-  if (!res.ok) {
-    let code = `http_${res.status}`;
-    try {
-      const body = await res.json();
-      if (typeof body?.error === "string") code = body.error;
-    } catch {
-      // Not JSON: the status is all there is to report.
-    }
-    throw new MangroveError(code);
-  }
+  const res = await fetchBlob(w, blob);
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
   a.href = url;

@@ -1049,6 +1049,20 @@ const en = {
     fragmentTitle: "A piece of a memory graph",
     fragmentCounts: "{entities} entities · {observations} observations · {relations} relations",
     fragmentMore: "+{count} more",
+    // WHERE IT LANDS, IN WORDS, BEFORE IT IS TAKEN. Both controls that take
+    // something out of the mangrove and put it into a workspace -- the file save and
+    // the fragment merge -- carry one of these three. The project case is the one
+    // worth the sentence: a member inside a project reads "save to your files",
+    // finds the file in the agent's own workspace instead, and has been told the
+    // truth about an act and the wrong thing about a destination.
+    //
+    // "The project you have open" is for the beat before the project list has
+    // arrived, when the id is known and the name is not. A uuid is not something to
+    // put in front of anybody.
+    mergeToProject: "Merges into the memory of the project “{project}”, not the agent's own.",
+    mergeToProjectUnnamed:
+      "Merges into the memory of the project you have open, not the agent's own.",
+    mergeToAgent: "Merges into this agent's own memory.",
     merge: "Merge into my memory",
     merging: "Merging…",
     merged: "Added {entities} entities, {observations} observations and {relations} relations.",
@@ -1059,6 +1073,23 @@ const en = {
     downloadFile: "Download",
     downloading: "Downloading…",
     downloadFailed: "Could not download that right now.",
+    // The other thing to do with a file somebody published: keep it where the agent
+    // can open it, rather than on this machine where it cannot.
+    saveToFiles: "Save to files",
+    saving: "Saving…",
+    // The stored path, exactly as the upload answered it. A file operation that
+    // reported nothing would be indistinguishable from one that did nothing.
+    saved: "Saved as {path}.",
+    saveFailed: "Could not save that right now.",
+    saveToProject: "Saves into the files of the project “{project}”, not the agent's own.",
+    saveToProjectUnnamed:
+      "Saves into the files of the project you have open, not the agent's own.",
+    saveToAgent: "Saves into this agent's own files.",
+    // SAID, NOT ASKED. The proxy's `StoreMedia` opens the sanitized name with
+    // O_TRUNC, so a second save of the same name overwrites the first and there is no
+    // outcome in which it does not. A confirmation would have to list the workspace's
+    // files first, to ask a question whose only honest answer is this sentence.
+    saveOverwrites: "A file already there under the same name is replaced.",
     reference: "Reference in chat",
     // The composer it filled is not on this screen, so the click needs an answer here.
     referenced: "Added to your next message.",
@@ -1892,6 +1923,9 @@ const pt: ChatDict = {
     fragmentTitle: "Um pedaço de um grafo de memória",
     fragmentCounts: "{entities} entidades · {observations} observações · {relations} relações",
     fragmentMore: "+{count} a mais",
+    mergeToProject: "Entra na memória do projeto “{project}”, não na do agente.",
+    mergeToProjectUnnamed: "Entra na memória do projeto que você tem aberto, não na do agente.",
+    mergeToAgent: "Entra na memória do próprio agente.",
     merge: "Juntar à minha memória",
     merging: "Juntando…",
     merged: "Entraram {entities} entidades, {observations} observações e {relations} relações.",
@@ -1900,6 +1934,15 @@ const pt: ChatDict = {
     downloadFile: "Baixar",
     downloading: "Baixando…",
     downloadFailed: "Não foi possível baixar agora.",
+    saveToFiles: "Salvar nos arquivos",
+    saving: "Salvando…",
+    saved: "Salvo em {path}.",
+    saveFailed: "Não foi possível salvar agora.",
+    saveToProject: "Vai para os arquivos do projeto “{project}”, não para os do agente.",
+    saveToProjectUnnamed:
+      "Vai para os arquivos do projeto que você tem aberto, não para os do agente.",
+    saveToAgent: "Vai para os arquivos do próprio agente.",
+    saveOverwrites: "Um arquivo que já esteja lá com o mesmo nome é substituído.",
     reference: "Citar na conversa",
     referenced: "Adicionado à sua próxima mensagem.",
     referencedPost: "Memória citada",
