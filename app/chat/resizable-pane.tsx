@@ -79,7 +79,19 @@ export const content = cva("h-full", {
     mode: {
       expanded: "",
       // Parked off-frame and out of the tab order while it is out of sight.
-      collapsed: `${PEEK_BASE} md:invisible md:-translate-x-full`,
+      // NO OUTBOUND SLIDE. The pane arrives on a transition and LEAVES AT ONCE:
+      // `transition-none` is on the closed state, so the class that removes it
+      // also removes the animation, in the same commit as the transform change.
+      //
+      // The asymmetry is deliberate and is the owner's call. Opening is a thing
+      // the member asked for and the slide says where it came from; closing is
+      // them moving on, and 200ms of a panel sweeping out is 200ms of the page
+      // still arguing about something already decided.
+      //
+      // `visibility` stays in PEEK_BASE's property list. With no transition it
+      // simply lands immediately, which is the point -- and leaving it there
+      // keeps the off-frame pane out of the tab order the moment it closes.
+      collapsed: `${PEEK_BASE} md:invisible md:-translate-x-full md:transition-none`,
       peeking: `${PEEK_BASE} md:visible md:translate-x-0`,
     },
   },
