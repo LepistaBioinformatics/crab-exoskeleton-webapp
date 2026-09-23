@@ -297,7 +297,6 @@ const en = {
       // The node-link view. "Map" rather than "Graph": the panel is already called the
       // knowledge graph, so a tab with that name would say nothing about what differs.
       map: "Map",
-      search: "Search",
       recent: "Recent",
     },
     // The panel is a narrow column by default and a graph needs room; without this the
@@ -314,23 +313,11 @@ const en = {
     // The map caps how many nodes it draws, because the layout cost grows with the square of
     // the node count and would freeze the tab. Filter to reach the rest.
     mapTruncated: "{count} more not shown — filter to narrow",
-    searchPlaceholder: "Search the graph…",
-    searchHint:
-      "Ranked by BM25 term relevance, so you do not need the exact stored wording. It does not understand synonyms.",
-    // The Search tab before a query has been typed. It used to render NOTHING at all —
-    // a blank pane that read as a broken tab rather than as a tab waiting for input.
-    searchIdle: {
-      title: "Search the graph",
-      body: "Type a term and press Enter to look through every entity and observation the agent has stored.",
-    },
     observations: "observations",
     relations: "relations",
-    noResults: "Nothing matched that search.",
-    noResultsHint:
-      "Ranking is by term relevance, not by meaning — try the wording the agent would have stored.",
-    // The MAP's own empty result. Deliberately not `noResults`: that tab runs a BM25
-    // search over everything, this one is a substring filter over names, and telling a
-    // member their search failed when their filter did sends them to the wrong fix.
+    // The MAP's own empty result. The map's filter has two scopes and this is the
+    // names-only one — a substring match over what is loaded, not the server's ranking —
+    // so the wording has to send the member to the right fix. See mapNoMatchContents.
     mapNoMatch: "No entity matches that filter.",
     mapNoMatchHint:
       "The map filter matches names only. Clear it to see the whole graph.",
@@ -369,6 +356,17 @@ const en = {
       // Into the mangrove. Absent where this deployment has no mangrove, so the string
       // is only ever read where the feature exists.
       share: "Share in the mangrove",
+      // The MAP's hop control, which decides how far out of the picked nodes the shared
+      // fragment reaches. Spelled out rather than shown as a bare number, because "2" in a
+      // row that already carries two counts reads as a quantity of entities.
+      hops: "+{count} hop",
+      hopsPlural: "+{count} hops",
+      hopsLabel: "How far around the selected entities the share reaches",
+      // The number that will actually travel, which the hops make larger than the count the
+      // member ticked. On screen BEFORE the share, never discovered after it.
+      sharing: "sharing {count}",
+      shareTooMany:
+        "{count} entities is over the {max} a single share carries — use fewer hops, or pick fewer entities.",
       clear: "Clear selection",
     },
     empty: {
@@ -1305,7 +1303,6 @@ const pt: ChatDict = {
     tabs: {
       browse: "Entidades",
       map: "Mapa",
-      search: "Busca",
       recent: "Recentes",
     },
     expandMap: "Expandir o mapa para tela cheia",
@@ -1316,18 +1313,8 @@ const pt: ChatDict = {
     spreadReadout: "espalhar {value}x",
     mapFilterPlaceholder: "Filtrar entidades por nome",
     mapTruncated: "{count} não exibidos — filtre para reduzir",
-    searchPlaceholder: "Buscar no grafo…",
-    searchHint:
-      "Ranqueado por relevância de termos (BM25), então não precisa acertar as palavras exatas. Não entende sinônimos.",
-    searchIdle: {
-      title: "Busque no grafo",
-      body: "Digite um termo e aperte Enter para procurar em todas as entidades e observações que o agente guardou.",
-    },
     observations: "observações",
     relations: "relações",
-    noResults: "Nada corresponde a essa busca.",
-    noResultsHint:
-      "O ranqueamento é por relevância de termos, não por significado — tente as palavras que o agente teria guardado.",
     mapNoMatch: "Nenhuma entidade corresponde ao filtro.",
     mapNoMatchHint:
       "O filtro do mapa compara só nomes. Limpe o campo para ver o grafo inteiro.",
@@ -1354,6 +1341,12 @@ const pt: ChatDict = {
       many: "{count} entidades selecionadas",
       hidden: "{count} fora da visão",
       share: "Compartilhar no mangue",
+      hops: "+{count} salto",
+      hopsPlural: "+{count} saltos",
+      hopsLabel: "Até onde o compartilhamento alcança em volta das entidades escolhidas",
+      sharing: "compartilhando {count}",
+      shareTooMany:
+        "{count} entidades passa das {max} que um compartilhamento leva — use menos saltos, ou escolha menos entidades.",
       clear: "Limpar seleção",
     },
     empty: {

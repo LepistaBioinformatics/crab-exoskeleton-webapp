@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { Clock, Network, Search, Share2, Waves } from "lucide-react";
+import { Clock, Network, Share2, Waves } from "lucide-react";
 import {
   openNodes,
   readGraph,
@@ -22,16 +22,10 @@ import MemoryGraphView from "./memory-graph-view";
 import { MAX_NODES } from "./graph-elements";
 import { useMapTools } from "./use-map-tools";
 import { countHiddenChecked, useGraphSelection } from "./use-graph-selection";
+import { expandByHops, MAX_SHARE_NAMES, type HopRadius } from "./graph-hops";
 import { requestMangroveShare } from "./mangrove-share-bus";
 import { useMangroveEnabled } from "./use-mangrove";
-import {
-  BrowseList,
-  EntityDetail,
-  RecentList,
-  SearchList,
-} from "./memory-graph-views";
-import { Input } from "@/components/ui/input";
-import { PanelEmpty } from "@/components/ui/panel-empty";
+import { BrowseList, EntityDetail, RecentList } from "./memory-graph-views";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -64,12 +58,34 @@ const tab = cva(
   },
 );
 
+// The share's hop control. Its own segmented look rather than the tab's, because it sits in a
+// row of text and a tab-sized control there would read as another tab.
+const hopSegment = cva(
+  "rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+  {
+    variants: {
+      active: {
+        true: "bg-accent/15 text-accent",
+        false: "text-fg-muted hover:text-fg",
+      },
+    },
+    defaultVariants: { active: false },
+  },
+);
+
+const SHARE_HOPS: HopRadius[] = [1, 2, 3];
 
 // "map" is the node-link view. It reads the SAME browse projection the list does and
 // drives the SAME select(), so choosing a node opens the existing detail pane — which
 // already answers "where did this come from" with the conversations behind each fact.
 // That reuse is the point: the graph adds a way to SEE the shape, not a second data path.
-type Mode = "browse" | "map" | "search" | "recent";
+//
+// There is no "search" mode, and that is a removal rather than an omission. The Map tab
+// already searches — its filter's `contents` scope issues the very same `searchGraph`
+// request the tab did, at the map's node ceiling rather than the default ten — so what the
+// tab added was a ranked hit LIST, not the ability to search. One fewer tab, and the
+// search that remains lands the member on the graph the results belong to.
+type Mode = "browse" | "map" | "recent";
 
 // The detail pane's size. It opens roughly half the column so both it and the list
 // above are usable at once; the ceiling leaves the list a visible sliver, because a
@@ -113,20 +129,30 @@ export default function MemoryGraphPanel({
 
   const [mode, setMode] = useState<Mode>("browse");
   const [graph, setGraph] = useState<SummaryGraph | null>(null);
-  const [hits, setHits] = useState<FullGraph | null>(null);
   const [recent, setRecent] = useState<RecentChanges | null>(null);
   const [detail, setDetail] = useState<FullGraph | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   // The multi-select, beside `selected` and not instead of it: `selected` is the one
   // entity the detail pane is showing, this is the set the member ticked to act on
   // several. See use-graph-selection.ts for why a checked name outlives a filter.
-  const { checked, toggle: toggleChecked, clear: clearChecked } =
-    useGraphSelection();
+  const {
+    checked,
+    toggle: toggleChecked,
+    replace: replaceChecked,
+    clear: clearChecked,
+  } = useGraphSelection();
   // Sharing the selection into the mangrove. ABSENT where there is no mangrove, the way
   // every other affordance of that feature is — a control that renders and then refuses
   // teaches the wrong thing about who can reach what.
   const mangroveOn = useMangroveEnabled(workspace);
-  const [query, setQuery] = useState("");
+  // How far the SHARED fragment reaches out from the selected nodes, on the map.
+  //
+  // Deliberately NOT `tools.hopRadius`, which looks like the same number and is not: that one
+  // decides how much of the graph stays lit around the single entity the detail pane has open,
+  // it lives in a sidebar that is collapsed by default in the column, and a member who widened
+  // it to look around would silently be publishing three hops of their graph. What travels is
+  // worth its own control, beside the button that sends it.
+  const [shareHops, setShareHops] = useState<HopRadius>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Monotonic request id, so an out-of-order detail response is dropped.
@@ -161,9 +187,9 @@ export default function MemoryGraphPanel({
   // a stale hit set, and the member would be looking at the results of a query they finished
   // typing over.
   const contentStamp = useRef(0);
-  // The map's own name filter. Deliberately NOT the search tab's `query`: that one issues a
-  // server-side BM25 request, and sharing it would fire searches while somebody narrows the
-  // map. This filters what is already loaded.
+  // The map's own filter. Under the `names` scope it matches what is already loaded; under
+  // `contents` it issues the server-side BM25 request — which is the search the removed
+  // Search tab used to run, now landing on the graph instead of on a hit list.
   const [mapQuery, setMapQuery] = useState("");
   // What the MAP is actually filtered by, trailing the input. The graph rebuilds when this
   // changes and the layout is O(n^2) on the main thread, so feeding it every keystroke is how
@@ -189,11 +215,9 @@ export default function MemoryGraphPanel({
 
   const reset = useCallback(() => {
     setGraph(null);
-    setHits(null);
     setRecent(null);
     setDetail(null);
     setSelected(null);
-    setQuery("");
     setError(null);
     setTypeFilter(null);
     // The multi-select goes too, and this is the one place it is dropped without the member
@@ -337,23 +361,6 @@ export default function MemoryGraphPanel({
     return c.alias ?? c.title;
   }
 
-  async function onSearch(e: FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
-    setMode("search");
-    setLoading(true);
-    setError(null);
-    setDetail(null);
-    setSelected(null);
-    try {
-      setHits(await searchGraph(workspace, query.trim()));
-    } catch (e2) {
-      setError(e2 instanceof Error ? e2.message : "unknown");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function select(name: string) {
     if (selected === name) {
       setSelected(null);
@@ -371,6 +378,34 @@ export default function MemoryGraphPanel({
       if (stamp === selectStamp.current)
         setError(e instanceof Error ? e.message : "unknown");
     }
+  }
+
+  /**
+   * Picking a node on the map, which is two acts sharing one gesture.
+   *
+   * A PLAIN click means "this one instead": it replaces the multi-select and opens the detail
+   * pane, which is what a bare click on a canvas means everywhere else. A CTRL or CMD click
+   * means "this one as well": it toggles the node in the set and leaves the detail pane
+   * alone, exactly as the tick beside a list row does — the map gains a second way to reach
+   * the same selection, not a second selection.
+   *
+   * Tapping the BACKGROUND deliberately does not clear the set. It closes the detail pane and
+   * nothing else: dropping a selection the member never asked to drop is the failure
+   * use-graph-selection.ts is built around, and an empty-canvas click is easy to make by
+   * accident while panning.
+   */
+  function selectOnMap(name: string | null, opts?: { additive?: boolean }) {
+    if (!name) {
+      setSelected(null);
+      setDetail(null);
+      return;
+    }
+    if (opts?.additive) {
+      toggleChecked(name);
+      return;
+    }
+    replaceChecked([name]);
+    void select(name);
   }
 
   // Dragging the handle UPWARD grows the pane, because it is anchored to the bottom.
@@ -420,10 +455,10 @@ export default function MemoryGraphPanel({
   // duplicated line beats a shared helper the two sides would then have to keep agreeing
   // on.
   //
-  // Only the two LIST tabs can answer this. The map has the same entities on screen as
-  // nodes and Recent shows a different projection, so "not in view" there would be a
-  // claim about the wrong thing — the ticks are absent, not the entities. The COUNT still
-  // renders on every tab, and that is what keeps a selection from going quiet.
+  // Only the Entities list answers this. The map draws the same entities as nodes and Recent
+  // shows a different projection, so "not in view" there would be a claim about the wrong
+  // thing. The COUNT still renders on every tab, and that is what keeps a selection from
+  // going quiet.
   const hiddenChecked =
     mode === "browse"
       ? countHiddenChecked(
@@ -432,9 +467,7 @@ export default function MemoryGraphPanel({
             .filter((e) => !typeFilter || (e.type || "unknown") === typeFilter)
             .map((e) => e.name),
         )
-      : mode === "search"
-        ? countHiddenChecked(checked, (hits?.entities ?? []).map((e) => e.name))
-        : 0;
+      : 0;
 
   const selection = {
     checked,
@@ -442,11 +475,34 @@ export default function MemoryGraphPanel({
     label: t.memoryGraph.selection.selectEntity,
   };
 
+  // What a share would actually carry.
+  //
+  // On the MAP the hop control widens it: the member picked nodes, and the fragment reaches
+  // `shareHops` relations out from them in EITHER direction (see graph-hops.ts). Everywhere
+  // else it is the ticked names exactly, because those tabs offer no hop control and a
+  // payload larger than the count on screen would be a share nobody agreed to.
+  //
+  // Expanded over the WHOLE graph's relations, not the map's drawn edges: what a member shares
+  // must not depend on the spread, the relation-type facet or the node ceiling. The cost is
+  // that the fragment can reach entities the map is not drawing — which is exactly why the
+  // count below is shown before the share rather than after it.
+  const shareNames = useMemo(
+    () =>
+      mode === "map"
+        ? [...expandByHops(checked, graph?.relations ?? [], shareHops)]
+        : [...checked],
+    [mode, checked, graph?.relations, shareHops],
+  );
+  // Three hops on a dense graph is most of the graph. Refused rather than trimmed: a
+  // truncated fragment is a lie about which entities were shared, and the member has an
+  // obvious remedy in the control right beside the message.
+  const shareTooMany = shareNames.length > MAX_SHARE_NAMES;
+
   // The selected entity's edges come from the list already in hand. open_nodes filters
   // relations to those with BOTH endpoints among the names requested, so asking for a
   // single entity returns an empty relation set every time.
   const contextRelations: Relation[] =
-    graph?.relations ?? hits?.relations ?? recent?.recentRelations ?? [];
+    graph?.relations ?? recent?.recentRelations ?? [];
   const entityRelations = selected
     ? relationsFor(contextRelations, selected)
     : [];
@@ -503,15 +559,6 @@ export default function MemoryGraphPanel({
           </button>
           <button
             type="button"
-            className={tab({ active: mode === "search" })}
-            aria-pressed={mode === "search"}
-            onClick={() => setMode("search")}
-          >
-            <Search size={12} aria-hidden />
-            {t.memoryGraph.tabs.search}
-          </button>
-          <button
-            type="button"
             className={tab({ active: mode === "recent" })}
             aria-pressed={mode === "recent"}
             onClick={() => setMode("recent")}
@@ -522,26 +569,12 @@ export default function MemoryGraphPanel({
         </div>
       </div>
 
-      {mode === "search" && (
-        <form onSubmit={onSearch} className="shrink-0 px-3 pt-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t.memoryGraph.searchPlaceholder}
-            aria-label={t.memoryGraph.searchPlaceholder}
-          />
-          <p className="mt-1 text-[11px] leading-snug text-fg-muted">
-            {t.memoryGraph.searchHint}
-          </p>
-        </form>
-      )}
-
       {/* OUTSIDE the scrolling list below, and outside the tab switch: a checked entity
           that a filter, a search or another tab stopped showing is still checked, and this
           bar is the only thing on screen that says so. Inside the scroll area it would
           leave with the rows it is describing. */}
       {checked.size > 0 && (
-        <div className="flex shrink-0 items-center gap-2 px-3 pt-2 text-[11px]">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-2 text-[11px]">
           <span className="font-medium text-fg">
             {checked.size === 1
               ? t.memoryGraph.selection.one
@@ -558,6 +591,44 @@ export default function MemoryGraphPanel({
               )}
             </span>
           )}
+          {/* How far out of the picked nodes the shared fragment reaches. On the MAP only:
+              it is the map that lets a member pick a node in the middle of a neighbourhood
+              and want the neighbourhood with it, and a control that silently enlarged a
+              list share would be a payload nobody could see. */}
+          {mangroveOn === true && mode === "map" && (
+            <>
+              <div
+                role="group"
+                aria-label={t.memoryGraph.selection.hopsLabel}
+                title={t.memoryGraph.selection.hopsLabel}
+                className="flex shrink-0 items-center gap-0.5 rounded-md border border-rule-strong p-0.5"
+              >
+                {SHARE_HOPS.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    aria-pressed={shareHops === h}
+                    onClick={() => setShareHops(h)}
+                    className={hopSegment({ active: shareHops === h })}
+                  >
+                    {(h === 1
+                      ? t.memoryGraph.selection.hops
+                      : t.memoryGraph.selection.hopsPlural
+                    ).replace("{count}", String(h))}
+                  </button>
+                ))}
+              </div>
+              {/* Said BEFORE the share, not discovered after it: the hops are what make the
+                  payload bigger than the count the member ticked, so the number that will
+                  actually travel has to be on screen next to the button that sends it. */}
+              <span className="shrink-0 text-fg-muted">
+                {t.memoryGraph.selection.sharing.replace(
+                  "{count}",
+                  String(shareNames.length),
+                )}
+              </span>
+            </>
+          )}
           {mangroveOn === true && (
             <button
               type="button"
@@ -565,10 +636,11 @@ export default function MemoryGraphPanel({
               // with the relations among them, so what travels is the same key the graph
               // is indexed by everywhere else in this panel.
               onClick={() => {
-                requestMangroveShare({ kind: "entities", names: [...checked] });
+                requestMangroveShare({ kind: "entities", names: shareNames });
                 setDestination("mangrove");
               }}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
+              disabled={shareTooMany}
+              className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Waves size={12} aria-hidden />
               {t.memoryGraph.selection.share}
@@ -581,6 +653,16 @@ export default function MemoryGraphPanel({
           >
             {t.memoryGraph.selection.clear}
           </button>
+          {/* A disabled control with no reason on screen is the thing that makes a member
+              think the feature is broken. Its own line, so the remedy sits under the
+              control that provides it. */}
+          {mangroveOn === true && shareTooMany && (
+            <p className="basis-full leading-snug text-fg-muted">
+              {t.memoryGraph.selection.shareTooMany
+                .replace("{count}", String(shareNames.length))
+                .replace("{max}", String(MAX_SHARE_NAMES))}
+            </p>
+          )}
         </div>
       )}
 
@@ -627,7 +709,8 @@ export default function MemoryGraphPanel({
                   entities={graph.entities}
                   relations={graph.relations}
                   selected={selected}
-                  onSelect={(name) => (name ? select(name) : setSelected(null))}
+                  onSelect={selectOnMap}
+                  checked={checked}
                   typeFilter={typeFilter}
                   onTypeFilter={setTypeFilter}
                   onResetFilters={resetMapFilters}
@@ -647,32 +730,6 @@ export default function MemoryGraphPanel({
                   copy={t.memoryGraph}
                 />
               </div>
-            )}
-
-            {/* Before the first query this tab used to render NOTHING — a blank pane
-                that reads as a broken tab rather than as one waiting for input. It sits
-                in the same non-loading fragment as the other modes, so it can never
-                race the spinner. */}
-            {/* `!error` too: a failed search leaves `hits` null, and without this the
-                idle prompt would sit under the error Alert telling the member to type
-                a term — as if the search they just ran had never happened. */}
-            {mode === "search" && !hits && !error && (
-              <PanelEmpty
-                icon={Search}
-                title={t.memoryGraph.searchIdle.title}
-                body={t.memoryGraph.searchIdle.body}
-              />
-            )}
-
-            {mode === "search" && hits && (
-              <SearchList
-                hits={hits}
-                selected={selected}
-                selection={selection}
-                onSelect={select}
-                noResults={t.memoryGraph.noResults}
-                noResultsHint={t.memoryGraph.noResultsHint}
-              />
             )}
 
             {mode === "recent" && recent && (

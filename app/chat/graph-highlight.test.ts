@@ -166,9 +166,73 @@ describe("applyHighlight — reapplying is always safe", () => {
     const cy = line();
     applyHighlight(cy, { ...IDLE, selected: "a" });
     applyHighlight(cy, IDLE);
-    for (const c of ["faded", "near", "picked", "path"]) {
+    for (const c of ["faded", "near", "picked", "path", "checked"]) {
       expect(cy.elements().filter((e) => e.hasClass(c)).length, c).toBe(0);
     }
+    cy.destroy();
+  });
+});
+
+// The multi-select, drawn on the map. Its own block because it is the one highlight that is
+// NOT a claimant on `faded`: it says which nodes the member ticked, which stays true while a
+// path is traced or another entity is open. Applied here rather than in a second effect for
+// the reason the whole module exists — a rebuild hands back an instance carrying no classes.
+describe("applyHighlight — the multi-select", () => {
+  const ticked = (cy: Core) =>
+    cy
+      .nodes()
+      .filter((n) => n.hasClass("checked"))
+      .map((n) => n.id() as string)
+      .sort();
+
+  it("marks exactly the ticked nodes", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, checked: new Set(["a", "c"]) });
+    expect(ticked(cy)).toEqual(["a", "c"]);
+    cy.destroy();
+  });
+
+  it("marks nothing when nothing is ticked", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, checked: new Set() });
+    expect(ticked(cy)).toEqual([]);
+    cy.destroy();
+  });
+
+  it("ignores a ticked name this graph does not have", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, checked: new Set(["a", "not-here"]) });
+    expect(ticked(cy)).toEqual(["a"]);
+    cy.destroy();
+  });
+
+  // The precedence chain returns early for a path and mid-trace, so a tick applied inside it
+  // would vanish the moment the member traced something.
+  it("survives a traced path, which returns before the selection is considered", () => {
+    const cy = line();
+    const path = findPath(cy, "a", "c");
+    applyHighlight(cy, { ...IDLE, path, checked: new Set(["island"]) });
+    expect(ticked(cy)).toEqual(["island"]);
+    cy.destroy();
+  });
+
+  it("survives a half-picked path trace", () => {
+    const cy = line();
+    applyHighlight(cy, {
+      ...IDLE,
+      pathMode: true,
+      pathFrom: "a",
+      checked: new Set(["d"]),
+    });
+    expect(ticked(cy)).toEqual(["d"]);
+    cy.destroy();
+  });
+
+  it("is independent of the open entity: a node can be both", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, selected: "a", checked: new Set(["a"]) });
+    expect(cy.getElementById("a").hasClass("checked")).toBe(true);
+    expect(cy.getElementById("a").hasClass("picked")).toBe(true);
     cy.destroy();
   });
 });

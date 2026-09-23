@@ -3,7 +3,6 @@ import { describe, it, expect } from "vitest";
 import {
   BrowseList,
   RecentList,
-  SearchList,
   type RowSelection,
 } from "./memory-graph-views";
 import MemoryGraphView from "./memory-graph-view";
@@ -96,6 +95,7 @@ function map(graph: SummaryGraph, query = "") {
       query={query}
       selected={null}
       onSelect={() => {}}
+      checked={new Set()}
       matchNames={null}
       filter={{
         value: "",
@@ -141,22 +141,6 @@ describe("the knowledge graph's empty branches all render one component", () => 
     expect(browse(populated, "note")).toContain(
       `>${g.allTypes} ${populated.entities.length}<`,
     );
-  });
-
-  it("Search, with no hits", () => {
-    const html = renderToStaticMarkup(
-      <SearchList
-        hits={{ entities: [], relations: [] }}
-        selected={null}
-        selection={noSelection}
-        onSelect={() => {}}
-        noResults={g.noResults}
-        noResultsHint={g.noResultsHint}
-      />,
-    );
-    expect(markers(html)).toBe(1);
-    expect(html).toContain(g.noResults);
-    expect(html).toContain(g.noResultsHint);
   });
 
   it("Recent, with nothing in the last 24h", () => {

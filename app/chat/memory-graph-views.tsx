@@ -11,7 +11,6 @@ import {
   GitMerge,
   MessageSquare,
   Network,
-  SearchX,
   X,
 } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
@@ -22,15 +21,14 @@ import {
   entitySources,
   entityTypeCounts,
   type Entity,
-  type FullGraph,
   type RecentChanges,
   type Relation,
   type SummaryGraph,
 } from "@/lib/memoryGraph";
 import type { EntityReference } from "@/lib/chatReference";
 
-// The knowledge graph's presentational pieces: a browse list, a search list, a
-// recent-changes list and an entity detail pane. Pure functions of props, with no
+// The knowledge graph's presentational pieces: a browse list, a recent-changes list
+// and an entity detail pane. Pure functions of props, with no
 // fetching and no state.
 //
 // Split out of the panel that renders them for two reasons. The suite runs
@@ -256,55 +254,6 @@ export function BrowseList({
         </ul>
       )}
     </>
-  );
-}
-
-export function SearchList({
-  hits,
-  selected,
-  selection,
-  onSelect,
-  noResults,
-  noResultsHint,
-}: {
-  hits: FullGraph;
-  selected: string | null;
-  /** The same set the browse list ticks into — both lists key on the entity name. */
-  selection: RowSelection;
-  onSelect: (name: string) => void;
-  noResults: string;
-  noResultsHint?: string;
-}) {
-  if (hits.entities.length === 0) {
-    return <PanelEmpty icon={SearchX} title={noResults} body={noResultsHint} />;
-  }
-  return (
-    <ul className="space-y-1 px-2">
-      {hits.entities.map((e) => (
-        <li key={e.name} className="flex items-start gap-1">
-          <EntityCheck name={e.name} selection={selection} />
-          <button
-            type="button"
-            className={`${row({ selected: selected === e.name })} min-w-0 flex-1`}
-            onClick={() => onSelect(e.name)}
-            aria-expanded={selected === e.name}
-          >
-            <span className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                {e.name}
-              </span>
-              {/* Full detail here, so it really is `entityType`. */}
-              <Badge tone="accent">{e.entityType}</Badge>
-            </span>
-            {e.observations[0] && (
-              <span className="line-clamp-2 text-xs leading-snug text-fg-muted">
-                {e.observations[0].content}
-              </span>
-            )}
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 

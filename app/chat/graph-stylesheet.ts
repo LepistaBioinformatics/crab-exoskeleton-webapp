@@ -164,6 +164,24 @@ export function buildStylesheet({
         "text-opacity": 0.45,
       },
     },
+    // The member's multi-select, drawn on the map the way the list draws its ticks. Without a
+    // rule here the map would accept Ctrl-clicks and look identical afterwards — the count bar
+    // would say "4 selected" and the graph would not say which four.
+    //
+    // A DOUBLE border rather than a colour: colour is already spoken for by the entity type or
+    // the cluster, and repainting a ticked node would break the legend's promise. It sits after
+    // `node[!match]` so a ticked context node is drawn as ticked, and before `node.picked` so
+    // the one open in the detail pane still wins the border colour — a node that is both reads
+    // as both.
+    {
+      selector: "node.checked",
+      style: {
+        "border-color": p.fg,
+        "border-width": 4,
+        "border-style": "double",
+        "text-opacity": 1,
+      },
+    },
     { selector: ".faded", style: { opacity: 0.1, "text-opacity": 0 } },
     { selector: "node.picked", style: { "border-color": p.types[0], "border-width": 4 } },
     { selector: "edge.near", style: { opacity: 0.9, "text-opacity": 1, width: 2 } },

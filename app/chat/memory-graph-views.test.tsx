@@ -5,7 +5,6 @@ import {
   EntityDetail,
   RecentList,
   RelationLine,
-  SearchList,
   type RowSelection,
 } from "./memory-graph-views";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -110,45 +109,6 @@ describe("BrowseList", () => {
   it("marks the selected row as expanded", () => {
     expect(browse({ selected: "ledger" })).toContain('aria-expanded="true"');
     expect(browse()).not.toContain('aria-expanded="true"');
-  });
-});
-
-describe("SearchList", () => {
-  const hit: Entity = {
-    name: "ledger",
-    entityType: "system",
-    observations: [{ content: "written in Rust", timestamp: 1_700_000_000_000, confidence: 1 }],
-  };
-
-  // Search returns FULL entities, so here it really is `entityType`. The two lists
-  // read different fields on purpose; asserting both is what stops a "unify these"
-  // refactor from blanking one.
-  it("renders the full projection's `entityType`", () => {
-    const html = renderToStaticMarkup(
-      <SearchList
-        hits={{ entities: [hit], relations: [] }}
-        selected={null}
-        selection={noSelection}
-        onSelect={() => {}}
-        noResults={g.noResults}
-      />,
-    );
-    expect(html).toContain("ledger");
-    expect(html).toContain("system");
-    expect(html).toContain("written in Rust");
-  });
-
-  it("says so when nothing matched", () => {
-    const html = renderToStaticMarkup(
-      <SearchList
-        hits={{ entities: [], relations: [] }}
-        selected={null}
-        selection={noSelection}
-        onSelect={() => {}}
-        noResults={g.noResults}
-      />,
-    );
-    expect(html).toContain(g.noResults);
   });
 });
 
@@ -545,28 +505,9 @@ describe("EntityDetail chrome", () => {
 
 // The multi-select is a SECOND selection, beside the `selected` the detail pane reads.
 // These assert what the markup promises a screen reader and a keyboard: one checkbox per
-// row, a name in every accessible name, and both lists reading the SAME set of names —
-// the browse list holds `SummaryEntity`, the search list holds `Entity`, and `name` is
-// the only field they agree on.
+// row and a name in every accessible name. The set is keyed by NAME, which is what lets
+// the map share it — see graph-map-share.test.tsx for the two of them holding one set.
 describe("the multi-select tick", () => {
-  const hit: Entity = {
-    name: "ledger",
-    entityType: "system",
-    observations: [{ content: "written in Rust", timestamp: 1_700_000_000_000 }],
-  };
-
-  function search(checked: ReadonlySet<string>) {
-    return renderToStaticMarkup(
-      <SearchList
-        hits={{ entities: [hit], relations: [] }}
-        selected={null}
-        selection={{ ...noSelection, checked }}
-        onSelect={() => {}}
-        noResults={g.noResults}
-      />,
-    );
-  }
-
   it("gives every browse row a checkbox named after its entity", () => {
     const html = browse();
     expect(html).toContain('role="checkbox"');
@@ -594,8 +535,4 @@ describe("the multi-select tick", () => {
     expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/);
   });
 
-  it("ticks search rows from the same set of names", () => {
-    expect(search(new Set(["ledger"]))).toContain('aria-checked="true"');
-    expect(search(new Set(["something else"]))).toContain('aria-checked="false"');
-  });
 });
