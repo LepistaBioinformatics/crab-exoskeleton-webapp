@@ -1,12 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import MessageContent from "./message-content";
 import CodeBlock from "./code-block";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { Button } from "@/components/ui/button";
-import { chatCopy } from "@/lib/i18n/chat";
-import { useT } from "@/lib/i18n/context";
 
 // How a shared memory's body is shown.
 //
@@ -25,9 +21,24 @@ import { useT } from "@/lib/i18n/context";
 // four screens tall stops being a list. The cut is by LINES rather than
 // characters because a line count is what the reader sees -- 2000 characters of
 // prose and 2000 characters of a table occupy very different amounts of screen.
+//
+// THE WAY IN IS THE CARD, NOT A BUTTON UNDER THE FADE. The sheet is opened by
+// whoever owns the card -- this component only says whether there IS one to
+// open (`isCut`) and renders it when told to. A "show more" control of its own
+// would be a second, smaller target for the thing the whole card now does.
 
-/** Above this many lines, the card shows a preview and a way in. */
+/** Above this many lines, the card shows a preview and there is a sheet to open. */
 const PREVIEW_LINES = 8;
+
+/**
+ * Whether this body has more in it than the card will show.
+ *
+ * The card asks before making itself clickable: a card that opens a sheet
+ * holding exactly what is already on screen is an affordance that lies.
+ */
+export function isCut(content: string): boolean {
+  return content.split("\n").length > PREVIEW_LINES;
+}
 
 /**
  * Which renderer a body gets.
@@ -82,6 +93,8 @@ export default function MangroveContent({
   mediaType,
   title,
   subtitle,
+  open,
+  onClose,
 }: {
   content: string;
   mediaType?: string;
@@ -89,21 +102,22 @@ export default function MangroveContent({
   title: string;
   /** Who wrote it and where it travelled. */
   subtitle?: React.ReactNode;
+  /** Owned by the card, which is what a reader clicks to get here. */
+  open: boolean;
+  onClose: () => void;
 }) {
-  const t = useT(chatCopy);
-  const [open, setOpen] = useState(false);
-
-  const lines = content.split("\n");
-  const long = lines.length > PREVIEW_LINES;
-  const preview = long ? lines.slice(0, PREVIEW_LINES).join("\n") : content;
+  const long = isCut(content);
+  const preview = long ? content.split("\n").slice(0, PREVIEW_LINES).join("\n") : content;
 
   return (
     <>
       <div className="relative">
         <Body content={preview} mediaType={mediaType} />
         {long && (
-          // The fade is what says "this is cut" before the button is read. A
-          // hard edge reads as the content ending there.
+          // The fade is what says "this is cut" before anything is clicked. A
+          // hard edge reads as the content ending there. It fades to `surface`,
+          // which is why a card's own background stays `surface` whatever else
+          // marks it out.
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface to-transparent"
@@ -111,13 +125,7 @@ export default function MangroveContent({
         )}
       </div>
 
-      {long && (
-        <Button className="mt-1" size="sm" variant="text" onClick={() => setOpen(true)}>
-          {t.mangrove.showMore}
-        </Button>
-      )}
-
-      <BottomSheet open={open} title={title} subtitle={subtitle} onClose={() => setOpen(false)}>
+      <BottomSheet open={open} title={title} subtitle={subtitle} onClose={onClose}>
         <Body content={content} mediaType={mediaType} />
       </BottomSheet>
     </>

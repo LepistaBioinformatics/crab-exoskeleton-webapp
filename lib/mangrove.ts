@@ -116,6 +116,25 @@ export interface MangroveTimeline {
   pending?: MangrovePending[];
 }
 
+/** Milliseconds, or 0 for a timestamp another deployment's mangrove wrote badly. */
+function at(published: string): number {
+  const ms = Date.parse(published);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * A reading's items, most recent first.
+ *
+ * SORTED HERE, not left to the order the answer happened to arrive in. `claims` is a
+ * reduction keyed by (cell, author), so its order is the order the keys were first
+ * seen — which is close enough to chronological, often enough, that a list nobody
+ * sorted looks sorted right up until the day it does not. A copy rather than a sort
+ * in place: the array belongs to the timeline the hook is holding.
+ */
+export function newestFirst<T extends { published: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => at(b.published) - at(a.published));
+}
+
 /** One person the directory found. */
 export interface DirectoryEntry {
   email: string;

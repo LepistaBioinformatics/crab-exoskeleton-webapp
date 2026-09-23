@@ -20,11 +20,21 @@ import type { ReactNode } from "react";
 export default function DestinationScreen({
   title,
   actions,
+  narrow = false,
   children,
 }: {
   title: string;
   /** Controls for the destination as a whole — creating, refreshing. */
   actions?: ReactNode;
+  /**
+   * A reading column instead of a grid's frame.
+   *
+   * THE FRAME NARROWS, NOT THE CHILDREN, and that is the whole reason this is a prop
+   * rather than a max-width the screen puts on its own content. The heading belongs to
+   * the frame: a screen that narrowed only what it renders would centre its prose while
+   * leaving its own title 200px away at the far left of a 6xl column.
+   */
+  narrow?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -32,7 +42,9 @@ export default function DestinationScreen({
     // scrolled its own body would take the heading out of view with it, and "where am
     // I" is the one thing that must survive scrolling.
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div
+        className={`mx-auto px-4 py-6 sm:px-6 sm:py-8 ${narrow ? "max-w-3xl" : "max-w-6xl"}`}
+      >
         <div className="flex items-start gap-3">
           <h1 className="min-w-0 flex-1 font-display text-xl font-bold text-fg sm:text-2xl">
             {title}

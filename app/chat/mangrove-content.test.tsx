@@ -1,24 +1,40 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
-import { act } from "react";
+import { act, useEffect, useState } from "react";
 
-import MangroveContent, { renderKind } from "./mangrove-content";
-import { chatCopy } from "@/lib/i18n/chat";
-
-const en = chatCopy.en;
+import MangroveContent, { isCut, renderKind } from "./mangrove-content";
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
-async function render(props: Parameters<typeof MangroveContent>[0]) {
+type Props = Omit<Parameters<typeof MangroveContent>[0], "open" | "onClose">;
+
+/**
+ * Stands in for the card, which is what owns `open` now: it opens the sheet and the
+ * sheet is what closes it. A harness that only passed `open` down would leave Escape
+ * with nothing to flip, and the exit these tests are about would never start.
+ */
+function Harness({ open, ...props }: Props & { open: boolean }) {
+  const [shown, setShown] = useState(open);
+  useEffect(() => setShown(open), [open]);
+  return <MangroveContent {...props} open={shown} onClose={() => setShown(false)} />;
+}
+
+async function render(props: Props, open = false) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<MangroveContent {...props} />);
+    root!.render(<Harness {...props} open={open} />);
   });
   return host.innerHTML;
+}
+
+async function reopen(props: Props, open: boolean) {
+  await act(async () => {
+    root!.render(<Harness {...props} open={open} />);
+  });
 }
 
 afterEach(() => {
@@ -49,32 +65,37 @@ describe("choosing a renderer", () => {
 });
 
 describe("cutting long content", () => {
-  it("shows a short body whole, with no way in", async () => {
-    const html = await render({ content: short, title: "soil-ph" });
-    expect(html).toContain("A short note.");
-    // Nothing to expand, so nothing offering to.
-    expect(html).not.toContain(en.mangrove.showMore);
+  // What the CARD asks before making itself clickable. A card that opens a sheet
+  // onto exactly what is already on screen is an affordance that lies.
+  it("says whether there is anything a sheet would add", () => {
+    expect(isCut(short)).toBe(false);
+    expect(isCut(long)).toBe(true);
+    // Exactly at the cut is not cut: eight lines are all shown.
+    expect(isCut(Array.from({ length: 8 }, (_, i) => `line ${i}`).join("\n"))).toBe(false);
+    expect(isCut(Array.from({ length: 9 }, (_, i) => `line ${i}`).join("\n"))).toBe(true);
   });
 
-  it("cuts a long body and offers to open it", async () => {
+  it("shows a short body whole", async () => {
+    const html = await render({ content: short, title: "soil-ph" });
+    expect(html).toContain("A short note.");
+  });
+
+  // The "show more" button is gone -- the whole card is the target now. What has to
+  // survive that is the CUT: a list where one item is four screens tall stops being
+  // a list, whatever opens it.
+  it("cuts a long body in the card, and offers no button of its own", async () => {
     const html = await render({ content: long, title: "soil-ph" });
     expect(html).toContain("line 0");
-    expect(html).toContain(en.mangrove.showMore);
-    // The tail is not in the card. A list where one item is four screens tall
-    // stops being a list.
     expect(html).not.toContain("line 39");
+    expect(host!.querySelector("button")).toBeNull();
   });
 
   it("puts the whole body in the sheet, and names what is being read", async () => {
-    await render({ content: long, title: "soil-ph", subtitle: "alice · soil-ph" });
+    const props = { content: long, title: "soil-ph", subtitle: "alice · soil-ph" };
+    await render(props);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
 
-    const button = Array.from(host!.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes(en.mangrove.showMore),
-    );
-    expect(button).toBeTruthy();
-    await act(async () => {
-      button!.click();
-    });
+    await reopen(props, true);
 
     // The sheet portals to <body>, so it is not inside `host`.
     const sheet = document.querySelector('[role="dialog"]');
@@ -86,18 +107,15 @@ describe("cutting long content", () => {
   // THE SHEET LEAVES ON ITS OWN ANIMATION, not on the keypress. Between Escape
   // and `animationend` it is still mounted and playing the exit -- which is the
   // whole point of animating it, and the reason this asserts both halves.
+  const LONG = { content: long, title: "soil-ph" };
+
   async function openSheet() {
-    const button = Array.from(host!.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes(en.mangrove.showMore),
-    );
-    await act(async () => {
-      button!.click();
-    });
+    await reopen(LONG, true);
     return document.querySelector('[role="dialog"]') as HTMLElement;
   }
 
   it("plays the exit before it leaves the tree", async () => {
-    await render({ content: long, title: "soil-ph" });
+    await render(LONG);
     const sheet = await openSheet();
     expect(sheet).toBeTruthy();
     expect(sheet.className).toContain("sheet-rise");
@@ -120,7 +138,7 @@ describe("cutting long content", () => {
   // bubbles its own animationend through the sheet. One of those must not drop
   // it mid-slide.
   it("ignores an animation that finished inside it", async () => {
-    await render({ content: long, title: "soil-ph" });
+    await render(LONG);
     await openSheet();
 
     await act(async () => {
@@ -138,15 +156,10 @@ describe("cutting long content", () => {
   // Scroll is locked while the sheet is open, then handed back exactly as it
   // was found -- a sheet that leaves <body> locked breaks the page behind it.
   it("locks and restores page scroll", async () => {
-    await render({ content: long, title: "soil-ph" });
+    await render(LONG);
     const before = document.body.style.overflow;
 
-    const button = Array.from(host!.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes(en.mangrove.showMore),
-    );
-    await act(async () => {
-      button!.click();
-    });
+    await openSheet();
     expect(document.body.style.overflow).toBe("hidden");
 
     // The lock is held for as long as the sheet is on screen, INCLUDING while it

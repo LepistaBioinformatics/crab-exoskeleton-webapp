@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blobUrl,
+  newestFirst,
   publish,
   mergeFragment,
   parseGraphFragment,
@@ -124,5 +125,51 @@ describe("the project travels with the calls that resolve a name", () => {
   it("but a blob url does not, because a digest is not a path", () => {
     const url = new URL(blobUrl(inProject, "a".repeat(64)), "https://example.test");
     expect(url.searchParams.has("project")).toBe(false);
+  });
+});
+
+describe("newestFirst", () => {
+  // SHUFFLED ON PURPOSE. A fixture that is already in order proves nothing: the test
+  // would pass against a function that returns its input untouched, which is exactly
+  // the bug -- `claims` arrives in the order a reduction's keys were first seen, and
+  // that is often nearly chronological.
+  const shuffled = [
+    { id: "c", published: "2026-03-02T09:00:00Z" },
+    { id: "e", published: "2026-01-01T00:00:00Z" },
+    { id: "a", published: "2026-09-22T10:00:00Z" },
+    { id: "d", published: "2026-03-01T09:00:00Z" },
+    { id: "b", published: "2026-06-15T23:59:59Z" },
+  ];
+
+  it("puts the most recent first", () => {
+    expect(newestFirst(shuffled).map((x) => x.id)).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("leaves the caller's array alone", () => {
+    const before = shuffled.map((x) => x.id);
+    newestFirst(shuffled);
+    expect(shuffled.map((x) => x.id)).toEqual(before);
+  });
+
+  // Two activities written in the same second is ordinary; which of them comes first
+  // is not something to invent, so the answer is the order they arrived in.
+  it("keeps the arrival order of items published at the same instant", () => {
+    const same = [
+      { id: "first", published: "2026-05-05T12:00:00Z" },
+      { id: "second", published: "2026-05-05T12:00:00Z" },
+    ];
+    expect(newestFirst(same).map((x) => x.id)).toEqual(["first", "second"]);
+  });
+
+  // The timestamp was written by another deployment's mangrove. An unparseable one
+  // sorts last rather than turning the whole comparison into NaN and scrambling the
+  // list around it.
+  it("does not let an unreadable timestamp scramble the rest", () => {
+    const withJunk = [
+      { id: "junk", published: "not a date" },
+      { id: "old", published: "2026-01-01T00:00:00Z" },
+      { id: "new", published: "2026-09-01T00:00:00Z" },
+    ];
+    expect(newestFirst(withJunk).map((x) => x.id)).toEqual(["new", "old", "junk"]);
   });
 });
