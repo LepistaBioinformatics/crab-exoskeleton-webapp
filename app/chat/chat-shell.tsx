@@ -15,6 +15,7 @@ import {
 import { asDestination, resolveCentre } from "./destination";
 import { asSection, type Section } from "./workspace-sections";
 import { railDestinationGroups } from "./sidebar-destinations";
+import { useMangroveEnabled } from "./use-mangrove";
 import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
@@ -186,6 +187,18 @@ export default function ChatShell({ email }: { email: string }) {
   // An agent whose proxy predates projects. The row and the screen go together — a
   // sidebar row that leads to a screen rendering nothing is worse than no row.
   const hideProjects = projectsError === "projects_unsupported";
+  // THE ROW IS ABSENT WHERE THERE IS NO MANGROVE, which it was not: only
+  // `projects` was ever filtered, so a deployment without one still offered
+  // `Mangrove Network` in the sidebar and answered with a blank centre pane. The
+  // screen hides ITSELF on the proxy's 404, which is what made every comment in
+  // this area read as though the row did too.
+  //
+  // Hidden while the answer is still unknown, not shown-then-withdrawn. A row
+  // that arrives a beat late costs the deployments that HAVE a mangrove almost
+  // nothing; a row that appears and vanishes hands the ones that do not a window
+  // in which the member can press it.
+  const mangroveOn = useMangroveEnabled(workspace);
+  const hidden = { projects: hideProjects, mangrove: mangroveOn !== true };
 
   const centre = resolveCentre({ resolved, workspace, destination, sid: sessionId ?? null });
 
@@ -270,7 +283,7 @@ export default function ChatShell({ email }: { email: string }) {
         t,
         openDestination: destination,
         openSection,
-        hideProjects,
+        hidden,
         onDestination: setDestination,
         onSection: setRightSidebar,
       })
@@ -335,7 +348,7 @@ export default function ChatShell({ email }: { email: string }) {
             project={project}
             openDestination={destination}
             openSection={openSection}
-            hideProjects={hideProjects}
+            hidden={hidden}
             onDestination={(to) => setDestination(to)}
             onSection={setRightSidebar}
             onNewChat={newChat}
