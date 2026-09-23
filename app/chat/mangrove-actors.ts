@@ -1,5 +1,6 @@
 import type { MangroveIdentity } from "@/lib/mangrove";
 import type { ChatDict } from "@/lib/i18n/chat";
+import type { Recipient } from "./mangrove-recipients";
 
 // WHO WROTE IT, AND WHO IT REACHED -- in words, not in uuids.
 //
@@ -38,6 +39,27 @@ export function isMine(actorId: string, identity: MangroveIdentity | null): bool
   return actorId === identity.personId || actorId === identity.serviceId;
 }
 
+/**
+ * Whether an actor is a person or an agent -- the one thing `actorLabel` throws away.
+ *
+ * The label is a SENTENCE and the card's byline needs a SHAPE: a person's avatar or a
+ * bot's, drawn before the name is read. Both answers come from the same two places --
+ * the member's own two ids, and the actor id's trailing `person`/`service` -- so they
+ * are computed side by side rather than by a second parse of a string one of them
+ * already turned into prose.
+ *
+ * An id this client cannot parse is a PERSON, because that is what the only unknown
+ * actor a member ever sees is: somebody on another deployment. A bot glyph over a
+ * human would be the wrong guess of the two.
+ */
+export function actorKind(
+  actorId: string,
+  identity: MangroveIdentity | null,
+): "person" | "agent" {
+  if (identity && actorId === identity.serviceId) return "agent";
+  return ACTOR.exec(actorId)?.[2] === "service" ? "agent" : "person";
+}
+
 /** An actor, in words: you, your agent, or somebody's person/agent and their id. */
 export function actorLabel(
   actorId: string,
@@ -66,14 +88,17 @@ export function audienceLabel(
 }
 
 /**
- * Everyone this reached, as one value, or null where there is nothing honest to say.
+ * Everyone this reached, one label each, or null where there is nothing honest to say.
  *
- * A VALUE AND NOT A SENTENCE. It used to come back as "shared with this subscription",
- * because it was read inline after the cell and the byline. It is a column under a
- * heading that already asks the question, so the preposition would be repeated on
- * every card.
+ * A LIST AND NOT A SENTENCE, on two counts. It used to come back as "shared with this
+ * subscription", because it was read inline after the cell and the byline -- and the
+ * column heading above it now asks that question already, so the preposition would be
+ * repeated on every card. It then spent a revision as a comma-joined STRING, which is
+ * the same mistake one layer down: five recipients ran to three wrapped lines of
+ * near-identical `a person (<uuid>)`, and a comma inside a label reads exactly like
+ * the comma between two of them. The card stacks them and shows the first few.
  *
- * NULL IS NOT THE EMPTY STRING: a card with nothing honest to say about who else
+ * NULL IS NOT THE EMPTY LIST: a card with nothing honest to say about who else
  * received this leaves the column OUT, rather than printing a heading over a blank.
  *
  * AN EMPTY AUDIENCE IS ONLY AN ANSWER ON YOUR OWN POST. Published with both lists
@@ -86,7 +111,10 @@ export function audienceSummary(
   identity: MangroveIdentity | null,
   t: ChatDict,
   own: boolean,
-): string | null {
-  if (audience.length === 0) return own ? t.mangrove.audiencePrivate : null;
-  return audience.map((a) => audienceLabel(a, identity, t)).join(", ");
+): Recipient[] | null {
+  // AN ANSWER WITH NO ADDRESS IN IT. "Only you" is a statement about an empty
+  // audience rather than a recipient, so it carries no id -- and the card draws
+  // it as a person, which is what it is.
+  if (audience.length === 0) return own ? [{ label: t.mangrove.audiencePrivate }] : null;
+  return audience.map((a) => ({ id: a, label: audienceLabel(a, identity, t) }));
 }

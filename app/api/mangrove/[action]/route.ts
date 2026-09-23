@@ -79,6 +79,11 @@ async function handle(req: NextRequest, action: string) {
   // is the proxy's call, since only it knows which mode this deployment is in.
   const q = p.get("q");
   if (q) query.set("q", q);
+  // The ids a card is asking to have named. Same route, same reason for
+  // forwarding as given: how many is too many, and which of them belong to this
+  // subscription, are both the proxy's call.
+  const ids = p.get("ids");
+  if (ids) query.set("ids", ids);
 
   try {
     const res = await fetchMycelium(`/${role}/v1/mangrove/${action}?${query}`, {

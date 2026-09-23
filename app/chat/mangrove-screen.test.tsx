@@ -40,8 +40,11 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
     downloadBlob: (...a: unknown[]) => downloadBlob(...a),
     readIdentity: (...a: unknown[]) => readIdentity(...a),
     shareWith: (...a: unknown[]) => shareWith(...a),
+    resolveActors: (...a: unknown[]) => resolveActors(...a),
   };
 });
+
+const resolveActors = vi.fn();
 
 const uploadMedia = vi.fn();
 vi.mock("@/lib/media", async (importOriginal) => {
@@ -89,6 +92,7 @@ async function render(inside?: { workspace: Workspace; projectName: string | nul
       <MangroveScreen
         workspace={inside?.workspace ?? workspace}
         projectName={inside?.projectName}
+        subscriptionName="Soil Lab"
         onReference={(ref) => referenced.push(ref)}
       />,
     );
@@ -422,13 +426,21 @@ describe("a shared graph fragment", () => {
     expect(text).toContain(en.mangrove.fragmentTitle);
     expect(text).toContain("Rhizophora");
     expect(text).toContain("Mangrove");
-    // 2 entities, 3 observations between them, 1 relation.
-    expect(text).toContain(
-      en.mangrove.fragmentCounts
-        .replace("{entities}", "2")
-        .replace("{observations}", "3")
-        .replace("{relations}", "1"),
+    // 2 entities, 3 observations between them, 1 relation -- each as its own row, the
+    // numeral set apart from what it counts.
+    expect(text).toContain(`2 ${en.mangrove.fragmentEntities}`);
+    expect(text).toContain(`3 ${en.mangrove.fragmentObservations}`);
+    expect(text).toContain(`1 ${en.mangrove.fragmentRelations}`);
+
+    // AND THE SHAPE OF IT. A node per entity and a line per relation between two of
+    // them, which is what the counts cannot say: whether this is one cluster or a
+    // handful of unconnected names.
+    const map = cards()[0].querySelector('svg[role="img"]')!;
+    expect(map.getAttribute("aria-label")).toBe(
+      en.mangrove.fragmentMap.replace("{count}", "2"),
     );
+    expect(map.querySelectorAll("circle")).toHaveLength(2);
+    expect(map.querySelectorAll("line")).toHaveLength(1);
     // The body itself is nowhere on screen: a reader deciding whether to merge is
     // served by names and counts, not by the serialization they arrived in.
     expect(text).not.toContain("entityType");
@@ -878,9 +890,59 @@ function cards(): HTMLLIElement[] {
   return [...host!.querySelectorAll("li")].filter((li) => li.querySelector(":scope > footer"));
 }
 
+/** The nearest ancestor that caps the width, as the class that does it. */
+function frameOf(el: Element): string {
+  for (let at: Element | null = el; at; at = at.parentElement) {
+    const cap = [...at.classList].find((c) => c.startsWith("max-w-"));
+    if (cap) return cap;
+  }
+  throw new Error("no max-width ancestor");
+}
+
 /** The card's regions, in the order they are rendered. */
 function regionsOf(li: HTMLLIElement): string[] {
   return [...li.children].map((el) => el.tagName);
+}
+
+/**
+ * The byline band's SENTENCE: who the memory is from.
+ *
+ * The paragraph and not the band, because the band also carries the action pill
+ * now -- a fact about the thing rather than about the person, which is why it is
+ * set apart from the sentence rather than appended to it. Reading the band whole
+ * would make every byline assertion here fail the day a second element joined it,
+ * which is exactly what happened.
+ */
+function bylineOf(li: HTMLLIElement): string {
+  return li.children[0].querySelector("p")!.textContent!;
+}
+
+/**
+ * The open tooltip, wherever in the document it is.
+ *
+ * It is portalled to the body rather than living in the face it belongs to,
+ * because the card clips its own overflow and the recipients column sits at the
+ * card's edge -- so looking for it inside the card is looking in the one place it
+ * must not be.
+ */
+function tooltip(): HTMLElement | null {
+  return document.querySelector('[role="tooltip"]');
+}
+
+/**
+ * What the card says HAPPENED: the pill at the end of the byline band.
+ *
+ * The band's LAST element child. Not `span:last-of-type` -- the name inside the
+ * byline sentence is a span too, and being the only span in its own parent it
+ * matches that selector first.
+ */
+function actionOf(li: HTMLLIElement): string {
+  return li.children[0].lastElementChild!.textContent!;
+}
+
+/** The glyph the byline draws, as class tokens -- `lucide-bot` or `lucide-user`. */
+function bylineGlyph(li: HTMLLIElement): string[] {
+  return li.children[0].querySelector("svg")!.getAttribute("class")!.split(" ");
 }
 
 /** What the card says it IS, above the body. */
@@ -888,9 +950,20 @@ function headerOf(li: HTMLLIElement): string {
   return li.querySelector("header")!.textContent!;
 }
 
-/** The body: the region between the header and the record. */
+/** The body: the region between the title and the record. */
 function bodyOf(li: HTMLLIElement): Element {
-  return li.children[1];
+  return li.children[2];
+}
+
+/** The recipient faces, as [glyph, accessible name] pairs, in order. */
+function facesOf(li: HTMLLIElement): [string, string][] {
+  const dd = [...li.querySelectorAll("footer dt")]
+    .find((d) => d.textContent === en.mangrove.recipientsLabel)
+    ?.parentElement?.querySelector("dd");
+  return [...(dd?.querySelectorAll("button[aria-label]") ?? [])].map((b) => [
+    [...b.querySelector("svg")!.classList].find((c) => c.startsWith("lucide-") && c !== "lucide")!,
+    b.getAttribute("aria-label")!,
+  ]);
 }
 
 /** The answer the card's record gives under one of its column headings. */
@@ -912,6 +985,28 @@ describe("the reading, as a list of cards", () => {
     { cell: "fourth", published: "2026-03-01T09:00:00Z" },
     { cell: "second", published: "2026-06-15T23:59:59Z" },
   ];
+
+  // ONE CARD TO A ROW, which is what a feed is. A behavioural test cannot see a column
+  // count -- the cards render either way -- so this asserts the classes that produce
+  // it, the way `pane-weight.test.ts` asserts a hairline. It exists because this WAS
+  // briefly a two-column grid: the reversal is a decision, and a decision nobody can
+  // fail to notice reversing again.
+  it("stacks the cards in one column", async () => {
+    readTimeline.mockResolvedValue(claimsOf(...SHUFFLED));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    await render();
+
+    const list = cards()[0].parentElement!;
+    expect(list.tagName).toBe("UL");
+    const classes = list.className.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["flex", "flex-col"]));
+    expect(classes.filter((c) => c.includes("grid"))).toEqual([]);
+
+    // AND NOT ACROSS THE WHOLE PANE. One column only reads as a feed if the column is
+    // narrow; at the frame's full width it is a stack of bands. Asserted as the exact
+    // cap rather than "some max-width", or widening it would pass.
+    expect(frameOf(list)).toBe("max-w-xl");
+  });
 
   it("renders them most recent first, whatever order they arrived in", async () => {
     readTimeline.mockResolvedValue(claimsOf(...SHUFFLED));
@@ -1092,14 +1187,14 @@ describe("the record under a card", () => {
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
   });
 
-  it("lays every card out as a header, a body and a record, in that order", async () => {
+  it("lays every card out as a byline, a header, a body and a record, in that order", async () => {
     readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
 
     readTimeline.mockResolvedValue(SHARED_FILE);
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
 
     // The third kind, whose header is its own branch: a fragment is titled by WHAT it
     // is, since a piece of a graph has no name of its own.
@@ -1113,7 +1208,7 @@ describe("the record under a card", () => {
       }),
     );
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
     expect(headerOf(cards()[0])).toBe(en.mangrove.fragmentTitle);
     expect(field(cards()[0], ID)).toBe("graph:b8d28853aae5");
   });
@@ -1122,18 +1217,22 @@ describe("the record under a card", () => {
   // different strings -- `nota-manguezais.md` against `attachments/nota-manguezais.md`.
   // On prose the two are one thing, and "the identifier is not above the body" would be
   // a claim about a coincidence.
-  it("carries the sender, the recipients and the identifier, and none of them above the body", async () => {
+  it("carries the sender in its byline, and the recipients and the identifier in its record", async () => {
     readTimeline.mockResolvedValue(SHARED_FILE);
     await render();
     const card = cards()[0];
 
-    expect(labelsOf(card)).toEqual([SENDER, RECIPIENTS, ID, ENDORSED]);
-    expect(field(card, SENDER)).toBe(`${en.mangrove.actorPerson} (alice)`);
-    expect(field(card, RECIPIENTS)).toBe(en.mangrove.audienceTenant);
+    // THE SENDER IS THE BYLINE AND NOT A COLUMN. It is the only fact on the card about
+    // a PERSON rather than about a thing, and the exact set of column headings below
+    // is what stops it being in both places at once.
+    expect(bylineOf(card)).toBe(`${SENDER} ${en.mangrove.actorPerson} (alice)`);
+    expect(labelsOf(card)).toEqual([RECIPIENTS, ID, ENDORSED]);
+    expect(facesOf(card)).toEqual([["lucide-building2", en.mangrove.audienceTenant]]);
     expect(field(card, ID)).toBe("attachments/nota-manguezais.md");
     expect(field(card, ENDORSED)).toBe("2");
 
-    // The header says what the file IS, and nothing about where it came from.
+    // The header says what the file IS, and nothing about where it came from -- the
+    // byline is a region of its own and neither of these reads it.
     const above = headerOf(card) + bodyOf(card).textContent!;
     expect(above).toContain("nota-manguezais.md");
     expect(above).not.toContain("attachments/");
@@ -1151,6 +1250,9 @@ describe("the record under a card", () => {
     expect(card.getAttribute("role")).toBe("button");
 
     for (const el of [
+      // The byline band is `data-inner` for the same reason the record is: an avatar
+      // and a gutter are not controls, and clicking either must not open a sheet.
+      card.children[0],
       card.querySelector("footer")!,
       card.querySelector("footer dt")!,
       card.querySelector("footer dd")!,
@@ -1249,6 +1351,96 @@ const FOUR = {
   held: [],
 };
 
+/** Somebody else's, and newer than anything in FOUR. */
+const FRESH = {
+  ...THEIRS,
+  cell: "fresh",
+  object: { ...MINE.object, id: "mangrove:obj:fresh", cell: "fresh" },
+  published: "2026-09-22T14:00:00Z",
+};
+
+const SEEN_KEY = "mangrove-seen:t1:s1:";
+const NOON = String(Date.parse("2026-09-22T12:00:00Z"));
+
+/** The rail's entries, by their labels, in order -- the badge is a sibling span. */
+function railLabels(): string[] {
+  const nav = host!.querySelector("nav")!;
+  return [...nav.querySelectorAll("button")].map((b) => b.querySelector("span")!.textContent!);
+}
+
+/** The count shown beside the feed, or null where there is none. */
+function feedBadge(): string | null {
+  const feed = host!.querySelector("nav")!.querySelector("button")!;
+  const spans = [...feed.querySelectorAll("span")];
+  return spans.length > 1 ? spans[1].textContent : null;
+}
+
+describe("the rail of destinations", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(FOUR);
+    localStorage.clear();
+  });
+
+  // THE ORDER IS THE SCREEN'S ARGUMENT, so it is asserted whole rather than by
+  // checking that writing comes "somewhere after" reading.
+  it("reads first and writes second, with the directory last", async () => {
+    readCapabilities.mockResolvedValue({ governs: true, tenantLicensed: false });
+    await render();
+    expect(railLabels()).toEqual([
+      en.mangrove.received,
+      en.mangrove.compose,
+      en.mangrove.published,
+      en.mangrove.pending,
+      en.mangrove.people,
+    ]);
+  });
+
+  // Absent and not disabled, which is the rule the reading itself already follows.
+  it("leaves the decisions out entirely for somebody who governs nothing", async () => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    await render();
+    expect(railLabels()).not.toContain(en.mangrove.pending);
+  });
+});
+
+describe("what arrived since the last visit", () => {
+  beforeEach(() => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    localStorage.clear();
+  });
+
+  it("counts other people's, and not the member's own", async () => {
+    localStorage.setItem(SEEN_KEY, NOON);
+    // MINE and BY_MY_AGENT are at 13:00 and newer than the mark -- and are the
+    // member's own, so announcing them back would be reporting their own post as news.
+    // THEIRS and TO_THE_TENANT are at 11:00 and older. Only FRESH counts.
+    readTimeline.mockResolvedValue({ ...FOUR, claims: [...FOUR.claims, FRESH] });
+    await render();
+    expect(feedBadge()).toBe("1");
+  });
+
+  it("shows nothing when nothing is newer than the mark", async () => {
+    localStorage.setItem(SEEN_KEY, String(Date.parse("2026-09-23T00:00:00Z")));
+    readTimeline.mockResolvedValue({ ...FOUR, claims: [...FOUR.claims, FRESH] });
+    await render();
+    expect(feedBadge()).toBeNull();
+  });
+
+  // THE BADGE SURVIVES THE VISIT THAT EARNED IT AND NOT THE NEXT ONE. The watermark is
+  // written while the feed is on screen, so the member reads the three new cards with
+  // the count still beside them -- and comes back to a clean rail.
+  it("marks the feed as seen, so the same arrivals are not new twice", async () => {
+    localStorage.setItem(SEEN_KEY, NOON);
+    readTimeline.mockResolvedValue({ ...FOUR, claims: [...FOUR.claims, FRESH] });
+    await render();
+    expect(feedBadge()).toBe("1");
+    expect(localStorage.getItem(SEEN_KEY)).toBe(String(Date.parse(FRESH.published)));
+
+    await render();
+    expect(feedBadge()).toBeNull();
+  });
+});
+
 /** The card whose memory is about this cell -- which, for prose, is its header. */
 function cardOf(cell: string): HTMLLIElement {
   return cards().find((li) => headerOf(li) === cell)!;
@@ -1270,21 +1462,32 @@ describe("who produced a memory", () => {
   it("reads as you when your own person wrote it", async () => {
     await render();
     const card = cardOf("mine");
-    expect(labelsOf(card)).toEqual([SENDER, RECIPIENTS, ID]);
-    expect(field(card, SENDER)).toBe(en.mangrove.actorYou);
+    expect(labelsOf(card)).toEqual([RECIPIENTS, ID]);
+    expect(bylineOf(card)).toBe(`${SENDER} ${en.mangrove.actorYou}`);
     expect(field(card, ID)).toBe("mine");
+  });
+
+  // THE SHAPE, WHICH IS READ BEFORE THE SENTENCE IS. `actorLabel` answers person or
+  // agent in words and throws the distinction away as a value, so the byline takes it
+  // from `actorKind` -- and without this the two glyphs could collapse into one
+  // without a single test noticing.
+  it("draws a bot beside an agent and a person beside a human", async () => {
+    await render();
+    expect(bylineGlyph(cardOf("agents"))).toContain("lucide-bot");
+    expect(bylineGlyph(cardOf("mine"))).toContain("lucide-user");
+    expect(bylineGlyph(cardOf("theirs"))).toContain("lucide-user");
   });
 
   it("reads as your agent when your agent wrote it", async () => {
     await render();
-    expect(field(cardOf("agents"), SENDER)).toBe(en.mangrove.actorYourAgent);
+    expect(bylineOf(cardOf("agents"))).toBe(`${SENDER} ${en.mangrove.actorYourAgent}`);
   });
 
   // Neither of the two the app can resolve -- and no invented name either. An
   // arbitrary actor cannot be looked up, so the kind is named and the id stays.
   it("reads as neither when somebody else wrote it, and keeps their id", async () => {
     await render();
-    expect(field(cardOf("theirs"), SENDER)).toBe(`${en.mangrove.actorPerson} (alice)`);
+    expect(bylineOf(cardOf("theirs"))).toBe(`${SENDER} ${en.mangrove.actorPerson} (alice)`);
   });
 
   // The byline must never be wrong, and identity arrives a beat after the first
@@ -1294,10 +1497,10 @@ describe("who produced a memory", () => {
     readIdentity.mockRejectedValue(new MangroveError("mangrove_unreachable"));
     await render();
     const card = cardOf("mine");
-    expect(field(card, SENDER)).toBe(`${en.mangrove.actorPerson} (me)`);
+    expect(bylineOf(card)).toBe(`${SENDER} ${en.mangrove.actorPerson} (me)`);
     // Not theirs to call private either: without the member's own ids, an empty
     // audience is not known to mean "only you".
-    expect(labelsOf(card)).toEqual([SENDER, ID]);
+    expect(labelsOf(card)).toEqual([ID]);
   });
 });
 
@@ -1305,15 +1508,116 @@ describe("who a memory was shared with", () => {
   beforeEach(() => {
     readTimeline.mockResolvedValue(FOUR);
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    // Answering with nothing is the ordinary case -- an actor this subscription
+    // does not contain. Set explicitly so a test that hovers is not relying on
+    // the component's catch to stand in for a reply.
+    resolveActors.mockResolvedValue([]);
   });
 
-  it("names a person, a subscription and a tenant, rather than printing the id", async () => {
+  // FOUR KINDS, FOUR GLYPHS. The kind is the part of a recipient that carries
+  // information at a glance -- one colleague, their agent, the whole
+  // subscription, the whole tenant -- and it was being thrown away at the last
+  // step, leaving four rows that differed only in a uuid.
+  it("draws a face per kind, and never the raw id", async () => {
     await render();
-    expect(field(cardOf("theirs"), RECIPIENTS)).toBe(`${en.mangrove.actorPerson} (bob)`);
-    expect(field(cardOf("agents"), RECIPIENTS)).toBe(en.mangrove.audienceSubscription);
-    expect(field(cardOf("everybody"), RECIPIENTS)).toBe(en.mangrove.audienceTenant);
+    expect(facesOf(cardOf("theirs"))).toEqual([
+      ["lucide-user", `${en.mangrove.actorPerson} (bob)`],
+    ]);
+    expect(facesOf(cardOf("agents"))).toEqual([
+      ["lucide-users", en.mangrove.audienceSubscription],
+    ]);
+    expect(facesOf(cardOf("everybody"))).toEqual([
+      ["lucide-building2", en.mangrove.audienceTenant],
+    ]);
     // The literal words the two group ids used to render as.
     expect(cardOf("agents").textContent).not.toContain("mangrove:group:");
+  });
+
+  it("tells an agent apart from the person who owns it", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [{ ...THEIRS, audience: ["mangrove:actor:bob:service"] }],
+      held: [],
+    });
+    await render();
+    expect(facesOf(cardOf("theirs"))).toEqual([
+      ["lucide-bot", `${en.mangrove.actorAgent} (bob)`],
+    ]);
+  });
+
+  // THE NAME IS ASKED FOR ON HOVER AND NOT BEFORE. A reading is a list of cards,
+  // and naming every recipient of every one of them eagerly is a burst of
+  // requests for something nobody asked to see.
+  it("looks a person up only when the face is pointed at, and then says who", async () => {
+    resolveActors.mockResolvedValue([
+      { id: "mangrove:actor:bob:person", email: "bob@example.test" },
+    ]);
+    await render();
+    const face = cardOf("theirs").querySelector("footer dd button")!;
+    expect(resolveActors).not.toHaveBeenCalled();
+
+    await act(async () => {
+      face.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    expect(resolveActors).toHaveBeenCalledWith(workspace, ["mangrove:actor:bob:person"]);
+
+    // FROM THE DOCUMENT, NOT FROM THE CARD. The tooltip is portalled out: the
+    // card is `overflow-hidden` and the recipients column sits at its left edge,
+    // so a tooltip centred on a face was cut in half by the card's own boundary.
+    const tip = tooltip()!;
+    expect(tip.textContent).toContain("bob@example.test");
+    expect(cardOf("theirs").contains(tip), "back inside the box that clipped it").toBe(
+      false,
+    );
+    // AND THE CONTROL IS RENAMED WITH IT, so the answer is not only visual.
+    expect(cardOf("theirs").querySelector("footer dd button")!.getAttribute("aria-label")).toBe(
+      "bob@example.test",
+    );
+  });
+
+  // The subscription's name is held by the app already. Asking the directory for
+  // it would be a request for a string on the other side of the same screen.
+  it("names the subscription from what the shell already resolved", async () => {
+    await render();
+    const face = cardOf("agents").querySelector("footer dd button")!;
+    await act(async () => {
+      face.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    expect(tooltip()!.textContent).toContain("Soil Lab");
+    expect(resolveActors).not.toHaveBeenCalled();
+  });
+
+  // A FACE EACH, up to the point where a row of them stops being readable.
+  it("shows every recipient until there are too many, then offers the rest", async () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => `mangrove:actor:p${i}:person`);
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [{ ...THEIRS, audience: many(8) }],
+      held: [],
+    });
+    await render();
+    const card = cardOf("theirs");
+    expect(facesOf(card)).toHaveLength(6);
+
+    const more = [...card.querySelectorAll("footer dd button")].find(
+      (b) => b.textContent === "+2",
+    )!;
+    expect(more).toBeTruthy();
+    await click(more);
+    expect(facesOf(card)).toHaveLength(8);
+    expect(card.textContent).toContain(en.mangrove.recipientsFewer);
+  });
+
+  it("offers nothing to expand when they all fit", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [{ ...THEIRS, audience: ["mangrove:actor:bob:person", "mangrove:actor:carol:person"] }],
+      held: [],
+    });
+    await render();
+    expect(facesOf(cardOf("theirs"))).toHaveLength(2);
+    expect(cardOf("theirs").textContent).not.toContain("+");
   });
 
   // An empty audience means published to the author alone. That is an answer on your
@@ -1326,10 +1630,12 @@ describe("who a memory was shared with", () => {
       held: [],
     });
     await render();
-    expect(field(cardOf("mine"), RECIPIENTS)).toBe(en.mangrove.audiencePrivate);
+    // A PERSON WITH NO ADDRESS: "only you" is a statement about an empty
+    // audience, so it is drawn as the member themselves and resolves to nothing.
+    expect(facesOf(cardOf("mine"))).toEqual([["lucide-user", en.mangrove.audiencePrivate]]);
     // ABSENT, not empty: a heading over a blank would be the same invention with
     // more furniture around it.
-    expect(labelsOf(cardOf("theirs"))).toEqual([SENDER, ID]);
+    expect(labelsOf(cardOf("theirs"))).toEqual([ID]);
     expect(cardOf("theirs").textContent).not.toContain(en.mangrove.audiencePrivate);
   });
 });
@@ -1375,7 +1681,9 @@ describe("passing a memory on", () => {
     await render();
     await click(shareControl("mine")!);
 
-    const panel = cardOf("mine").querySelector("[data-inner]")!;
+    // THE FOOTER, not the first `[data-inner]`: the byline band carries that attribute
+    // too, and it is above this one.
+    const panel = cardOf("mine").querySelector("footer")!;
     const subscription = [...panel.querySelectorAll('[role="radio"]')].find(
       (r) => r.textContent?.trim() === en.mangrove.groupSubscription,
     )!;
@@ -1431,5 +1739,156 @@ describe("passing a memory on", () => {
     )!;
     await click(hint);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+// WHAT HAPPENED TO THIS MEMORY, said on the card.
+//
+// The case that prompted this: a REVOKED memory was a card at reduced opacity and
+// nothing else. Opacity says "something" and never says what, and it is the one
+// signal that does not survive being read on a phone, in bright light, or by
+// anyone who did not see the card before it changed.
+//
+// The other two that were lost are `held` and `pending`. Both were told apart
+// only by the heading above their section — which is fine while the section is on
+// screen and useless the moment a card is read anywhere else.
+describe("what the card says happened", () => {
+  const PROSE_CLAIM = { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.2" };
+
+  beforeEach(() => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("says a live memory was published", async () => {
+    readTimeline.mockResolvedValue(claimOf(PROSE_CLAIM));
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionPublished);
+  });
+
+  // THE ONE THIS FEATURE EXISTS FOR.
+  it("says a revoked memory was revoked, rather than only dimming it", async () => {
+    const t = claimOf(PROSE_CLAIM);
+    readTimeline.mockResolvedValue({ ...t, claims: [{ ...t.claims[0], deleted: true }] });
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionRevoked);
+  });
+
+  // `deleted` WINS over the log's verb. A mangrove that has not shipped `action`
+  // yet still answers with the tombstone, and that is the case with no word at all.
+  it("reads the tombstone even when the log calls the winning write an update", async () => {
+    const t = claimOf(PROSE_CLAIM);
+    readTimeline.mockResolvedValue({
+      ...t,
+      claims: [{ ...t.claims[0], deleted: true, action: "updated" }],
+    });
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionRevoked);
+  });
+
+  // The third verb comes from the mangrove, which is the only side that can say it
+  // consistently: the timeline each reader gets is filtered to what they may see,
+  // so a count taken in the client would differ from one member to the next.
+  it("says a rewritten cell was updated, when the mangrove says so", async () => {
+    const t = claimOf(PROSE_CLAIM);
+    readTimeline.mockResolvedValue({ ...t, claims: [{ ...t.claims[0], action: "updated" }] });
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionUpdated);
+  });
+
+  // A mangrove that predates the field answers without it, and the card must not
+  // go blank where it used to say nothing.
+  it("falls back to published when the mangrove sends no verb", async () => {
+    readTimeline.mockResolvedValue(claimOf(PROSE_CLAIM));
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionPublished);
+  });
+
+  it("marks something waiting on the member as theirs to take", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [],
+      held: [
+        {
+          activityId: "act-held",
+          from: "mangrove:actor:bob:service",
+          object: PROSE_CLAIM,
+          published: "2026-09-22T10:00:00Z",
+        },
+      ],
+    });
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionHeld);
+  });
+
+  it("marks something waiting on a governing role as a decision", async () => {
+    readCapabilities.mockResolvedValue({ governs: true, tenantLicensed: false });
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [],
+      held: [],
+      pending: [
+        {
+          activityId: "act-pending",
+          author: "mangrove:actor:bob:service",
+          scope: "mangrove:group:subs",
+          object: PROSE_CLAIM,
+          published: "2026-09-22T10:00:00Z",
+        },
+      ],
+    });
+    await render();
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionPending);
+  });
+
+  // FIVE STATES, FIVE WORDS. Two of them reading the same is the failure this
+  // whole thing is about — a reader scanning a column cannot tell two cards apart.
+  it("gives every state a word of its own, in both locales", () => {
+    for (const [locale, dict] of Object.entries(chatCopy)) {
+      const words = [
+        dict.mangrove.actionPublished,
+        dict.mangrove.actionUpdated,
+        dict.mangrove.actionRevoked,
+        dict.mangrove.actionHeld,
+        dict.mangrove.actionPending,
+      ];
+      expect(new Set(words).size, `${locale}: ${words.join(" / ")}`).toBe(words.length);
+    }
+  });
+});
+
+// THE RAIL STAYS PUT WHILE THE FEED MOVES.
+//
+// Scrolling a long feed carried the destinations off the top with it, so changing
+// where you were meant first scrolling back up to somewhere you were not reading.
+//
+// Asserted on the CLASS and not on layout, because jsdom computes none: what is
+// being pinned here is that the two utilities travel together. `sticky` on a flex
+// item that still stretches has nothing to travel within, and the property then
+// looks like it simply did nothing — which is the version of this that ships.
+describe("the destination rail", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue({ reading: "received", claims: [], held: [] });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("sticks to the top of the content area rather than scrolling away", async () => {
+    await render();
+    const rail = host!.querySelector("nav")!;
+    expect(rail.className).toContain("sm:sticky");
+    expect(rail.className, "a stretched flex item cannot stick").toContain("sm:self-start");
+  });
+
+  // Only from `sm` up. On a narrow screen the rail is a horizontal scroller ABOVE
+  // the feed, so the feed would pass under it -- and a pinned strip with nothing
+  // painted behind it shows the cards through itself.
+  it("is not pinned on a narrow screen, where the feed would pass under it", async () => {
+    await render();
+    const rail = host!.querySelector("nav")!;
+    for (const unprefixed of ["sticky", "self-start"]) {
+      expect(
+        rail.className.split(" ").includes(unprefixed),
+        `${unprefixed} applies at every width`,
+      ).toBe(false);
+    }
   });
 });
