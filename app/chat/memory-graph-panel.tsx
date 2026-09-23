@@ -497,6 +497,18 @@ export default function MemoryGraphPanel({
   // truncated fragment is a lie about which entities were shared, and the member has an
   // obvious remedy in the control right beside the message.
   const shareTooMany = shareNames.length > MAX_SHARE_NAMES;
+  // The same set, for the MAP to draw. Derived from `shareNames` and never expanded a second
+  // time: a highlight that disagreed with the payload would be worse than none, and two
+  // expansions with the same inputs today are two expansions that drift tomorrow.
+  //
+  // Memoised off `shareNames`, which is itself a memo. A Set rebuilt per render is a new
+  // identity every render, and the view's highlight effect depends on it by identity — it
+  // would reapply every class on every keystroke.
+  //
+  // Absent when there is no mangrove: without a share button, `shareNames` is the answer to a
+  // question nobody asked, and lighting a node's neighbours for it would be noise.
+  const shareSet = useMemo(() => new Set(shareNames), [shareNames]);
+  const drawnShareSet = mangroveOn === true ? shareSet : undefined;
 
   // The selected entity's edges come from the list already in hand. open_nodes filters
   // relations to those with BOTH endpoints among the names requested, so asking for a
@@ -506,6 +518,107 @@ export default function MemoryGraphPanel({
   const entityRelations = selected
     ? relationsFor(contextRelations, selected)
     : [];
+
+  // The selection bar: the count, what a filter is hiding, the hop control, share and clear.
+  //
+  // Built once and placed differently per tab, the way `detailPane` below is. It has to live
+  // OUTSIDE the scrolling list and outside the tab switch — a checked entity that a filter, a
+  // search or another tab stopped showing is still checked, and this bar is the only thing on
+  // screen that says so — but on the map "outside" used to mean above the map's own search
+  // box, and the box is what a member uses to FIND the nodes these controls then act on.
+  const selectionBar =
+    checked.size > 0 ? (
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-2 text-[11px]">
+        <span className="font-medium text-fg">
+          {checked.size === 1
+            ? t.memoryGraph.selection.one
+            : t.memoryGraph.selection.many.replace(
+                "{count}",
+                String(checked.size),
+              )}
+        </span>
+        {hiddenChecked > 0 && (
+          <span className="truncate text-fg-muted">
+            {t.memoryGraph.selection.hidden.replace(
+              "{count}",
+              String(hiddenChecked),
+            )}
+          </span>
+        )}
+        {/* How far out of the picked nodes the shared fragment reaches. On the MAP only:
+            it is the map that lets a member pick a node in the middle of a neighbourhood
+            and want the neighbourhood with it, and a control that silently enlarged a
+            list share would be a payload nobody could see. */}
+        {mangroveOn === true && mode === "map" && (
+          <>
+            <div
+              role="group"
+              aria-label={t.memoryGraph.selection.hopsLabel}
+              title={t.memoryGraph.selection.hopsLabel}
+              className="flex shrink-0 items-center gap-0.5 rounded-md border border-rule-strong p-0.5"
+            >
+              {SHARE_HOPS.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  aria-pressed={shareHops === h}
+                  onClick={() => setShareHops(h)}
+                  className={hopSegment({ active: shareHops === h })}
+                >
+                  {(h === 1
+                    ? t.memoryGraph.selection.hops
+                    : t.memoryGraph.selection.hopsPlural
+                  ).replace("{count}", String(h))}
+                </button>
+              ))}
+            </div>
+            {/* Said BEFORE the share, not discovered after it: the hops are what make the
+                payload bigger than the count the member ticked, so the number that will
+                actually travel has to be on screen next to the button that sends it. */}
+            <span className="shrink-0 text-fg-muted">
+              {t.memoryGraph.selection.sharing.replace(
+                "{count}",
+                String(shareNames.length),
+              )}
+            </span>
+          </>
+        )}
+        {mangroveOn === true && (
+          <button
+            type="button"
+            // The names, not the entities: the mangrove extracts them itself, along
+            // with the relations among them, so what travels is the same key the graph
+            // is indexed by everywhere else in this panel.
+            onClick={() => {
+              requestMangroveShare({ kind: "entities", names: shareNames });
+              setDestination("mangrove");
+            }}
+            disabled={shareTooMany}
+            className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <Waves size={12} aria-hidden />
+            {t.memoryGraph.selection.share}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={clearChecked}
+          className={`${mangroveOn === true ? "" : "ml-auto "}shrink-0 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg`}
+        >
+          {t.memoryGraph.selection.clear}
+        </button>
+        {/* A disabled control with no reason on screen is the thing that makes a member
+            think the feature is broken. Its own line, so the remedy sits under the
+            control that provides it. */}
+        {mangroveOn === true && shareTooMany && (
+          <p className="basis-full leading-snug text-fg-muted">
+            {t.memoryGraph.selection.shareTooMany
+              .replace("{count}", String(shareNames.length))
+              .replace("{max}", String(MAX_SHARE_NAMES))}
+          </p>
+        )}
+      </div>
+    ) : null;
 
   // Built once and placed differently per tab: inside the map's graph column, below the list
   // everywhere else. Same element, same state, two homes — which is why it is a variable rather
@@ -569,102 +682,10 @@ export default function MemoryGraphPanel({
         </div>
       </div>
 
-      {/* OUTSIDE the scrolling list below, and outside the tab switch: a checked entity
-          that a filter, a search or another tab stopped showing is still checked, and this
-          bar is the only thing on screen that says so. Inside the scroll area it would
-          leave with the rows it is describing. */}
-      {checked.size > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-2 text-[11px]">
-          <span className="font-medium text-fg">
-            {checked.size === 1
-              ? t.memoryGraph.selection.one
-              : t.memoryGraph.selection.many.replace(
-                  "{count}",
-                  String(checked.size),
-                )}
-          </span>
-          {hiddenChecked > 0 && (
-            <span className="truncate text-fg-muted">
-              {t.memoryGraph.selection.hidden.replace(
-                "{count}",
-                String(hiddenChecked),
-              )}
-            </span>
-          )}
-          {/* How far out of the picked nodes the shared fragment reaches. On the MAP only:
-              it is the map that lets a member pick a node in the middle of a neighbourhood
-              and want the neighbourhood with it, and a control that silently enlarged a
-              list share would be a payload nobody could see. */}
-          {mangroveOn === true && mode === "map" && (
-            <>
-              <div
-                role="group"
-                aria-label={t.memoryGraph.selection.hopsLabel}
-                title={t.memoryGraph.selection.hopsLabel}
-                className="flex shrink-0 items-center gap-0.5 rounded-md border border-rule-strong p-0.5"
-              >
-                {SHARE_HOPS.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    aria-pressed={shareHops === h}
-                    onClick={() => setShareHops(h)}
-                    className={hopSegment({ active: shareHops === h })}
-                  >
-                    {(h === 1
-                      ? t.memoryGraph.selection.hops
-                      : t.memoryGraph.selection.hopsPlural
-                    ).replace("{count}", String(h))}
-                  </button>
-                ))}
-              </div>
-              {/* Said BEFORE the share, not discovered after it: the hops are what make the
-                  payload bigger than the count the member ticked, so the number that will
-                  actually travel has to be on screen next to the button that sends it. */}
-              <span className="shrink-0 text-fg-muted">
-                {t.memoryGraph.selection.sharing.replace(
-                  "{count}",
-                  String(shareNames.length),
-                )}
-              </span>
-            </>
-          )}
-          {mangroveOn === true && (
-            <button
-              type="button"
-              // The names, not the entities: the mangrove extracts them itself, along
-              // with the relations among them, so what travels is the same key the graph
-              // is indexed by everywhere else in this panel.
-              onClick={() => {
-                requestMangroveShare({ kind: "entities", names: shareNames });
-                setDestination("mangrove");
-              }}
-              disabled={shareTooMany}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <Waves size={12} aria-hidden />
-              {t.memoryGraph.selection.share}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={clearChecked}
-            className={`${mangroveOn === true ? "" : "ml-auto "}shrink-0 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg`}
-          >
-            {t.memoryGraph.selection.clear}
-          </button>
-          {/* A disabled control with no reason on screen is the thing that makes a member
-              think the feature is broken. Its own line, so the remedy sits under the
-              control that provides it. */}
-          {mangroveOn === true && shareTooMany && (
-            <p className="basis-full leading-snug text-fg-muted">
-              {t.memoryGraph.selection.shareTooMany
-                .replace("{count}", String(shareNames.length))
-                .replace("{max}", String(MAX_SHARE_NAMES))}
-            </p>
-          )}
-        </div>
-      )}
+      {/* On the MAP this same bar is handed to MemoryGraphView and rendered under the search
+          box instead — see `selectionBar` there. Out here it sat ABOVE the map's own filter,
+          so the controls that act on a selection came before the box used to find one. */}
+      {mode !== "map" && selectionBar}
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
         {error && (
@@ -711,6 +732,8 @@ export default function MemoryGraphPanel({
                   selected={selected}
                   onSelect={selectOnMap}
                   checked={checked}
+                  shareNames={drawnShareSet}
+                  selectionBar={selectionBar}
                   typeFilter={typeFilter}
                   onTypeFilter={setTypeFilter}
                   onResetFilters={resetMapFilters}
