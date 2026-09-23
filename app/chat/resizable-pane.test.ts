@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { content } from "./resizable-pane";
 
@@ -75,3 +77,37 @@ describe("pane content modes", () => {
   });
 });
 
+
+// THE PREVIEW ARRIVES ON A SLIDE AND LEAVES AT ONCE.
+//
+// The owner asked for the closing animation to go. Opening is a thing the member
+// asked for, and the slide says where the panel came from; closing is them moving
+// on, and 200ms of a panel sweeping out is 200ms of the page still arguing about
+// something already decided.
+//
+// Pinned from the source, like `pane-ground.test.ts` beside it: a transition class
+// is invisible to tsc and to every behavioural test, so nothing else would notice
+// it coming back with the next tidy-up of this cva.
+describe("the collapsed preview's transition", () => {
+  const src = readFileSync(join(__dirname, "resizable-pane.tsx"), "utf8");
+  const variant = (name: string) => {
+    const m = src.match(new RegExp(`${name}: \`\\$\\{PEEK_BASE\\}([^\`]*)\``));
+    if (!m) throw new Error(`no ${name} variant built on PEEK_BASE`);
+    return m[1];
+  };
+
+  it("is off on the way out", () => {
+    expect(variant("collapsed")).toContain("md:transition-none");
+  });
+
+  it("is still on on the way in", () => {
+    expect(variant("peeking")).not.toContain("transition-none");
+    expect(src).toContain("md:transition-[transform,visibility]");
+  });
+
+  // visibility must keep landing with the close, transition or not: an off-frame
+  // pane that is merely unclickable is still tabbable.
+  it("still hides the pane from the tab order", () => {
+    expect(variant("collapsed")).toContain("md:invisible");
+  });
+});
