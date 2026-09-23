@@ -85,9 +85,17 @@ const tab = cva(
 
 export default function MangroveScreen({
   workspace,
+  projectName,
   onReference,
 }: {
   workspace: Workspace;
+  /**
+   * The name of the project `workspace.p` names, for the cards that have to say where
+   * a file or a fragment will land. The screen itself never resolves it: the project
+   * list belongs to the shell, and a second read of it here could be a beat behind the
+   * one the breadcrumb is showing.
+   */
+  projectName?: string | null;
   /**
    * Puts a memory in the composer's context slot, the same slot the graph panel fills.
    * Absent where there is no conversation to reference into.
@@ -325,6 +333,7 @@ export default function MangroveScreen({
                 <MangrovePost
                   key={h.activityId}
                   workspace={workspace}
+                  projectName={projectName}
                   object={h.object}
                   author={actorLabel(h.from, identity, t)}
                   title={h.object.cell}
@@ -368,10 +377,11 @@ export default function MangroveScreen({
                 <MangrovePost
                   key={p.activityId}
                   workspace={workspace}
+                  projectName={projectName}
                   object={p.object}
                   author={actorLabel(p.author, identity, t)}
                   title={p.object.cell}
-                  canMerge={false}
+                  canTake={false}
                   meta={
                     <>
                       {t.mangrove.from.replace("{who}", actorLabel(p.author, identity, t))} →{" "}
@@ -427,6 +437,7 @@ export default function MangroveScreen({
                   <MangrovePost
                     key={`${c.cell}:${c.author}`}
                     workspace={workspace}
+                    projectName={projectName}
                     object={c.object}
                     author={actorLabel(c.author, identity, t)}
                     title={c.cell}

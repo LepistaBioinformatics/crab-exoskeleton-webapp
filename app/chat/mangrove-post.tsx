@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { cva } from "class-variance-authority";
-import { Download, GitMerge, Network, Paperclip, Quote } from "lucide-react";
+import { Download, FolderDown, GitMerge, Network, Paperclip, Quote } from "lucide-react";
 import type { Workspace } from "./fragment";
 import MangroveContent, { isCut } from "./mangrove-content";
 import { formatSize } from "@/app/chat/file-visuals";
 import {
+  blobFile,
   downloadBlob,
   mergeFragment,
   parseGraphFragment,
@@ -15,9 +16,11 @@ import {
   type MangroveMerge,
   type MangroveObject,
 } from "@/lib/mangrove";
+import { uploadMedia } from "@/lib/media";
 import type { MangroveReference } from "@/lib/chatReference";
 import { Button } from "@/components/ui/button";
-import { chatCopy } from "@/lib/i18n/chat";
+import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
+import { errorCopy, type ErrorDict } from "@/lib/i18n/errors";
 import { useT } from "@/lib/i18n/context";
 
 // ONE MEMORY, WHICHEVER OF THE THREE KINDS IT IS.
@@ -40,6 +43,13 @@ import { useT } from "@/lib/i18n/context";
 // every entity and observation the agent already holds creates zero of all three, and a
 // control that just stopped being busy would look like it had failed. Zero is an answer
 // and gets a sentence of its own.
+//
+// AND WHATEVER IS TAKEN OUT OF THE MANGROVE HAS TO NAME WHERE IT LANDS, BEFORE IT IS
+// TAKEN. Two of the three kinds can be put into the workspace -- a fragment merges into
+// its memory graph, a file saves into its `uploads/` -- and the workspace in question is
+// whichever one the member has open, which may be a project's. Both controls carry the
+// same sentence for the same reason: the member is the only person who can see that the
+// file went somewhere other than where they were told, and only after it has.
 //
 // AND THE POST IS THE CARD. It used to be a body the screen dropped into an <li> it
 // styled itself, in three places. The card is now here, once, because the thing that
@@ -66,9 +76,9 @@ const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
 /**
  * Whether an event that reached the card started at something with its own answer to it.
  *
- * A WHOLE CARD BEING CLICKABLE MUST NOT SWALLOW WHAT IS INSIDE IT. Download, merge,
- * reference-in-chat, admit, accept/reject, the revoke disclosure and the share panel all
- * live in a card, and every one of them would otherwise also open the sheet. A <button>
+ * A WHOLE CARD BEING CLICKABLE MUST NOT SWALLOW WHAT IS INSIDE IT. Download, save-to-
+ * files, merge, reference-in-chat, admit, accept/reject, the revoke disclosure and the
+ * share panel all live in a card, and every one of them would otherwise also open the sheet. A <button>
  * wrapping the card is not valid HTML around those, and a stretched overlay button would
  * cover the links and code blocks a markdown body renders -- so the card carries the
  * handler and refuses events that began somewhere that already handles them.
@@ -91,6 +101,61 @@ function fromControl(target: EventTarget | null): boolean {
   );
 }
 
+/**
+ * The three sentences one destination can be said with, and the one that is true here.
+ *
+ * READ OFF `workspace.p`, which is the field the request itself carries -- never a
+ * second prop saying whether a project is open. `uploadMedia`'s own comment records
+ * what two reads of that one idea cost the last time they disagreed: the file landed
+ * in the agent's workspace while the turn told the PROJECT's agent to open it. A
+ * label promising one destination while the upload sends another is that same bug
+ * one layer up, where the member is the only one who can see it and only afterwards.
+ *
+ * The NAME is a separate question from the destination. `projects` is still in
+ * flight on the first paint inside a project, and `p` is a uuid -- which is nothing
+ * to put in front of a member. The unnamed wording is true in that moment, names the
+ * project case just as unmistakably, and stops being needed a beat later.
+ */
+function destination(
+  workspace: Workspace,
+  projectName: string | null | undefined,
+  copy: { agent: string; project: string; projectUnnamed: string },
+): string {
+  if (!workspace.p) return copy.agent;
+  return projectName ? copy.project.replace("{project}", projectName) : copy.projectUnnamed;
+}
+
+/**
+ * What to say when a save did not happen.
+ *
+ * TWO LEGS, TWO VOCABULARIES, and both arrive as `Error.message` -- `MangroveError`
+ * carries its code there and `uploadMedia` throws the media route's code.
+ *
+ *   - `/api/media` speaks CODES and nothing else, deliberately (see MEDIA_ERROR_CODES
+ *     in lib/mycelium): the gateway's prose about a byte limit was untranslatable, so
+ *     the status is what those routes forward. The dictionary is where those become
+ *     sentences.
+ *   - The blob route forwards the mangrove's own words verbatim through
+ *     `upstreamError`, and a refusal that names the file or the reason is the only
+ *     thing here a member can act on. Anything left after the dictionary is that, and
+ *     it is shown as it arrived -- the same rule `failureText` keeps for a publish.
+ *
+ * WHAT PASSES THROUGH IS GATED ON THE ERROR'S TYPE, NOT ON FAILING THE TESTS ABOVE IT.
+ * Neither leg catches a `fetch` that never reached anything, so a dropped connection
+ * arrives here as a `TypeError` whose message is the BROWSER's ("Failed to fetch",
+ * "NetworkError when attempting to fetch resource") -- which is exactly the literal this
+ * app has a dictionary to stop showing people. Only a `MangroveError` carries a
+ * sentence somebody wrote about this file, and `http_<status>` is this client's own
+ * invention and says nothing.
+ */
+function saveFailure(err: unknown, t: ChatDict, errs: ErrorDict): string {
+  const code = err instanceof Error ? err.message : "";
+  if (code === "mangrove_unreachable") return t.mangrove.unreachable;
+  if (Object.hasOwn(errs, code)) return errs[code as keyof ErrorDict];
+  if (err instanceof MangroveError && code && !/^http_\d+$/.test(code)) return code;
+  return t.mangrove.saveFailed;
+}
+
 /** Beyond this many names the list says "and N more" instead of running down the card. */
 const FRAGMENT_NAMES = 12;
 
@@ -100,14 +165,16 @@ function observationCount(fragment: GraphFragment): number {
 
 function FragmentView({
   workspace,
+  projectName,
   object,
   fragment,
-  canMerge,
+  canTake,
 }: {
   workspace: Workspace;
+  projectName?: string | null;
   object: MangroveObject;
   fragment: GraphFragment;
-  canMerge: boolean;
+  canTake: boolean;
 }) {
   const t = useT(chatCopy);
   const [merging, setMerging] = useState(false);
@@ -169,8 +236,22 @@ function FragmentView({
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {canMerge && (
+      {/* WHICH memory, said before the control that fills it. This already went to the
+          workspace the member has open -- `mergeFragment` sends the project -- and the
+          screen simply never said so, which is the same silence the file save would
+          have shipped with. */}
+      {canTake && (
+        <p className="mt-3 text-xs text-fg-muted">
+          {destination(workspace, projectName, {
+            agent: t.mangrove.mergeToAgent,
+            project: t.mangrove.mergeToProject,
+            projectUnnamed: t.mangrove.mergeToProjectUnnamed,
+          })}
+        </p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {canTake && (
           <Button size="sm" variant="tonal" disabled={merging} onClick={() => void merge()}>
             <GitMerge size={14} aria-hidden /> {merging ? t.mangrove.merging : t.mangrove.merge}
           </Button>
@@ -191,22 +272,65 @@ function FragmentView({
   );
 }
 
-function FileView({ workspace, object }: { workspace: Workspace; object: MangroveObject }) {
+/**
+ * A file somebody published, and the two places a member can put it.
+ *
+ * DOWNLOAD TAKES IT OUT OF THE SYSTEM; SAVE TAKES IT FURTHER IN. That is why only
+ * one of them is gated: bytes on the member's own machine are not something the
+ * agent will read back, and bytes in `uploads/` are exactly that.
+ *
+ * The save is a fetch and an upload from THIS BROWSER, and no new route. Both ends
+ * already exist and already authorize this member -- see `blobFile`.
+ */
+function FileView({
+  workspace,
+  projectName,
+  object,
+  canTake,
+}: {
+  workspace: Workspace;
+  projectName?: string | null;
+  object: MangroveObject;
+  canTake: boolean;
+}) {
   const t = useT(chatCopy);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const errs = useT(errorCopy);
+  // One at a time, and which one is showing. Two booleans would let a member start a
+  // save while a download was still reading the same bytes.
+  const [busy, setBusy] = useState<"download" | "save" | null>(null);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  // The stored path, as the upload answered it -- not prettified. `attachmentName`
+  // strips the folder, and the folder is half of where the file went.
+  const [savedPath, setSavedPath] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const blob = object.blob!;
   const name = object.fileName || object.cell;
 
-  const save = async () => {
-    setBusy(true);
-    setError(false);
+  const download = async () => {
+    setBusy("download");
+    setDownloadFailed(false);
     try {
       await downloadBlob(workspace, blob, object.fileName);
     } catch {
-      setError(true);
+      setDownloadFailed(true);
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+
+  const save = async () => {
+    setBusy("save");
+    setSaveError(null);
+    setSavedPath(null);
+    try {
+      // THE SAME `workspace` THE LABEL WAS WRITTEN FROM. `uploadMedia` reads `p` off
+      // it and sends the project; nothing here re-decides where this goes.
+      const stored = await uploadMedia(workspace, await blobFile(workspace, blob, object.fileName));
+      setSavedPath(stored.path);
+    } catch (err) {
+      setSaveError(saveFailure(err, t, errs));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -223,17 +347,48 @@ function FileView({ workspace, object }: { workspace: Workspace; object: Mangrov
           {formatSize(object.size)}
         </span>
       </div>
+
+      {canTake && (
+        <p className="mt-2 text-xs text-fg-muted">
+          {destination(workspace, projectName, {
+            agent: t.mangrove.saveToAgent,
+            project: t.mangrove.saveToProject,
+            projectUnnamed: t.mangrove.saveToProjectUnnamed,
+          })}{" "}
+          {t.mangrove.saveOverwrites}
+        </p>
+      )}
+
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant="tonal"
-          disabled={busy}
+          disabled={busy !== null}
           aria-label={`${t.mangrove.downloadFile} — ${name}`}
-          onClick={() => void save()}
+          onClick={() => void download()}
         >
-          <Download size={14} aria-hidden /> {busy ? t.mangrove.downloading : t.mangrove.downloadFile}
+          <Download size={14} aria-hidden />{" "}
+          {busy === "download" ? t.mangrove.downloading : t.mangrove.downloadFile}
         </Button>
-        {error && <span className="text-xs text-fg-muted">{t.mangrove.downloadFailed}</span>}
+        {canTake && (
+          <Button
+            size="sm"
+            variant="tonal"
+            disabled={busy !== null}
+            aria-label={`${t.mangrove.saveToFiles} — ${name}`}
+            onClick={() => void save()}
+          >
+            <FolderDown size={14} aria-hidden />{" "}
+            {busy === "save" ? t.mangrove.saving : t.mangrove.saveToFiles}
+          </Button>
+        )}
+        {downloadFailed && <span className="text-xs text-fg-muted">{t.mangrove.downloadFailed}</span>}
+        {savedPath && (
+          <span className="text-xs text-fg-muted">
+            {t.mangrove.saved.replace("{path}", savedPath)}
+          </span>
+        )}
+        {saveError && <span className="text-xs text-fg-muted">{saveError}</span>}
       </div>
     </div>
   );
@@ -251,18 +406,25 @@ function FileView({ workspace, object }: { workspace: Workspace; object: Mangrov
  */
 export default function MangrovePost({
   workspace,
+  projectName,
   object,
   author,
   title,
   subtitle,
   meta,
   actions,
-  canMerge = true,
+  canTake = true,
   recent = false,
   dimmed = false,
   onReference,
 }: {
   workspace: Workspace;
+  /**
+   * What the member calls the project `workspace.p` names, when there is one and it
+   * has arrived. Only ever DISPLAYED: what a request addresses is `p`, and these two
+   * must not be able to disagree about which project is open.
+   */
+  projectName?: string | null;
   object: MangroveObject;
   /** Who this is from, already in the form the screen shows. */
   author: string;
@@ -274,12 +436,17 @@ export default function MangrovePost({
   /** What the reading lets a member DO with it -- admit, decide, revoke. */
   actions?: React.ReactNode;
   /**
-   * False where merging would be premature. A cross-scope publication awaiting a
-   * decision is the one case: whoever governs it has to READ the fragment to decide,
-   * which is why it renders as one at all, but taking it into their own memory before
-   * they have accepted it is not a thing the screen should offer.
+   * Whether this may be TAKEN -- merged into the workspace's memory, or saved into its
+   * files. One flag for both, because it is one question: a cross-scope publication
+   * awaiting a decision is the case it exists for, and whoever governs it has to READ
+   * the thing to decide, which is why it renders at all. Putting it into the workspace
+   * before they have accepted it is not something the screen should offer, and a file
+   * is no different from a fragment there.
+   *
+   * Download is NOT gated by it. Bytes on the member's own machine leave the system;
+   * bytes in `uploads/` are what the agent reads on the next turn.
    */
-  canMerge?: boolean;
+  canTake?: boolean;
   /** One of the newest few in this reading. */
   recent?: boolean;
   /** Revoked: still listed, struck through, and no longer something to act on. */
@@ -327,12 +494,18 @@ export default function MangrovePost({
         {fragment ? (
           <FragmentView
             workspace={workspace}
+            projectName={projectName}
             object={object}
             fragment={fragment}
-            canMerge={canMerge}
+            canTake={canTake}
           />
         ) : object.blob ? (
-          <FileView workspace={workspace} object={object} />
+          <FileView
+            workspace={workspace}
+            projectName={projectName}
+            object={object}
+            canTake={canTake}
+          />
         ) : (
           <MangroveContent
             content={content}

@@ -43,13 +43,22 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
   };
 });
 
+const uploadMedia = vi.fn();
+vi.mock("@/lib/media", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/media")>();
+  return { ...actual, uploadMedia: (...a: unknown[]) => uploadMedia(...a) };
+});
+
 import MangroveScreen from "./mangrove-screen";
 import { requestMangroveShare, takePendingShare } from "./mangrove-share-bus";
 import { GRAPH_FRAGMENT_MEDIA_TYPE, MangroveError } from "@/lib/mangrove";
 import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { chatCopy } from "@/lib/i18n/chat";
+import { errorCopy } from "@/lib/i18n/errors";
+import type { Workspace } from "./fragment";
 
 const en = chatCopy.en;
+const errs = errorCopy.en;
 
 const workspace = { t: "t1", s: "s1", r: "alpha" as const };
 
@@ -71,13 +80,17 @@ beforeEach(() => {
   readIdentity.mockResolvedValue(ME);
 });
 
-async function render() {
+async function render(inside?: { workspace: Workspace; projectName: string | null }) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
     root!.render(
-      <MangroveScreen workspace={workspace} onReference={(ref) => referenced.push(ref)} />,
+      <MangroveScreen
+        workspace={inside?.workspace ?? workspace}
+        projectName={inside?.projectName}
+        onReference={(ref) => referenced.push(ref)}
+      />,
     );
   });
   return host.innerHTML;
@@ -93,6 +106,8 @@ afterEach(() => {
   // open the next test's composer.
   takePendingShare();
   vi.clearAllMocks();
+  // The save control fetches the blob itself, with the real `blobFile`.
+  vi.unstubAllGlobals();
 });
 
 describe("the mangrove tab", () => {
@@ -499,6 +514,265 @@ describe("a shared file", () => {
     await clickLabel(`${en.mangrove.downloadFile} — q2.pdf`);
 
     expect(downloadBlob).toHaveBeenCalledWith(expect.anything(), FILE.blob, "q2.pdf");
+  });
+});
+
+// SAVING A PUBLISHED FILE INTO THE WORKSPACE, AND SAYING WHICH ONE.
+//
+// The act is two calls this app already had -- the blob route for the bytes, /api/media
+// for the write -- so what these pin is not the plumbing but the promise: the workspace
+// named on the card and the workspace the upload addresses are the SAME value. They came
+// apart once already one layer down (see the `project` line in `uploadMedia`), and a
+// member inside a project who is told "your files" and finds the file in the agent's own
+// workspace has been handed exactly that bug with a label on it.
+//
+// The blob fetch is the real `blobFile` against a stubbed `fetch`: mocking it away would
+// leave the digest -- the only handle the bytes have -- unasserted.
+
+/** What the blob route answers, or refuses with. */
+function servingBlob(answer: { ok: true } | { ok: false; body: unknown }) {
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", async (url: string) => {
+    calls.push(String(url));
+    return answer.ok
+      ? { ok: true, blob: async () => new Blob(["%PDF-1.7"], { type: "application/pdf" }) }
+      : { ok: false, status: 403, json: async () => answer.body };
+  });
+  return calls;
+}
+
+describe("saving a published file into the workspace", () => {
+  const FILE = {
+    id: "mangrove:obj:file",
+    type: "MemoryNote",
+    cell: "q2-report",
+    blob: "a".repeat(64),
+    fileName: "q2.pdf",
+    size: 2048,
+  };
+
+  const PROSE = {
+    id: "mangrove:obj:prose",
+    type: "MemoryNote",
+    cell: "soil-ph",
+    content: "pH 5.2 after liming.",
+    mediaType: "text/markdown",
+  };
+
+  const inProject = {
+    workspace: { ...workspace, p: "proj-1" } as Workspace,
+    projectName: "Field trials",
+  };
+
+  const save = () => clickLabel(`${en.mangrove.saveToFiles} — q2.pdf`);
+
+  beforeEach(() => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    uploadMedia.mockResolvedValue({ path: "uploads/q2.pdf", name: "q2.pdf", size: 8 });
+  });
+
+  it("is offered on a file, and on nothing that is not one", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    await render();
+    expect(host!.textContent).toContain(en.mangrove.saveToFiles);
+
+    act(() => root!.unmount());
+    host!.remove();
+
+    readTimeline.mockResolvedValue(claimOf(PROSE));
+    await render();
+    // Prose has nowhere to land: there is no file to write.
+    expect(host!.textContent).not.toContain(en.mangrove.saveToFiles);
+  });
+
+  it("names the project, and uploads into that same project", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    const fetched = servingBlob({ ok: true });
+
+    await render(inProject);
+    // Said BEFORE the press, and with the project named rather than its id.
+    expect(host!.textContent).toContain(
+      en.mangrove.saveToProject.replace("{project}", "Field trials"),
+    );
+    expect(host!.textContent).not.toContain("proj-1");
+
+    await save();
+
+    // The bytes came from the digest...
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toContain(`blob=${FILE.blob}`);
+    // ...and the write went where the card said it would. `uploadMedia` reads `p` off
+    // this very object, so the label and the destination cannot disagree.
+    const [sent, file] = uploadMedia.mock.calls[0] as [Workspace, File];
+    expect(sent.p).toBe("proj-1");
+    expect(file.name).toBe("q2.pdf");
+  });
+
+  it("names the agent's own files, and sends no project, when none is open", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    servingBlob({ ok: true });
+
+    await render();
+    expect(host!.textContent).toContain(en.mangrove.saveToAgent);
+    expect(host!.textContent).not.toContain(en.mangrove.saveToProjectUnnamed);
+
+    await save();
+
+    const [sent] = uploadMedia.mock.calls[0] as [Workspace];
+    expect(sent.p).toBeFalsy();
+  });
+
+  it("says a project is open even before its name has arrived", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    // The project list is still in flight: the id is known, the name is not, and a
+    // uuid is not something to put in front of anybody.
+    await render({ workspace: inProject.workspace, projectName: null });
+    expect(host!.textContent).toContain(en.mangrove.saveToProjectUnnamed);
+    expect(host!.textContent).not.toContain(en.mangrove.saveToAgent);
+  });
+
+  it("warns that a file of the same name is replaced, before anything is pressed", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    await render();
+    // `StoreMedia` opens the sanitized name with O_TRUNC. There is no outcome in which
+    // it asks, so the screen says.
+    expect(host!.textContent).toContain(en.mangrove.saveOverwrites);
+  });
+
+  it("reports where it landed, by the path the upload answered", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    servingBlob({ ok: true });
+
+    await render();
+    await save();
+
+    // The stored path, folder and all -- a silent success on a file operation is
+    // indistinguishable from nothing having happened.
+    expect(host!.textContent).toContain(en.mangrove.saved.replace("{path}", "uploads/q2.pdf"));
+  });
+
+  it("keeps the mangrove's own sentence when it refuses the bytes", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    const refusal = "that blob belongs to another subscription";
+    servingBlob({ ok: false, body: { error: refusal } });
+
+    await render();
+    await save();
+
+    // Shown as it arrived: it names the reason, and this client cannot.
+    expect(host!.textContent).toContain(refusal);
+    expect(uploadMedia).not.toHaveBeenCalled();
+    expect(host!.textContent).not.toContain(en.mangrove.saved.replace("{path}", "uploads/q2.pdf"));
+  });
+
+  it("translates the media route's code, which is never prose", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    servingBlob({ ok: true });
+    // /api/media forwards a STATUS-derived code on purpose (MEDIA_ERROR_CODES), so the
+    // dictionary is the only place it becomes a sentence.
+    uploadMedia.mockRejectedValue(new Error("too_large"));
+
+    await render();
+    await save();
+
+    expect(host!.textContent).toContain(errs.too_large);
+    expect(host!.textContent).not.toContain("too_large");
+  });
+
+  it("does not put the browser's own words on screen when the connection drops", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    // Neither leg catches a fetch that reached nothing, so this is what a dropped
+    // connection actually throws. The message is the BROWSER's, and it differs per
+    // engine -- it is not a sentence anybody wrote about this file.
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await render();
+    await save();
+
+    expect(host!.textContent).toContain(en.mangrove.saveFailed);
+    expect(host!.textContent).not.toContain("Failed to fetch");
+  });
+
+  it("does not open the sheet when the control is pressed", async () => {
+    readTimeline.mockResolvedValue(claimOf(FILE));
+    servingBlob({ ok: true });
+
+    await render();
+    await save();
+
+    // `fromControl` refuses events from a <button>; a file card is also never
+    // `openable` in the first place. Both have to hold.
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("is not offered on something still waiting on a decision", async () => {
+    // Whoever governs the scope has to READ it to decide. Putting it into their
+    // workspace before they have accepted it is the same thing merging is refused for.
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [],
+      held: [],
+      pending: [
+        {
+          activityId: "act-1",
+          author: "mangrove:actor:bob:service",
+          scope: "mangrove:group:subs",
+          object: FILE,
+          published: "2026-09-22T10:00:00Z",
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: true, tenantLicensed: false });
+
+    await render();
+    expect(host!.textContent).toContain(en.mangrove.pendingTitle);
+    // The bytes are still readable -- a download leaves the system.
+    expect(host!.textContent).toContain(en.mangrove.downloadFile);
+    expect(host!.textContent).not.toContain(en.mangrove.saveToFiles);
+    expect(host!.textContent).not.toContain(en.mangrove.saveOverwrites);
+  });
+});
+
+describe("where a merge lands", () => {
+  const FRAGMENT = {
+    id: "mangrove:obj:frag",
+    type: "MemoryNote",
+    cell: "mangroves",
+    mediaType: GRAPH_FRAGMENT_MEDIA_TYPE,
+    content: FRAGMENT_BODY,
+  };
+
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(claimOf(FRAGMENT));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  // This already went to the project's graph -- `mergeFragment` sends it. What was
+  // missing is the same thing the file save would have shipped without: the screen
+  // never said so.
+  it("names the project the fragment will be merged into", async () => {
+    await render({ workspace: { ...workspace, p: "proj-1" } as Workspace, projectName: "Field trials" });
+    expect(host!.textContent).toContain(
+      en.mangrove.mergeToProject.replace("{project}", "Field trials"),
+    );
+  });
+
+  it("names the agent's own memory when no project is open", async () => {
+    await render();
+    expect(host!.textContent).toContain(en.mangrove.mergeToAgent);
+  });
+
+  it("does not open the sheet when the merge is pressed", async () => {
+    mergeFragment.mockResolvedValue({
+      entitiesCreated: 1,
+      observationsAdded: 0,
+      relationsCreated: 0,
+    });
+    await render();
+    await clickText(en.mangrove.merge);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 

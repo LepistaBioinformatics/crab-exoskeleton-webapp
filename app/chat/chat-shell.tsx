@@ -436,7 +436,13 @@ export default function ChatShell({ email }: { email: string }) {
               />
             )}
             {centre.kind === "destination" && workspace && centre.at === "mangrove" && (
-              <MangroveScreen workspace={workspace} onReference={setChatRef} />
+              <MangroveScreen
+                workspace={workspace}
+                // The NAME, never `project` -- both are strings, so tsc would take the
+                // id just as happily and a member would read a uuid.
+                projectName={openProject?.name ?? null}
+                onReference={setChatRef}
+              />
             )}
             {/* A place before a conversation is chosen: the agent's root and a
                 project's root alike. It replaced an empty transcript, and the effect
