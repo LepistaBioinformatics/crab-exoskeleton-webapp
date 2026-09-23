@@ -390,6 +390,55 @@ export function publish(w: Workspace, publication: MangrovePublication): Promise
 
 
 /**
+ * What a share came back with.
+ *
+ * `pending` is OPTIONAL and not `MangrovePublished`: a share into a group waits on
+ * whoever governs it exactly as a publication does, but the route is newer than this
+ * client and a field that is simply absent must not read as "delivered" OR as
+ * "waiting". Only `true` means waiting; anything else means it went.
+ */
+export interface MangroveShared {
+  pending?: boolean;
+}
+
+/**
+ * Pass something already published on to somebody who has not got it.
+ *
+ * SAME AUDIENCE SHAPE AS PUBLISH, and the same rule about groups: sharing into one
+ * needs the governing role, so the caller offers the group options only where
+ * `capabilities` says they exist.
+ *
+ * IT TAKES THE PROJECT, for the reason publish and merge do -- see `projectExtra`.
+ * The object is resolved against a workspace, and each project is a separate one.
+ *
+ * `undo` is sent explicitly rather than left off: the route reads it either way, and
+ * a body that says which of the two operations this is cannot be misread by a route
+ * that defaults differently. It is a constant and not a parameter -- nothing in this
+ * app un-shares, and a flag with no caller is a guess about what one would want.
+ */
+export function shareWith(
+  w: Workspace,
+  objectId: string,
+  audience: MangroveAudience,
+): Promise<MangroveShared> {
+  return call<MangroveShared>(
+    "share",
+    w,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        objectId,
+        to: audience.to,
+        toEmails: audience.toEmails,
+        undo: false,
+      }),
+    },
+    projectExtra(w),
+  );
+}
+
+/**
  * What a merge put into the member's own graph.
  *
  * Three counts, and all three can be zero: merging a fragment whose every entity

@@ -338,6 +338,20 @@ describe("an empty audience", () => {
 });
 
 describe("the body", () => {
+  // THE FORMAT IS CHOSEN BEFORE THE BODY IS WRITTEN. Under the box, the control comes
+  // after the decision it governs: somebody writing plain text with asterisks in it has
+  // already written it as markdown by the time they reach it. Position is what these
+  // assert, so `compareDocumentPosition` and not an index into the selects on screen --
+  // a recipient's reach is a <select> too, and an index would pass for the wrong reason.
+  it("puts the format above the box, set to markdown before anybody types", async () => {
+    const el = await render();
+    const format = byLabel<HTMLSelectElement>(en.mangrove.formatLabel);
+    const body = el.querySelector("textarea")!;
+
+    expect(format.value).toBe("text/markdown");
+    expect(format.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("sends the format the writer chose, rather than leaving it to be guessed", async () => {
     publish.mockResolvedValue({ activity: {}, pending: false });
     await render();
