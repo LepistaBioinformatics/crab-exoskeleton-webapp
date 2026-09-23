@@ -9,7 +9,7 @@ import MangrovePost from "./mangrove-post";
 import MangrovePeople from "./mangrove-people";
 import MangroveCompose from "./mangrove-compose";
 import { useMangrove } from "./use-mangrove";
-import { admit, decide, revoke, type MangroveReading } from "@/lib/mangrove";
+import { admit, decide, newestFirst, revoke, type MangroveReading } from "@/lib/mangrove";
 import { subscribeToShareRequests, takePendingShare, type MangroveShare } from "./mangrove-share-bus";
 import type { MangroveReference } from "@/lib/chatReference";
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,20 @@ import { useT } from "@/lib/i18n/context";
 // this screen existed (which is every FIRST share), the subscription for one made while
 // it is already open.
 //
+// A READING IS ORDERED HERE, MOST RECENT FIRST, and the newest few are marked out.
+// `claims` arrives as a reduction keyed by (cell, author), so its order is whichever
+// key the proxy saw first -- near enough to chronological to look deliberate and not
+// near enough to be. `newestFirst` makes it a decision. What is marked out is the top
+// of THIS reading, not of the mangrove: three cards, or all of them when there are
+// fewer than three, which is a list too short for "the recent ones" to mean anything.
+//
 // AND "NOTHING YET" IS NOT "IT IS DOWN". An empty reading is a normal state and
 // renders as prose; an unreachable service renders as an error with a retry.
 // Collapsing them would mean a member who has simply not been shared anything
 // is told something is broken.
+
+/** How many of a reading's newest cards are marked out. */
+const RECENT = 3;
 
 const tab = cva(
   "rounded-lg px-3 py-1.5 text-sm transition-colors",
@@ -137,27 +147,34 @@ export default function MangroveScreen({
     ...(caps?.governs ? [{ key: "pending" as MangroveReading, label: t.mangrove.pending }] : []),
   ];
 
-  const claims = timeline?.claims ?? [];
+  // Sorted, not merely rendered in the order it arrived. Held and pending are left
+  // as the proxy answered them: they are decision queues, and oldest-first is the
+  // order a queue is worked.
+  const claims = newestFirst(timeline?.claims ?? []);
   const held = timeline?.held ?? [];
   const pending = timeline?.pending ?? [];
   const nothing = !loading && !error && claims.length === 0 && held.length === 0 && pending.length === 0;
 
   return (
-    <DestinationScreen title={t.mangrove.title}>
-      {/* A READING COLUMN, not the frame's full width.
-          DestinationScreen is max-w-6xl because Projects is a grid of cards and
-          a grid wants the room. This screen is prose somebody's agent wrote, and
-          prose at 1150px is a line the eye loses its place in on the way back --
-          the reason typography settles around 65-75 characters. max-w-3xl is
-          that measure at this font size.
-
-          AND A WHOLE VIEWPORT OF PADDING UNDER IT. Without it the last memory
-          sits against the bottom edge, so reading it means scrolling it to the
-          very end of the scroll range and then reading at the rim of the screen.
-          The padding is part of the scrollable area, so the last card comes to
-          rest wherever the reader stops, rather than only at the very bottom
-          of the range. */}
-      <div className="max-w-3xl pb-[100vh]">
+    // A READING COLUMN, not the frame's full width. DestinationScreen is max-w-6xl
+    // because Projects is a grid of cards and a grid wants the room. This screen is
+    // prose somebody's agent wrote, and prose at 1150px is a line the eye loses its
+    // place in on the way back -- the reason typography settles around 65-75
+    // characters. max-w-3xl is that measure at this font size.
+    //
+    // THE FRAME NARROWS, NOT THE CHILDREN. This was a max-w-3xl div inside the 6xl
+    // frame, which put the column hard against the left of a pane half again as
+    // wide -- "pushed to the left", which is what it was. Centring only the div
+    // would have moved the misalignment rather than fixed it: the heading is the
+    // frame's, so it would have stayed at the far left with the prose 200px in from
+    // it. Narrowing the frame centres the heading and the reading on one axis.
+    <DestinationScreen title={t.mangrove.title} narrow>
+      {/* A WHOLE VIEWPORT OF PADDING UNDER IT. Without it the last memory sits
+          against the bottom edge, so reading it means scrolling it to the very end
+          of the scroll range and then reading at the rim of the screen. The padding
+          is part of the scrollable area, so the last card comes to rest wherever the
+          reader stops, rather than only at the very bottom of the range. */}
+      <div className="pb-[100vh]">
           <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
 
         <nav className="mt-4 flex gap-1" aria-label={t.mangrove.title}>
@@ -280,33 +297,33 @@ export default function MangroveScreen({
               <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
             </h2>
             <p className="mt-1 text-xs text-fg-muted">{t.mangrove.heldHint}</p>
-            <ul className="mt-3 flex flex-col gap-2">
+            <ul className="mt-3 flex flex-col gap-3">
               {held.map((h) => (
-                <li key={h.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
-                  <p className="text-xs text-fg-muted">
-                    {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
-                  </p>
-                  <div className="mt-1 text-sm text-fg">
-                    <MangrovePost
-                      workspace={workspace}
-                      object={h.object}
-                      author={actorLabel(h.from)}
-                      title={h.object.cell}
-                      subtitle={t.mangrove.sheetFrom
-                        .replace("{who}", actorLabel(h.from))
-                        .replace("{cell}", h.object.cell)}
-                      onReference={onReference}
-                    />
-                  </div>
-                  <Button
-                    className="mt-2"
-                    size="sm"
-                    disabled={busy === h.activityId}
-                    onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
-                  >
-                    {t.mangrove.admit}
-                  </Button>
-                </li>
+                <MangrovePost
+                  key={h.activityId}
+                  workspace={workspace}
+                  object={h.object}
+                  author={actorLabel(h.from)}
+                  title={h.object.cell}
+                  meta={
+                    <>
+                      {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
+                    </>
+                  }
+                  subtitle={t.mangrove.sheetFrom
+                    .replace("{who}", actorLabel(h.from))
+                    .replace("{cell}", h.object.cell)}
+                  onReference={onReference}
+                  actions={
+                    <Button
+                      size="sm"
+                      disabled={busy === h.activityId}
+                      onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
+                    >
+                      {t.mangrove.admit}
+                    </Button>
+                  }
+                />
               ))}
             </ul>
           </section>
@@ -318,46 +335,52 @@ export default function MangroveScreen({
             <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
               <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
             </h2>
-            <ul className="mt-3 flex flex-col gap-2">
+            <ul className="mt-3 flex flex-col gap-3">
+              {/* A fragment renders as one here too: deciding whether a whole
+                  subscription should receive it means reading what is in it. What is
+                  NOT offered is merging it — that is a thing to do once it has been
+                  accepted, not while deciding. */}
               {pending.map((p) => (
-                <li key={p.activityId} className="rounded-xl border border-rule-strong bg-surface p-3">
-                  <p className="text-xs text-fg-muted">
-                    {t.mangrove.from.replace("{who}", actorLabel(p.author))} → {scopeLabel(p.scope)} · {p.object.cell}
-                  </p>
-                  <div className="mt-1 text-sm text-fg">
-                    {/* A fragment renders as one here too: deciding whether a whole
-                        subscription should receive it means reading what is in it. What
-                        is NOT offered is merging it — that is a thing to do once it has
-                        been accepted, not while deciding. */}
-                    <MangrovePost
-                      workspace={workspace}
-                      object={p.object}
-                      author={actorLabel(p.author)}
-                      title={p.object.cell}
-                      canMerge={false}
-                      subtitle={t.mangrove.sheetFrom
-                        .replace("{who}", actorLabel(p.author))
-                        .replace("{cell}", p.object.cell)}
-                    />
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={busy === p.activityId}
-                      onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, true))}
-                    >
-                      <Check size={14} aria-hidden /> {t.mangrove.accept}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="text"
-                      disabled={busy === p.activityId}
-                      onClick={() => void run(p.activityId, () => decide(workspace, p.activityId, false))}
-                    >
-                      <X size={14} aria-hidden /> {t.mangrove.reject}
-                    </Button>
-                  </div>
-                </li>
+                <MangrovePost
+                  key={p.activityId}
+                  workspace={workspace}
+                  object={p.object}
+                  author={actorLabel(p.author)}
+                  title={p.object.cell}
+                  canMerge={false}
+                  meta={
+                    <>
+                      {t.mangrove.from.replace("{who}", actorLabel(p.author))} →{" "}
+                      {scopeLabel(p.scope)} · {p.object.cell}
+                    </>
+                  }
+                  subtitle={t.mangrove.sheetFrom
+                    .replace("{who}", actorLabel(p.author))
+                    .replace("{cell}", p.object.cell)}
+                  actions={
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={busy === p.activityId}
+                        onClick={() =>
+                          void run(p.activityId, () => decide(workspace, p.activityId, true))
+                        }
+                      >
+                        <Check size={14} aria-hidden /> {t.mangrove.accept}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="text"
+                        disabled={busy === p.activityId}
+                        onClick={() =>
+                          void run(p.activityId, () => decide(workspace, p.activityId, false))
+                        }
+                      >
+                        <X size={14} aria-hidden /> {t.mangrove.reject}
+                      </Button>
+                    </div>
+                  }
+                />
               ))}
             </ul>
           </section>
@@ -369,43 +392,53 @@ export default function MangroveScreen({
               <Send size={16} aria-hidden />{" "}
               {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
             </h2>
-            <ul className="mt-3 flex flex-col gap-2">
-              {claims.map((c) => (
-                <li
+            <ul className="mt-3 flex flex-col gap-3">
+              {claims.map((c, i) => (
+                <MangrovePost
                   key={`${c.cell}:${c.author}`}
-                  className="rounded-xl border border-rule-strong bg-surface p-3"
-                >
-                  <p className="text-xs text-fg-muted">
-                    {c.cell} · {actorLabel(c.author)}
-                    {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
-                    {/* Weight of evidence, never a verdict. */}
-                    {c.evidence > 0 && ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
-                  </p>
-                  <div className={`mt-1 text-sm ${c.deleted ? "text-fg-muted line-through" : "text-fg"}`}>
-                    <MangrovePost
-                      workspace={workspace}
-                      object={c.object}
-                      author={actorLabel(c.author)}
-                      title={c.cell}
-                      subtitle={t.mangrove.sheetFrom
-                        .replace("{who}", actorLabel(c.author))
-                        .replace("{cell}", c.cell)}
-                      onReference={onReference}
-                    />
-                  </div>
-                  {reading === "published" && !c.deleted && (
-                    // Revoke is destructive and irreversible, and it sat one
-                    // click from the content it destroys. Behind a disclosure
-                    // and off to the side, it stops being something you reach
-                    // for while meaning to do something else -- without being
-                    // hidden, which would be its own kind of trap.
-                    <div className="mt-2 flex justify-end">
-                      <details className="w-fit text-right">
-                        <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg">
+                  workspace={workspace}
+                  object={c.object}
+                  author={actorLabel(c.author)}
+                  title={c.cell}
+                  recent={i < RECENT}
+                  dimmed={c.deleted}
+                  meta={
+                    <>
+                      {c.cell} · {actorLabel(c.author)}
+                      {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
+                      {/* Weight of evidence, never a verdict. */}
+                      {c.evidence > 0 &&
+                        ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
+                    </>
+                  }
+                  subtitle={t.mangrove.sheetFrom
+                    .replace("{who}", actorLabel(c.author))
+                    .replace("{cell}", c.cell)}
+                  onReference={onReference}
+                  actions={
+                    reading === "published" && !c.deleted ? (
+                      // Revoke is destructive and irreversible, and it sat one click
+                      // from the content it destroys. Behind a disclosure and off to
+                      // the side, it stops being something you reach for while meaning
+                      // to do something else -- without being hidden, which would be
+                      // its own kind of trap.
+                      <details>
+                        <summary className="flex cursor-pointer list-none justify-end text-xs text-fg-muted hover:text-fg">
                           {t.mangrove.advanced}
                         </summary>
-                        <div className="mt-1 flex justify-end">
+                        {/* THE WARNING IS IN THE BOX WITH THE BUTTON. It was a footnote
+                            under the whole list, which is not where somebody about to
+                            revoke is looking -- and the alternative to reading it is a
+                            member believing a revoke recalled something. ActivityPub
+                            cannot un-deliver. The border is the blocked colour because
+                            what is inside the box is the one irreversible thing on this
+                            screen. */}
+                        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-blocked p-3">
+                          <p className="text-left text-xs text-fg-muted">
+                            {t.mangrove.revokeNote}
+                          </p>
                           <Button
+                            className="shrink-0 text-blocked"
                             size="sm"
                             variant="text"
                             disabled={busy === c.object.id}
@@ -417,16 +450,11 @@ export default function MangroveScreen({
                           </Button>
                         </div>
                       </details>
-                    </div>
-                  )}
-                </li>
+                    ) : undefined
+                  }
+                />
               ))}
             </ul>
-            {reading === "published" && claims.length > 0 && (
-              // Said plainly, because the alternative is a member believing a
-              // revoke recalled something. ActivityPub cannot un-deliver.
-              <p className="mt-3 text-xs text-fg-muted">{t.mangrove.revokeNote}</p>
-            )}
           </section>
         )}
       </div>

@@ -535,3 +535,208 @@ async function clickLabel(label: string) {
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
+
+// THE READING IS A LIST OF CARDS, AND THE ORDER IS A DECISION.
+//
+// What these pin down is the part that is easy to get accidentally right: a fixture
+// that is already in order passes against a screen that never sorts, and a card that
+// opens the sheet is worth nothing if it also opens when the member meant to press
+// Download. Both are asserted against the rendered list, not against the helper --
+// a green `newestFirst` says nothing about whether the screen calls it.
+
+const LONG_BODY = Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n");
+
+function claimsOf(...cells: { cell: string; published: string; content?: string }[]) {
+  return {
+    reading: "received",
+    claims: cells.map((c) => ({
+      cell: c.cell,
+      author: "mangrove:actor:alice:person",
+      object: {
+        id: `mangrove:obj:${c.cell}`,
+        type: "MemoryNote",
+        cell: c.cell,
+        content: c.content ?? LONG_BODY,
+        mediaType: "text/markdown",
+      },
+      published: c.published,
+      deleted: false,
+      evidence: 0,
+      audience: [],
+    })),
+    held: [],
+  };
+}
+
+/** The cards on screen, in the order they are rendered. */
+function cards(): HTMLLIElement[] {
+  return [...host!.querySelectorAll("li")];
+}
+
+describe("the reading, as a list of cards", () => {
+  const SHUFFLED = [
+    { cell: "third", published: "2026-03-02T09:00:00Z" },
+    { cell: "fifth", published: "2026-01-01T00:00:00Z" },
+    { cell: "first", published: "2026-09-22T10:00:00Z" },
+    { cell: "fourth", published: "2026-03-01T09:00:00Z" },
+    { cell: "second", published: "2026-06-15T23:59:59Z" },
+  ];
+
+  it("renders them most recent first, whatever order they arrived in", async () => {
+    readTimeline.mockResolvedValue(claimsOf(...SHUFFLED));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    // The cell is in each card's meta line, so the cards' own text is the order.
+    const order = cards().map((li) => li.querySelector("p")!.textContent!.split(" ·")[0]);
+    expect(order).toEqual(["first", "second", "third", "fourth", "fifth"]);
+  });
+
+  it("marks out exactly the three most recent", async () => {
+    readTimeline.mockResolvedValue(claimsOf(...SHUFFLED));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    const recent = [...host!.querySelectorAll('[data-recent="true"]')];
+    expect(recent.length).toBe(3);
+    // The three at the TOP, which is what "most recent" means once the list is sorted.
+    expect(recent).toEqual(cards().slice(0, 3));
+  });
+
+  // Fewer than three is a list too short for "the recent ones" to pick anything out,
+  // so it does not try to.
+  it("marks out all of them when there are fewer than three", async () => {
+    readTimeline.mockResolvedValue(
+      claimsOf(
+        { cell: "older", published: "2026-01-01T00:00:00Z" },
+        { cell: "newer", published: "2026-09-01T00:00:00Z" },
+      ),
+    );
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    expect(host!.querySelectorAll('[data-recent="true"]').length).toBe(2);
+  });
+});
+
+describe("a card as the way into the sheet", () => {
+  const ONE = [{ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }];
+
+  async function renderOne(content?: string) {
+    readTimeline.mockResolvedValue(claimsOf({ ...ONE[0], content }));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    await render();
+    return cards()[0];
+  }
+
+  it("opens it when the card body is clicked", async () => {
+    const card = await renderOne();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    // On the meta line, which is card and not control -- the event bubbles to the
+    // card the way a click anywhere in its body does.
+    await act(async () => {
+      card.querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const sheet = document.querySelector('[role="dialog"]');
+    expect(sheet).toBeTruthy();
+    // The whole body, which is what the card was cutting.
+    expect(sheet!.textContent).toContain("line 39");
+  });
+
+  // THE CARD MUST NOT SWALLOW WHAT IS INSIDE IT. Every control in a card would
+  // otherwise also open the sheet, because the click reaches the card after it.
+  it("does NOT open it when a control inside the card is clicked", async () => {
+    await renderOne();
+    await clickLabel(`${en.mangrove.reference} — soil-ph`);
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    // And the control did its own job.
+    expect(referenced).toHaveLength(1);
+  });
+
+  it("does not open it when the revoke disclosure is used", async () => {
+    readTimeline.mockResolvedValue({
+      ...claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }),
+      reading: "published",
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    revoke.mockResolvedValue({});
+
+    await render();
+    await clickText(en.mangrove.published);
+    await act(async () => {
+      host!
+        .querySelector("summary")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  // Otherwise the sheet is mouse-only, which for a whole card is worse than the
+  // button it replaced: at least that one was in the tab order.
+  it("opens on Enter and on Space, with an accessible name", async () => {
+    const card = await renderOne();
+    expect(card.getAttribute("role")).toBe("button");
+    expect(card.tabIndex).toBe(0);
+    expect(card.getAttribute("aria-label")).toBe(
+      en.mangrove.openPost.replace("{cell}", "soil-ph"),
+    );
+
+    for (const key of ["Enter", " "]) {
+      await act(async () => {
+        card.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+      // Back to closed, so the next key is opening it rather than finding it open.
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      });
+      await act(async () => {
+        document
+          .querySelector('[role="dialog"]')!
+          .dispatchEvent(new Event("animationend", { bubbles: true }));
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    }
+  });
+
+  // A card that opens onto exactly what is already on it is an affordance that lies,
+  // so a short memory is not a control at all.
+  it("is not a control when there is nothing more to read", async () => {
+    const card = await renderOne("Two lines.\nThat is all.");
+    expect(card.getAttribute("role")).toBeNull();
+    expect(card.getAttribute("tabindex")).toBeNull();
+
+    await act(async () => {
+      card.querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe("the revoke box", () => {
+  it("keeps the warning in the box with the button, and nowhere else", async () => {
+    readTimeline.mockResolvedValue({
+      ...claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }),
+      reading: "published",
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    await clickText(en.mangrove.published);
+
+    const button = [...host!.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes(en.mangrove.revoke),
+    )!;
+    // The box is the button's own: danger-bordered, and holding the sentence that
+    // says what a revoke does not do.
+    const box = button.closest("div")!;
+    expect(box.className).toContain("border-blocked");
+    expect(box.textContent).toContain(en.mangrove.revokeNote);
+    // The note used to be a footnote under the whole list. It is not in two places.
+    const notes = host!.textContent!.split(en.mangrove.revokeNote).length - 1;
+    expect(notes).toBe(1);
+  });
+});

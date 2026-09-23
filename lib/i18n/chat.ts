@@ -960,7 +960,6 @@ const en = {
     loadFailed: "Could not read the mangrove.",
     actionFailed: "That did not go through.",
     retry: "Try again",
-    showMore: "Show more",
     people: "People",
     yourIdentity: "Your handles",
     yourIdentityHint: "Send these to somebody who needs to share with you.",
@@ -977,6 +976,8 @@ const en = {
     findFailed: "Could not search right now.",
     shareByEmail: "Share with them by email.",
     sheetFrom: "{who} · {cell}",
+    // The card itself is the control, so it has to say what it opens onto.
+    openPost: "Read all of “{cell}”",
     compose: "Share something",
     composeHint:
       "Write down what you learned and choose who reads it. Choose nobody and it stays in your own agent's memory.",
@@ -1800,7 +1801,6 @@ const pt: ChatDict = {
     loadFailed: "Nao foi possivel ler o mangue.",
     actionFailed: "Nao deu certo.",
     retry: "Tentar de novo",
-    showMore: "Ver mais",
     people: "Pessoas",
     yourIdentity: "Suas identificacoes",
     yourIdentityHint: "Envie isto a quem precisar compartilhar com voce.",
@@ -1817,6 +1817,7 @@ const pt: ChatDict = {
     findFailed: "Nao foi possivel buscar agora.",
     shareByEmail: "Compartilhe com essa pessoa por e-mail.",
     sheetFrom: "{who} · {cell}",
+    openPost: "Ler tudo de “{cell}”",
     compose: "Compartilhar algo",
     composeHint:
       "Escreva o que você aprendeu e escolha quem lê. Sem escolher ninguém, fica só na memória do seu agente.",
