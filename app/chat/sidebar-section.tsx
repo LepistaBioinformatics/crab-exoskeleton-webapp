@@ -17,10 +17,16 @@ const chevron = cva("shrink-0 text-fg-muted transition-colors group-hover/sec:te
 
 // A quiet label, NOT an eyebrow any more (FR-6.3). The uppercase, letter-spaced,
 // 12px treatment was the idiom of a sidebar built out of named sections: it shouted
-// because three of them had to be told apart at a glance. There is one list in this
-// column now, and a single all-caps heading over it reads as a section marker for
-// sections that no longer exist. So it drops to the size the rows beneath it are set
-// in -- it names the list, it does not announce a part of the sidebar.
+// because three of them had to be told apart at a glance. So it drops to the size the
+// rows beneath it are set in -- it names a list, it does not announce a part of the
+// sidebar.
+//
+// THE COLUMN HAS THREE OF THESE AGAIN — Screens, Tools and the conversation list — and
+// that does NOT bring the eyebrow back, which is worth saying because the original
+// argument here was "there is one list in this column now". The size was never what
+// told the three apart: the rows they head are, and three all-caps bars over a column
+// this short would be shouting three times on one screen. What the labels need is to
+// read as quieter than their rows, which this does.
 export function SectionLabel({ children }: { children: ReactNode }) {
   return <span className="truncate text-sm font-medium text-fg-muted">{children}</span>;
 }

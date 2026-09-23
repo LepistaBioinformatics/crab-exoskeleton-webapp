@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
-import SidebarDestinations, { DESTINATION_ROWS } from "./sidebar-destinations";
+import SidebarDestinations, {
+  DESTINATION_GROUPS,
+  DESTINATION_ROWS,
+  railDestinationGroups,
+  rowKey,
+} from "./sidebar-destinations";
 import { SECTION_ORDER, SECTIONS } from "./workspace-sections";
 import { chatCopy } from "@/lib/i18n/chat";
 
@@ -115,5 +120,51 @@ describe("the rows the rail reads", () => {
         r.kind === "section" ? r.section : null,
       ),
     ).toEqual(SECTION_ORDER);
+  });
+
+  // THE ASSERTION THAT CATCHES THE TWO LISTS DRIFTING APART, and it is deliberately
+  // written against the structure rather than against a literal: a sixth section, or a
+  // third screen, must not need an edit here to stay true. A literal list would go
+  // stale at exactly the moment this is supposed to fire.
+  it("offers every row the sidebar does, grouped the same way", () => {
+    const groups = railDestinationGroups({
+      t: en,
+      openDestination: null,
+      openSection: null,
+      onDestination: () => {},
+      onSection: () => {},
+    });
+    expect(groups.map((g) => g.length)).toEqual(DESTINATION_GROUPS.map((g) => g.rows.length));
+    expect(groups.flat().map((entry) => entry.key)).toEqual(DESTINATION_ROWS.map(rowKey));
+    // A rail entry is a bare glyph, so every one of them needs the sentence its
+    // tooltip is made of. A row added with no blurb would be a nameless icon.
+    for (const entry of groups.flat()) {
+      expect(entry.label, `${entry.key} has no name`).toBeTruthy();
+      expect(entry.blurb, `${entry.key} has no blurb`).toBeTruthy();
+    }
+  });
+
+  // The FOLD is the expanded column's. A rail that dropped five of its glyphs because
+  // the column was folded would be a way out of the tools with no way back in.
+  it("drops only what the sidebar drops -- the projects row, for an agent without them", () => {
+    const groups = railDestinationGroups({
+      t: en,
+      openDestination: null,
+      openSection: null,
+      hideProjects: true,
+      onDestination: () => {},
+      onSection: () => {},
+    });
+    expect(groups.flat().map((entry) => entry.key)).toEqual(
+      DESTINATION_ROWS.filter((r) => r.kind !== "projects").map(rowKey),
+    );
+  });
+
+  // The two kinds read on the rail as the hairline `ResizablePane` draws between
+  // groups, which is all a 48px column has room for.
+  it("hands the rail one group per kind rather than one list", () => {
+    expect(DESTINATION_GROUPS).toHaveLength(2);
+    expect(DESTINATION_GROUPS.map((g) => g.key)).toEqual(["screens", "tools"]);
+    expect(DESTINATION_GROUPS.map((g) => g.collapsible)).toEqual([false, true]);
   });
 });

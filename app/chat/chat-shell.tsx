@@ -13,8 +13,8 @@ import {
   setFragmentProjectSid,
 } from "./fragment";
 import { asDestination, resolveCentre } from "./destination";
-import { asSection, nextSidebarValue, type Section } from "./workspace-sections";
-import { DESTINATION_ROWS, rowBlurb, rowIcon, rowKey, rowLabel } from "./sidebar-destinations";
+import { asSection, type Section } from "./workspace-sections";
+import { railDestinationGroups } from "./sidebar-destinations";
 import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
@@ -233,9 +233,11 @@ export default function ChatShell({ email }: { email: string }) {
   //
   // A row means here exactly what it means there, toggle included: `nextSidebarValue` is
   // what both call, so clicking the open section on the rail closes the pane rather than
-  // reopening it on itself.
-  // THE CONVERSATION LIST, as an entry of its own, and the reason the rail has three
-  // groups now.
+  // reopening it on itself. The rows arrive in the SAME GROUPS the open column labels
+  // them with — screens, then tools — because a rail cannot carry the two labels and the
+  // hairline between groups is what is left to say the two kinds apart.
+  // THE CONVERSATION LIST, as an entry of its own, and one of the reasons the rail is
+  // groups rather than one list.
   //
   // What the collapsed pane previews is the conversation list — and it used to appear
   // from a hover anywhere on the column, so reaching for Files meant dismissing a list
@@ -263,18 +265,15 @@ export default function ChatShell({ email }: { email: string }) {
       ]
     : [];
 
-  const railDestinations: RailPanel[] = workspace
-    ? DESTINATION_ROWS.filter((r) => !(r.kind === "projects" && hideProjects)).map((r) => ({
-        key: rowKey(r),
-        Icon: rowIcon(r),
-        label: rowLabel(r, t),
-        blurb: rowBlurb(r, t),
-        active: r.kind === "section" ? openSection === r.section : destination === r.kind,
-        onSelect: () =>
-          r.kind === "section"
-            ? setRightSidebar(nextSidebarValue(openSection, r.section))
-            : setDestination(r.kind),
-      }))
+  const railDestinations: RailPanel[][] = workspace
+    ? railDestinationGroups({
+        t,
+        openDestination: destination,
+        openSection,
+        hideProjects,
+        onDestination: setDestination,
+        onSection: setRightSidebar,
+      })
     : [];
 
   const railActions: RailPanel[] = workspace
@@ -291,12 +290,12 @@ export default function ChatShell({ email }: { email: string }) {
       ]
     : [];
 
-  // THE SAME ORDER THE OPEN SIDEBAR READS, top to bottom: New chat, the destinations,
-  // then the conversation list. The rail had the list first and the action last, so the
-  // two renderings of one column disagreed about where anything was — and the rail is
-  // what a member reads while the column is collapsed, which is exactly when they cannot
-  // check.
-  const railGroups = [railActions, railDestinations, railConversations].filter(
+  // THE SAME ORDER THE OPEN SIDEBAR READS, top to bottom: New chat, the screens, the
+  // tools, then the conversation list. The rail had the list first and the action last,
+  // so the two renderings of one column disagreed about where anything was — and the
+  // rail is what a member reads while the column is collapsed, which is exactly when
+  // they cannot check.
+  const railGroups = [railActions, ...railDestinations, railConversations].filter(
     (g) => g.length > 0,
   );
 
