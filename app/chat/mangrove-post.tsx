@@ -55,9 +55,25 @@ import { useT } from "@/lib/i18n/context";
 // styled itself, in three places. The card is now here, once, because the thing that
 // makes a card a card -- it opens the sheet when you click it -- has to know which of
 // the three kinds it is holding, and only this component does.
+//
+// THREE REGIONS, IN ONE ORDER, WHATEVER THE KIND: a <header> saying what this is, the
+// body, and a <footer> holding the record and the controls. It used to open with a
+// line of run-together provenance -- `soil-ph · by you · shared with this subscription
+// · 2 endorsed` -- above the body, so the first thing read on every card was four
+// small-print items the reader had to parse to find two answers, and the body itself
+// started halfway down. The same facts are columns in the footer now: a heading asks
+// the question, the value under it answers, and the top of the card is what the card
+// is about.
+//
+// THE HEADER IS THE KIND'S OWN TITLE. A file has a name and a size, a fragment is a
+// piece of a graph, and prose has its cell -- which is the one case where the title
+// and the identifier in the footer are the same string, because for prose they really
+// are the same thing. On a file they are not (`q2.pdf` against `attachments/q2.pdf`),
+// which is exactly why the footer names the identifier separately rather than
+// trusting the header to have shown it.
 
 /** Recent, cut, or neither -- the two things that change how a card looks. */
-const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
+const card = cva("rounded-xl border bg-surface transition-colors", {
   variants: {
     // An accent edge and a lift -- the treatment chat-view already gives the one
     // card on screen it wants read first. NOT a different background: the preview's
@@ -83,10 +99,11 @@ const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
  * cover the links and code blocks a markdown body renders -- so the card carries the
  * handler and refuses events that began somewhere that already handles them.
  *
- * `[data-inner]` is for a whole REGION rather than a control: the share panel is a form
- * of its own inside the card, and the tags say nothing about its padding, its heading or
- * its explanatory line -- a click on any of which is a click on the panel, not on the
- * card, and must not open a sheet over the thing being shared.
+ * `[data-inner]` is for a whole REGION rather than a control: the card's footer is the
+ * record and the controls, and the share panel inside it is a form of its own -- and
+ * the tags say nothing about a column heading, a padding gutter or an explanatory line,
+ * a click on any of which is a click on the footer, not on the body, and must not open
+ * a sheet over the thing being read or shared.
  *
  * `[role="dialog"]` is in the list because React propagates a PORTAL's events through
  * the React tree: the sheet this card opened is rendered inside it, so a click in the
@@ -202,15 +219,16 @@ function FragmentView({
   };
 
   return (
-    // A TINT, NOT A SECOND FRAME. This box sits inside a card that already has a
-    // border, and the two together read as a form field rather than as part of one
-    // memory. `bg-elevated` against the card's `surface` separates it just as well
-    // and stops the card being a stack of boxes.
-    <div className="rounded-lg bg-elevated p-3">
-      <p className="flex items-center gap-2 text-xs font-medium text-fg">
-        <Network size={14} aria-hidden /> {t.mangrove.fragmentTitle}
-      </p>
-      <p className="mt-1 text-xs text-fg-muted">
+    // NO BOX OF ITS OWN. This used to be a tinted well, because the card around it
+    // was one undifferentiated block and the fragment needed separating from the
+    // provenance line above it. The card has regions now -- a header saying what this
+    // is, a toned footer holding the record -- and a third tone between them made a
+    // post read as a stack of boxes again, which is what the tint was avoiding.
+    //
+    // WHAT IT IS is said by the header, so this opens on the counts. A title here as
+    // well would be the same sentence twice, one line apart.
+    <div>
+      <p className="text-xs text-fg-muted">
         {t.mangrove.fragmentCounts
           .replace("{entities}", String(fragment.entities.length))
           .replace("{observations}", String(observationCount(fragment)))
@@ -222,7 +240,7 @@ function FragmentView({
           {shown.map((e) => (
             <li
               key={e.name}
-              className="rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-fg"
+              className="rounded-md bg-elevated px-1.5 py-0.5 text-[11px] text-fg"
             >
               {e.name}
               {e.entityType && <span className="ml-1 text-fg-muted">{e.entityType}</span>}
@@ -335,21 +353,12 @@ function FileView({
   };
 
   return (
-    <div className="rounded-lg bg-elevated p-3">
-      <div className="flex items-center gap-2">
-        <Paperclip size={14} className="shrink-0 text-fg-muted" aria-hidden />
-        <span className="min-w-0 truncate text-sm text-fg" title={name}>
-          {name}
-        </span>
-        {/* Empty string when the sender's mangrove did not report a size, which is what
-            formatSize answers for undefined -- no "0 B" on a file that is not empty. */}
-        <span className="shrink-0 font-mono text-[11px] text-fg-muted">
-          {formatSize(object.size)}
-        </span>
-      </div>
-
+    // The name and the size are the card's header; what is left here is what can be
+    // DONE with the bytes, and the sentence saying where each of those puts them.
+    // No box of its own, for the reason FragmentView records.
+    <div className="flex flex-col gap-2">
       {canTake && (
-        <p className="mt-2 text-xs text-fg-muted">
+        <p className="text-xs text-fg-muted">
           {destination(workspace, projectName, {
             agent: t.mangrove.saveToAgent,
             project: t.mangrove.saveToProject,
@@ -359,7 +368,7 @@ function FileView({
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant="tonal"
@@ -395,9 +404,40 @@ function FileView({
 }
 
 /**
- * One memory, as the card a reading is a list of: where it came from, its body, and the
- * things a member can do with it. A card whose body is cut opens the sheet when it is
- * clicked or when Enter or Space is pressed on it.
+ * One column of the card's record: a heading, and the answer under it.
+ *
+ * A <dl> AND NOT A GRID OF <span>s, because that is what this is -- a question and its
+ * answer, up to four of them, asked the same way on every card and left OUT where
+ * there is no honest answer. It also means a reader on a screen reader hears "From:
+ * you" rather than two adjacent fragments whose relationship is a stylesheet.
+ */
+function Field({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  /** An address rather than a name: shown monospaced, and broken anywhere it must be. */
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+        {label}
+      </dt>
+      <dd className={`mt-0.5 text-xs text-fg ${mono ? "break-all font-mono" : "break-words"}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * One memory, as the card a reading is a list of: what it is, its body, and -- under
+ * both -- who sent it, who got it, what it is called and what a member can do with it.
+ * A card whose body is cut opens the sheet when it is clicked or when Enter or Space is
+ * pressed on it.
  *
  * `onReference` is absent when there is nowhere to reference INTO -- the same rule the
  * graph panel's own control follows. When it is there, the chip it fills carries the
@@ -411,7 +451,8 @@ export default function MangrovePost({
   author,
   title,
   subtitle,
-  meta,
+  recipients,
+  endorsed = 0,
   actions,
   canTake = true,
   recent = false,
@@ -431,8 +472,15 @@ export default function MangrovePost({
   /** The sheet's heading when the body is long enough to need one. */
   title: string;
   subtitle?: React.ReactNode;
-  /** The line above the body: where this came from, where it went, what endorsed it. */
-  meta?: React.ReactNode;
+  /**
+   * Who else got this, already labelled, or absent where there is nothing honest to
+   * say -- which is not the same as nobody. A directly held memory says who sent it
+   * and no more; a stranger's post does not tell us who else received it. The column
+   * is left OUT in both, rather than headed over a blank. See `audienceSummary`.
+   */
+  recipients?: string | null;
+  /** How many have endorsed it. Weight of evidence, never a verdict; 0 says nothing. */
+  endorsed?: number;
   /** What the reading lets a member DO with it -- admit, decide, revoke. */
   actions?: React.ReactNode;
   /**
@@ -488,9 +536,42 @@ export default function MangrovePost({
       data-recent={recent ? "true" : undefined}
       className={card({ recent, openable })}
     >
-      {meta && <p className="text-xs text-fg-muted">{meta}</p>}
+      {/* WHAT THIS IS, in the kind's own terms. A file is its name and its weight, a
+          fragment is a piece of somebody's graph, and prose is the handle it was
+          filed under. NOT struck through when the memory is revoked: the title is how
+          the reader finds the thing again, and a tombstoned memory is still listed. */}
+      <header className="flex items-center gap-2 px-3 pt-3">
+        {fragment ? (
+          <>
+            <Network size={14} className="shrink-0 text-fg-muted" aria-hidden />
+            <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+              {t.mangrove.fragmentTitle}
+            </h3>
+          </>
+        ) : object.blob ? (
+          <>
+            <Paperclip size={14} className="shrink-0 text-fg-muted" aria-hidden />
+            <h3
+              className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
+              title={object.fileName || object.cell}
+            >
+              {object.fileName || object.cell}
+            </h3>
+            {/* Empty string when the sender's mangrove did not report a size, which is
+                what formatSize answers for undefined -- no "0 B" on a file that is not
+                empty. */}
+            <span className="shrink-0 font-mono text-[11px] text-fg-muted">
+              {formatSize(object.size)}
+            </span>
+          </>
+        ) : (
+          <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={object.cell}>
+            {object.cell}
+          </h3>
+        )}
+      </header>
 
-      <div className={`mt-1 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}>
+      <div className={`px-3 pb-3 pt-2 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}>
         {fragment ? (
           <FragmentView
             workspace={workspace}
@@ -518,32 +599,67 @@ export default function MangrovePost({
         )}
       </div>
 
-      {onReference && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="text"
-            aria-label={`${t.mangrove.reference} — ${object.cell}`}
-            onClick={() => {
-              onReference({
-                kind: "mangrove",
-                objectId: object.id,
-                cell: object.cell,
-                author,
-              });
-              setReferenced(true);
-            }}
-          >
-            <Quote size={14} aria-hidden /> {t.mangrove.reference}
-          </Button>
-          {/* Said out loud, because the composer it filled is not on this screen: the
-              mangrove replaces the centre pane, so the chip appears when the member goes
-              back to the conversation and nothing here would otherwise report the click. */}
-          {referenced && <span className="text-xs text-fg-muted">{t.mangrove.referenced}</span>}
-        </div>
-      )}
+      {/* THE RECORD, AND THE CONTROLS, UNDER THE THING THEY ARE ABOUT.
+          `data-inner` on the whole section, not on each control: it holds column
+          headings, a gutter and a share panel's prose, none of which are a click on
+          the body -- and the body is what the card opens a sheet over.
 
-      {actions && <div className="mt-2">{actions}</div>}
+          SEPARATED BY TONE AND NOT BY A HAIRLINE, which is the design system's answer
+          (`--rule` is for a boundary a control's edge draws) and also `pane-weight`'s:
+          a horizontal rule survives only where content scrolls past it, and nothing
+          scrolls past the bottom of a card.
+
+          THE TINT IS ON THIS REGION, NOT ON THE CARD. The preview's fade is painted
+          `from-surface` and lives in the body above, so the card's own background has
+          to stay `surface` -- which is why `recent` is a border and a lift. A region
+          BELOW the fade may be toned; a card that changed its own background could
+          not. */}
+      <footer data-inner className="rounded-b-xl bg-elevated px-3 py-2.5">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+          <Field label={t.mangrove.senderLabel} value={author} />
+          {recipients && <Field label={t.mangrove.recipientsLabel} value={recipients} />}
+          {/* The address, always -- and on prose the same string as the header, because
+              for prose the title and the address really are one thing. */}
+          <Field label={t.mangrove.identifierLabel} value={object.cell} mono />
+          {endorsed > 0 && (
+            <Field label={t.mangrove.endorsedLabel} value={String(endorsed)} />
+          )}
+        </dl>
+
+        {(onReference || actions) && (
+          <div className="mt-3 flex flex-col gap-2">
+            {onReference && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="text"
+                  aria-label={`${t.mangrove.reference} — ${object.cell}`}
+                  onClick={() => {
+                    onReference({
+                      kind: "mangrove",
+                      objectId: object.id,
+                      cell: object.cell,
+                      author,
+                    });
+                    setReferenced(true);
+                  }}
+                >
+                  <Quote size={14} aria-hidden /> {t.mangrove.reference}
+                </Button>
+                {/* Said out loud, because the composer it filled is not on this screen:
+                    the mangrove replaces the centre pane, so the chip appears when the
+                    member goes back to the conversation and nothing here would
+                    otherwise report the click. */}
+                {referenced && (
+                  <span className="text-xs text-fg-muted">{t.mangrove.referenced}</span>
+                )}
+              </div>
+            )}
+
+            {actions}
+          </div>
+        )}
+      </footer>
     </li>
   );
 }

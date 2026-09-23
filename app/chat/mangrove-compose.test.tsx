@@ -352,6 +352,25 @@ describe("the body", () => {
     expect(format.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  // AND ITS HEADING SITS ABOVE IT, like every other field on this form. It was the one
+  // label rendered inline -- a muted span beside its control -- so a form of four
+  // decisions read as three fields and a stray setting.
+  it("gives the format the same heading, above the control, as every other field", async () => {
+    const el = await render();
+    const format = byLabel<HTMLSelectElement>(en.mangrove.formatLabel);
+    const label = format.closest("label")!;
+    const heading = label.querySelector("span")!;
+
+    expect(heading.textContent).toBe(en.mangrove.formatLabel);
+    // Stacked rather than sat beside the control, which is what "above" is here.
+    expect(label.className).toContain("flex-col");
+    // The SAME heading as the field under it, not its own quieter variety -- compared
+    // against the body's rather than against a literal, so the two cannot drift apart
+    // while this still passes.
+    const body = el.querySelector("textarea")!.closest("label")!;
+    expect(heading.className).toBe(body.querySelector("span")!.className);
+  });
+
   it("sends the format the writer chose, rather than leaving it to be guessed", async () => {
     publish.mockResolvedValue({ activity: {}, pending: false });
     await render();

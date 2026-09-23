@@ -191,16 +191,23 @@ export default function MangroveCompose({
             />
           </label>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-3">
             {/* The media type travels with the memory. The preview renderer reads it
                 and only sniffs the body when it is absent, so saying "plain text"
                 here is what stops a body full of asterisks being rendered as
                 emphasis for every reader afterwards -- which is why the choice is
-                made BEFORE the box, not under it. */}
-            <label className="flex items-center gap-2">
-              <span className="text-sm text-fg-muted">{t.mangrove.formatLabel}</span>
+                made BEFORE the box, not under it.
+
+                ITS HEADING SITS ABOVE IT, like every other field on this form. It was
+                the one label rendered inline -- muted, beside its control -- so the
+                form read as three fields and a stray setting, and the eye running down
+                the headings skipped the one decision made before anything is typed.
+                `self-start` because a dropdown with two options has no reason to be as
+                wide as the box below it. */}
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-fg">{t.mangrove.formatLabel}</span>
               <select
-                className={selectClass}
+                className={`mt-1 self-start ${selectClass}`}
                 value={mediaType}
                 aria-label={t.mangrove.formatLabel}
                 onChange={(e) => setMediaType(e.target.value as MangroveMediaType)}
@@ -210,7 +217,7 @@ export default function MangroveCompose({
               </select>
             </label>
 
-            <label className="mt-2 flex flex-col gap-1">
+            <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
               <Textarea
                 className="mt-1 min-h-40 rounded-lg border border-brand bg-elevated px-3 py-2"

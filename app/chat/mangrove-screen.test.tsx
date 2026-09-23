@@ -868,9 +868,40 @@ function claimsOf(...cells: { cell: string; published: string; content?: string 
   };
 }
 
-/** The cards on screen, in the order they are rendered. */
+/**
+ * The cards on screen, in the order they are rendered.
+ *
+ * Filtered on the footer every card has, because a fragment's entity chips are <li>
+ * too -- an unfiltered list would count them as cards in any fixture holding one.
+ */
 function cards(): HTMLLIElement[] {
-  return [...host!.querySelectorAll("li")];
+  return [...host!.querySelectorAll("li")].filter((li) => li.querySelector(":scope > footer"));
+}
+
+/** The card's regions, in the order they are rendered. */
+function regionsOf(li: HTMLLIElement): string[] {
+  return [...li.children].map((el) => el.tagName);
+}
+
+/** What the card says it IS, above the body. */
+function headerOf(li: HTMLLIElement): string {
+  return li.querySelector("header")!.textContent!;
+}
+
+/** The body: the region between the header and the record. */
+function bodyOf(li: HTMLLIElement): Element {
+  return li.children[1];
+}
+
+/** The answer the card's record gives under one of its column headings. */
+function field(li: HTMLLIElement, label: string): string | undefined {
+  const dt = [...li.querySelectorAll("footer dt")].find((d) => d.textContent === label);
+  return dt?.parentElement?.querySelector("dd")?.textContent ?? undefined;
+}
+
+/** Every column heading the record carries, in order -- so an EXTRA one fails too. */
+function labelsOf(li: HTMLLIElement): string[] {
+  return [...li.querySelectorAll("footer dt")].map((d) => d.textContent!);
 }
 
 describe("the reading, as a list of cards", () => {
@@ -887,8 +918,8 @@ describe("the reading, as a list of cards", () => {
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
 
     await render();
-    // The cell is in each card's meta line, so the cards' own text is the order.
-    const order = cards().map((li) => li.querySelector("p")!.textContent!.split(" ·")[0]);
+    // Prose is headed by its cell, so the cards' own headers are the order.
+    const order = cards().map(headerOf);
     expect(order).toEqual(["first", "second", "third", "fourth", "fifth"]);
   });
 
@@ -933,10 +964,12 @@ describe("a card as the way into the sheet", () => {
     const card = await renderOne();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
 
-    // On the meta line, which is card and not control -- the event bubbles to the
-    // card the way a click anywhere in its body does.
+    // On a paragraph of the body, which is card and not control -- the event bubbles
+    // to the card the way a click anywhere in its body does.
     await act(async () => {
-      card.querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      bodyOf(card)
+        .querySelector("p")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const sheet = document.querySelector('[role="dialog"]');
@@ -1010,9 +1043,130 @@ describe("a card as the way into the sheet", () => {
     expect(card.getAttribute("tabindex")).toBeNull();
 
     await act(async () => {
-      card.querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      bodyOf(card)
+        .querySelector("p")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+// THE CARD'S BOTTOM SECTION, WHICH IS WHERE THE PROVENANCE WENT.
+//
+// It used to be a line of run-together small print ABOVE the body -- cell, byline,
+// audience and endorsements joined by middle dots -- so the first thing read on every
+// card was four items that had to be parsed to find two answers, and the memory itself
+// started halfway down. It is a record in columns under the body now.
+//
+// What these pin is the arrangement, because the arrangement is the whole change: the
+// order of the three regions, that every one of those facts survived the move, that
+// none of them is left above the body -- and that the footer is INERT, which is the bug
+// this refactor was most likely to reintroduce. Half a card's content moving into a new
+// region is exactly how a region ends up opening the sheet the card opens.
+
+const SHARED_FILE = {
+  reading: "received",
+  claims: [
+    {
+      cell: "attachments/nota-manguezais.md",
+      author: "mangrove:actor:alice:person",
+      object: {
+        id: "mangrove:obj:nota",
+        type: "MemoryNote",
+        cell: "attachments/nota-manguezais.md",
+        blob: "b".repeat(64),
+        fileName: "nota-manguezais.md",
+        size: 2048,
+      },
+      published: "2026-09-22T10:00:00Z",
+      deleted: false,
+      evidence: 2,
+      audience: ["mangrove:group:tenant:t1"],
+    },
+  ],
+  held: [],
+};
+
+describe("the record under a card", () => {
+  beforeEach(() => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("lays every card out as a header, a body and a record, in that order", async () => {
+    readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
+    await render();
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+
+    readTimeline.mockResolvedValue(SHARED_FILE);
+    await render();
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+
+    // The third kind, whose header is its own branch: a fragment is titled by WHAT it
+    // is, since a piece of a graph has no name of its own.
+    readTimeline.mockResolvedValue(
+      claimOf({
+        id: "mangrove:obj:frag",
+        type: "MemoryNote",
+        cell: "graph:b8d28853aae5",
+        mediaType: GRAPH_FRAGMENT_MEDIA_TYPE,
+        content: FRAGMENT_BODY,
+      }),
+    );
+    await render();
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
+    expect(headerOf(cards()[0])).toBe(en.mangrove.fragmentTitle);
+    expect(field(cards()[0], ID)).toBe("graph:b8d28853aae5");
+  });
+
+  // ASSERTED ON A FILE, because it is the kind whose header and whose identifier are
+  // different strings -- `nota-manguezais.md` against `attachments/nota-manguezais.md`.
+  // On prose the two are one thing, and "the identifier is not above the body" would be
+  // a claim about a coincidence.
+  it("carries the sender, the recipients and the identifier, and none of them above the body", async () => {
+    readTimeline.mockResolvedValue(SHARED_FILE);
+    await render();
+    const card = cards()[0];
+
+    expect(labelsOf(card)).toEqual([SENDER, RECIPIENTS, ID, ENDORSED]);
+    expect(field(card, SENDER)).toBe(`${en.mangrove.actorPerson} (alice)`);
+    expect(field(card, RECIPIENTS)).toBe(en.mangrove.audienceTenant);
+    expect(field(card, ID)).toBe("attachments/nota-manguezais.md");
+    expect(field(card, ENDORSED)).toBe("2");
+
+    // The header says what the file IS, and nothing about where it came from.
+    const above = headerOf(card) + bodyOf(card).textContent!;
+    expect(above).toContain("nota-manguezais.md");
+    expect(above).not.toContain("attachments/");
+    expect(above).not.toContain(en.mangrove.actorPerson);
+    expect(above).not.toContain(en.mangrove.audienceTenant);
+  });
+
+  // THE RECORD IS NOT THE BODY. A click on it must not open a sheet over the memory:
+  // it is dense small print with controls in it, and the share panel lives there too.
+  it("does not open the sheet when the record is clicked", async () => {
+    readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
+    await render();
+    const card = cards()[0];
+    // A card that really does have a sheet, or this asserts nothing.
+    expect(card.getAttribute("role")).toBe("button");
+
+    for (const el of [
+      card.querySelector("footer")!,
+      card.querySelector("footer dt")!,
+      card.querySelector("footer dd")!,
+    ]) {
+      await act(async () => {
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    }
+
+    // And the body still does open it, so the guard above is not simply a card that
+    // stopped working.
+    await act(async () => {
+      bodyOf(card).querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   });
 });
 
@@ -1095,18 +1249,15 @@ const FOUR = {
   held: [],
 };
 
-/** The card whose memory is about this cell. */
+/** The card whose memory is about this cell -- which, for prose, is its header. */
 function cardOf(cell: string): HTMLLIElement {
-  return cards().find((li) => li.querySelector("p")!.textContent!.startsWith(`${cell} ·`))!;
+  return cards().find((li) => headerOf(li) === cell)!;
 }
 
-/** Its meta line -- where a card says where it came from and where it went. */
-function metaOf(cell: string): string {
-  return cardOf(cell).querySelector("p")!.textContent!;
-}
-
-const by = (who: string) => en.mangrove.by.replace("{who}", who);
-const to = (who: string) => en.mangrove.sharedWith.replace("{who}", who);
+const SENDER = en.mangrove.senderLabel;
+const RECIPIENTS = en.mangrove.recipientsLabel;
+const ID = en.mangrove.identifierLabel;
+const ENDORSED = en.mangrove.endorsedLabel;
 
 describe("who produced a memory", () => {
   beforeEach(() => {
@@ -1114,28 +1265,26 @@ describe("who produced a memory", () => {
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
   });
 
+  // EXACT VALUES AND THE WHOLE SET OF HEADINGS, because "you" is a prefix of "your
+  // agent" and because a column that appeared out of nowhere would otherwise pass.
   it("reads as you when your own person wrote it", async () => {
     await render();
-    // WHOLE-LINE equality, because "by you" is a prefix of "by your agent": a
-    // `toContain` would pass on the wrong card.
-    expect(metaOf("mine")).toBe(`mine · ${by(en.mangrove.actorYou)} · ${to(en.mangrove.audiencePrivate)}`);
+    const card = cardOf("mine");
+    expect(labelsOf(card)).toEqual([SENDER, RECIPIENTS, ID]);
+    expect(field(card, SENDER)).toBe(en.mangrove.actorYou);
+    expect(field(card, ID)).toBe("mine");
   });
 
   it("reads as your agent when your agent wrote it", async () => {
     await render();
-    expect(metaOf("agents")).toBe(
-      `agents · ${by(en.mangrove.actorYourAgent)} · ${to(en.mangrove.audienceSubscription)}`,
-    );
+    expect(field(cardOf("agents"), SENDER)).toBe(en.mangrove.actorYourAgent);
   });
 
   // Neither of the two the app can resolve -- and no invented name either. An
   // arbitrary actor cannot be looked up, so the kind is named and the id stays.
   it("reads as neither when somebody else wrote it, and keeps their id", async () => {
     await render();
-    const meta = metaOf("theirs");
-    expect(meta).toContain(by(`${en.mangrove.actorPerson} (alice)`));
-    expect(meta).not.toContain(en.mangrove.actorYou);
-    expect(meta).not.toContain(en.mangrove.actorYourAgent);
+    expect(field(cardOf("theirs"), SENDER)).toBe(`${en.mangrove.actorPerson} (alice)`);
   });
 
   // The byline must never be wrong, and identity arrives a beat after the first
@@ -1144,7 +1293,11 @@ describe("who produced a memory", () => {
   it("says a person rather than you while the member's own ids are unknown", async () => {
     readIdentity.mockRejectedValue(new MangroveError("mangrove_unreachable"));
     await render();
-    expect(metaOf("mine")).toBe(`mine · ${by(`${en.mangrove.actorPerson} (me)`)}`);
+    const card = cardOf("mine");
+    expect(field(card, SENDER)).toBe(`${en.mangrove.actorPerson} (me)`);
+    // Not theirs to call private either: without the member's own ids, an empty
+    // audience is not known to mean "only you".
+    expect(labelsOf(card)).toEqual([SENDER, ID]);
   });
 });
 
@@ -1156,11 +1309,11 @@ describe("who a memory was shared with", () => {
 
   it("names a person, a subscription and a tenant, rather than printing the id", async () => {
     await render();
-    expect(metaOf("theirs")).toContain(to(`${en.mangrove.actorPerson} (bob)`));
-    expect(metaOf("agents")).toContain(to(en.mangrove.audienceSubscription));
-    expect(metaOf("everybody")).toContain(to(en.mangrove.audienceTenant));
+    expect(field(cardOf("theirs"), RECIPIENTS)).toBe(`${en.mangrove.actorPerson} (bob)`);
+    expect(field(cardOf("agents"), RECIPIENTS)).toBe(en.mangrove.audienceSubscription);
+    expect(field(cardOf("everybody"), RECIPIENTS)).toBe(en.mangrove.audienceTenant);
     // The literal words the two group ids used to render as.
-    expect(metaOf("agents")).not.toContain("mangrove:group:");
+    expect(cardOf("agents").textContent).not.toContain("mangrove:group:");
   });
 
   // An empty audience means published to the author alone. That is an answer on your
@@ -1173,9 +1326,11 @@ describe("who a memory was shared with", () => {
       held: [],
     });
     await render();
-    expect(metaOf("mine")).toContain(to(en.mangrove.audiencePrivate));
-    expect(metaOf("theirs")).not.toContain(en.mangrove.audiencePrivate);
-    expect(metaOf("theirs")).toBe(`theirs · ${by(`${en.mangrove.actorPerson} (alice)`)}`);
+    expect(field(cardOf("mine"), RECIPIENTS)).toBe(en.mangrove.audiencePrivate);
+    // ABSENT, not empty: a heading over a blank would be the same invention with
+    // more furniture around it.
+    expect(labelsOf(cardOf("theirs"))).toEqual([SENDER, ID]);
+    expect(cardOf("theirs").textContent).not.toContain(en.mangrove.audiencePrivate);
   });
 });
 
@@ -1235,9 +1390,9 @@ describe("passing a memory on", () => {
       toEmails: [],
     });
     expect(cardOf("mine").textContent).toContain(en.mangrove.publishedOk);
-    // AND THE READING IS RE-READ. The card's own meta line says who this memory
-    // reached, so leaving it as it was would print "shared with only you" directly
-    // above the word "Shared."
+    // AND THE READING IS RE-READ. The card's own record says who this memory reached,
+    // and the panel sits in the same footer -- so leaving it as it was would print
+    // "Recipients: only you" beside the word "Shared."
     expect(readTimeline).toHaveBeenCalledTimes(2);
   });
 
