@@ -164,6 +164,23 @@ export function buildStylesheet({
         "text-opacity": 0.45,
       },
     },
+    // A node the SHARE's hop control pulled in. It is in the payload exactly as a ticked node
+    // is, so it has to be visible — otherwise raising the hops changes the "sharing N" readout
+    // and leaves the map identical, which is the member being asked to publish blind.
+    //
+    // DASHED and MUTED against the tick's solid double `fg`: the member chose a seed and this
+    // one merely arrived, and two states drawn alike would be one state. Neither border colour
+    // is a legend colour — the legend reads `palette.types` — so the type/cluster encoding is
+    // untouched. Before `node.checked` so a node that is somehow both draws as chosen.
+    {
+      selector: "node.reached",
+      style: {
+        "border-color": p.muted,
+        "border-width": 3,
+        "border-style": "dashed",
+        "text-opacity": 1,
+      },
+    },
     // The member's multi-select, drawn on the map the way the list draws its ticks. Without a
     // rule here the map would accept Ctrl-clicks and look identical afterwards — the count bar
     // would say "4 selected" and the graph would not say which four.

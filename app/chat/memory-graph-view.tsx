@@ -99,6 +99,8 @@ export default function MemoryGraphView({
   selected,
   onSelect,
   checked,
+  shareNames,
+  selectionBar,
   tools,
   setTool,
   onTypeFilter,
@@ -153,6 +155,24 @@ export default function MemoryGraphView({
    * `applyHighlight`, which is the single owner of class application on this instance.
    */
   checked: ReadonlySet<string>;
+  /**
+   * The exact set the share button would send — the ticked names expanded by the panel's hop
+   * control. Passed down rather than recomputed here on purpose: the map has to draw what the
+   * payload carries, and two expansions would eventually disagree.
+   *
+   * Absent where there is nothing to share (no mangrove), in which case the map draws ticks
+   * only — a reach with no destination is a highlight that means nothing.
+   */
+  shareNames?: ReadonlySet<string>;
+  /**
+   * The panel's selection bar — the count, the hop control, share and clear.
+   *
+   * Handed in and rendered under the filter bar rather than left above the map, which is where
+   * the panel's own render site put it: the member reads the search box first and the controls
+   * that act on what they found second. It also lands the controls INSIDE the fullscreen
+   * element, the same reason the filter bar moved in here.
+   */
+  selectionBar?: ReactNode;
   /**
    * The whole `memoryGraph` dictionary, not a label per control.
    *
@@ -545,8 +565,9 @@ export default function MemoryGraphView({
       pathMode,
       pathFrom,
       checked,
+      shareNames,
     });
-  }, [built, selected, tools.hopRadius, path, pathMode, pathFrom, checked]);
+  }, [built, selected, tools.hopRadius, path, pathMode, pathFrom, checked, shareNames]);
 
   // Leaving path mode drops the trace, so re-entering never starts half-way through somebody
   // else's question.
@@ -775,6 +796,11 @@ export default function MemoryGraphView({
     // would otherwise be needed for.
     <div ref={shell} className="flex h-full flex-col bg-bg">
       <MapFilterBar filter={filter} tools={tools} set={setTool} copy={copy} />
+      {/* BELOW the filter bar, never above it. The panel renders this same bar above the
+          content on every other tab, which put the share controls on top of the map's search
+          box — the member searches for what to pick before picking it, so the order was
+          backwards here and only here. */}
+      {selectionBar}
       {/* Horizontal: the graph column, then the tools sidebar. This row's height is the whole map
           area, so the sidebar's height no longer depends on whether the detail pane is open. */}
       <div className="flex min-h-0 flex-1">

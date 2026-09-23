@@ -166,7 +166,7 @@ describe("applyHighlight — reapplying is always safe", () => {
     const cy = line();
     applyHighlight(cy, { ...IDLE, selected: "a" });
     applyHighlight(cy, IDLE);
-    for (const c of ["faded", "near", "picked", "path", "checked"]) {
+    for (const c of ["faded", "near", "picked", "path", "checked", "reached"]) {
       expect(cy.elements().filter((e) => e.hasClass(c)).length, c).toBe(0);
     }
     cy.destroy();
@@ -233,6 +233,105 @@ describe("applyHighlight — the multi-select", () => {
     applyHighlight(cy, { ...IDLE, selected: "a", checked: new Set(["a"]) });
     expect(cy.getElementById("a").hasClass("checked")).toBe(true);
     expect(cy.getElementById("a").hasClass("picked")).toBe(true);
+    cy.destroy();
+  });
+});
+
+// The share's reach, drawn on the map.
+//
+// Without it, raising the share's hop control changed the count on screen and left the picture
+// identical — the member was asked to publish a fragment they could not see. Two things have to
+// hold: an arrival is drawn DIFFERENTLY from a seed (one was chosen, the other came along), and
+// an arrival outside the focus radius is not quietly faded to nothing.
+describe("applyHighlight — the share's reach", () => {
+  const reached = (cy: Core) =>
+    cy
+      .nodes()
+      .filter((n) => n.hasClass("reached"))
+      .map((n) => n.id() as string)
+      .sort();
+
+  it("marks what the share reached, and not the seeds it started from", () => {
+    const cy = line();
+    applyHighlight(cy, {
+      ...IDLE,
+      checked: new Set(["a"]),
+      shareNames: new Set(["a", "b", "c"]),
+    });
+    expect(reached(cy)).toEqual(["b", "c"]);
+    expect(cy.getElementById("a").hasClass("checked")).toBe(true);
+    // Disjoint, so "what the member chose" stays readable off the classes alone.
+    expect(cy.getElementById("a").hasClass("reached")).toBe(false);
+    cy.destroy();
+  });
+
+  it("marks nothing when the share carries only the seeds", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, checked: new Set(["a"]), shareNames: new Set(["a"]) });
+    expect(reached(cy)).toEqual([]);
+    cy.destroy();
+  });
+
+  it("ignores a shared name this graph does not draw", () => {
+    // The expansion runs over the WHOLE graph's relations, so it can name an entity the map
+    // left out under a filter or the node ceiling.
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, shareNames: new Set(["b", "not-here"]) });
+    expect(reached(cy)).toEqual(["b"]);
+    cy.destroy();
+  });
+
+  // The focus radius and the share's hops are different numbers on purpose, so the share
+  // normally reaches past what the selection leaves lit. A class under `opacity: 0.1` is not
+  // a highlight.
+  it("keeps the reach out of the fade when an entity is open", () => {
+    const cy = line();
+    applyHighlight(cy, {
+      ...IDLE,
+      selected: "a",
+      hopRadius: 1,
+      checked: new Set(["a"]),
+      shareNames: new Set(["a", "b", "c"]),
+    });
+    expect(lit(cy)).toEqual(["a", "b", "c"]);
+    expect(cy.getElementById("c").hasClass("reached")).toBe(true);
+    // Still nothing beyond it: the exemption is the share set, not a wider radius.
+    expect(cy.getElementById("d").hasClass("faded")).toBe(true);
+    cy.destroy();
+  });
+
+  // The mangrove extracts the relations among the names it is given, so an edge between two
+  // shared entities is part of the payload and drawing it as good as invisible would
+  // misdescribe what travels.
+  it("keeps the edges between shared entities out of the fade too", () => {
+    const cy = line();
+    applyHighlight(cy, {
+      ...IDLE,
+      selected: "a",
+      hopRadius: 1,
+      shareNames: new Set(["a", "b", "c"]),
+    });
+    expect(cy.getElementById("bc").hasClass("faded")).toBe(false);
+    // `near` means "inside the focus radius", which this edge is not — exempt is not lit.
+    expect(cy.getElementById("bc").hasClass("near")).toBe(false);
+    expect(cy.getElementById("cd").hasClass("faded")).toBe(true);
+    cy.destroy();
+  });
+
+  it("survives a traced path, like the ticks it sits beside", () => {
+    const cy = line();
+    const path = findPath(cy, "a", "c");
+    applyHighlight(cy, { ...IDLE, path, shareNames: new Set(["island"]) });
+    expect(reached(cy)).toEqual(["island"]);
+    cy.destroy();
+  });
+
+  it("marks nothing when no share is on offer", () => {
+    // No mangrove, no share — the panel passes nothing, and the map draws ticks only.
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, selected: "a", checked: new Set(["a"]) });
+    expect(reached(cy)).toEqual([]);
+    expect(lit(cy)).toEqual(["a", "b"]);
     cy.destroy();
   });
 });
