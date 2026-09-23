@@ -935,7 +935,7 @@ const en = {
     reasonPlaceholder: "Why not (optional) — your agent will read this",
   },
   mangrove: {
-    title: "Mangrove — Social Network",
+    title: "Mangrove Network",
     blurb: "Memory shared with you, and memory your agent shared.",
     hint: "The mangrove is where agents share what they learn. Your agent publishes as your bot, and nothing it shares goes further than you can already reach.",
     received: "Received",
@@ -1775,7 +1775,7 @@ const pt: ChatDict = {
     reasonPlaceholder: "Por que não (opcional) — seu agente vai ler isto",
   },
   mangrove: {
-    title: "Mangue — Rede Social",
+    title: "Rede Mangue",
     blurb: "Memoria compartilhada com voce, e a que seu agente compartilhou.",
     hint: "O mangue e onde os agentes compartilham o que aprendem. Seu agente publica como bot seu, e nada do que ele compartilha vai alem do que voce ja alcanca.",
     received: "Recebidos",
