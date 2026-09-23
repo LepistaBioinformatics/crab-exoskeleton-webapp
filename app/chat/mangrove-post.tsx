@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { cva } from "class-variance-authority";
 import { Download, GitMerge, Network, Paperclip, Quote } from "lucide-react";
 import type { Workspace } from "./fragment";
-import MangroveContent from "./mangrove-content";
+import MangroveContent, { isCut } from "./mangrove-content";
 import { formatSize } from "@/app/chat/file-visuals";
 import {
   downloadBlob,
@@ -39,6 +40,49 @@ import { useT } from "@/lib/i18n/context";
 // every entity and observation the agent already holds creates zero of all three, and a
 // control that just stopped being busy would look like it had failed. Zero is an answer
 // and gets a sentence of its own.
+//
+// AND THE POST IS THE CARD. It used to be a body the screen dropped into an <li> it
+// styled itself, in three places. The card is now here, once, because the thing that
+// makes a card a card -- it opens the sheet when you click it -- has to know which of
+// the three kinds it is holding, and only this component does.
+
+/** Recent, cut, or neither -- the two things that change how a card looks. */
+const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
+  variants: {
+    // An accent edge and a lift -- the treatment chat-view already gives the one
+    // card on screen it wants read first. NOT a different background: the preview's
+    // fade-out is painted `from-surface`, so a card that changed its background
+    // would show the fade as a wash across its last two lines.
+    recent: { true: "border-accent/40 shadow-elevated", false: "border-rule-strong" },
+    // The accent means "interactive", which is exactly what this is saying.
+    openable: {
+      true: "cursor-pointer hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      false: "",
+    },
+  },
+  defaultVariants: { recent: false, openable: false },
+});
+
+/**
+ * Whether an event that reached the card started at something with its own answer to it.
+ *
+ * A WHOLE CARD BEING CLICKABLE MUST NOT SWALLOW WHAT IS INSIDE IT. Download, merge,
+ * reference-in-chat, admit, accept/reject and the revoke disclosure all live in a card,
+ * and every one of them would otherwise also open the sheet. A <button> wrapping the
+ * card is not valid HTML around those, and a stretched overlay button would cover the
+ * links and code blocks a markdown body renders -- so the card carries the handler and
+ * refuses events that began somewhere that already handles them.
+ *
+ * `[role="dialog"]` is in the list because React propagates a PORTAL's events through
+ * the React tree: the sheet this card opened is rendered inside it, so a click in the
+ * sheet arrives here too.
+ */
+function fromControl(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest('a, button, summary, input, textarea, select, label, [role="dialog"]') !== null
+  );
+}
 
 /** Beyond this many names the list says "and N more" instead of running down the card. */
 const FRAGMENT_NAMES = 12;
@@ -185,7 +229,9 @@ function FileView({ workspace, object }: { workspace: Workspace; object: Mangrov
 }
 
 /**
- * One memory's body, and the things a member can do with it.
+ * One memory, as the card a reading is a list of: where it came from, its body, and the
+ * things a member can do with it. A card whose body is cut opens the sheet when it is
+ * clicked or when Enter or Space is pressed on it.
  *
  * `onReference` is absent when there is nowhere to reference INTO -- the same rule the
  * graph panel's own control follows. When it is there, the chip it fills carries the
@@ -198,7 +244,11 @@ export default function MangrovePost({
   author,
   title,
   subtitle,
+  meta,
+  actions,
   canMerge = true,
+  recent = false,
+  dimmed = false,
   onReference,
 }: {
   workspace: Workspace;
@@ -208,6 +258,10 @@ export default function MangrovePost({
   /** The sheet's heading when the body is long enough to need one. */
   title: string;
   subtitle?: React.ReactNode;
+  /** The line above the body: where this came from, where it went, what endorsed it. */
+  meta?: React.ReactNode;
+  /** What the reading lets a member DO with it -- admit, decide, revoke. */
+  actions?: React.ReactNode;
   /**
    * False where merging would be premature. A cross-scope publication awaiting a
    * decision is the one case: whoever governs it has to READ the fragment to decide,
@@ -215,31 +269,70 @@ export default function MangrovePost({
    * they have accepted it is not a thing the screen should offer.
    */
   canMerge?: boolean;
+  /** One of the newest few in this reading. */
+  recent?: boolean;
+  /** Revoked: still listed, struck through, and no longer something to act on. */
+  dimmed?: boolean;
   onReference?: (ref: MangroveReference) => void;
 }) {
   const t = useT(chatCopy);
   const [referenced, setReferenced] = useState(false);
+  const [open, setOpen] = useState(false);
   const fragment = parseGraphFragment(object);
+  const content = object.content ?? "";
+  // ONLY PROSE HAS MORE THAN THE CARD SHOWS. A fragment's card is a summary by
+  // intent -- names and counts, never the JSON -- and a file's card is the whole
+  // of what arrived. A sheet over either would open onto what is already on screen.
+  const openable = !fragment && !object.blob && isCut(content);
+
+  const opener: React.LiHTMLAttributes<HTMLLIElement> = openable
+    ? {
+        role: "button",
+        tabIndex: 0,
+        "aria-label": t.mangrove.openPost.replace("{cell}", object.cell),
+        onClick: (e) => {
+          if (!fromControl(e.target)) setOpen(true);
+        },
+        onKeyDown: (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          if (fromControl(e.target)) return;
+          // Space scrolls the page otherwise, which is the reading being lost
+          // at the moment it opens.
+          e.preventDefault();
+          setOpen(true);
+        },
+      }
+    : {};
 
   return (
-    <>
-      {fragment ? (
-        <FragmentView
-          workspace={workspace}
-          object={object}
-          fragment={fragment}
-          canMerge={canMerge}
-        />
-      ) : object.blob ? (
-        <FileView workspace={workspace} object={object} />
-      ) : (
-        <MangroveContent
-          content={object.content ?? ""}
-          mediaType={object.mediaType}
-          title={title}
-          subtitle={subtitle}
-        />
-      )}
+    <li
+      {...opener}
+      data-recent={recent ? "true" : undefined}
+      className={card({ recent, openable })}
+    >
+      {meta && <p className="text-xs text-fg-muted">{meta}</p>}
+
+      <div className={`mt-1 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}>
+        {fragment ? (
+          <FragmentView
+            workspace={workspace}
+            object={object}
+            fragment={fragment}
+            canMerge={canMerge}
+          />
+        ) : object.blob ? (
+          <FileView workspace={workspace} object={object} />
+        ) : (
+          <MangroveContent
+            content={content}
+            mediaType={object.mediaType}
+            title={title}
+            subtitle={subtitle}
+            open={open}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
 
       {onReference && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -265,6 +358,8 @@ export default function MangrovePost({
           {referenced && <span className="text-xs text-fg-muted">{t.mangrove.referenced}</span>}
         </div>
       )}
-    </>
+
+      {actions && <div className="mt-2">{actions}</div>}
+    </li>
   );
 }
