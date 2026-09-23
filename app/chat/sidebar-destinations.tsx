@@ -139,8 +139,20 @@ export function rowBlurb(row: DestinationRow, t: ChatDict): string {
 }
 
 /** What the member can actually press: the group's rows, less the ones hidden. */
-function visibleRows(group: DestinationGroup, hideProjects: boolean): DestinationRow[] {
-  return hideProjects ? group.rows.filter((row) => row.kind !== "projects") : group.rows;
+/**
+ * Which rows this member can be offered at all.
+ *
+ * ONE FILTER FOR BOTH, because the sidebar and the collapsed rail read it and
+ * the file's own comments already say what a second hand-written answer costs.
+ */
+export type HiddenRows = { projects?: boolean; mangrove?: boolean };
+
+function visibleRows(group: DestinationGroup, hidden: HiddenRows): DestinationRow[] {
+  return group.rows.filter((row) => {
+    if (row.kind === "projects") return !hidden.projects;
+    if (row.kind === "mangrove") return !hidden.mangrove;
+    return true;
+  });
 }
 
 /** Which of the two currents this row holds, if either. */
@@ -170,19 +182,20 @@ export function railDestinationGroups({
   t,
   openDestination,
   openSection,
-  hideProjects = false,
+  hidden = {},
   onDestination,
   onSection,
 }: {
   t: ChatDict;
   openDestination: Destination | null;
   openSection: Section | null;
-  hideProjects?: boolean;
+  /** Rows to leave out entirely -- absent, never present-and-dead. */
+  hidden?: HiddenRows;
   onDestination: (to: Destination) => void;
   onSection: (next: Section | null) => void;
 }): RailPanel[][] {
   return DESTINATION_GROUPS.map((group) =>
-    visibleRows(group, hideProjects).map((row) => ({
+    visibleRows(group, hidden).map((row) => ({
       key: rowKey(row),
       Icon: rowIcon(row),
       label: rowLabel(row, t),
@@ -251,7 +264,7 @@ export default function SidebarDestinations({
   openSection,
   onDestination,
   onSection,
-  hideProjects = false,
+  hidden = {},
 }: {
   /**
    * The destination the centre pane is showing, or null -- the fragment's `v`.
@@ -278,7 +291,8 @@ export default function SidebarDestinations({
    * its own click: the member sees a way in, presses it, and nothing happens -- which is
    * worse than the row simply not being there.
    */
-  hideProjects?: boolean;
+  /** Rows to leave out entirely -- absent, never present-and-dead. */
+  hidden?: HiddenRows;
 }) {
   const t = useT(chatCopy);
   // OPEN until storage says otherwise, restored in an effect rather than read while
@@ -314,7 +328,7 @@ export default function SidebarDestinations({
   return (
     <nav aria-label={t.shell.destinations} className="flex flex-col">
       {DESTINATION_GROUPS.map((group) => {
-        const rows = visibleRows(group, hideProjects);
+        const rows = visibleRows(group, hidden);
         // A heading over nothing is worse than no heading. Nothing empties a group
         // today -- `hideProjects` leaves the mangrove behind -- but a group that can
         // be filtered can be emptied.

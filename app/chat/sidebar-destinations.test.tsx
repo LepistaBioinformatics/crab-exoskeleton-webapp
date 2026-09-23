@@ -96,13 +96,59 @@ describe("which rows are marked, and how", () => {
 // control swallows its own click, so the member sees a way in that does nothing.
 describe("an agent whose proxy has no projects", () => {
   it("omits the projects row", () => {
-    const html = list({ hideProjects: true });
+    const html = list({ hidden: { projects: true } });
     expect(html).not.toContain(`>${en.projects.title}</span>`);
-    // Only PROJECTS is hidden. The mangrove has its own switch -- an operator who
-    // never enabled it gets no rows from the screen itself -- so hiding one
-    // must not hide the other.
+    // Only PROJECTS. The two switches are independent, and hiding one must not
+    // hide the other.
     expect(html.split("<li>").length - 1).toBe(SECTION_ORDER.length + DESTINATIONS.length - 1);
     expect(html).toContain(`>${en.mangrove.title}</span>`);
+  });
+});
+
+// A DEPLOYMENT WITH NO MANGROVE OFFERED THE ROW ANYWAY, and answered it with a
+// blank centre pane. The screen hides ITSELF on the proxy's 404, which is what
+// made the comment this block replaces -- "the mangrove has its own switch, an
+// operator who never enabled it gets no rows from the screen itself" -- read as
+// though the row went with it. It did not: the filter only ever knew about
+// projects.
+//
+// Absent, not present-and-dead, which is the rule the rest of this column
+// follows.
+describe("a deployment with no mangrove", () => {
+  it("omits the mangrove row", () => {
+    const html = list({ hidden: { mangrove: true } });
+    expect(html).not.toContain(`>${en.mangrove.title}</span>`);
+    expect(html).toContain(`>${en.projects.title}</span>`);
+    expect(html.split("<li>").length - 1).toBe(SECTION_ORDER.length + DESTINATIONS.length - 1);
+  });
+
+  it("drops it from the collapsed rail too", () => {
+    const groups = railDestinationGroups({
+      t: en,
+      openDestination: null,
+      openSection: null,
+      hidden: { mangrove: true },
+      onDestination: () => {},
+      onSection: () => {},
+    });
+    const keys = groups.flat().map((p) => p.key);
+    expect(keys).not.toContain("mangrove");
+    expect(keys).toContain("projects");
+  });
+
+  // Both at once is a real configuration -- an old proxy with no mangrove -- and
+  // it must not leave an empty group drawing a heading over nothing.
+  it("leaves no empty group when both are hidden", () => {
+    const groups = railDestinationGroups({
+      t: en,
+      openDestination: null,
+      openSection: null,
+      hidden: { projects: true, mangrove: true },
+      onDestination: () => {},
+      onSection: () => {},
+    });
+    expect(groups.every((g) => g.length > 0)).toBe(true);
+    expect(groups.flat().map((p) => p.key)).toEqual([...SECTION_ORDER]);
   });
 });
 
@@ -151,7 +197,7 @@ describe("the rows the rail reads", () => {
       t: en,
       openDestination: null,
       openSection: null,
-      hideProjects: true,
+      hidden: { projects: true },
       onDestination: () => {},
       onSection: () => {},
     });

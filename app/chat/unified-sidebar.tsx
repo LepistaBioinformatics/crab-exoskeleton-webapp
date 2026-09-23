@@ -8,7 +8,7 @@ import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import LogoutButton from "./logout-button";
 import HistorySidebar from "./history-sidebar";
 import type { Destination } from "./destination";
-import SidebarDestinations from "./sidebar-destinations";
+import SidebarDestinations, { type HiddenRows } from "./sidebar-destinations";
 import AdminLink from "./admin-link";
 import InstallAppButton from "./install-app-button";
 import { useT } from "@/lib/i18n/context";
@@ -42,7 +42,7 @@ export default function UnifiedSidebar({
   onNewChat,
   onConversationSelect,
   onCollapse,
-  hideProjects,
+  hidden,
   showDestinations = true,
 }: {
   email: string;
@@ -71,7 +71,7 @@ export default function UnifiedSidebar({
   onConversationSelect?: () => void;
   onCollapse?: () => void;
   /** The agent's proxy predates projects; the row is omitted rather than disabled. */
-  hideProjects?: boolean;
+  hidden?: HiddenRows;
   /**
    * False while the pane is COLLAPSED, which is also the state the hover preview shows
    * it in. The rail standing beside the preview already lists these same destinations as
@@ -128,7 +128,7 @@ export default function UnifiedSidebar({
             <SidebarDestinations
               openDestination={openDestination}
               openSection={openSection}
-              hideProjects={hideProjects}
+              hidden={hidden}
               onDestination={(to) => {
                 onDestination(to);
                 onConversationSelect?.();
