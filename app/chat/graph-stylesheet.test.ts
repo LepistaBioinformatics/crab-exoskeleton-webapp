@@ -115,6 +115,7 @@ describe("buildStylesheet", () => {
     for (const s of [
       ".faded",
       "node.checked",
+      "node.reached",
       "node.picked",
       "edge.near",
       "node.path",

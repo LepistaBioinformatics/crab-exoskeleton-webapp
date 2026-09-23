@@ -186,6 +186,32 @@ const drawnAsChecked = () =>
     .map((n) => n.id() as string)
     .sort();
 
+/** The nodes the hop control pulled in — the arrivals, never the seeds. */
+const drawnAsReached = () =>
+  map()
+    .nodes()
+    .filter((n) => n.hasClass("reached"))
+    .map((n) => n.id() as string)
+    .sort();
+
+/** Everything the map claims is in the fragment, seeds and arrivals together. */
+const drawnAsShared = () =>
+  map()
+    .nodes()
+    .filter((n) => n.hasClass("checked") || n.hasClass("reached"))
+    .map((n) => n.id() as string)
+    .sort();
+
+/** Setting the share's reach through the control the member actually turns. */
+async function setHops(host: HTMLElement, hops: number) {
+  const label =
+    hops === 1
+      ? g.selection.hops.replace("{count}", "1")
+      : g.selection.hopsPlural.replace("{count}", String(hops));
+  await act(async () => byText(host, label).click());
+  await act(async () => {});
+}
+
 describe("the graph panel's tabs, after the Search tab was removed", () => {
   it("offers Entities, Map and Recent, and nothing else", async () => {
     const host = await mount();
@@ -392,5 +418,130 @@ describe("the whole-graph guard", () => {
 
     await act(async () => share(host)!.click());
     expect(takePendingShare()).toBeNull();
+  });
+});
+
+// The report this block exists for: raising the hop count changed the "sharing N" readout and
+// left the map looking identical, so the member could not see what they were about to publish.
+//
+// Two claims throughout. The arrivals are DRAWN — and drawn as arrivals, not as seeds, because
+// the member chose one and the other came along. And what is drawn is the SAME SET the share
+// sends: the one assertion that catches a second expansion drifting from the payload.
+describe("the map shows what the share would carry", () => {
+  it("marks the hop the selection reached, distinctly from the seed", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+    expect(drawnAsReached()).toEqual(["Onboarding"]);
+  });
+
+  it("marks more nodes as the hop count goes up", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await setHops(host, 2);
+
+    expect(drawnAsReached()).toEqual(["Onboarding", "Rust"]);
+    // Still the seed, and only the seed.
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+  });
+
+  it("takes them off again as it comes back down", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await setHops(host, 3);
+    expect(drawnAsReached()).toEqual(["Onboarding", "Rust"]);
+
+    await setHops(host, 1);
+    expect(drawnAsReached()).toEqual(["Onboarding"]);
+  });
+
+  // The half of the fix that the class alone does not deliver. A plain click opens the detail
+  // pane, which fades everything outside the FOCUS radius — a separate number from the share's
+  // hops, and the default is 1. Without the exemption `Rust` would carry the class at
+  // `opacity: 0.1` and the map would still look identical to the member.
+  it("keeps what it reached visible rather than faded out", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await setHops(host, 2);
+
+    const rust = map().getElementById("Rust");
+    expect(rust.hasClass("reached")).toBe(true);
+    expect(rust.hasClass("faded")).toBe(false);
+  });
+
+  it("never marks an entity nothing connects to the selection", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await setHops(host, 3);
+
+    expect(drawnAsShared()).not.toContain("Island");
+  });
+
+  // THE one that would catch the map computing its own expansion. The count on screen would
+  // not: two expansions that disagree can still both say "3".
+  it("draws exactly the names the share sends, not its own expansion", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await setHops(host, 2);
+
+    const drawn = drawnAsShared();
+    await act(async () => share(host)!.click());
+    const sent = takePendingShare() as { names: string[] };
+    expect(drawn).toEqual([...sent.names].sort());
+  });
+
+  it("marks nothing once the selection is cleared", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+    await act(async () => byText(host, g.selection.clear).click());
+    await act(async () => {});
+
+    expect(drawnAsShared()).toEqual([]);
+  });
+});
+
+// The other report: the share controls appeared ABOVE the map's search box, so the controls
+// that act on a selection came before the box used to find one.
+describe("where the selection controls sit", () => {
+  const searchBox = (host: HTMLElement) =>
+    host.querySelector(`[aria-label="${g.mapFilterPlaceholder}"]`);
+
+  it("puts them after the search box on the map", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+
+    const position = searchBox(host)!.compareDocumentPosition(share(host)!);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders them once, not once per home", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+
+    const shares = [...host.querySelectorAll("button")].filter(
+      (b) => b.textContent?.trim() === g.selection.share,
+    );
+    expect(shares).toHaveLength(1);
+  });
+
+  // The bar is the same element on every tab, and the tabs with no search box must not have
+  // lost it on the way.
+  it("still shows them on the entity list, which has no search box", async () => {
+    const host = await mount();
+    await act(async () => tick(host, "Samuel")!.click());
+
+    expect(host.textContent).toContain(g.selection.one);
+    expect(share(host)).toBeDefined();
+    expect(searchBox(host)).toBeNull();
   });
 });
