@@ -95,13 +95,20 @@ async function click(el: Element) {
   });
 }
 
-async function checkbox(labelText: string) {
-  const label = [...host!.querySelectorAll("label")].find((l) =>
-    l.textContent?.includes(labelText),
-  )!;
-  const box = label.querySelector("input[type=checkbox]")!;
+/** Choose one of the audience scopes. There is no combination to build. */
+async function pickScope(labelText: string) {
+  const radio = [...host!.querySelectorAll('[role="radio"]')].find((r) =>
+    r.textContent?.trim() === labelText,
+  );
+  if (!radio) {
+    throw new Error(
+      `no scope offered called ${labelText}; offered: ${[...host!.querySelectorAll('[role="radio"]')]
+        .map((r) => r.textContent?.trim())
+        .join(", ")}`,
+    );
+  }
   await act(async () => {
-    (box as HTMLInputElement).click();
+    radio.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 
@@ -112,6 +119,10 @@ async function writeMemory(cell = "soil-ph", body = "pH 5.2 after liming.") {
 }
 
 async function addRecipient(email: string) {
+  // The finder lives under the People scope, because that is the only scope that
+  // sends what it finds. Every caller that adds somebody is in that scope by
+  // definition, so the helper puts itself there rather than making each test say so.
+  await pickScope(en.mangrove.scopePeople);
   findPeople.mockResolvedValue({ mode: "exact", results: [{ email }] });
   await setValue(byLabel<HTMLInputElement>(en.mangrove.findPeople), email);
   await click(byText(en.mangrove.find));
@@ -169,16 +180,77 @@ describe("group scopes", () => {
     publish.mockResolvedValue({ activity: {}, pending: true });
     await render({ governs: true, tenantLicensed: true });
     await writeMemory();
-    await checkbox(en.mangrove.groupSubscription);
-    await checkbox(en.mangrove.groupTenant);
+    await pickScope(en.mangrove.groupSubscription);
     await send();
 
-    expect(sent().to).toEqual([
-      "mangrove:group:subscription:s1",
-      "mangrove:group:tenant:t1",
-    ]);
-    // A cross-scope publication is not delivered yet, and the screen is told so.
+    expect(sent().to).toEqual(["mangrove:group:subscription:s1"]);
     expect(published).toEqual([true]);
+  });
+
+  // ONE ANSWER, NOT A COMBINATION. Choosing the tenant after the subscription
+  // REPLACES it; the two cannot both travel, which is the whole point of the
+  // control. Asserting the second choice alone is what would pass against a set
+  // of checkboxes too, so the first is asserted as gone.
+  it("replaces the scope rather than adding to it", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: true });
+    await render({ governs: true, tenantLicensed: true });
+    await writeMemory();
+    await pickScope(en.mangrove.groupSubscription);
+    await pickScope(en.mangrove.groupTenant);
+    await send();
+
+    expect(sent().to).toEqual(["mangrove:group:tenant:t1"]);
+    expect(sent().to).not.toContain("mangrove:group:subscription:s1");
+  });
+
+  // Exactly one is checked at any moment, whatever the member clicked.
+  it("never has two scopes checked", async () => {
+    await render({ governs: true, tenantLicensed: true });
+    const checked = () =>
+      [...host!.querySelectorAll('[role="radio"]')].filter(
+        (r) => r.getAttribute("aria-checked") === "true",
+      ).length;
+
+    expect(checked()).toBe(1);
+    for (const label of [
+      en.mangrove.scopePeople,
+      en.mangrove.groupSubscription,
+      en.mangrove.groupTenant,
+      en.mangrove.scopePrivate,
+    ]) {
+      await pickScope(label);
+      expect(checked()).toBe(1);
+    }
+  });
+
+  // Picked people are KEPT when the member looks at another scope, and simply do
+  // not travel. Switching back restores the list rather than punishing the look.
+  it("keeps the people list across a scope change but does not send it", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: true });
+    await render({ governs: true, tenantLicensed: true });
+    await writeMemory();
+    await pickScope(en.mangrove.scopePeople);
+    await addRecipient("bob@x.test");
+    await pickScope(en.mangrove.groupSubscription);
+    await send();
+
+    expect(sent().toEmails).toEqual([]);
+    expect(sent().to).toEqual(["mangrove:group:subscription:s1"]);
+
+    await pickScope(en.mangrove.scopePeople);
+    expect(host!.textContent).toContain("bob@x.test");
+  });
+
+  // Private is an ANSWER, not the absence of one: it is offered, it is the
+  // default, and it sends nothing.
+  it("publishes to nobody under Only you", async () => {
+    publish.mockResolvedValue({ activity: {}, pending: false });
+    await render({ governs: true, tenantLicensed: true });
+    await writeMemory();
+    await send();
+
+    expect(sent().to).toEqual([]);
+    expect(sent().toEmails).toEqual([]);
   });
 });
 
@@ -193,6 +265,7 @@ describe("who it reaches", () => {
       mode: "prefix",
       results: [{ email: "bob@example.test", actorId: "mangrove:actor:bob:person" }],
     });
+    await pickScope(en.mangrove.scopePeople);
     await setValue(byLabel<HTMLInputElement>(en.mangrove.findPeople), "bob");
     await click(byText(en.mangrove.find));
     await click(byLabel(`${en.mangrove.addRecipient} — bob@example.test`));
@@ -247,7 +320,14 @@ describe("an empty audience", () => {
     publish.mockResolvedValue({ activity: {}, pending: false });
     const el = await render();
     await writeMemory();
-    expect(el.textContent).toContain(en.mangrove.audienceNone);
+    // Private is the DEFAULT and it says what it means. It used to be the state
+    // left over from choosing nothing, described by a line that only appeared
+    // while nothing was chosen; it is an option now, checked on arrival.
+    expect(el.textContent).toContain(en.mangrove.scopePrivateNote);
+    const checked = [...host!.querySelectorAll('[role="radio"]')].find(
+      (r) => r.getAttribute("aria-checked") === "true",
+    );
+    expect(checked?.textContent?.trim()).toBe(en.mangrove.scopePrivate);
     await send();
 
     expect(publish).toHaveBeenCalledTimes(1);
@@ -374,10 +454,25 @@ describe("entities attached from the knowledge graph", () => {
   it("still addresses a group when one was chosen", async () => {
     publish.mockResolvedValue({ activity: {}, pending: true });
     await render({ governs: true, tenantLicensed: false }, ENTITIES);
-    await checkbox(en.mangrove.groupSubscription);
+    await pickScope(en.mangrove.groupSubscription);
     await send();
 
     expect(sent().to).toEqual(["mangrove:group:subscription:s1"]);
     expect(sent().entities).toEqual(["Rhizophora", "Mangrove"]);
+  });
+});
+
+// A hidden input is still tabbable. Under another scope the finder must not be
+// in the document at all, or a keyboard user lands in a search box for
+// recipients the post is not going to have.
+describe("the people finder", () => {
+  it("is absent under another scope, not merely hidden", async () => {
+    await render({ governs: true, tenantLicensed: false });
+    await pickScope(en.mangrove.scopePeople);
+    expect(host!.querySelector(`[aria-label="${en.mangrove.findPeople}"]`)).not.toBeNull();
+
+    await pickScope(en.mangrove.groupSubscription);
+    expect(host!.querySelector(`[aria-label="${en.mangrove.findPeople}"]`)).toBeNull();
+    expect(host!.querySelectorAll("input[type=text], textarea").length).toBeLessThan(3);
   });
 });
