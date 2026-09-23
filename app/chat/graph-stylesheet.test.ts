@@ -114,6 +114,7 @@ describe("buildStylesheet", () => {
     const selectors = sheet().map((r) => r.selector);
     for (const s of [
       ".faded",
+      "node.checked",
       "node.picked",
       "edge.near",
       "node.path",

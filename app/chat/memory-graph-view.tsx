@@ -98,6 +98,7 @@ export default function MemoryGraphView({
   filter,
   selected,
   onSelect,
+  checked,
   tools,
   setTool,
   onTypeFilter,
@@ -141,7 +142,17 @@ export default function MemoryGraphView({
    */
   filter: MapFilter;
   selected: string | null;
-  onSelect: (name: string | null) => void;
+  /**
+   * Picking a node. `additive` is a Ctrl or Cmd click: the panel adds the node to its
+   * multi-select instead of replacing it, and leaves the detail pane where it was.
+   */
+  onSelect: (name: string | null, opts?: { additive?: boolean }) => void;
+  /**
+   * The panel's multi-select — the SAME set the entity list ticks into, so a member who
+   * ticked rows and then opened the map finds those nodes already marked. Drawn through
+   * `applyHighlight`, which is the single owner of class application on this instance.
+   */
+  checked: ReadonlySet<string>;
   /**
    * The whole `memoryGraph` dictionary, not a label per control.
    *
@@ -179,7 +190,7 @@ export default function MemoryGraphView({
   select.current = onSelect;
   // Reassigned every render so the tap handler reads current state without the graph being
   // rebuilt to refresh a closure — a rebuild re-runs the layout.
-  const onNodeTap = useRef<(id: string) => void>(() => {});
+  const onNodeTap = useRef<(id: string, additive: boolean) => void>(() => {});
   const onBackgroundTap = useRef<() => void>(() => {});
   const spreadLabel = copy.spreadReadout.replace("{value}", String(spread));
   // The tools panel's own open state. Seeded from `expanded` by the effect below: the column is
@@ -364,9 +375,12 @@ export default function MemoryGraphView({
   }
 
   // Endpoint picking. Never routed through the panel's select() — see the path state above.
-  onNodeTap.current = (id: string) => {
+  //
+  // `additive` is ignored in path mode on purpose: a trace has exactly two endpoints, so
+  // "add another" has nothing to mean there.
+  onNodeTap.current = (id: string, additive: boolean) => {
     if (!pathMode) {
-      select.current(id);
+      select.current(id, { additive });
       return;
     }
     const instance = cy.current;
@@ -426,7 +440,18 @@ export default function MemoryGraphView({
       },
     });
 
-    instance.on("tap", "node", (e) => onNodeTap.current(e.target.id() as string));
+    // `metaKey` as well as `ctrlKey`, and both are only READ — nothing is prevented here, so
+    // the browser's own context menu still opens. On macOS ctrl+click is routed to `cxttap`
+    // by the platform rather than to this handler, which is why Cmd has to be the modifier
+    // that works there; trying to intercept `cxttap` to "fix" that would take the context
+    // menu away from every member on every platform.
+    instance.on("tap", "node", (e) => {
+      const original = e.originalEvent as
+        | { ctrlKey?: boolean; metaKey?: boolean }
+        | undefined;
+      const additive = Boolean(original?.ctrlKey || original?.metaKey);
+      onNodeTap.current(e.target.id() as string, additive);
+    });
     instance.on("tap", (e) => {
       if (e.target === instance) onBackgroundTap.current();
     });
@@ -519,8 +544,9 @@ export default function MemoryGraphView({
       path,
       pathMode,
       pathFrom,
+      checked,
     });
-  }, [built, selected, tools.hopRadius, path, pathMode, pathFrom]);
+  }, [built, selected, tools.hopRadius, path, pathMode, pathFrom, checked]);
 
   // Leaving path mode drops the trace, so re-entering never starts half-way through somebody
   // else's question.

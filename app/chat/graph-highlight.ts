@@ -28,6 +28,16 @@ export interface HighlightInput {
    * stays null.
    */
   group?: { key: string; value: string } | null;
+  /**
+   * The member's multi-select, the same set the entity list ticks into.
+   *
+   * Applied as its own class and OUTSIDE the precedence chain below, because it is not a
+   * claimant on `faded` — it answers "which nodes did I tick", which stays true while a
+   * path is traced or another entity is opened. Applied here rather than in a second effect
+   * for the reason this module exists: a rebuild hands back an instance carrying no
+   * classes, and only the owner of the reapply can put them all back.
+   */
+  checked?: ReadonlySet<string>;
 }
 
 /**
@@ -41,8 +51,16 @@ export interface HighlightInput {
  * specific than the next, and was asked more recently.
  */
 export function applyHighlight(cy: Core, input: HighlightInput): void {
-  const { selected, hopRadius, path, pathMode, pathFrom, group } = input;
-  cy.elements().removeClass("faded near picked path");
+  const { selected, hopRadius, path, pathMode, pathFrom, group, checked } = input;
+  cy.elements().removeClass("faded near picked path checked");
+
+  // Before every branch below, and never returned from early: whether a node is ticked is
+  // independent of whether a path or a selection is lit.
+  if (checked && checked.size > 0) {
+    cy.nodes()
+      .filter((n) => checked.has(n.id() as string))
+      .addClass("checked");
+  }
 
   if (path?.kind === "found" && path.steps.length > 0) {
     const nodes = cy.nodes().filter((n) => path.nodes.includes(n.id() as string));

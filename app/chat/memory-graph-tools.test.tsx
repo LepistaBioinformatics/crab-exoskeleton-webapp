@@ -203,6 +203,7 @@ describe("MemoryGraphView — the tools survive a filter that matched nothing", 
       <MemoryGraphView
         entities={entities}
         relations={[]}
+        checked={new Set()}
         typeFilter={null}
         onTypeFilter={() => {}}
         onResetFilters={() => {}}

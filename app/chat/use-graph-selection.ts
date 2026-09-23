@@ -32,6 +32,15 @@ export interface GraphSelection {
   /** Read-only on the way out: the state object itself must never be mutated in place. */
   checked: ReadonlySet<string>;
   toggle: (name: string) => void;
+  /**
+   * The whole selection, replaced.
+   *
+   * This exists for the MAP, where a plain click means "these instead" and a Ctrl/Cmd click
+   * means "these as well" — the convention every multi-select canvas already uses, and the
+   * only one under which a bare click on a node is not an ever-growing pile. The lists have
+   * no use for it: a row's tick is a toggle and nothing else.
+   */
+  replace: (names: Iterable<string>) => void;
   clear: () => void;
 }
 
@@ -47,6 +56,11 @@ export function useGraphSelection(): GraphSelection {
     });
   }, []);
 
+  const replace = useCallback(
+    (names: Iterable<string>) => setChecked(new Set(names)),
+    [],
+  );
+
   // `prev` when already empty, not a fresh Set: this runs inside the panel's `reset`,
   // which fires on every workspace switch, and a new identity there is a re-render of the
   // whole list for nothing.
@@ -55,7 +69,7 @@ export function useGraphSelection(): GraphSelection {
     [],
   );
 
-  return { checked, toggle, clear };
+  return { checked, toggle, replace, clear };
 }
 
 /**
