@@ -191,7 +191,10 @@ export default function MangroveScreen({
     // because Projects is a grid of cards and a grid wants the room. This screen is
     // prose somebody's agent wrote, and prose at 1150px is a line the eye loses its
     // place in on the way back -- the reason typography settles around 65-75
-    // characters. max-w-3xl is that measure at this font size.
+    // characters. `narrow` is that measure at this font size, and it narrowed again
+    // (3xl -> 2xl) when the memories became cards with a header and a footer: a card
+    // as wide as the screen reads as a band across the page, and the compactness the
+    // structure buys is only visible at a width the eye can take in at once.
     //
     // THE FRAME NARROWS, NOT THE CHILDREN. This was a max-w-3xl div inside the 6xl
     // frame, which put the column hard against the left of a pane half again as
@@ -337,12 +340,6 @@ export default function MangroveScreen({
                   object={h.object}
                   author={actorLabel(h.from, identity, t)}
                   title={h.object.cell}
-                  meta={
-                    <>
-                      {t.mangrove.from.replace("{who}", actorLabel(h.from, identity, t))} ·{" "}
-                      {h.object.cell}
-                    </>
-                  }
                   subtitle={t.mangrove.sheetFrom
                     .replace("{who}", actorLabel(h.from, identity, t))
                     .replace("{cell}", h.object.cell)}
@@ -382,12 +379,9 @@ export default function MangroveScreen({
                   author={actorLabel(p.author, identity, t)}
                   title={p.object.cell}
                   canTake={false}
-                  meta={
-                    <>
-                      {t.mangrove.from.replace("{who}", actorLabel(p.author, identity, t))} →{" "}
-                      {audienceLabel(p.scope, identity, t)} · {p.object.cell}
-                    </>
-                  }
+                  // The scope it was published INTO is the whole question here: this
+                  // card exists because somebody has to decide whether it reaches them.
+                  recipients={audienceLabel(p.scope, identity, t)}
                   subtitle={t.mangrove.sheetFrom
                     .replace("{who}", actorLabel(p.author, identity, t))
                     .replace("{cell}", p.object.cell)}
@@ -443,16 +437,8 @@ export default function MangroveScreen({
                     title={c.cell}
                     recent={i < RECENT}
                     dimmed={c.deleted}
-                    meta={
-                      <>
-                        {c.cell} ·{" "}
-                        {t.mangrove.by.replace("{who}", actorLabel(c.author, identity, t))}
-                        {audience && ` · ${audience}`}
-                        {/* Weight of evidence, never a verdict. */}
-                        {c.evidence > 0 &&
-                          ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
-                      </>
-                    }
+                    recipients={audience}
+                    endorsed={c.evidence}
                     subtitle={t.mangrove.sheetFrom
                       .replace("{who}", actorLabel(c.author, identity, t))
                       .replace("{cell}", c.cell)}

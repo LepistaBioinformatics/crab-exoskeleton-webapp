@@ -39,9 +39,9 @@ import { useT } from "@/lib/i18n/context";
 // IT REPORTS ITS OWN FAILURE AND DOES NOT GO THROUGH THE SCREEN'S `run`. That helper
 // replaces whatever came back with one generic sentence, and a refusal here is the
 // mangrove naming the addressee that was out of reach -- the only thing the sender can
-// act on. What it DOES borrow is the reload: the card's own meta line says who this
-// memory reached, so a share that left the reading as it was would leave "shared with
-// only you" sitting above the words "Shared."
+// act on. What it DOES borrow is the reload: the card's own record says who this
+// memory reached, and this panel sits in the same footer -- so a share that left the
+// reading as it was would print "Recipients: only you" beside the word "Shared."
 //
 // AND THE PANEL IS AN INNER CONTROL. The card opens a sheet when it is clicked, so
 // everything in here is marked `data-inner` -- see `fromControl` in mangrove-post.

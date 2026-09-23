@@ -20,10 +20,10 @@ import type { ChatDict } from "@/lib/i18n/chat";
 // missing, and the id is the part that tells two strangers apart and matches what the
 // People tab hands out. Dropping it would be a loss dressed as a tidy-up.
 //
-// BRACKETS AND NOT A MIDDLE DOT, because the meta line joins its own parts with one:
-// `by a person · alice · shared with a person · bob` is four items to the eye and two
-// answers in fact, which is the illegibility this module exists to fix, one level
-// down.
+// BRACKETS AND NOT A MIDDLE DOT. A recipients column holds a LIST -- `a person
+// (alice), a person (bob)` -- and a separator that also reads as a list separator
+// turns two people into four entries to the eye. The brackets keep the kind and the
+// id one unit whatever the value is set beside.
 //
 // IDENTITY IS NULL ON THE FIRST PAINT, and that is why "a person (<id>)" is the
 // fallback rather than something that would have to be corrected. A byline that says
@@ -66,7 +66,15 @@ export function audienceLabel(
 }
 
 /**
- * The whole audience as one phrase, or null where there is nothing honest to say.
+ * Everyone this reached, as one value, or null where there is nothing honest to say.
+ *
+ * A VALUE AND NOT A SENTENCE. It used to come back as "shared with this subscription",
+ * because it was read inline after the cell and the byline. It is a column under a
+ * heading that already asks the question, so the preposition would be repeated on
+ * every card.
+ *
+ * NULL IS NOT THE EMPTY STRING: a card with nothing honest to say about who else
+ * received this leaves the column OUT, rather than printing a heading over a blank.
  *
  * AN EMPTY AUDIENCE IS ONLY AN ANSWER ON YOUR OWN POST. Published with both lists
  * empty means published to the author alone, which is worth saying out loud -- on
@@ -79,11 +87,6 @@ export function audienceSummary(
   t: ChatDict,
   own: boolean,
 ): string | null {
-  if (audience.length === 0) {
-    return own ? t.mangrove.sharedWith.replace("{who}", t.mangrove.audiencePrivate) : null;
-  }
-  return t.mangrove.sharedWith.replace(
-    "{who}",
-    audience.map((a) => audienceLabel(a, identity, t)).join(", "),
-  );
+  if (audience.length === 0) return own ? t.mangrove.audiencePrivate : null;
+  return audience.map((a) => audienceLabel(a, identity, t)).join(", ");
 }

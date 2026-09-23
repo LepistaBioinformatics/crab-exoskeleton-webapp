@@ -945,7 +945,6 @@ const en = {
     heldHint: "Sent to you directly. It is not in your agent's memory until you admit it.",
     pendingTitle: "Waiting on your decision",
     from: "from {who}",
-    evidence: "{n} endorsed",
     admit: "Admit",
     accept: "Accept",
     reject: "Reject",
@@ -994,8 +993,20 @@ const en = {
     // author alone. Said only on the author's own post, because on somebody else's
     // the timeline tells us nothing about who else received it.
     audiencePrivate: "only you",
-    by: "by {who}",
-    sharedWith: "shared with {who}",
+    // THE CARD'S BOTTOM SECTION IS A RECORD, NOT A SENTENCE. Who sent it, who got it
+    // and what it is called used to run along one line above the body -- "soil-ph · by
+    // you · shared with this subscription" -- where the eye had to parse four items to
+    // find two answers. They are columns now, so the heading carries the question and
+    // the value answers it: "by" and "shared with" were prepositions a column does not
+    // need.
+    senderLabel: "From",
+    recipientsLabel: "Recipients",
+    // The cell: the address everything under the same handle lines up at. Called an
+    // identifier here rather than a cell because that is what it looks like on a file
+    // or a graph fragment -- `attachments/notes.md`, `graph:b8d28853aae5`.
+    identifierLabel: "Identifier",
+    // Weight of evidence, never a verdict.
+    endorsedLabel: "Endorsements",
     // Passing a memory you wrote on to somebody who has not got it.
     shareOthers: "Share with others",
     shareOthersHint: "Send this on to somebody else, or to a group you govern.",
@@ -1003,11 +1014,11 @@ const en = {
     openPost: "Read all of “{cell}”",
     compose: "Share something",
     composeHint:
-      "Write down what you learned and choose who reads it. Choose nobody and it stays in your own agent's memory.",
+      "Write what you want to share and choose who reads it. Choose nobody and it stays in your own agent's memory.",
     cellLabel: "What it is about",
     cellHint: "A short handle. Everything anybody shares under the same one lines up together.",
     cellPlaceholder: "soil-ph",
-    bodyLabel: "What you learned",
+    bodyLabel: "What you want to share",
     bodyPlaceholder: "e.g. Plot 14 came back at pH 5.2, two months after liming.",
     formatLabel: "Format",
     formatMarkdown: "Markdown",
@@ -1840,7 +1851,6 @@ const pt: ChatDict = {
     heldHint: "Enviado direto a voce. So entra na memoria do seu agente quando voce admitir.",
     pendingTitle: "Esperando sua decisao",
     from: "de {who}",
-    evidence: "{n} apoiaram",
     admit: "Admitir",
     accept: "Aceitar",
     reject: "Recusar",
@@ -1876,18 +1886,20 @@ const pt: ChatDict = {
     audienceSubscription: "esta assinatura",
     audienceTenant: "este tenant",
     audiencePrivate: "só você",
-    by: "por {who}",
-    sharedWith: "compartilhado com {who}",
+    senderLabel: "De",
+    recipientsLabel: "Destinatários",
+    identifierLabel: "Identificador",
+    endorsedLabel: "Apoios",
     shareOthers: "Compartilhar com outros",
     shareOthersHint: "Repasse isto a outra pessoa, ou a um grupo que você governa.",
     openPost: "Ler tudo de “{cell}”",
     compose: "Compartilhar algo",
     composeHint:
-      "Escreva o que você aprendeu e escolha quem lê. Sem escolher ninguém, fica só na memória do seu agente.",
+      "Escreva o que você quer compartilhar e escolha quem lê. Sem escolher ninguém, fica só na memória do seu agente.",
     cellLabel: "Sobre o que é",
     cellHint: "Um identificador curto. Tudo que for compartilhado com o mesmo se junta no mesmo lugar.",
     cellPlaceholder: "ph-do-solo",
-    bodyLabel: "O que você aprendeu",
+    bodyLabel: "O que você quer compartilhar",
     bodyPlaceholder: "ex.: A parcela 14 voltou com pH 5,2, dois meses depois da calagem.",
     formatLabel: "Formato",
     formatMarkdown: "Markdown",

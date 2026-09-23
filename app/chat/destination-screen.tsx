@@ -33,6 +33,11 @@ export default function DestinationScreen({
    * rather than a max-width the screen puts on its own content. The heading belongs to
    * the frame: a screen that narrowed only what it renders would centre its prose while
    * leaving its own title 200px away at the far left of a 6xl column.
+   *
+   * max-w-2xl, and it used to be 3xl. Both are inside the 65-75 character measure this
+   * was chosen for -- 3xl is the loose end of it -- and the narrower one is what makes
+   * a list of cards read as cards rather than as full-width bands. It moves the
+   * heading and every child together, which is the rule above still doing its job.
    */
   narrow?: boolean;
   children: ReactNode;
@@ -43,7 +48,7 @@ export default function DestinationScreen({
     // I" is the one thing that must survive scrolling.
     <div className="h-full overflow-y-auto">
       <div
-        className={`mx-auto px-4 py-6 sm:px-6 sm:py-8 ${narrow ? "max-w-3xl" : "max-w-6xl"}`}
+        className={`mx-auto px-4 py-6 sm:px-6 sm:py-8 ${narrow ? "max-w-2xl" : "max-w-6xl"}`}
       >
         <div className="flex items-start gap-3">
           <h1 className="min-w-0 flex-1 font-display text-xl font-bold text-fg sm:text-2xl">
