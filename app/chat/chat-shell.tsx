@@ -218,6 +218,7 @@ export default function ChatShell({ email }: { email: string }) {
         // Keeps `p`: asking to see the list is not leaving the project you are in
         // (FR-1.5). The grid marks it as the one you are inside.
         onProjects: () => setDestination("projects"),
+        onMangrove: () => setDestination("mangrove"),
         // Up one level from a conversation is the PROJECT, which drops `sid` and lands
         // on the project's own screen. It used to be the list of projects, which is what
         // `Projects` above it carries now.
