@@ -67,11 +67,16 @@ const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
  * Whether an event that reached the card started at something with its own answer to it.
  *
  * A WHOLE CARD BEING CLICKABLE MUST NOT SWALLOW WHAT IS INSIDE IT. Download, merge,
- * reference-in-chat, admit, accept/reject and the revoke disclosure all live in a card,
- * and every one of them would otherwise also open the sheet. A <button> wrapping the
- * card is not valid HTML around those, and a stretched overlay button would cover the
- * links and code blocks a markdown body renders -- so the card carries the handler and
- * refuses events that began somewhere that already handles them.
+ * reference-in-chat, admit, accept/reject, the revoke disclosure and the share panel all
+ * live in a card, and every one of them would otherwise also open the sheet. A <button>
+ * wrapping the card is not valid HTML around those, and a stretched overlay button would
+ * cover the links and code blocks a markdown body renders -- so the card carries the
+ * handler and refuses events that began somewhere that already handles them.
+ *
+ * `[data-inner]` is for a whole REGION rather than a control: the share panel is a form
+ * of its own inside the card, and the tags say nothing about its padding, its heading or
+ * its explanatory line -- a click on any of which is a click on the panel, not on the
+ * card, and must not open a sheet over the thing being shared.
  *
  * `[role="dialog"]` is in the list because React propagates a PORTAL's events through
  * the React tree: the sheet this card opened is rendered inside it, so a click in the
@@ -80,7 +85,9 @@ const card = cva("rounded-xl border bg-surface p-3 transition-colors", {
 function fromControl(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
-    target.closest('a, button, summary, input, textarea, select, label, [role="dialog"]') !== null
+    target.closest(
+      'a, button, summary, input, textarea, select, label, [data-inner], [role="dialog"]',
+    ) !== null
   );
 }
 
@@ -128,7 +135,11 @@ function FragmentView({
   };
 
   return (
-    <div className="rounded-lg border border-rule-strong bg-elevated p-3">
+    // A TINT, NOT A SECOND FRAME. This box sits inside a card that already has a
+    // border, and the two together read as a form field rather than as part of one
+    // memory. `bg-elevated` against the card's `surface` separates it just as well
+    // and stops the card being a stack of boxes.
+    <div className="rounded-lg bg-elevated p-3">
       <p className="flex items-center gap-2 text-xs font-medium text-fg">
         <Network size={14} aria-hidden /> {t.mangrove.fragmentTitle}
       </p>
@@ -144,7 +155,7 @@ function FragmentView({
           {shown.map((e) => (
             <li
               key={e.name}
-              className="rounded-md border border-rule-strong bg-surface px-1.5 py-0.5 text-[11px] text-fg"
+              className="rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-fg"
             >
               {e.name}
               {e.entityType && <span className="ml-1 text-fg-muted">{e.entityType}</span>}
@@ -200,7 +211,7 @@ function FileView({ workspace, object }: { workspace: Workspace; object: Mangrov
   };
 
   return (
-    <div className="rounded-lg border border-rule-strong bg-elevated p-3">
+    <div className="rounded-lg bg-elevated p-3">
       <div className="flex items-center gap-2">
         <Paperclip size={14} className="shrink-0 text-fg-muted" aria-hidden />
         <span className="min-w-0 truncate text-sm text-fg" title={name}>

@@ -4,6 +4,7 @@ import {
   newestFirst,
   publish,
   mergeFragment,
+  shareWith,
   parseGraphFragment,
   GRAPH_FRAGMENT_MEDIA_TYPE,
   type MangroveObject,
@@ -109,6 +110,15 @@ describe("the project travels with the calls that resolve a name", () => {
     expect(q.get("project")).toBe("proj-1");
   });
 
+  // Same reason as the other two: a share names an OBJECT that was resolved against
+  // a workspace, and each project is a separate one.
+  it("share carries it", async () => {
+    const q = await queryOf(() =>
+      shareWith(inProject, "mangrove:obj:1", { to: [], toEmails: [] }),
+    );
+    expect(q.get("project")).toBe("proj-1");
+  });
+
   it("merge carries it", async () => {
     const q = await queryOf(() => mergeFragment(inProject, "mangrove:obj:1"));
     expect(q.get("project")).toBe("proj-1");
@@ -125,6 +135,45 @@ describe("the project travels with the calls that resolve a name", () => {
   it("but a blob url does not, because a digest is not a path", () => {
     const url = new URL(blobUrl(inProject, "a".repeat(64)), "https://example.test");
     expect(url.searchParams.has("project")).toBe(false);
+  });
+});
+
+// The audience shape publish takes, sent again by a share -- so a recipient the
+// mangrove would have to name in a refusal is named in the request the same way.
+describe("shareWith", () => {
+  async function bodyOf(fn: () => Promise<unknown>): Promise<Record<string, unknown>> {
+    let seen = "";
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen = String(init?.body ?? "");
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await fn();
+    } finally {
+      globalThis.fetch = original;
+    }
+    return JSON.parse(seen) as Record<string, unknown>;
+  }
+
+  it("sends the object, the audience and the direction", async () => {
+    const body = await bodyOf(() =>
+      shareWith(workspace, "mangrove:obj:1", {
+        to: ["mangrove:group:subscription:growth"],
+        toEmails: [{ email: "bob@example.test", person: true, agent: false }],
+      }),
+    );
+    expect(body).toEqual({
+      objectId: "mangrove:obj:1",
+      to: ["mangrove:group:subscription:growth"],
+      toEmails: [{ email: "bob@example.test", person: true, agent: false }],
+      // Said explicitly rather than left off: a body that names which of the two
+      // operations this is cannot be misread by a route that defaults differently.
+      undo: false,
+    });
   });
 });
 

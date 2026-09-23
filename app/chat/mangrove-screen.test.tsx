@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 
@@ -22,6 +22,8 @@ const publish = vi.fn();
 const findPeople = vi.fn();
 const mergeFragment = vi.fn();
 const downloadBlob = vi.fn();
+const readIdentity = vi.fn();
+const shareWith = vi.fn();
 
 vi.mock("@/lib/mangrove", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/mangrove")>();
@@ -36,6 +38,8 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
     findPeople: (...a: unknown[]) => findPeople(...a),
     mergeFragment: (...a: unknown[]) => mergeFragment(...a),
     downloadBlob: (...a: unknown[]) => downloadBlob(...a),
+    readIdentity: (...a: unknown[]) => readIdentity(...a),
+    shareWith: (...a: unknown[]) => shareWith(...a),
   };
 });
 
@@ -53,6 +57,19 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
 const referenced: ChatReference[] = [];
+
+/** The member, as the mangrove knows them. */
+const ME = {
+  email: "me@example.test",
+  personId: "mangrove:actor:me:person",
+  serviceId: "mangrove:actor:me:service",
+};
+
+// Every fixture below is authored by somebody who is NOT the member unless it says
+// otherwise, so nothing turns into "your own post" by accident.
+beforeEach(() => {
+  readIdentity.mockResolvedValue(ME);
+});
 
 async function render() {
   host = document.createElement("div");
@@ -229,8 +246,9 @@ describe("the mangrove tab", () => {
     expect(html).toContain(en.mangrove.heldHint);
     expect(html).toContain(en.mangrove.admit);
     expect(html).toContain("6.4");
-    // The bot is labelled as a bot -- it is somebody's agent, not a peer.
-    expect(html).toContain("(bot)");
+    // Somebody's AGENT, not a peer -- said in words, with the id it is the only
+    // handle for kept beside them.
+    expect(html).toContain(`${en.mangrove.actorAgent} (bob)`);
   });
 
   // Compose is a flag beside People, NOT a reading. Made a member of the union
@@ -501,7 +519,15 @@ describe("referencing a memory in the chat", () => {
     await clickLabel(`${en.mangrove.reference} — soil-ph`);
 
     expect(referenced).toEqual([
-      { kind: "mangrove", objectId: "mangrove:obj:prose", cell: "soil-ph", author: "bob (bot)" },
+      {
+        kind: "mangrove",
+        objectId: "mangrove:obj:prose",
+        cell: "soil-ph",
+        // The chip and the marker are both prose for a reader, which is why the
+        // humanised label travels and the raw id does not: `objectId` is what
+        // anything resolves by.
+        author: `${en.mangrove.actorAgent} (bob)`,
+      },
     ]);
     // The marker that actually travels carries it too -- a chip with the id and a
     // message without one would leave the agent nothing to look up.
@@ -738,5 +764,243 @@ describe("the revoke box", () => {
     // The note used to be a footnote under the whole list. It is not in two places.
     const notes = host!.textContent!.split(en.mangrove.revokeNote).length - 1;
     expect(notes).toBe(1);
+  });
+});
+
+// WHO PRODUCED IT, WHO GOT IT, AND WHETHER IT IS YOURS TO PASS ON.
+//
+// All three were already on the data and none of them was legible: an author was a
+// bare uuid (or a uuid and "(bot)"), an audience was the literal word "subscription",
+// and nothing on a card said whether the member was looking at their own memory.
+//
+// ASSERTED ON THE CARD, NOT ON THE PAGE. "you" and "your agent" are words this screen
+// uses about the member in several places it did not change -- the tab's hint says
+// "Your agent publishes as your bot", a reading is headed "Shared with you" -- so a
+// whole-page `toContain` proves nothing and a whole-page `not.toContain` fails against
+// copy that was always there.
+
+const MINE = {
+  cell: "mine",
+  author: ME.personId,
+  object: { id: "mangrove:obj:mine", type: "MemoryNote", cell: "mine", content: "6.4" },
+  published: "2026-09-22T13:00:00Z",
+  deleted: false,
+  evidence: 0,
+  audience: [] as string[],
+};
+
+const BY_MY_AGENT = {
+  ...MINE,
+  cell: "agents",
+  author: ME.serviceId,
+  object: { ...MINE.object, id: "mangrove:obj:agents", cell: "agents" },
+  published: "2026-09-22T12:00:00Z",
+  audience: ["mangrove:group:subscription:s1"],
+};
+
+const THEIRS = {
+  ...MINE,
+  cell: "theirs",
+  author: "mangrove:actor:alice:person",
+  object: { ...MINE.object, id: "mangrove:obj:theirs", cell: "theirs" },
+  published: "2026-09-22T11:00:00Z",
+  audience: ["mangrove:actor:bob:person"],
+};
+
+const TO_THE_TENANT = {
+  ...THEIRS,
+  cell: "everybody",
+  object: { ...MINE.object, id: "mangrove:obj:everybody", cell: "everybody" },
+  published: "2026-09-22T10:00:00Z",
+  audience: ["mangrove:group:tenant:t1"],
+};
+
+const FOUR = {
+  reading: "received",
+  claims: [MINE, BY_MY_AGENT, THEIRS, TO_THE_TENANT],
+  held: [],
+};
+
+/** The card whose memory is about this cell. */
+function cardOf(cell: string): HTMLLIElement {
+  return cards().find((li) => li.querySelector("p")!.textContent!.startsWith(`${cell} ·`))!;
+}
+
+/** Its meta line -- where a card says where it came from and where it went. */
+function metaOf(cell: string): string {
+  return cardOf(cell).querySelector("p")!.textContent!;
+}
+
+const by = (who: string) => en.mangrove.by.replace("{who}", who);
+const to = (who: string) => en.mangrove.sharedWith.replace("{who}", who);
+
+describe("who produced a memory", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(FOUR);
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("reads as you when your own person wrote it", async () => {
+    await render();
+    // WHOLE-LINE equality, because "by you" is a prefix of "by your agent": a
+    // `toContain` would pass on the wrong card.
+    expect(metaOf("mine")).toBe(`mine · ${by(en.mangrove.actorYou)} · ${to(en.mangrove.audiencePrivate)}`);
+  });
+
+  it("reads as your agent when your agent wrote it", async () => {
+    await render();
+    expect(metaOf("agents")).toBe(
+      `agents · ${by(en.mangrove.actorYourAgent)} · ${to(en.mangrove.audienceSubscription)}`,
+    );
+  });
+
+  // Neither of the two the app can resolve -- and no invented name either. An
+  // arbitrary actor cannot be looked up, so the kind is named and the id stays.
+  it("reads as neither when somebody else wrote it, and keeps their id", async () => {
+    await render();
+    const meta = metaOf("theirs");
+    expect(meta).toContain(by(`${en.mangrove.actorPerson} (alice)`));
+    expect(meta).not.toContain(en.mangrove.actorYou);
+    expect(meta).not.toContain(en.mangrove.actorYourAgent);
+  });
+
+  // The byline must never be wrong, and identity arrives a beat after the first
+  // paint -- so the impersonal form is what a not-yet-known member's own post reads
+  // as, rather than a guess that would have to be corrected.
+  it("says a person rather than you while the member's own ids are unknown", async () => {
+    readIdentity.mockRejectedValue(new MangroveError("mangrove_unreachable"));
+    await render();
+    expect(metaOf("mine")).toBe(`mine · ${by(`${en.mangrove.actorPerson} (me)`)}`);
+  });
+});
+
+describe("who a memory was shared with", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(FOUR);
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("names a person, a subscription and a tenant, rather than printing the id", async () => {
+    await render();
+    expect(metaOf("theirs")).toContain(to(`${en.mangrove.actorPerson} (bob)`));
+    expect(metaOf("agents")).toContain(to(en.mangrove.audienceSubscription));
+    expect(metaOf("everybody")).toContain(to(en.mangrove.audienceTenant));
+    // The literal words the two group ids used to render as.
+    expect(metaOf("agents")).not.toContain("mangrove:group:");
+  });
+
+  // An empty audience means published to the author alone. That is an answer on your
+  // own post, and an invention on anybody else's -- the timeline is simply not saying
+  // who else received theirs.
+  it("says only you on your own post with no audience, and nothing on somebody else's", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [MINE, { ...THEIRS, audience: [] }],
+      held: [],
+    });
+    await render();
+    expect(metaOf("mine")).toContain(to(en.mangrove.audiencePrivate));
+    expect(metaOf("theirs")).not.toContain(en.mangrove.audiencePrivate);
+    expect(metaOf("theirs")).toBe(`theirs · ${by(`${en.mangrove.actorPerson} (alice)`)}`);
+  });
+});
+
+/** The "share with others" control inside this card, if it has one. */
+function shareControl(cell: string): HTMLButtonElement | undefined {
+  return [...cardOf(cell).querySelectorAll("button")].find((b) =>
+    b.textContent?.includes(en.mangrove.shareOthers),
+  );
+}
+
+async function click(el: Element) {
+  await act(async () => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+describe("passing a memory on", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(FOUR);
+    readCapabilities.mockResolvedValue({ governs: true, tenantLicensed: true });
+  });
+
+  // A UI decision, not the rule the service enforces: the mangrove lets a recipient
+  // re-share within their own reach. Restricting the affordance to the author is what
+  // keeps the byline beside it worth trusting.
+  it("is offered on a post either of your own actors wrote, and not on somebody else's", async () => {
+    await render();
+    expect(shareControl("mine")).toBeDefined();
+    expect(shareControl("agents")).toBeDefined();
+    expect(shareControl("theirs")).toBeUndefined();
+    expect(shareControl("everybody")).toBeUndefined();
+  });
+
+  it("is not offered at all while the member's own ids are unknown", async () => {
+    readIdentity.mockRejectedValue(new MangroveError("mangrove_unreachable"));
+    await render();
+    expect(shareControl("mine")).toBeUndefined();
+  });
+
+  it("sends the object and the audience the member chose", async () => {
+    shareWith.mockResolvedValue({});
+    await render();
+    await click(shareControl("mine")!);
+
+    const panel = cardOf("mine").querySelector("[data-inner]")!;
+    const subscription = [...panel.querySelectorAll('[role="radio"]')].find(
+      (r) => r.textContent?.trim() === en.mangrove.groupSubscription,
+    )!;
+    await click(subscription);
+    const send = [...panel.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === en.mangrove.publishAction,
+    )!;
+    await click(send);
+
+    expect(shareWith).toHaveBeenCalledWith(workspace, "mangrove:obj:mine", {
+      to: ["mangrove:group:subscription:s1"],
+      toEmails: [],
+    });
+    expect(cardOf("mine").textContent).toContain(en.mangrove.publishedOk);
+    // AND THE READING IS RE-READ. The card's own meta line says who this memory
+    // reached, so leaving it as it was would print "shared with only you" directly
+    // above the word "Shared."
+    expect(readTimeline).toHaveBeenCalledTimes(2);
+  });
+
+  // "Only you" is not an answer to "who else should get this": the memory is already
+  // the author's own.
+  it("does not offer only-you, and offers no group to somebody who governs none", async () => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    await render();
+    await click(shareControl("mine")!);
+
+    const labels = [...cardOf("mine").querySelectorAll('[role="radio"]')].map((r) =>
+      r.textContent?.trim(),
+    );
+    expect(labels).toEqual([en.mangrove.scopePeople]);
+  });
+
+  // THE PANEL IS AN INNER CONTROL. The card opens a sheet when it is clicked, and a
+  // form inside it has padding and prose that are not <button>s -- which is what
+  // `[data-inner]` is for.
+  it("does not open the sheet, neither the control nor anything in its panel", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [{ ...MINE, object: { ...MINE.object, content: LONG_BODY } }],
+      held: [],
+    });
+    await render();
+    // The card really is one that HAS a sheet, or this asserts nothing.
+    expect(cards()[0].getAttribute("role")).toBe("button");
+
+    await click(shareControl("mine")!);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    // The panel's own explanatory line: not a control, and still not the card.
+    const hint = [...cardOf("mine").querySelectorAll("p")].find(
+      (el) => el.textContent === en.mangrove.shareOthersHint,
+    )!;
+    await click(hint);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

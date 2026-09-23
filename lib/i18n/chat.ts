@@ -974,6 +974,31 @@ const en = {
     findFailed: "Could not search right now.",
     shareByEmail: "Share with them by email.",
     sheetFrom: "{who} · {cell}",
+    // WHO PRODUCED IT, AND WHO IT REACHED. Both of these were built outside i18n,
+    // in hardcoded English, and both put a bare uuid on screen: the information was
+    // already on the data and simply illegible.
+    //
+    // Lowercase, because every one of them is read after a preposition -- "by you",
+    // "from an agent · <id>", "shared with this subscription".
+    actorYou: "you",
+    actorYourAgent: "your agent",
+    // An arbitrary actor CANNOT be resolved to a name or an email: the directory
+    // answers a needle, and only in prefix mode does it return an id at all. So the
+    // kind is named and the id stays beside it -- as precise as the data allows,
+    // and no more.
+    actorPerson: "a person",
+    actorAgent: "an agent",
+    audienceSubscription: "this subscription",
+    audienceTenant: "this tenant",
+    // An empty audience is a real answer, not a missing one: it was published to the
+    // author alone. Said only on the author's own post, because on somebody else's
+    // the timeline tells us nothing about who else received it.
+    audiencePrivate: "only you",
+    by: "by {who}",
+    sharedWith: "shared with {who}",
+    // Passing a memory you wrote on to somebody who has not got it.
+    shareOthers: "Share with others",
+    shareOthersHint: "Send this on to somebody else, or to a group you govern.",
     // The card itself is the control, so it has to say what it opens onto.
     openPost: "Read all of “{cell}”",
     compose: "Share something",
@@ -1813,6 +1838,17 @@ const pt: ChatDict = {
     findFailed: "Nao foi possivel buscar agora.",
     shareByEmail: "Compartilhe com essa pessoa por e-mail.",
     sheetFrom: "{who} · {cell}",
+    actorYou: "você",
+    actorYourAgent: "seu agente",
+    actorPerson: "uma pessoa",
+    actorAgent: "um agente",
+    audienceSubscription: "esta assinatura",
+    audienceTenant: "este tenant",
+    audiencePrivate: "só você",
+    by: "por {who}",
+    sharedWith: "compartilhado com {who}",
+    shareOthers: "Compartilhar com outros",
+    shareOthersHint: "Repasse isto a outra pessoa, ou a um grupo que você governa.",
     openPost: "Ler tudo de “{cell}”",
     compose: "Compartilhar algo",
     composeHint:
