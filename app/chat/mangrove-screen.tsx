@@ -8,8 +8,18 @@ import DestinationScreen from "./destination-screen";
 import MangrovePost from "./mangrove-post";
 import MangrovePeople from "./mangrove-people";
 import MangroveCompose from "./mangrove-compose";
+import MangroveShareAction from "./mangrove-share-action";
+import { actorLabel, audienceSummary, audienceLabel, isMine } from "./mangrove-actors";
 import { useMangrove } from "./use-mangrove";
-import { admit, decide, newestFirst, revoke, type MangroveReading } from "@/lib/mangrove";
+import {
+  admit,
+  decide,
+  newestFirst,
+  readIdentity,
+  revoke,
+  type MangroveIdentity,
+  type MangroveReading,
+} from "@/lib/mangrove";
 import { subscribeToShareRequests, takePendingShare, type MangroveShare } from "./mangrove-share-bus";
 import type { MangroveReference } from "@/lib/chatReference";
 import { Button } from "@/components/ui/button";
@@ -46,6 +56,13 @@ import { useT } from "@/lib/i18n/context";
 // of THIS reading, not of the mangrove: three cards, or all of them when there are
 // fewer than three, which is a list too short for "the recent ones" to mean anything.
 //
+// WHO WROTE IT AND WHO GOT IT ARE READ OFF THE MEMBER'S OWN IDS. `readIdentity`
+// returns this member's two actors, and matching an author against them is the only
+// way this app can say "you" or "your agent" -- nothing else in the mangrove maps an
+// id to a person. It is asked ONCE per workspace rather than folded into
+// `useMangrove`'s pair, which would re-ask it on every change of reading for an
+// answer that does not depend on one. See `mangrove-actors`.
+//
 // AND "NOTHING YET" IS NOT "IT IS DOWN". An empty reading is a normal state and
 // renders as prose; an unreachable service renders as an error with a retry.
 // Collapsing them would mean a member who has simply not been shared anything
@@ -65,20 +82,6 @@ const tab = cva(
     },
   },
 );
-
-/** An actor id is `mangrove:actor:<accId>:person|service`. Show the tail, which is
- *  the part a member can tell apart at a glance. */
-function actorLabel(id: string): string {
-  const m = /^mangrove:actor:(.+):(person|service)$/.exec(id);
-  if (!m) return id;
-  return m[2] === "service" ? `${m[1]} (bot)` : m[1];
-}
-
-function scopeLabel(id: string): string {
-  if (id.startsWith("mangrove:group:subscription:")) return "subscription";
-  if (id.startsWith("mangrove:group:tenant:")) return "tenant";
-  return actorLabel(id);
-}
 
 export default function MangroveScreen({
   workspace,
@@ -105,6 +108,9 @@ export default function MangroveScreen({
   const [actionError, setActionError] = useState<string | null>(null);
   // What the member arrived here to share, if they arrived from somewhere else.
   const [attachment, setAttachment] = useState<MangroveShare | null>(null);
+  // The member's own two actor ids. Null until they arrive, and the labels degrade to
+  // the impersonal form rather than guessing -- see `mangrove-actors`.
+  const [identity, setIdentity] = useState<MangroveIdentity | null>(null);
   const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
   const onTimeline = !onPeople && !onCompose;
 
@@ -122,6 +128,23 @@ export default function MangroveScreen({
     if (waiting) take(waiting);
     return subscribeToShareRequests(take);
   }, []);
+
+  // ALSO above the early return. A failure is swallowed on purpose: the tab already
+  // reports an unreachable mangrove, and a second copy of that message would say
+  // nothing new -- what is lost is the word "you" on a byline, which the impersonal
+  // form covers.
+  useEffect(() => {
+    let live = true;
+    readIdentity(workspace).then(
+      (id) => {
+        if (live) setIdentity(id);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [workspace]);
 
   // The operator never enabled the mangrove. Render NOTHING — not an error, not an
   // empty state with a dead button.
@@ -303,15 +326,16 @@ export default function MangroveScreen({
                   key={h.activityId}
                   workspace={workspace}
                   object={h.object}
-                  author={actorLabel(h.from)}
+                  author={actorLabel(h.from, identity, t)}
                   title={h.object.cell}
                   meta={
                     <>
-                      {t.mangrove.from.replace("{who}", actorLabel(h.from))} · {h.object.cell}
+                      {t.mangrove.from.replace("{who}", actorLabel(h.from, identity, t))} ·{" "}
+                      {h.object.cell}
                     </>
                   }
                   subtitle={t.mangrove.sheetFrom
-                    .replace("{who}", actorLabel(h.from))
+                    .replace("{who}", actorLabel(h.from, identity, t))
                     .replace("{cell}", h.object.cell)}
                   onReference={onReference}
                   actions={
@@ -345,17 +369,17 @@ export default function MangroveScreen({
                   key={p.activityId}
                   workspace={workspace}
                   object={p.object}
-                  author={actorLabel(p.author)}
+                  author={actorLabel(p.author, identity, t)}
                   title={p.object.cell}
                   canMerge={false}
                   meta={
                     <>
-                      {t.mangrove.from.replace("{who}", actorLabel(p.author))} →{" "}
-                      {scopeLabel(p.scope)} · {p.object.cell}
+                      {t.mangrove.from.replace("{who}", actorLabel(p.author, identity, t))} →{" "}
+                      {audienceLabel(p.scope, identity, t)} · {p.object.cell}
                     </>
                   }
                   subtitle={t.mangrove.sheetFrom
-                    .replace("{who}", actorLabel(p.author))
+                    .replace("{who}", actorLabel(p.author, identity, t))
                     .replace("{cell}", p.object.cell)}
                   actions={
                     <div className="flex gap-2">
@@ -393,67 +417,99 @@ export default function MangroveScreen({
               {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
             </h2>
             <ul className="mt-3 flex flex-col gap-3">
-              {claims.map((c, i) => (
-                <MangrovePost
-                  key={`${c.cell}:${c.author}`}
-                  workspace={workspace}
-                  object={c.object}
-                  author={actorLabel(c.author)}
-                  title={c.cell}
-                  recent={i < RECENT}
-                  dimmed={c.deleted}
-                  meta={
-                    <>
-                      {c.cell} · {actorLabel(c.author)}
-                      {c.audience.length > 0 && ` · ${c.audience.map(scopeLabel).join(", ")}`}
-                      {/* Weight of evidence, never a verdict. */}
-                      {c.evidence > 0 &&
-                        ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
-                    </>
-                  }
-                  subtitle={t.mangrove.sheetFrom
-                    .replace("{who}", actorLabel(c.author))
-                    .replace("{cell}", c.cell)}
-                  onReference={onReference}
-                  actions={
-                    reading === "published" && !c.deleted ? (
-                      // Revoke is destructive and irreversible, and it sat one click
-                      // from the content it destroys. Behind a disclosure and off to
-                      // the side, it stops being something you reach for while meaning
-                      // to do something else -- without being hidden, which would be
-                      // its own kind of trap.
-                      <details>
-                        <summary className="flex cursor-pointer list-none justify-end text-xs text-fg-muted hover:text-fg">
-                          {t.mangrove.advanced}
-                        </summary>
-                        {/* THE WARNING IS IN THE BOX WITH THE BUTTON. It was a footnote
-                            under the whole list, which is not where somebody about to
-                            revoke is looking -- and the alternative to reading it is a
-                            member believing a revoke recalled something. ActivityPub
-                            cannot un-deliver. The border is the blocked colour because
-                            what is inside the box is the one irreversible thing on this
-                            screen. */}
-                        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-blocked p-3">
-                          <p className="text-left text-xs text-fg-muted">
-                            {t.mangrove.revokeNote}
-                          </p>
-                          <Button
-                            className="shrink-0 text-blocked"
-                            size="sm"
-                            variant="text"
-                            disabled={busy === c.object.id}
-                            onClick={() =>
-                              void run(c.object.id, () => revoke(workspace, c.object.id, c.cell))
-                            }
-                          >
-                            <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
-                          </Button>
+              {claims.map((c, i) => {
+                // Theirs, and still there to act on. BOTH of the member's actors
+                // count: a memory the agent published is the member's to pass on.
+                const own = isMine(c.author, identity) && !c.deleted;
+                const revocable = reading === "published" && !c.deleted;
+                const audience = audienceSummary(c.audience, identity, t, own);
+                return (
+                  <MangrovePost
+                    key={`${c.cell}:${c.author}`}
+                    workspace={workspace}
+                    object={c.object}
+                    author={actorLabel(c.author, identity, t)}
+                    title={c.cell}
+                    recent={i < RECENT}
+                    dimmed={c.deleted}
+                    meta={
+                      <>
+                        {c.cell} ·{" "}
+                        {t.mangrove.by.replace("{who}", actorLabel(c.author, identity, t))}
+                        {audience && ` · ${audience}`}
+                        {/* Weight of evidence, never a verdict. */}
+                        {c.evidence > 0 &&
+                          ` · ${t.mangrove.evidence.replace("{n}", String(c.evidence))}`}
+                      </>
+                    }
+                    subtitle={t.mangrove.sheetFrom
+                      .replace("{who}", actorLabel(c.author, identity, t))
+                      .replace("{cell}", c.cell)}
+                    onReference={onReference}
+                    actions={
+                      own || revocable ? (
+                        <div className="flex flex-col gap-2">
+                          {/* Passing it on is the member's own to offer, in ANY
+                              reading: a post of theirs turns up under Published, and
+                              a memory they wrote can also come back to them in a
+                              reading they did not expect. */}
+                          {own && (
+                            <MangroveShareAction
+                              workspace={workspace}
+                              objectId={c.object.id}
+                              caps={caps}
+                              onShared={() => void reload()}
+                            />
+                          )}
+                          {revocable && (
+                            // Revoke is destructive and irreversible, and it sat one
+                            // click from the content it destroys. Behind a disclosure
+                            // and off to the side, it stops being something you reach
+                            // for while meaning to do something else -- without being
+                            // hidden, which would be its own kind of trap.
+                            <details>
+                              <summary className="flex cursor-pointer list-none justify-end text-xs text-fg-muted hover:text-fg">
+                                {t.mangrove.advanced}
+                              </summary>
+                              {/* THE WARNING IS IN THE BOX WITH THE BUTTON. It was a
+                                  footnote under the whole list, which is not where
+                                  somebody about to revoke is looking -- and the
+                                  alternative to reading it is a member believing a
+                                  revoke recalled something. ActivityPub cannot
+                                  un-deliver.
+
+                                  THE BLOCKED EDGE SURVIVED AS A RULE, NOT AS A FRAME.
+                                  A bordered box inside a disclosure inside a bordered
+                                  card was three frames deep, which is what made a
+                                  post read as heavy. What the colour is for -- this
+                                  is the one irreversible thing on the screen -- is
+                                  carried by the edge alone. */}
+                              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border-l-2 border-blocked bg-elevated px-3 py-2">
+                                <p className="text-left text-xs text-fg-muted">
+                                  {t.mangrove.revokeNote}
+                                </p>
+                                <Button
+                                  className="shrink-0 text-blocked"
+                                  size="sm"
+                                  variant="text"
+                                  disabled={busy === c.object.id}
+                                  onClick={() =>
+                                    void run(c.object.id, () =>
+                                      revoke(workspace, c.object.id, c.cell),
+                                    )
+                                  }
+                                >
+                                  <Trash2 size={14} aria-hidden /> {t.mangrove.revoke}
+                                </Button>
+                              </div>
+                            </details>
+                          )}
                         </div>
-                      </details>
-                    ) : undefined
-                  }
-                />
-              ))}
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
             </ul>
           </section>
         )}
