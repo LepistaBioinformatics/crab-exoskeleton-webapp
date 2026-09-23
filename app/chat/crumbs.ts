@@ -21,7 +21,7 @@ import type { Workspace } from "./fragment";
 // the whole thing this split exists to avoid.
 
 export interface Crumb {
-  key: "workspace" | "projects" | "project" | "leaf";
+  key: "workspace" | "projects" | "project" | "mangrove" | "leaf";
   label: string;
   /** Absent on the last crumb, unless that crumb is the root. */
   go?: () => void;
@@ -36,6 +36,7 @@ export function buildCrumbs({
   t,
   onWorkspace,
   onProjects,
+  onMangrove,
   onProject,
 }: {
   workspace: Workspace | null;
@@ -44,6 +45,8 @@ export function buildCrumbs({
   project: Project | null;
   conversationTitle: string | null;
   destination: Destination | null;
+  /** Back to the mangrove from a crumb below it. */
+  onMangrove?: () => void;
   t: ChatDict;
   /** Leave the workspace: the agent grid. */
   onWorkspace: () => void;
@@ -82,11 +85,25 @@ export function buildCrumbs({
   // and absent otherwise (FR-1.5). An agent with neither is not somewhere below a list
   // of projects — it is the agent — and a segment naming one would be a level the
   // member never walked through.
-  if (project || destination) {
+  if (project || destination === "projects") {
     crumbs.push({ key: "projects", label: t.projects.title, go: onProjects });
   }
 
+
   if (project) crumbs.push({ key: "project", label: project.name, go: onProject });
+
+  // THE CRUMB NAMES THE DESTINATION IT IS, which it did not: every destination
+  // pushed one labelled `Projects`, so standing in the mangrove read as standing
+  // in a list of projects. The paragraph above already gives the argument against
+  // that -- a segment naming a level the member never walked through -- and the
+  // mangrove is exactly that case: nobody reaches it by way of the projects list.
+  //
+  // AFTER the project, because the project is a context the member is still
+  // inside while they look at the mangrove, and the last crumb is where they are
+  // standing.
+  if (destination === "mangrove") {
+    crumbs.push({ key: "mangrove", label: t.mangrove.title, go: onMangrove });
+  }
 
   // The conversation, and only when the centre is showing it. On the projects list the
   // path ends at the project (or at `Projects` with none open): the list is where the
