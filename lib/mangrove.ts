@@ -80,6 +80,22 @@ export function parseGraphFragment(object: MangroveObject): GraphFragment | null
   }
 }
 
+/**
+ * What happened to a memory, as the log recorded it.
+ *
+ * The mangrove is a log and a claim is its reduction, so the winning activity's
+ * verb is the one fact that says which of these a card is showing. `updated` is
+ * emitted by the mangrove when an author writes a cell they already hold -- it
+ * is not derived here, and deliberately not: the timeline each reader is given is
+ * filtered to what they may see, so a count taken on this side would make one
+ * member read "updated" and another "published" on the same card.
+ *
+ * OPTIONAL, because a mangrove that has not shipped it yet answers without it.
+ * `deleted` still says everything needed for a revocation, which is the case that
+ * was invisible.
+ */
+export type MangroveAction = "published" | "updated" | "revoked";
+
 /** One author's current position on one cell. */
 export interface MangroveClaim {
   cell: string;
@@ -87,6 +103,8 @@ export interface MangroveClaim {
   object: MangroveObject;
   published: string;
   deleted: boolean;
+  /** The winning activity's verb. Absent from a mangrove that predates it. */
+  action?: MangroveAction;
   /** Distinct actors who endorsed this. Weight of evidence, never a verdict. */
   evidence: number;
   audience: string[];
@@ -146,6 +164,12 @@ export interface DirectoryResult {
   /** Which question this deployment's directory is able to answer. */
   mode: "exact" | "prefix";
   results: DirectoryEntry[];
+}
+
+/** An actor id, and who it turns out to be. */
+export interface ResolvedActor {
+  id: string;
+  email: string;
 }
 
 /** Your own handles, to give to somebody whose deployment cannot search. */
@@ -226,6 +250,25 @@ export function readCapabilities(w: Workspace): Promise<MangroveCapabilities> {
  */
 export function findPeople(w: Workspace, q: string): Promise<DirectoryResult> {
   return call<DirectoryResult>("directory", w, undefined, { q });
+}
+
+/**
+ * Name actor ids this member is ALREADY being shown.
+ *
+ * NOT `findPeople` TURNED AROUND. That one starts from a needle the member typed
+ * and is gated on the deployment's search mode; this one starts from an id the
+ * mangrove itself put on their screen -- a post's author, a post's recipient --
+ * and only says who it is. It answers in strict mode for that reason.
+ *
+ * Ids the subscription does not contain come back ABSENT rather than as an
+ * error: an actor who has left, or one from another deployment, is an ordinary
+ * thing for a card to name, and the row keeps the id it was already showing.
+ */
+export function resolveActors(w: Workspace, ids: readonly string[]): Promise<ResolvedActor[]> {
+  if (ids.length === 0) return Promise.resolve([]);
+  return call<{ resolved: ResolvedActor[] }>("directory", w, undefined, {
+    ids: ids.join(","),
+  }).then((r) => r.resolved ?? []);
 }
 
 /** Your own ids. Always available, in either directory mode. */

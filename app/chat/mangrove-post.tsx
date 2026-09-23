@@ -2,9 +2,21 @@
 
 import { useState } from "react";
 import { cva } from "class-variance-authority";
-import { Download, FolderDown, GitMerge, Network, Paperclip, Quote } from "lucide-react";
+import {
+  Bot,
+  Download,
+  FileText,
+  FileType,
+  FolderDown,
+  GitMerge,
+  Network,
+  Quote,
+  StickyNote,
+  User,
+} from "lucide-react";
 import type { Workspace } from "./fragment";
 import MangroveContent, { isCut } from "./mangrove-content";
+import Recipients, { type Recipient } from "./mangrove-recipients";
 import { formatSize } from "@/app/chat/file-visuals";
 import {
   blobFile,
@@ -14,6 +26,7 @@ import {
   MangroveError,
   type GraphFragment,
   type MangroveMerge,
+  type MangroveAction,
   type MangroveObject,
 } from "@/lib/mangrove";
 import { uploadMedia } from "@/lib/media";
@@ -72,8 +85,64 @@ import { useT } from "@/lib/i18n/context";
 // which is exactly why the footer names the identifier separately rather than
 // trusting the header to have shown it.
 
+/**
+ * WHAT HAPPENED, on the card that shows it.
+ *
+ * Three of these come off the log's own verb and two off which list the card is
+ * in. They are one vocabulary because they answer one question -- a reader
+ * scanning a column of cards is asking "what is this one" before anything else --
+ * and a revocation had no word at all: it was a card at reduced opacity, which
+ * says "something" and never says what.
+ *
+ * `held` and `pending` were distinguished only by the heading above their
+ * section. That is fine while the section is on screen and useless the moment a
+ * card is read anywhere else, which is what a card is for.
+ */
+export type PostAction = MangroveAction | "held" | "pending";
+
+/**
+ * The pill, and why it is a pill rather than another line of the byline.
+ *
+ * The byline is a sentence about a PERSON and this is a fact about the THING. Put
+ * in the same sentence they compete for the same read; set apart at the end of
+ * the band, one is scanned and the other is read.
+ *
+ * `attention` for the two that want the member to do something, and a quieter
+ * tone for the three that are a record of what already happened. Revoked is not
+ * struck through: the card is already dimmed and a second signal saying the same
+ * thing is noise.
+ */
+const actionPill = cva(
+  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1",
+  {
+    variants: {
+      tone: {
+        record: "bg-surface text-fg-muted ring-rule-strong",
+        attention: "bg-accent/10 text-accent ring-accent/40",
+      },
+    },
+    defaultVariants: { tone: "record" },
+  },
+);
+
+/** The pill's copy and tone, for each of the five. */
+function actionBadge(action: PostAction, t: ChatDict) {
+  switch (action) {
+    case "published":
+      return { label: t.mangrove.actionPublished, tone: "record" as const };
+    case "updated":
+      return { label: t.mangrove.actionUpdated, tone: "record" as const };
+    case "revoked":
+      return { label: t.mangrove.actionRevoked, tone: "record" as const };
+    case "held":
+      return { label: t.mangrove.actionHeld, tone: "attention" as const };
+    case "pending":
+      return { label: t.mangrove.actionPending, tone: "attention" as const };
+  }
+}
+
 /** Recent, cut, or neither -- the two things that change how a card looks. */
-const card = cva("rounded-xl border bg-surface transition-colors", {
+const card = cva("overflow-hidden rounded-xl border bg-surface transition-colors", {
   variants: {
     // An accent edge and a lift -- the treatment chat-view already gives the one
     // card on screen it wants read first. NOT a different background: the preview's
@@ -173,8 +242,106 @@ function saveFailure(err: unknown, t: ChatDict, errs: ErrorDict): string {
   return t.mangrove.saveFailed;
 }
 
+/**
+ * One fact about the thing, in a pill: its weight, its format.
+ *
+ * A ROW OF THESE AND NOT A LINE OF PROSE, because they are answers to different
+ * questions that happen to be short. Run together -- `2 KB · Markdown` -- they read as
+ * one value with a separator in it, and the separator is the only thing saying they
+ * are two.
+ */
+function Chip({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-1.5 rounded-md bg-elevated px-2 py-1 text-[11px] text-fg">
+      <span className="shrink-0 text-fg-muted">{icon}</span>
+      {children}
+    </li>
+  );
+}
+
+/**
+ * What to call the body's media type, or null where there is nothing to call it.
+ *
+ * ONLY THE TWO THIS APP ALREADY NAMES. The composer offers markdown and plain text and
+ * the dictionary has a word for each; anything else arrived from another deployment's
+ * agent and would be shown as a raw `application/...`, which is a chip that costs a
+ * line and answers nothing. No chip is the better of the two.
+ */
+function mediaLabel(mediaType: string | undefined, t: ChatDict): string | null {
+  if (!mediaType) return null;
+  if (mediaType.includes("markdown")) return t.mangrove.formatMarkdown;
+  if (mediaType.startsWith("text/plain")) return t.mangrove.formatPlain;
+  return null;
+}
+
 /** Beyond this many names the list says "and N more" instead of running down the card. */
 const FRAGMENT_NAMES = 12;
+
+/** How many nodes the thumbnail draws before it stops. */
+const MAP_NODES = 9;
+
+/**
+ * The shape of what was shared, at thumbnail size.
+ *
+ * A HAND-DRAWN SVG AND NOT CYTOSCAPE, which this app already depends on and which
+ * `memory-graph-view` uses for the real thing. A Cytoscape instance is a canvas, a
+ * layout run and a teardown per mount, and a reading is a LIST of these -- twenty
+ * cards would be twenty engines running a force simulation to fill 150 pixels. The
+ * panel is where a graph is explored; here the question is only "how connected is
+ * this", and that is answerable at a glance without a layout.
+ *
+ * THE RING IS THE LAYOUT, and it is the honest one at this size. A force layout would
+ * claim that distance on screen means something, which at 150px across and nine nodes
+ * it cannot; every node on a circle says only what the EDGES say, which is the whole
+ * content of the picture. The edges are real -- the fragment's own relations, drawn
+ * between the nodes that made the cut.
+ *
+ * DETERMINISTIC, so the same fragment draws the same picture on every render and in
+ * every reading. Nothing here is random and nothing is measured from the DOM.
+ */
+function FragmentMap({ fragment }: { fragment: GraphFragment }) {
+  const t = useT(chatCopy);
+  const names = fragment.entities.slice(0, MAP_NODES).map((e) => e.name);
+  const at = new Map(names.map((n, i) => [n, i]));
+
+  // A circle of radius 1 in the viewBox's own units, inset so a node's disc and its
+  // label stay inside the box rather than being clipped by it.
+  const R = 40;
+  const point = (i: number) => {
+    const a = (i / names.length) * 2 * Math.PI - Math.PI / 2;
+    return { x: 50 + R * Math.cos(a), y: 46 + R * Math.sin(a) };
+  };
+
+  const edges = fragment.relations
+    .filter((r) => at.has(r.from) && at.has(r.to))
+    .map((r) => ({ a: point(at.get(r.from)!), b: point(at.get(r.to)!), key: `${r.from}>${r.to}:${r.relationType}` }));
+
+  return (
+    <svg
+      viewBox="0 0 100 92"
+      className="h-auto w-full"
+      role="img"
+      aria-label={t.mangrove.fragmentMap.replace("{count}", String(fragment.entities.length))}
+    >
+      {edges.map((e) => (
+        <line
+          key={e.key}
+          x1={e.a.x}
+          y1={e.a.y}
+          x2={e.b.x}
+          y2={e.b.y}
+          className="stroke-fg-muted"
+          strokeWidth={0.5}
+          strokeOpacity={0.5}
+        />
+      ))}
+      {names.map((n, i) => {
+        const { x, y } = point(i);
+        return <circle key={n} cx={x} cy={y} r={3} className="fill-accent" />;
+      })}
+    </svg>
+  );
+}
 
 function observationCount(fragment: GraphFragment): number {
   return fragment.entities.reduce((n, e) => n + (e.observations?.length ?? 0), 0);
@@ -228,15 +395,8 @@ function FragmentView({
     // WHAT IT IS is said by the header, so this opens on the counts. A title here as
     // well would be the same sentence twice, one line apart.
     <div>
-      <p className="text-xs text-fg-muted">
-        {t.mangrove.fragmentCounts
-          .replace("{entities}", String(fragment.entities.length))
-          .replace("{observations}", String(observationCount(fragment)))
-          .replace("{relations}", String(fragment.relations.length))}
-      </p>
-
       {shown.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1">
+        <ul className="flex flex-wrap gap-1">
           {shown.map((e) => (
             <li
               key={e.name}
@@ -254,21 +414,56 @@ function FragmentView({
         </ul>
       )}
 
-      {/* WHICH memory, said before the control that fills it. This already went to the
-          workspace the member has open -- `mergeFragment` sends the project -- and the
-          screen simply never said so, which is the same silence the file save would
-          have shipped with. */}
-      {canTake && (
-        <p className="mt-3 text-xs text-fg-muted">
-          {destination(workspace, projectName, {
-            agent: t.mangrove.mergeToAgent,
-            project: t.mangrove.mergeToProject,
-            projectUnnamed: t.mangrove.mergeToProjectUnnamed,
-          })}
-        </p>
-      )}
+      {/* WHAT IS IN IT, BESIDE THE SHAPE OF IT. The counts used to be one interpolated
+          line -- `3 entities · 13 observations · 3 relations` -- read above the chips.
+          Three of anything separated by dots is a value with punctuation in it; as
+          three rows with the numeral set apart, each one is a question answered.
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+          THE THUMBNAIL IS THE OTHER HALF OF THE SAME ANSWER. Counts say how much came
+          and say nothing about whether it is one cluster or nine loose names, which is
+          the thing a member is deciding when they merge. */}
+      <div className="mt-3 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {/* WHICH memory, said before the control that fills it. This already went to
+              the workspace the member has open -- `mergeFragment` sends the project --
+              and the screen simply never said so, which is the same silence the file
+              save would have shipped with. */}
+          {canTake && (
+            <p className="text-xs leading-relaxed text-fg-muted">
+              {destination(workspace, projectName, {
+                agent: t.mangrove.mergeToAgent,
+                project: t.mangrove.mergeToProject,
+                projectUnnamed: t.mangrove.mergeToProjectUnnamed,
+              })}
+            </p>
+          )}
+
+          <ul className="mt-2 space-y-0.5 text-xs text-fg-muted">
+            <li>
+              <span className="font-semibold text-fg">{fragment.entities.length}</span>{" "}
+              {t.mangrove.fragmentEntities}
+            </li>
+            <li>
+              <span className="font-semibold text-fg">{observationCount(fragment)}</span>{" "}
+              {t.mangrove.fragmentObservations}
+            </li>
+            <li>
+              <span className="font-semibold text-fg">{fragment.relations.length}</span>{" "}
+              {t.mangrove.fragmentRelations}
+            </li>
+          </ul>
+        </div>
+
+        {/* Nothing to draw a picture of when the fragment carries no entity at all --
+            which is a body that parsed and turned out to be empty, not an error. */}
+        {fragment.entities.length > 0 && (
+          <div className="w-2/5 max-w-[150px] shrink-0">
+            <FragmentMap fragment={fragment} />
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {canTake && (
           <Button size="sm" variant="tonal" disabled={merging} onClick={() => void merge()}>
             <GitMerge size={14} aria-hidden /> {merging ? t.mangrove.merging : t.mangrove.merge}
@@ -352,13 +547,29 @@ function FileView({
     }
   };
 
+  const format = mediaLabel(object.mediaType, t);
+  // Empty string when the sender's mangrove did not report one, which is what
+  // formatSize answers for undefined.
+  const size = formatSize(object.size);
+
   return (
-    // The name and the size are the card's header; what is left here is what can be
-    // DONE with the bytes, and the sentence saying where each of those puts them.
-    // No box of its own, for the reason FragmentView records.
-    <div className="flex flex-col gap-2">
+    // The name is the card's header; the weight and the format are chips under it, and
+    // what is left is what can be DONE with the bytes plus the sentence saying where
+    // each of those puts them. No box of its own, for the reason FragmentView records.
+    <div className="flex flex-col gap-3">
+      {/* THE SIZE MOVED OUT OF THE HEADER TO SIT BESIDE THE FORMAT. They are two facts
+          of the same kind, and one of them being set in the title row made it read as
+          part of the name. Either is left OUT where it is not known, rather than
+          claiming "0 B" about a file that is not empty. */}
+      {(size || format) && (
+        <ul className="flex flex-wrap gap-1.5">
+          {size && <Chip icon={<FileText size={12} aria-hidden />}>{size}</Chip>}
+          {format && <Chip icon={<FileType size={12} aria-hidden />}>{format}</Chip>}
+        </ul>
+      )}
+
       {canTake && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-xs leading-relaxed text-fg-muted">
           {destination(workspace, projectName, {
             agent: t.mangrove.saveToAgent,
             project: t.mangrove.saveToProject,
@@ -368,7 +579,10 @@ function FileView({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* STACKED, NOT WRAPPED. Two controls in a column this narrow wrap anyway, and a
+          wrap puts the second one hard against the left edge under a first that ended
+          mid-line -- a ragged pair rather than a list of what can be done. */}
+      <div className="flex flex-col items-start gap-2">
         <Button
           size="sm"
           variant="tonal"
@@ -449,6 +663,9 @@ export default function MangrovePost({
   projectName,
   object,
   author,
+  authorKind = "person",
+  action,
+  subscriptionName,
   title,
   subtitle,
   recipients,
@@ -469,16 +686,30 @@ export default function MangrovePost({
   object: MangroveObject;
   /** Who this is from, already in the form the screen shows. */
   author: string;
+  /**
+   * What happened to this memory. REQUIRED, so a fourth list cannot be added
+   * without deciding what its cards say -- which is how `held` and `pending` came
+   * to be told apart only by the heading above them.
+   */
+  action: PostAction;
+  /**
+   * Person or agent, for the glyph beside the name. Separate from `author` because the
+   * label is a finished sentence and the byline needs the kind BEFORE the sentence is
+   * read -- see `actorKind`.
+   */
+  authorKind?: "person" | "agent";
   /** The sheet's heading when the body is long enough to need one. */
   title: string;
   subtitle?: React.ReactNode;
   /**
-   * Who else got this, already labelled, or absent where there is nothing honest to
+   * Who else got this, one label each, or absent where there is nothing honest to
    * say -- which is not the same as nobody. A directly held memory says who sent it
    * and no more; a stranger's post does not tell us who else received it. The column
    * is left OUT in both, rather than headed over a blank. See `audienceSummary`.
    */
-  recipients?: string | null;
+  recipients?: readonly Recipient[] | null;
+  /** What this subscription is called, for a recipient that is the whole of it. */
+  subscriptionName?: string | null;
   /** How many have endorsed it. Weight of evidence, never a verdict; 0 says nothing. */
   endorsed?: number;
   /** What the reading lets a member DO with it -- admit, decide, revoke. */
@@ -502,6 +733,7 @@ export default function MangrovePost({
   onReference?: (ref: MangroveReference) => void;
 }) {
   const t = useT(chatCopy);
+  const badge = actionBadge(action, t);
   const [referenced, setReferenced] = useState(false);
   const [open, setOpen] = useState(false);
   const fragment = parseGraphFragment(object);
@@ -536,42 +768,77 @@ export default function MangrovePost({
       data-recent={recent ? "true" : undefined}
       className={card({ recent, openable })}
     >
-      {/* WHAT THIS IS, in the kind's own terms. A file is its name and its weight, a
-          fragment is a piece of somebody's graph, and prose is the handle it was
-          filed under. NOT struck through when the memory is revoked: the title is how
-          the reader finds the thing again, and a tombstoned memory is still listed. */}
-      <header className="flex items-center gap-2 px-3 pt-3">
+      {/* WHO IT IS FROM, ACROSS THE TOP.
+          This used to be a column in the footer, under a heading, read last. It is the
+          first thing a reader of somebody else's memory wants and the only fact on the
+          card that is about a PERSON rather than about a thing, which is why it gets
+          a band of its own and a glyph: the shape says person-or-agent before the
+          sentence beside it has been read at all.
+
+          `data-inner`, because the band is a region -- a padding gutter and an avatar,
+          neither of them a control -- and a click on it must not open a sheet over the
+          body. */}
+      <div data-inner className="flex items-center gap-2.5 bg-elevated px-3.5 py-2.5">
+        <span className="shrink-0 rounded-full bg-surface p-1.5 text-accent ring-1 ring-rule-strong">
+          {authorKind === "agent" ? (
+            <Bot size={16} aria-hidden />
+          ) : (
+            <User size={16} aria-hidden />
+          )}
+        </span>
+        <p className="min-w-0 flex-1 break-words text-xs leading-snug text-fg-muted">
+          {t.mangrove.senderLabel}{" "}
+          <span className="font-medium text-fg">{author}</span>
+        </p>
+        {/* WHAT HAPPENED, at the end of the band the eye already lands on. A
+            revocation used to be a card at reduced opacity and nothing else. */}
+        <span className={actionPill({ tone: badge.tone })}>{badge.label}</span>
+      </div>
+
+      {/* WHAT THIS IS, in the kind's own terms. A file is its name, a fragment is a
+          piece of somebody's graph, and prose is the handle it was filed under. The
+          glyph is ACCENT and the title is set a size up: this is the line the eye
+          should land on after the byline, and a 14px title beside a muted 14px icon
+          was the same weight as everything under it.
+
+          NOT struck through when the memory is revoked: the title is how the reader
+          finds the thing again, and a tombstoned memory is still listed. */}
+      <header className="flex items-start gap-2.5 px-3.5 pt-3.5">
         {fragment ? (
           <>
-            <Network size={14} className="shrink-0 text-fg-muted" aria-hidden />
-            <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+            <Network size={20} className="mt-px shrink-0 text-accent" aria-hidden />
+            <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug text-fg">
               {t.mangrove.fragmentTitle}
             </h3>
           </>
         ) : object.blob ? (
           <>
-            <Paperclip size={14} className="shrink-0 text-fg-muted" aria-hidden />
+            <FileText size={20} className="mt-px shrink-0 text-accent" aria-hidden />
             <h3
-              className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
+              className="min-w-0 flex-1 break-words text-base font-semibold leading-snug text-fg"
               title={object.fileName || object.cell}
             >
               {object.fileName || object.cell}
             </h3>
-            {/* Empty string when the sender's mangrove did not report a size, which is
-                what formatSize answers for undefined -- no "0 B" on a file that is not
-                empty. */}
-            <span className="shrink-0 font-mono text-[11px] text-fg-muted">
-              {formatSize(object.size)}
-            </span>
           </>
         ) : (
-          <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={object.cell}>
-            {object.cell}
-          </h3>
+          <>
+            {/* Prose gets one too, so the three kinds read as three of the same thing
+                rather than as two cards and a bare line. */}
+            <StickyNote size={20} className="mt-px shrink-0 text-accent" aria-hidden />
+            <h3
+              className="min-w-0 flex-1 break-words text-base font-semibold leading-snug text-fg"
+              title={object.cell}
+            >
+              {object.cell}
+            </h3>
+          </>
         )}
       </header>
 
-      <div className={`px-3 pb-3 pt-2 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}>
+      <div
+        className={`px-3.5 pb-3.5 pt-2.5 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}
+      >
         {fragment ? (
           <FragmentView
             workspace={workspace}
@@ -599,25 +866,38 @@ export default function MangrovePost({
         )}
       </div>
 
-      {/* THE RECORD, AND THE CONTROLS, UNDER THE THING THEY ARE ABOUT.
+      {/* THE RECORD, AND THEN THE CONTROLS, UNDER THE THING THEY ARE ABOUT.
           `data-inner` on the whole section, not on each control: it holds column
           headings, a gutter and a share panel's prose, none of which are a click on
           the body -- and the body is what the card opens a sheet over.
 
-          SEPARATED BY TONE AND NOT BY A HAIRLINE, which is the design system's answer
-          (`--rule` is for a boundary a control's edge draws) and also `pane-weight`'s:
-          a horizontal rule survives only where content scrolls past it, and nothing
-          scrolls past the bottom of a card.
+          ONE COLUMN, NOT TWO OR THREE. The grid was `grid-cols-2 sm:grid-cols-3` from
+          when a card was the width of the reading column; at two cards to a row an
+          identifier like `attachments/nota-manguezais.md` had about twelve characters
+          before it broke, so every value wrapped and the columns stopped lining up
+          with anything. A heading over its answer, stacked, survives any width.
+
+          SEPARATED BY TONE AND NOT BY A HAIRLINE, and the alternation is what does it:
+          the byline band and this record are `elevated`, the title, the body and the
+          controls under here are the card's own `surface`. Three regions, two tones,
+          no lines -- which is `pane-weight`'s rule (a horizontal rule survives only
+          where content scrolls past it, and nothing scrolls past the bottom of a
+          card) satisfied rather than argued with. The tone change is also why the
+          controls sit OUTSIDE the tinted block: what you can DO is not part of the
+          record, and here that is said by the background rather than by a line.
 
           THE TINT IS ON THIS REGION, NOT ON THE CARD. The preview's fade is painted
           `from-surface` and lives in the body above, so the card's own background has
-          to stay `surface` -- which is why `recent` is a border and a lift. A region
-          BELOW the fade may be toned; a card that changed its own background could
-          not. */}
-      <footer data-inner className="rounded-b-xl bg-elevated px-3 py-2.5">
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-          <Field label={t.mangrove.senderLabel} value={author} />
-          {recipients && <Field label={t.mangrove.recipientsLabel} value={recipients} />}
+          to stay `surface` -- which is why `recent` is a border and a lift. */}
+      <footer data-inner>
+        <dl className="grid gap-y-2.5 bg-elevated px-3.5 py-3">
+          {recipients && recipients.length > 0 && (
+            <Recipients
+              workspace={workspace}
+              to={recipients}
+              subscriptionName={subscriptionName}
+            />
+          )}
           {/* The address, always -- and on prose the same string as the header, because
               for prose the title and the address really are one thing. */}
           <Field label={t.mangrove.identifierLabel} value={object.cell} mono />
@@ -627,12 +907,12 @@ export default function MangrovePost({
         </dl>
 
         {(onReference || actions) && (
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="flex flex-col gap-2 px-3.5 py-3">
             {onReference && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
-                  variant="text"
+                  variant="tonal"
                   aria-label={`${t.mangrove.reference} — ${object.cell}`}
                   onClick={() => {
                     onReference({

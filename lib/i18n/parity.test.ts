@@ -42,6 +42,9 @@ const SHARED = new Set([
   "chat.search.tag",
   // Two interpolations and a separator -- there is no word in it to translate.
   "chat.mangrove.sheetFrom",
+  // "Feed" is the word Portuguese uses for this, unchanged -- and it is what the tab
+  // was renamed TO, from "Recebidos", precisely because that is what members call it.
+  "chat.mangrove.received",
   // The format's own name. Portuguese writes "markdown" unchanged -- the editor's
   // heading beside it is translated ("Editor markdown"), which is what makes this
   // one a shared name rather than a forgotten string.

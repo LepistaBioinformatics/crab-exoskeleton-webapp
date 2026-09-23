@@ -17,29 +17,42 @@ import type { ReactNode } from "react";
 //
 // The measurements are workspace-grid.tsx's, not new ones, for exactly that reason
 // (FR-2.3).
+/**
+ * The three column widths a destination can be, and what each one is for.
+ *
+ * THE FRAME NARROWS, NOT THE CHILDREN, and that is the whole reason this is a prop
+ * rather than a max-width the screen puts on its own content. The heading belongs to
+ * the frame: a screen that narrowed only what it renders would centre its prose while
+ * leaving its own title 200px away at the far left of a 6xl column.
+ *
+ *   - `reading` is the 65-75 character measure: one column of prose, nothing beside it.
+ *   - `feed` is a rail of destinations and ONE narrow column of cards beside it. The
+ *     cap here is the pair; the column's own width is the screen's, because only the
+ *     screen knows how wide its rail is. The column is deliberately narrower than the
+ *     reading measure -- a feed is scanned an object at a time rather than read line
+ *     by line, and every product doing this (X, LinkedIn, Mastodon) lands between 500
+ *     and 600px, past which a card stops looking like an object and starts looking
+ *     like a band across the page.
+ *   - `full` is a grid that wants the room, which is what Projects is.
+ */
+type Width = "reading" | "feed" | "full";
+
+const WIDTH: Record<Width, string> = {
+  reading: "max-w-2xl",
+  feed: "max-w-4xl",
+  full: "max-w-6xl",
+};
+
 export default function DestinationScreen({
   title,
   actions,
-  narrow = false,
+  width = "full",
   children,
 }: {
   title: string;
   /** Controls for the destination as a whole — creating, refreshing. */
   actions?: ReactNode;
-  /**
-   * A reading column instead of a grid's frame.
-   *
-   * THE FRAME NARROWS, NOT THE CHILDREN, and that is the whole reason this is a prop
-   * rather than a max-width the screen puts on its own content. The heading belongs to
-   * the frame: a screen that narrowed only what it renders would centre its prose while
-   * leaving its own title 200px away at the far left of a 6xl column.
-   *
-   * max-w-2xl, and it used to be 3xl. Both are inside the 65-75 character measure this
-   * was chosen for -- 3xl is the loose end of it -- and the narrower one is what makes
-   * a list of cards read as cards rather than as full-width bands. It moves the
-   * heading and every child together, which is the rule above still doing its job.
-   */
-  narrow?: boolean;
+  width?: Width;
   children: ReactNode;
 }) {
   return (
@@ -48,7 +61,7 @@ export default function DestinationScreen({
     // I" is the one thing that must survive scrolling.
     <div className="h-full overflow-y-auto">
       <div
-        className={`mx-auto px-4 py-6 sm:px-6 sm:py-8 ${narrow ? "max-w-2xl" : "max-w-6xl"}`}
+        className={`mx-auto px-4 py-6 sm:px-6 sm:py-8 ${WIDTH[width]}`}
       >
         <div className="flex items-start gap-3">
           <h1 className="min-w-0 flex-1 font-display text-xl font-bold text-fg sm:text-2xl">

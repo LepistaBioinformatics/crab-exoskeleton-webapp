@@ -441,6 +441,9 @@ export default function ChatShell({ email }: { email: string }) {
                 // The NAME, never `project` -- both are strings, so tsc would take the
                 // id just as happily and a member would read a uuid.
                 projectName={openProject?.name ?? null}
+                // Already resolved above for the header; a recipient that is the
+                // whole subscription is named from it rather than fetched again.
+                subscriptionName={subscription}
                 onReference={setChatRef}
               />
             )}
