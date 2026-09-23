@@ -16,6 +16,18 @@ const en = {
     // The sidebar's list of places. A <nav> needs a name to be told apart from the
     // conversation list below it, which is also a nav.
     destinations: "Go to",
+    // The two kinds of destination, named over their rows. A screen REPLACES the
+    // conversation; a tool OPENS BESIDE it. The distinction was structural and
+    // invisible -- six rows that looked alike and behaved as two things -- and these
+    // are what say it out loud.
+    //
+    // Plain nouns rather than a sentence each: they head two and five rows that are
+    // already labelled, so the heading's whole job is to say which of the two a row
+    // belongs to.
+    groups: {
+      screens: "Screens",
+      tools: "Tools",
+    },
     // The rail entry that reveals the conversation list, and the ONLY one whose hover
     // opens the collapsed sidebar's preview. Named here rather than reused from
     // `landing.conversations`, which is a heading over a list on another screen.
@@ -1085,6 +1097,10 @@ const pt: ChatDict = {
     openMenu: "Abrir menu",
     closeMenu: "Fechar menu",
     destinations: "Ir para",
+    groups: {
+      screens: "Telas",
+      tools: "Ferramentas",
+    },
     conversations: "Conversas",
     path: "Caminho",
     crumbActions: "Ações da conversa",

@@ -93,8 +93,13 @@ describe("the collapsed rail's order", () => {
   it("matches the open sidebar's, top to bottom", () => {
     const shell = code("app/chat/chat-shell.tsx");
     const groups = /const railGroups = \[([^\]]+)\]/.exec(shell)?.[1] ?? "";
+    // SPREAD, because the destinations are now several groups rather than one: the
+    // hairline between screens and tools is what a rail has instead of the two labels
+    // the open column carries. Their order within the spread is
+    // `railDestinationGroups`', which reads DESTINATION_GROUPS — the same structure the
+    // open column renders — so this only has to pin where the block sits.
     expect(groups.replace(/\s+/g, " ").trim()).toBe(
-      "railActions, railDestinations, railConversations",
+      "railActions, ...railDestinations, railConversations",
     );
 
     const sidebar = code("app/chat/unified-sidebar.tsx");
