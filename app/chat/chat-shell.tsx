@@ -11,6 +11,7 @@ import {
   setRightSidebar,
   setFragmentProject,
   setFragmentProjectSid,
+  setWorkspace,
 } from "./fragment";
 import { asDestination, resolveCentre } from "./destination";
 import { asSection, type Section } from "./workspace-sections";
@@ -20,6 +21,22 @@ import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
 import { useProjects } from "./use-projects";
 import { useConversations } from "./use-conversations";
+import ConversationTabStrip from "./conversation-tab-strip";
+import {
+  close as closeTab,
+  nextAfterClose,
+  openPreview,
+  pin as pinTab,
+  readActiveTab,
+  readTabs,
+  resumeTab,
+  retitle,
+  sameTab,
+  writeActiveTab,
+  writeTabs,
+  type Tab,
+  type TabRef,
+} from "./conversation-tabs";
 import { restoreDockedTurns } from "./turn-restore";
 import type { ChatReference } from "@/lib/chatReference";
 import { accountName } from "@/lib/subscriptions";
@@ -178,6 +195,77 @@ export default function ChatShell({ email }: { email: string }) {
 
   const openProject = projects.find((p) => p.id === project) ?? null;
   const openConversation = conversations.find((c) => c.id === sessionId) ?? null;
+
+  // ------------------------------------------------------------------ tabs
+  //
+  // THE STRIP IS NOT IN THE FRAGMENT, and that is the decision the request asked for.
+  // The fragment describes ONE location and is the thing members paste to each other;
+  // a URL carrying the whole strip would grow with a member's working set and hand
+  // whoever received it every tab they had open, including ones from a project that
+  // person is not in. So: the fragment is the ACTIVE tab, the strip is local, and
+  // switching tabs rewrites the fragment. See conversation-tabs.ts.
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  // Read once, on the client. `readTabs` touches localStorage, which does not exist
+  // during the server render -- and a first paint that differs from the second is a
+  // hydration error rather than an empty strip.
+  useEffect(() => setTabs(readTabs()), []);
+  useEffect(() => writeTabs(tabs), [tabs]);
+
+  // ENTERING THE WORKSPACE RESUMES WHERE THE MEMBER WAS, rather than opening a new
+  // conversation over the work they had open. Landing on the composer with nine tabs
+  // behind it throws away the context the strip exists to keep.
+  //
+  // ONCE, ON ARRIVAL, and the guard is the whole design. `sid` is absent for two very
+  // different reasons: the member just arrived, and the member pressed New chat. A
+  // rule that fired whenever `sid` was missing would make New chat impossible to
+  // reach -- pressing it would bounce straight back into the last tab.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || !workspace || sessionId) return;
+    resumed.current = true;
+    const restored = readTabs();
+    const go = resumeTab(restored, readActiveTab(restored));
+    if (go) setWorkspace({ t: go.t, s: go.s, r: go.r }, go.sid, go.p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.t, workspace?.s, workspace?.r]);
+
+  const activeTab: TabRef | null =
+    workspace && sessionId
+      ? { t: workspace.t, s: workspace.s, r: workspace.r, p: project, sid: sessionId }
+      : null;
+
+  // Every conversation the centre lands on becomes a PREVIEW, whichever way the member
+  // got there -- the sidebar, the landing list, a pasted link, the tree. One place
+  // rather than one call per entry point, because an entry point that forgot would
+  // leave a member working in a conversation with no tab.
+  // Derived here rather than from `conversationTitle` below: that one is declared
+  // further down and reading it from up here is a temporal dead zone, not a lint.
+  const activeTitle = openConversation?.alias?.trim() || openConversation?.title || "";
+  useEffect(() => {
+    if (!activeTab) return;
+    setTabs((prev) => retitle(openPreview(prev, activeTab, activeTitle), activeTab, activeTitle));
+    // The ref is rebuilt every render, so the primitives are the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.t, workspace?.s, workspace?.r, project, sessionId, activeTitle]);
+
+  // Remembered so the NEXT arrival lands here. Written from the fragment rather than
+  // from a click, so a tab reached by a pasted link is remembered too.
+  useEffect(() => writeActiveTab(activeTab), [activeTab?.t, activeTab?.s, activeTab?.r, activeTab?.p, activeTab?.sid]);
+
+  const goToTab = (ref: TabRef) => {
+    // `setWorkspace` writes t/s/r/sid and the project together, which is what makes a
+    // tab from another project land in that project rather than on its conversation
+    // in the wrong one.
+    setWorkspace({ t: ref.t, s: ref.s, r: ref.r }, ref.sid, ref.p);
+  };
+
+  const onCloseTab = (ref: TabRef) => {
+    const goTo = nextAfterClose(tabs, ref, activeTab);
+    setTabs((prev) => closeTab(prev, ref));
+    // Only when the ACTIVE one closed. Closing a tab the member is not in must not
+    // take them out of what they are reading.
+    if (goTo) goToTab(goTo);
+  };
   // The alias wins where there is one: it is what the member named the conversation,
   // and the title is what the transcript's first message made of it.
   const conversationTitle =
@@ -403,6 +491,21 @@ export default function ChatShell({ email }: { email: string }) {
             )}
           </div>
 
+          {/* WHAT ELSE IS OPEN. Under the breadcrumb, which says where the ACTIVE tab
+              is, and above the centre. Not below the transcript: `turn-dock` is there
+              and answers a third question again -- what is RUNNING, which leaves the
+              moment a finished turn is acknowledged. The two lists are independent and
+              neither one's controls touch the other's. */}
+          {workspace && (
+            <ConversationTabStrip
+              tabs={tabs}
+              active={activeTab}
+              onActivate={goToTab}
+              onPin={(ref) => setTabs((prev) => pinTab(prev, ref, ref.sid))}
+              onClose={onCloseTab}
+            />
+          )}
+
           {/* Above the centre pane: a pending restart is a property of the workspace,
               not of the view you happen to be in. */}
           {workspace && (
@@ -455,6 +558,12 @@ export default function ChatShell({ email }: { email: string }) {
                 project={project}
                 chatRef={chatRef}
                 onChatRef={setChatRef}
+                // SENDING IS WHAT KEEPS IT, and it is the stronger of the two signals:
+                // a member who has written into a conversation is working in it. Pinning
+                // is idempotent, so this fires on every send without opening a second tab.
+                onSent={() => {
+                  if (activeTab) setTabs((prev) => pinTab(prev, activeTab, activeTitle));
+                }}
                 onRestartNeeded={() => setRestartRefresh((n) => n + 1)}
               />
             )}

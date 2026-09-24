@@ -55,6 +55,11 @@ const en = {
     // Said once, under the heading, rather than repeated on every row.
     inProject: "In {name}",
   },
+  tabs: {
+    label: "Open conversations",
+    close: "Close",
+    untitled: "Untitled",
+  },
   pane: {
     // Prefixes, completed with the pane's own name: "Expand Conversations".
     expand: "Expand",
@@ -1219,6 +1224,11 @@ const pt: ChatDict = {
     title: "Comece uma conversa",
     conversations: "Conversas",
     inProject: "Em {name}",
+  },
+  tabs: {
+    label: "Conversas abertas",
+    close: "Fechar",
+    untitled: "Sem título",
   },
   pane: {
     expand: "Expandir",

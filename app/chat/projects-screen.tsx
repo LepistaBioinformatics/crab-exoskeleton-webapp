@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cva } from "class-variance-authority";
 import { FolderPlus, Folders, House, Pencil, Trash2 } from "lucide-react";
 import {
@@ -48,9 +48,17 @@ const EMPTY_DRAFT: Draft = { editing: null, name: "", instructions: "" };
 // The project you are standing in is marked rather than hidden or moved to the front:
 // FR-1.5 reaches this screen with `p` still set, and a member who asked to see the list
 // is asking where the others are, not to be told they are somewhere.
+// A ROW, NOT A CARD. This was a three-column grid of tall cards at the frame's full
+// 6xl, which is a shape for browsing a gallery: it spread a handful of projects --
+// most members have four or five -- across a band wider than anything else in the
+// app, and each one reserved height for a blurb that is usually one line or none.
+//
+// A list reads top to bottom in creation order, which is the order the request asks
+// for, and it sits in the same column the conversation does. `pr-16` stays: the edit
+// and delete controls are absolutely positioned over the right end.
 const card = cva(
   [
-    "flex h-full w-full flex-col gap-2 rounded-xl border bg-surface p-4 pr-16 text-left",
+    "flex w-full items-center gap-3 rounded-xl border bg-surface px-4 py-3 pr-16 text-left",
     "transition-colors hover:border-accent/60 hover:bg-elevated",
   ],
   {
@@ -93,7 +101,22 @@ export default function ProjectsScreen({
   // The shared hook, not a local fetch: the sidebar hides its Projects row on the same
   // `projects_unsupported` this screen goes silent for, and two fetches would let the
   // row and the screen disagree the moment one of them created or deleted something.
-  const { projects, error: loadError } = useProjects(workspace);
+  const { projects: unsorted, error: loadError } = useProjects(workspace);
+  // NEWEST FIRST. The proxy returns them in whatever order it walked the directory,
+  // which is near enough to creation order to look deliberate and not near enough to
+  // be -- the same trap the mangrove's reading had.
+  //
+  // `createdAt` is the empty string when the proxy sent no `created_at`, and those
+  // sort LAST rather than first: an unknown date is not "the oldest", and putting
+  // them at the top would give the least-known entries the most prominent place.
+  const projects = useMemo(
+    () =>
+      [...unsorted].sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return a.createdAt ? -1 : b.createdAt ? 1 : 0;
+        return b.createdAt.localeCompare(a.createdAt);
+      }),
+    [unsorted],
+  );
   // Write failures are this screen's own; read failures come from the hook. Kept apart
   // so a failed save does not read as the list being unavailable.
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +183,10 @@ export default function ProjectsScreen({
   return (
     <DestinationScreen
       title={t.projects.title}
+      // The conversation's own measure. `full` was for a grid that wanted the room;
+      // a list of five rows in a 6xl column is five short lines stranded in a very
+      // wide band.
+      width="reading"
       actions={
         <IconButton
           variant="ghost"
@@ -229,9 +256,7 @@ export default function ProjectsScreen({
           <p className="mt-1 text-sm text-fg-muted">{t.projects.noneHint}</p>
         </div>
       ) : (
-        // Wraps rather than squeezing, like the agent grid: this pane shares the
-        // viewport with a sidebar and has to survive a phone at one column.
-        <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-6 flex flex-col gap-2">
           {/* THE WAY OUT OF A PROJECT, and until 2026-09-12 there was none.
               Every control led further in: the sidebar entered one, the breadcrumb's
               project segment led to this list while keeping `p` (FR-1.5, and still
@@ -285,26 +310,31 @@ export default function ProjectsScreen({
                   aria-current={here ? "true" : undefined}
                   className={card({ current: here })}
                 >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <Folders size={16} className="shrink-0 text-fg-muted" aria-hidden />
-                    <span className="min-w-0 truncate font-display text-base font-semibold text-fg">
-                      {p.name}
+                  <Folders size={16} className="shrink-0 text-fg-muted" aria-hidden />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 truncate font-display text-sm font-semibold text-fg">
+                        {p.name}
+                      </span>
+                      {here && (
+                        <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-fg">
+                          {t.projects.current}
+                        </span>
+                      )}
                     </span>
+                    {/* ONE LINE. A row's job is to be scanned, and a project's
+                        instructions are read inside it rather than from the list. */}
+                    {p.instructions && (
+                      <span className="min-w-0 truncate text-xs text-fg-muted">
+                        {p.instructions}
+                      </span>
+                    )}
                   </span>
-                  {here && (
-                    <span className="w-fit rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-fg">
-                      {t.projects.current}
-                    </span>
-                  )}
-                  {p.instructions && (
-                    <span className="line-clamp-3 text-sm text-fg-muted">
-                      {p.instructions}
-                    </span>
-                  )}
-                  {/* mt-auto pins the date to the bottom, so cards whose blurbs differ
-                      in length still line their dates up across a row. */}
+                  {/* At the END of the row now rather than pinned to a card's floor.
+                      Hidden on a phone, where the row has no width to spare and the
+                      date is the least of the three things on it. */}
                   {created && (
-                    <span className="mt-auto pt-1 text-xs text-muted">{created}</span>
+                    <span className="hidden shrink-0 text-xs text-muted sm:block">{created}</span>
                   )}
                 </button>
                 <div className="absolute right-2 top-2 flex items-center gap-0.5">
