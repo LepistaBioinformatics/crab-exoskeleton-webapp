@@ -230,7 +230,6 @@ export default function ChatShell({ email }: { email: string }) {
         // Keeps `p`: asking to see the list is not leaving the project you are in
         // (FR-1.5). The grid marks it as the one you are inside.
         onProjects: () => setDestination("projects"),
-        onMangrove: () => setDestination("mangrove"),
         // Up one level from a conversation is the PROJECT, which drops `sid` and lands
         // on the project's own screen. It used to be the list of projects, which is what
         // `Projects` above it carries now.
@@ -485,6 +484,13 @@ export default function ChatShell({ email }: { email: string }) {
             key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
             workspace={workspace}
             section={shownSection}
+            // SWITCHING WITHOUT LEAVING. The same setter the sidebar row uses, so a
+            // move made in the heading and a move made in the column are one
+            // operation with one fragment write behind them.
+            onSection={setRightSidebar}
+            // Derived from the SAME object the sidebar filters its rows with, so the
+            // heading cannot offer a way into something the column hides.
+            hiddenSections={hidden.mangrove ? (["mangrove"] as const) : []}
             // For the mangrove alone, which is the one section that has to say where a
             // file will land and to name a recipient that is the whole subscription.
             // The NAME, never `project` -- both are strings, so tsc would take the id

@@ -59,6 +59,7 @@ const en = {
     // Prefixes, completed with the pane's own name: "Expand Conversations".
     expand: "Expand",
     resize: "Resize",
+    switchTool: "Switch tool",
     // The workspace pane's X. Completed the same way — "Close Files" — because two panes
     // can be on screen at once and "Close" alone would not say which.
     close: "Close",
@@ -1053,7 +1054,14 @@ const en = {
     scopePrivate: "Only you",
     scopePeople: "People",
     scopePrivateNote: "Nobody else sees this. Your agent can still read it.",
-    scopePeopleNote: "Each person decides whether to let it into their agent's memory.",
+    scopePeopleNote: "It lands in their mangrove. Taking it into a memory graph stays their own act.",
+    handedOff: "{name} is ready to post.",
+    openToFinish: "Open the mangrove",
+    reachYou: "Nobody else",
+    reachPeople: "The people you name",
+    reachPeopleCount: "{n} so far",
+    reachSubscription: "Everybody in this subscription",
+    reachTenant: "Every subscription in this tenant, and everybody in them",
     addRecipient: "Add",
     removeRecipient: "Remove",
     reachLabel: "What it reaches",
@@ -1210,6 +1218,7 @@ const pt: ChatDict = {
   pane: {
     expand: "Expandir",
     resize: "Redimensionar",
+    switchTool: "Trocar de ferramenta",
     close: "Fechar",
   },
   nav: {
@@ -1949,7 +1958,14 @@ const pt: ChatDict = {
     scopePrivate: "Somente você",
     scopePeople: "Pessoas",
     scopePrivateNote: "Ninguém mais vê. Seu agente continua podendo ler.",
-    scopePeopleNote: "Cada pessoa decide se deixa entrar na memória do agente dela.",
+    scopePeopleNote: "Chega no mangue de cada uma. Levar para o grafo de memória continua sendo ato dela.",
+    handedOff: "{name} está pronto para virar post.",
+    openToFinish: "Abrir o mangue",
+    reachYou: "Mais ninguém",
+    reachPeople: "As pessoas que você nomear",
+    reachPeopleCount: "{n} até agora",
+    reachSubscription: "Todo mundo desta assinatura",
+    reachTenant: "Todas as assinaturas deste tenant, e todo mundo nelas",
     addRecipient: "Adicionar",
     removeRecipient: "Remover",
     reachLabel: "O que isso alcança",

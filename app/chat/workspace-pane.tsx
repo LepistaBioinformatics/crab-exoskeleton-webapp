@@ -1,7 +1,8 @@
 "use client";
 
 import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { SECTIONS, SECTION_ORDER, type Section } from "./workspace-sections";
 import { IconButton } from "@/components/ui/icon-button";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
@@ -56,6 +57,9 @@ const WIDTH_KEY = "chat-files-width";
 
 export default function WorkspacePane({
   title,
+  section,
+  onSection,
+  hiddenSections,
   actions,
   onClose,
   closing = false,
@@ -64,6 +68,23 @@ export default function WorkspacePane({
 }: {
   /** The open section's name -- the heading, and what the pane is called to a screen reader. */
   title: string;
+  /**
+   * Which section is open, for the switcher in the heading.
+   *
+   * ABSENT MEANS NO SWITCHER. The pane is a general frame and there is no rule that
+   * everything it will ever hold is one of the six -- a caller with nothing to switch
+   * between gets a plain heading, as it did before.
+   */
+  section?: Section;
+  /** Switch the pane to another section. Required for the switcher to be offered. */
+  onSection?: (next: Section) => void;
+  /**
+   * Sections this deployment does not have. The mangrove is the one that can be
+   * absent, and offering a row that opens an empty pane is the thing its switch
+   * exists to prevent -- the sidebar already filters it out and this list is the
+   * same list.
+   */
+  hiddenSections?: readonly Section[];
   /** Controls for the section itself, beside the close button. */
   actions?: ReactNode;
   onClose: () => void;
@@ -85,6 +106,40 @@ export default function WorkspacePane({
 }) {
   const t = useT(chatCopy);
   const [width, setWidth] = useState(MIN_WIDTH);
+  const [menu, setMenu] = useState(false);
+  const switchRef = useRef<HTMLButtonElement | null>(null);
+  // Offered only when the caller gave both halves, and only for the sections this
+  // deployment actually has.
+  const switcher =
+    section && onSection
+      ? SECTION_ORDER.filter((s) => !(hiddenSections ?? []).includes(s))
+      : null;
+
+  // A MENU THAT OUTLIVES THE CLICK THAT OPENED IT IS A MENU NOBODY CAN DISMISS.
+  // Escape and a click anywhere else both close it; the pane itself has no other
+  // layer, so there is nothing else listening for either.
+  useEffect(() => {
+    if (!menu) return;
+    const away = (e: globalThis.MouseEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (switchRef.current?.parentElement?.contains(e.target)) return;
+      setMenu(false);
+    };
+    const key = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(false);
+    };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", key);
+    };
+  }, [menu]);
+
+  // Closing the pane while the menu is open would leave it open over the next one.
+  useEffect(() => {
+    if (closing) setMenu(false);
+  }, [closing]);
 
   // ONCE THE PANE HAS STARTED LEAVING IT NEVER PLAYS THE ARRIVAL AGAIN.
   //
@@ -165,10 +220,33 @@ export default function WorkspacePane({
         // conversation beside it — so the tone draws nothing, and the edge has to come
         // back as an edge: a rounded border with air around it on three sides.
         //
-        // `md:` on all four, because below that width this is a full-height overlay
-        // drawer. A drawer inset from the edges of the screen is a dialog that forgot to
-        // dim what is behind it.
-        className={`${phase} relative flex shrink-0 flex-col overflow-hidden bg-bg md:my-2 md:mr-2 md:rounded-2xl md:border md:border-rule max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[92vw]! max-md:max-w-[92vw] max-md:shadow-xl`}
+        // `md:` on all four, because below that width this is an overlay drawer, and a
+        // drawer inset from the edges of the screen is a dialog that forgot to dim what
+        // is behind it.
+        //
+        // IT RISES FROM THE BOTTOM ON A PHONE. It used to be a full-height column
+        // pinned to the right edge at 92vw, which is a desktop pane made narrow: it
+        // came from the side, left a strip of dead chat beside it that was too thin to
+        // read and too wide to ignore, and put its close control at the far top corner
+        // — the hardest point on the screen for the thumb holding the device.
+        //
+        // Anchored to the bottom instead, full width, and stopping just under the
+        // breadcrumb. That is the shape a phone already uses for a layer over the
+        // page, and it is the same one `BottomSheet` draws three components away.
+        //
+        // UNDER THE BREADCRUMB, not at some fraction of the viewport. It was
+        // `h-[85dvh]`, which left a strip of conversation showing that was too short
+        // to read and only there to prove the sheet was a layer. The breadcrumb does
+        // that job and earns its space: it says which agent and which project this
+        // pane belongs to, which is exactly the context a member needs while reading
+        // one. `top-12` is that bar's own height -- `py-2` around an `h-8` control --
+        // and `pane-switcher.test.tsx` asserts the two agree rather than trusting
+        // this arithmetic to survive a change to either input.
+        //
+        // `w-full!` for the reason the 92vw needed `!`: `width` above is an inline
+        // style, drag-resizable on desktop, and an inline style beats an ordinary
+        // class. Tailwind v4 puts the important modifier at the END.
+        className={`${phase} relative flex shrink-0 flex-col overflow-hidden bg-bg md:my-2 md:mr-2 md:rounded-2xl md:border md:border-rule max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-12 max-md:z-50 max-md:w-full! max-md:max-w-full max-md:rounded-t-2xl max-md:border-t max-md:border-rule max-md:shadow-xl`}
         // Only the aside's own animation ends the exit. Animations inside the pane — a
         // spinner, a fading row — bubble their `animationend` through here too, and one
         // of those firing would drop the pane mid-slide.
@@ -188,12 +266,73 @@ export default function WorkspacePane({
           className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
         />
 
-        <div className="flex shrink-0 items-center gap-1 border-b border-rule px-3 py-2">
+        <div className="relative flex shrink-0 items-center gap-1 border-b border-rule px-3 py-2">
           {/* h2, not h1: the centre pane holds the heading for where the member IS, and
-              this is what is open beside it. */}
-          <h2 className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
-            {title}
-          </h2>
+              this is what is open beside it.
+
+              AND IT IS THE WAY TO THE OTHER FIVE. Switching tools meant going back to
+              the left column every time -- out of the pane, down the list, back in --
+              for a move between two things that are both "open beside the
+              conversation". The heading already names where you are, so it is the
+              honest place to hang where else you could be: the same six names and the
+              same six icons the sidebar draws, from `SECTIONS`, so nothing here can
+              disagree with what the column says. */}
+          {switcher ? (
+            <>
+              <button
+                ref={switchRef}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={menu}
+                onClick={() => setMenu((v) => !v)}
+                className="-mx-1 flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-elevated"
+              >
+                <h2 className="min-w-0 truncate font-display text-sm font-semibold text-fg">
+                  {title}
+                </h2>
+                <ChevronDown size={14} aria-hidden className="shrink-0 text-fg-muted" />
+              </button>
+              {menu && (
+                <div
+                  role="menu"
+                  aria-label={t.pane.switchTool}
+                  className="absolute left-2 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg border border-rule-strong bg-surface py-1 shadow-elevated"
+                >
+                  {switcher.map((s) => {
+                    const { Icon } = SECTIONS[s];
+                    const here = s === section;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        role="menuitem"
+                        aria-current={here ? "true" : undefined}
+                        onClick={() => {
+                          setMenu(false);
+                          // The open one is not a move. Answering it by re-opening
+                          // what is already open would flash the pane for nothing;
+                          // answering it by CLOSING would make the list a toggle,
+                          // which is not what a list of places is.
+                          if (!here) onSection?.(s);
+                        }}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                          here ? "bg-elevated text-fg" : "text-fg-muted hover:bg-elevated/60 hover:text-fg"
+                        }`}
+                      >
+                        <Icon size={15} aria-hidden className="shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{SECTIONS[s].label(t)}</span>
+                        {here && <Check size={14} aria-hidden className="shrink-0 text-accent" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <h2 className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-fg">
+              {title}
+            </h2>
+          )}
           {actions}
           <IconButton
             variant="ghost"

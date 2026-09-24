@@ -95,15 +95,25 @@ async function click(el: Element) {
   });
 }
 
-/** Choose one of the audience scopes. There is no combination to build. */
+/** Choose one of the audience scopes. There is no combination to build.
+ *
+ * MATCHED ON THE LABEL, not on the button's whole text. Each rung carries a second
+ * line saying what it contains -- "Everybody in this subscription" under a label of
+ * the same words, and a count under "People" that moves as recipients are added -- so
+ * the button's `textContent` is no longer the label and was never meant to be read as
+ * one. */
+function scopeLabelOf(radio: Element): string {
+  return radio.querySelector("[data-scope-label]")?.textContent?.trim() ?? "";
+}
+
 async function pickScope(labelText: string) {
-  const radio = [...host!.querySelectorAll('[role="radio"]')].find((r) =>
-    r.textContent?.trim() === labelText,
+  const radio = [...host!.querySelectorAll('[role="radio"]')].find(
+    (r) => scopeLabelOf(r) === labelText,
   );
   if (!radio) {
     throw new Error(
       `no scope offered called ${labelText}; offered: ${[...host!.querySelectorAll('[role="radio"]')]
-        .map((r) => r.textContent?.trim())
+        .map(scopeLabelOf)
         .join(", ")}`,
     );
   }
@@ -147,6 +157,66 @@ afterEach(() => {
   published.length = 0;
   removed.length = 0;
   vi.clearAllMocks();
+});
+
+// THE LADDER, AND THE PART OF IT ONLY THE DOM CAN ANSWER.
+//
+// Four scopes used to be a flat row of equal segments -- same width, same weight --
+// which said they were four alternatives and nothing about three of them CONTAINING
+// the ones before. What the request asked for is that picking a few people READS as
+// narrow and picking the tenant reads as many more people and accounts.
+//
+// `mangrove-reach.test.ts` covers what each rung says. This covers the marking, which
+// is the half that carries the containment.
+describe("the reach ladder", () => {
+  const rungs = () => [...host!.querySelectorAll('[role="radio"]')];
+  const within = () =>
+    rungs()
+      .filter((r) => r.getAttribute("data-within") === "true")
+      .map((r) => r.getAttribute("data-scope"));
+
+  it("marks the chosen step and every narrower one, never the wider ones", async () => {
+    await render({ governs: true, tenantLicensed: true });
+
+    await pickScope(en.mangrove.scopePeople);
+    expect(within()).toEqual(["private", "people"]);
+
+    await pickScope(en.mangrove.groupTenant);
+    expect(within(), "choosing the tenant excluded what it contains").toEqual([
+      "private",
+      "people",
+      "subscription",
+      "tenant",
+    ]);
+
+    // AND BACK DOWN. A ladder that only ever filled would tell a member narrowing
+    // their audience that it had stayed wide.
+    await pickScope(en.mangrove.scopePrivate);
+    expect(within()).toEqual(["private"]);
+  });
+
+  // A COLUMN, because the rows are nested rather than side by side -- and because a
+  // row of four cannot give each one a width that means anything.
+  it("draws them stacked rather than in a row", async () => {
+    await render({ governs: true, tenantLicensed: true });
+    const group = host!.querySelector('[role="radiogroup"]')!;
+    expect([...group.classList]).toContain("flex-col");
+  });
+
+  // The bar is what carries the hierarchy for an eye that has not read the labels, so
+  // the widths have to actually differ and to grow with the rung.
+  it("gives each step a wider fill than the one it contains", async () => {
+    await render({ governs: true, tenantLicensed: true });
+    const widths = rungs().map((r) =>
+      parseFloat((r.querySelector("[data-fill]") as HTMLElement).style.width),
+    );
+    expect(widths).toHaveLength(4);
+    for (let i = 1; i < widths.length; i++) {
+      expect(widths[i], `rung ${i} is not wider than the one it contains`).toBeGreaterThan(
+        widths[i - 1],
+      );
+    }
+  });
 });
 
 describe("group scopes", () => {
@@ -327,7 +397,7 @@ describe("an empty audience", () => {
     const checked = [...host!.querySelectorAll('[role="radio"]')].find(
       (r) => r.getAttribute("aria-checked") === "true",
     );
-    expect(checked?.textContent?.trim()).toBe(en.mangrove.scopePrivate);
+    expect(scopeLabelOf(checked!)).toBe(en.mangrove.scopePrivate);
     await send();
 
     expect(publish).toHaveBeenCalledTimes(1);

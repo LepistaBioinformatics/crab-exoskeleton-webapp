@@ -505,19 +505,32 @@
   animation: paneClose 200ms ease-out forwards;
 }
 
-/* THE MOBILE DRAWER LEAVES AT ONCE, and it is the `!important` above it that makes that
- * the right answer. `max-md:w-[92vw]!` beats an animation in the cascade, so neither
- * paneOpen nor paneClose can move this element on a phone — the drawer has always
- * appeared and disappeared in one frame, symmetrically. Left at 200ms the animation would
- * still RUN, invisibly, and hold a dead drawer and its backdrop on screen for a fifth of a
- * second before React removed them: an exit animation that only added latency.
+/* THE MOBILE DRAWER MOVES NOW, and this rule is the reversal of what stood here.
  *
- * The animation is shortened rather than removed. `animation: none` would mean no
- * `animationend`, and the shell waits for that event to unmount — the drawer would never
- * leave at all. */
+ * It used to shorten `paneClose` to 1ms, because the drawer was a right-edge column at
+ * `max-md:w-[92vw]!` and that `!important` beat any animation of `width` — so neither
+ * paneOpen nor paneClose could move the element on a phone, and leaving it at 200ms only
+ * held a dead drawer and its backdrop on screen for a fifth of a second.
+ *
+ * The drawer rises from the bottom edge now, so it animates on TRANSFORM, which nothing
+ * in the cascade is overriding. The width `!important` is still there and still beats a
+ * width animation, which is exactly why these two have to be replaced rather than
+ * neutralized: the same class names, a different property.
+ *
+ * The motion is `BottomSheet`'s, deliberately — one movement for one meaning, so a layer
+ * over the page always arrives the same way. Out is quicker than in and eased the other
+ * way, for the reason stated there: leaving should not make the reader wait for a
+ * decision they have already made.
+ *
+ * `forwards` on the exit keeps it off-screen for the frame between the animation ending
+ * and React removing the node, and `animationend` still fires — which the shell waits
+ * for. `animation: none` would mean no event and a drawer that never leaves. */
 @media (max-width: 767px) {
+  .pane-open {
+    animation: sheetRise 220ms ease-out;
+  }
   .pane-close {
-    animation-duration: 1ms;
+    animation: sheetFall 180ms ease-in forwards;
   }
 }
 

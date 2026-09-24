@@ -37,7 +37,7 @@ import {
   type Attachment,
 } from "@/lib/media";
 import { FileThumb, formatSize } from "@/app/chat/file-visuals";
-import { setDestination, type Workspace } from "./fragment";
+import { setRightSidebar, type Workspace } from "./fragment";
 import { requestMangroveShare } from "./mangrove-share-bus";
 import { useMangroveEnabled } from "./use-mangrove";
 import FilePreview from "@/app/chat/file-preview";
@@ -278,6 +278,12 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
         }
       : null;
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+  // THE FILE JUST HANDED TO THE MANGROVE, by the name the member saw.
+  //
+  // Held here rather than in the row, because the row is one of twenty and the
+  // handoff is about the share, not about the file it came from -- and the row it
+  // came from may well be scrolled off by the time the member looks up.
+  const [handedOff, setHandedOff] = useState<string | null>(null);
   // Drag state. `dragPath` is the workspace-relative path being dragged (a file's
   // `name` or a folder's `path` — both already live in the same space, without the
   // `uploads/` prefix). `dropFolder` is the folder currently under the pointer, or ""
@@ -738,10 +744,18 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
                 // The PATH is what the proxy resolves; the leaf is only what the
                 // composer shows. The two differ for every file inside a folder.
                 requestMangroveShare({ kind: "file", path: f.path, name: node.leaf });
-                // The composer is a centre destination and this pane is beside the
-                // conversation, so the share is parked on the bus first and collected
-                // by the screen this navigation mounts.
-                setDestination("mangrove");
+                // AND THEN NOTHING MOVES. This used to call
+                // `setDestination("mangrove")`, which worked while the mangrove
+                // replaced the centre pane. It stopped when the mangrove became a
+                // right-pane section: `asDestination` was narrowed and REFUSES
+                // "mangrove" on purpose, because old links still carry it. So the
+                // share was parked on a bus nobody was listening to and the click
+                // did nothing at all, with no error to show for it.
+                //
+                // The pane is where this list is. Switching it here would take the
+                // list away mid-task, on a click that may have been aimed at one of
+                // several files, so the member is offered the crossing instead.
+                setHandedOff(node.leaf);
               }}
             >
               <Waves size={14} aria-hidden />
@@ -907,6 +921,31 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
               />
             </div>
           </div>
+
+          {/* ABOVE THE SCROLLER, so it cannot be scrolled away from. The listing
+              below is the only thing in this pane that scrolls, and a strip inside it
+              would leave the member looking for a control they had just been given. */}
+          {handedOff !== null && (
+            <div className="px-2 pt-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+                <p className="min-w-0 flex-1 text-xs leading-snug text-fg">
+                  {t.mangrove.handedOff.replace("{name}", handedOff)}
+                </p>
+                <Button
+                  size="sm"
+                  variant="tonal"
+                  onClick={() => {
+                    // `rs`, not `v`. The mangrove is a section beside the
+                    // conversation now, and this is the only key that opens one.
+                    setRightSidebar("mangrove");
+                    setHandedOff(null);
+                  }}
+                >
+                  <Waves size={14} aria-hidden /> {t.mangrove.openToFinish}
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-auto p-2">
             {error && <Alert severity="error">{error}</Alert>}
