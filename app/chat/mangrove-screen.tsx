@@ -659,11 +659,17 @@ export default function MangroveScreen({
                     onRead={() => {
                       if (!unread) return;
                       setReadHere((prev) => new Set(prev).add(c.object.id));
-                      // Best effort. The mark is already gone from the screen,
-                      // and putting it back because a receipt did not land would
-                      // tell the member they had not read something they just
-                      // read. The next reload asks the server again.
-                      void markRead(workspace, c.object.id).catch(() => {});
+                      // Best effort ON SCREEN, not in silence. Putting the
+                      // mark back because a receipt did not land would tell the
+                      // member they had not read something they just read, so
+                      // the failure must not reach the UI -- but it swallowed
+                      // the one signal that the receipt was 404ing at the BFF's
+                      // allow-list, and the symptom that reached a human was
+                      // "it goes unread again when I reload". Said out loud
+                      // now; the next reload still asks the server again.
+                      void markRead(workspace, c.object.id).catch((err) => {
+                        console.warn("mangrove: read receipt did not land", err);
+                      });
                     }}
                     readBy={reading === "published" ? c.readBy : undefined}
                     recipients={audience}
