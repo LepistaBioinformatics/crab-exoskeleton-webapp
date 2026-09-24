@@ -60,8 +60,22 @@ describe("the shell's ground", () => {
     expect(code("app/chat/unified-sidebar.tsx")).not.toContain("bg-surface");
   });
 
+  // THE PANE'S OWN GROUND, which is the claim -- not "the file mentions no fill".
+  //
+  // It was written as `not.toContain("bg-surface")` over the whole file, which held
+  // while the only fill in there was the pane's. The heading grew a switcher, and a
+  // menu floating OVER the pane is the one thing that does need a step above it: at
+  // `bg-bg` it would be a list with no edge, painted on the pane it is covering. Every
+  // other popover in this app is `bg-surface`, so that is the convention and not a
+  // exception argued for here.
+  //
+  // So the rule is asserted where it lives: the <aside>'s own class list.
   it("puts the pane beside the conversation on it too", () => {
-    expect(code("app/chat/workspace-pane.tsx")).not.toContain("bg-surface");
+    const src = code("app/chat/workspace-pane.tsx");
+    const aside = /className=\{`\$\{phase\}([^`]*)`\}/.exec(src);
+    expect(aside, "the pane's className moved; this test reads it by shape").not.toBeNull();
+    expect(aside![1]).not.toContain("bg-surface");
+    expect(aside![1], "the pane stopped sitting on the shell's ground").toContain("bg-bg");
   });
 
   // THE HALF THAT IS NOT OPTIONAL. Level with the conversation, the tone draws nothing —

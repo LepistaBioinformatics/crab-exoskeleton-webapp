@@ -115,3 +115,72 @@ describe("sharing a file in the mangrove", () => {
     });
   });
 });
+
+// WHAT HAPPENS AFTER THE CLICK, which for a while was nothing at all.
+//
+// The control parked the share and then called `setDestination("mangrove")`. That
+// worked while the mangrove replaced the centre pane; it stopped the day the mangrove
+// became a right-pane section, because `asDestination` was narrowed to `projects` and
+// REFUSES "mangrove" on purpose -- old links still carry it. So the share went onto a
+// bus nobody was listening to, `v=mangrove` was written and refused, and the member
+// saw nothing happen and got no error to explain it.
+//
+// The pane is where the listing is, so this does not switch it for them: the share is
+// captured, and going to finish it is a second decision.
+describe("getting from the file to the composer", () => {
+  const openMangrove = () =>
+    [...host!.querySelectorAll("button")].find(
+      (b) => b.textContent?.includes(t.mangrove.openToFinish),
+    );
+
+  it("offers no crossing until something has been shared", async () => {
+    stubFetch("on");
+    await mount();
+    expect(openMangrove()).toBeUndefined();
+  });
+
+  it("offers one after the share, naming the file it captured", async () => {
+    stubFetch("on");
+    const el = await mount();
+    await act(async () => {
+      el.querySelector(`[aria-label="${SHARE_LABEL}"]`)!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(openMangrove(), "no way across after sharing").toBeTruthy();
+    // NAMED, because the member may have clicked one row of twenty and a mis-aimed
+    // click should be visible before they leave the list.
+    expect(el.textContent).toContain("q2.pdf");
+  });
+
+  it("opens the mangrove beside the conversation, and writes no destination", async () => {
+    stubFetch("on");
+    const el = await mount();
+    window.location.hash = "";
+    await act(async () => {
+      el.querySelector(`[aria-label="${SHARE_LABEL}"]`)!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      openMangrove()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // `rs`, the key that opens a pane beside the conversation. NOT `v` -- that one
+    // names what replaces the centre, and it is what the dead call was writing.
+    expect(window.location.hash).toContain("rs=mangrove");
+    expect(window.location.hash, "a destination was written again").not.toContain("v=mangrove");
+  });
+
+  it("puts the crossing away once it has been taken", async () => {
+    stubFetch("on");
+    const el = await mount();
+    await act(async () => {
+      el.querySelector(`[aria-label="${SHARE_LABEL}"]`)!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      openMangrove()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(openMangrove()).toBeUndefined();
+  });
+});

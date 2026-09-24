@@ -2127,8 +2127,10 @@ describe("passing a memory on", () => {
     // THE FOOTER, not the first `[data-inner]`: the byline band carries that attribute
     // too, and it is above this one.
     const panel = cardOf("mine").querySelector("footer")!;
+    // MATCHED ON THE LABEL, not the button's whole text: each rung carries a second
+    // line saying what it contains, and for this one the two read almost alike.
     const subscription = [...panel.querySelectorAll('[role="radio"]')].find(
-      (r) => r.textContent?.trim() === en.mangrove.groupSubscription,
+      (r) => r.querySelector("[data-scope-label]")?.textContent?.trim() === en.mangrove.groupSubscription,
     )!;
     await click(subscription);
     const send = [...panel.querySelectorAll("button")].find(
@@ -2155,7 +2157,7 @@ describe("passing a memory on", () => {
     await click(shareControl("mine")!);
 
     const labels = [...cardOf("mine").querySelectorAll('[role="radio"]')].map((r) =>
-      r.textContent?.trim(),
+      r.querySelector("[data-scope-label]")?.textContent?.trim(),
     );
     expect(labels).toEqual([en.mangrove.scopePeople]);
   });

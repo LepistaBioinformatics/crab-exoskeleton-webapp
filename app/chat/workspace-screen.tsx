@@ -35,6 +35,8 @@ import { useT } from "@/lib/i18n/context";
 export default function WorkspaceScreen({
   workspace,
   section,
+  onSection,
+  hiddenSections,
   projectName,
   subscriptionName,
   onClose,
@@ -54,6 +56,10 @@ export default function WorkspaceScreen({
   projectName?: string | null;
   subscriptionName?: string | null;
   /** Closes the pane — the shell clears `rs`. */
+  /** Switch the pane to another section, from the heading's own list. */
+  onSection?: (next: Section) => void;
+  /** What this deployment does not have. Today that is the mangrove or nothing. */
+  hiddenSections?: readonly Section[];
   onClose: () => void;
   /** Passed straight through to the pane's chrome; see `workspace-pane.tsx`. */
   closing?: boolean;
@@ -94,6 +100,13 @@ export default function WorkspaceScreen({
   return (
     <WorkspacePane
       title={SECTIONS[section].label(t)}
+      // The switcher in the heading. Passed from here rather than read inside the
+      // pane, because the pane is a frame and does not know what a section is until
+      // it is told -- and `hiddenSections` is the shell's answer, the same one the
+      // sidebar filters its rows with.
+      section={section}
+      onSection={onSection}
+      hiddenSections={hiddenSections}
       onClose={onClose}
       closing={closing}
       onClosed={onClosed}

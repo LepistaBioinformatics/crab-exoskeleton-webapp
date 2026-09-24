@@ -36,7 +36,6 @@ export function buildCrumbs({
   t,
   onWorkspace,
   onProjects,
-  onMangrove,
   onProject,
 }: {
   workspace: Workspace | null;
@@ -45,8 +44,6 @@ export function buildCrumbs({
   project: Project | null;
   conversationTitle: string | null;
   destination: Destination | null;
-  /** Back to the mangrove from a crumb below it. */
-  onMangrove?: () => void;
   t: ChatDict;
   /** Leave the workspace: the agent grid. */
   onWorkspace: () => void;

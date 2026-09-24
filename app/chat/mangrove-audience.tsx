@@ -61,15 +61,43 @@ export interface Recipient {
  */
 export type AudienceScope = "private" | "people" | "subscription" | "tenant";
 
-const segment = cva("rounded-md px-3 py-1.5 text-sm transition-colors", {
-  variants: {
-    active: {
-      true: "bg-accent/15 font-medium text-fg",
-      false: "text-fg-muted hover:bg-elevated hover:text-fg",
+/**
+ * THE LADDER, and it is the whole point of the control.
+ *
+ * Each scope CONTAINS the one before it: you, then the people you name, then everybody
+ * in the subscription those people are in, then every subscription in the tenant. A
+ * flat row of four equal segments said these were four alternatives and nothing about
+ * that -- a member picking `tenant` had no way to see they had just crossed from a
+ * handful of named people to every account in the organisation.
+ *
+ * ABSOLUTE POSITION, not the index within `offered`. Two members with different
+ * capabilities see the same widths for the same scope, and a member who cannot address
+ * the tenant still sees that `subscription` is not the widest thing that exists.
+ */
+const LADDER: readonly AudienceScope[] = ["private", "people", "subscription", "tenant"];
+
+/** How far along the ladder a scope sits, 0 to 3. */
+function rung(scope: AudienceScope): number {
+  return LADDER.indexOf(scope);
+}
+
+const step = cva(
+  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors",
+  {
+    variants: {
+      // WITHIN REACH, not merely chosen. The chosen step and every narrower one are
+      // marked, because choosing the tenant really does include the subscription and
+      // the people in it -- a control that lit only the chosen rung would draw four
+      // alternatives again, in a column.
+      state: {
+        chosen: "bg-accent/15 font-medium text-fg",
+        included: "text-fg",
+        beyond: "text-fg-muted hover:bg-elevated hover:text-fg",
+      },
     },
+    defaultVariants: { state: "beyond" },
   },
-  defaultVariants: { active: false },
-});
+);
 
 export function scopeLabel(scope: AudienceScope, t: ChatDict): string {
   switch (scope) {
@@ -96,6 +124,33 @@ export function scopeNote(scope: AudienceScope, t: ChatDict): string {
     case "subscription":
     case "tenant":
       return t.mangrove.groupNote;
+  }
+}
+
+/**
+ * WHAT A STEP CONTAINS, said without a number nobody has.
+ *
+ * There is no count for a subscription or a tenant anywhere this app can reach: the
+ * directory is a SEARCH, and in `exact` mode it will not enumerate at all. A figure
+ * here would have to be invented, so the widening is said as containment -- which is
+ * true, and is what a reader actually needs to judge the step they are taking.
+ *
+ * The one real number is under `people`: the list the member has built themselves.
+ */
+export function reachNote(scope: AudienceScope, t: ChatDict, picked: number): string {
+  switch (scope) {
+    case "private":
+      return t.mangrove.reachYou;
+    case "people":
+      return picked > 0
+        ? `${t.mangrove.reachPeople} — ${t.mangrove.reachPeopleCount.replace("{n}", String(picked))}`
+        : t.mangrove.reachPeople;
+    case "subscription":
+      return t.mangrove.reachSubscription;
+    case "tenant":
+      // A CHANGE OF KIND, not only of size. A subscription is people; a tenant is
+      // subscriptions, each with its own. "Even more people" would undersell it.
+      return t.mangrove.reachTenant;
   }
 }
 
@@ -240,24 +295,56 @@ export default function AudiencePicker({
         {/* A radiogroup, not tabs: tabs promise panels that persist, and these are
             answers to one question. Only the ones this member may give are offered --
             a group they cannot address would render and then be refused, which is the
-            thing `capabilities` exists to prevent. */}
+            thing `capabilities` exists to prevent.
+
+            A COLUMN, not a row, and that is the change. Four equal segments side by
+            side said these were four alternatives; they are nested, and the column is
+            what lets each one be as wide as it reaches. */}
         <div
           role="radiogroup"
           aria-label={t.mangrove.audienceLabel}
-          className="mt-2 flex flex-wrap gap-1 rounded-lg border border-rule-strong bg-surface p-1"
+          className="mt-2 flex flex-col gap-0.5 rounded-lg border border-rule-strong bg-surface p-1"
         >
-          {offered.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={scope === s}
-              className={segment({ active: scope === s })}
-              onClick={() => onScope(s)}
-            >
-              {scopeLabel(s, t)}
-            </button>
-          ))}
+          {offered.map((s) => {
+            const within = rung(s) <= rung(scope);
+            return (
+              <button
+                key={s}
+                type="button"
+                role="radio"
+                aria-checked={scope === s}
+                data-scope={s}
+                data-within={within ? "true" : undefined}
+                className={step({
+                  state: scope === s ? "chosen" : within ? "included" : "beyond",
+                })}
+                onClick={() => onScope(s)}
+              >
+                {/* THE BAR IS THE SENTENCE NOBODY READS. Its width is the rung, so the
+                    four together are a staircase -- and the eye gets the hierarchy
+                    before the labels are read at all. Reserved at full width with the
+                    fill inside it, so the rows stay aligned. */}
+                <span
+                  aria-hidden
+                  className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-elevated"
+                >
+                  <span
+                    data-fill
+                    className={`block h-full rounded-full transition-colors ${within ? "bg-accent" : "bg-rule-strong"}`}
+                    style={{ width: `${((rung(s) + 1) / LADDER.length) * 100}%` }}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span data-scope-label className="block truncate text-sm">
+                    {scopeLabel(s, t)}
+                  </span>
+                  <span className="block truncate text-[11px] leading-snug text-fg-muted">
+                    {reachNote(s, t, recipients.length)}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <p className="mt-2 text-xs text-fg-muted">{scopeNote(scope, t)}</p>
