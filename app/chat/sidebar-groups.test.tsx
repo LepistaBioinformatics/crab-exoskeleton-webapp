@@ -73,21 +73,24 @@ function click(el: Element) {
   });
 }
 
-describe("the two groups", () => {
-  it("labels each one and lists its own rows under it", () => {
+// ONE LABELLED GROUP, AND THE ROWS ABOVE IT. There were two labelled groups until the
+// mangrove became a right-pane section, which left the first one a heading over a list
+// of one -- a word that earns nothing, and a line between Projects and the New chat
+// button directly above it. It is unlabelled now, which is what puts the two together.
+describe("the groups", () => {
+  it("heads the labelled group and lists its own rows under it", () => {
     const el = mount();
     const html = el.innerHTML;
 
-    for (const group of DESTINATION_GROUPS) {
-      const heading = html.indexOf(`>${group.label(t)}</span>`);
-      expect(heading, `${group.key} has no heading`).toBeGreaterThan(-1);
-    }
+    const labelled = DESTINATION_GROUPS.filter((g) => g.label);
+    expect(labelled, "no group carries a heading any more").not.toHaveLength(0);
 
-    // Each group's rows sit between its own heading and the next group's, which is
-    // what "grouped" means and what a flat list with two decorative labels would fail.
-    const bounds = DESTINATION_GROUPS.map((g) => html.indexOf(`>${g.label(t)}</span>`));
-    for (const [i, group] of DESTINATION_GROUPS.entries()) {
-      const slice = html.slice(bounds[i], i + 1 < bounds.length ? bounds[i + 1] : html.length);
+    for (const group of labelled) {
+      const heading = html.indexOf(`>${group.label!(t)}</span>`);
+      expect(heading, `${group.key} has no heading`).toBeGreaterThan(-1);
+      // Its rows sit after its own heading, which is what "grouped" means and what a
+      // flat list with a decorative label would fail.
+      const slice = html.slice(heading);
       for (const row of group.rows) {
         expect(slice, `${rowLabel(row, t)} is not under ${group.key}`).toContain(
           `>${rowLabel(row, t)}</span>`,
@@ -100,28 +103,41 @@ describe("the two groups", () => {
     }
   });
 
+  // NO EMPTY HEADING EITHER. A blank header would still take the vertical space that
+  // separates Projects from New chat, which is the gap this shape exists to close.
+  it("draws no heading at all for the unlabelled group", () => {
+    const el = mount();
+    const headings = Array.from(el.querySelectorAll("nav > div > div, nav > div > button"));
+    expect(headings).toHaveLength(DESTINATION_GROUPS.filter((g) => g.label).length);
+  });
+
   it("puts every row in exactly one group, and no row anywhere else", () => {
     expect(rowLabels(mount())).toHaveLength(
       DESTINATION_GROUPS.reduce((n, g) => n + g.rows.length, 0),
     );
   });
 
-  // THE HALF THAT IS NOT A DRAWING. Two lists with a heading painted above each still
-  // announce as "list, 2 items" and "list, 5 items" — as undifferentiated as the flat
-  // list this replaced. Each list has to NAME its group.
-  it("names each list after its own heading", () => {
+  // THE HALF THAT IS NOT A DRAWING. A list with a heading painted above it still
+  // announces as "list, 6 items" unless it NAMES the heading. A list with no heading
+  // must not point at one either -- an `aria-labelledby` naming an id that is not in
+  // the document is the dangling reference the group header is careful to avoid.
+  it("names a list after its heading, and only when it has one", () => {
     const el = mount();
     const lists = Array.from(el.querySelectorAll("ul"));
     expect(lists).toHaveLength(DESTINATION_GROUPS.length);
     for (const [i, list] of lists.entries()) {
+      const group = DESTINATION_GROUPS[i];
       const labelledBy = list.getAttribute("aria-labelledby");
+      if (!group.label) {
+        expect(labelledBy, "an unlabelled group pointed at a heading").toBeNull();
+        continue;
+      }
       expect(labelledBy, "a list with no accessible name").toBeTruthy();
-      expect(el.querySelector(`#${labelledBy}`)?.textContent).toBe(
-        DESTINATION_GROUPS[i].label(t),
-      );
+      expect(el.querySelector(`#${labelledBy}`)?.textContent).toBe(group.label(t));
     }
   });
 });
+
 
 // The owner's answer to the follow-up: Tools folds, Screens does not. Screens is where
 // the member can BE, and a column whose "where am I" list can be hidden is a column
@@ -150,14 +166,14 @@ describe("which group folds", () => {
     expect(rowLabels(el)).toHaveLength(before);
   });
 
-  it("gives Screens no control to fold it with", () => {
+  // Only the labelled group folds. The rows above it are where the member can BE, and
+  // a column whose "where am I" list can be hidden is one that can be left saying
+  // nothing -- so they get no control, which now falls out of having no heading.
+  it("gives the unlabelled group no control to fold it with", () => {
     const el = mount();
-    const headings = Array.from(el.querySelectorAll("button")).filter((b) =>
-      b.hasAttribute("aria-expanded"),
-    );
-    expect(headings).toHaveLength(1);
-    expect(headings[0].getAttribute("aria-label")).toContain(t.shell.groups.tools);
-    expect(el.innerHTML).toContain(`>${t.shell.groups.screens}</span>`);
+    const buttons = Array.from(el.querySelectorAll("button[aria-expanded]"));
+    expect(buttons).toHaveLength(DESTINATION_GROUPS.filter((g) => g.collapsible).length);
+    expect(buttons[0].getAttribute("aria-label")).toContain(t.shell.groups.tools);
   });
 });
 

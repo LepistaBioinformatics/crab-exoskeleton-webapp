@@ -1,4 +1,4 @@
-import { Brain, CalendarClock, FileText, KeyRound, Network } from "lucide-react";
+import { Brain, CalendarClock, FileText, KeyRound, Network, Share2 } from "lucide-react";
 import type { ChatDict } from "@/lib/i18n/chat";
 
 // What a workspace holds, and the one list every rendering of it reads.
@@ -12,9 +12,20 @@ import type { ChatDict } from "@/lib/i18n/chat";
 // Ordered deliberately: memory and the graph are what a member asks about ("what does
 // it know about me"), scheduled tasks are what it does on its own, files and secrets
 // are what they manage.
-export type Section = "memory" | "graph" | "tasks" | "files" | "secrets";
+export type Section = "memory" | "graph" | "tasks" | "files" | "secrets" | "mangrove";
 
-export const SECTION_ORDER: Section[] = ["memory", "graph", "tasks", "files", "secrets"];
+// The mangrove is LAST, and that is the order's argument continuing rather than a
+// row appended. Everything before it is scoped BY this workspace; shared memory is
+// the only one of the six that is not -- it spans subscriptions and tenants. Last is
+// where a reader looks for the odd one out.
+export const SECTION_ORDER: Section[] = [
+  "memory",
+  "graph",
+  "tasks",
+  "files",
+  "secrets",
+  "mangrove",
+];
 
 // THE BLURB IS BACK, and the reason it was deleted is the reason it returns.
 //
@@ -48,6 +59,15 @@ export const SECTIONS: Record<
     Icon: KeyRound,
     label: (t) => t.secrets.title,
     blurb: (t) => t.uploads.sections.secrets,
+  },
+  // IT USED TO BE A DESTINATION, one of two things that replaced the centre. Reading
+  // what a colleague shared meant putting the conversation away, which is the opposite
+  // of what it is for: the member manages posts WITH the agent, and the agent is in the
+  // conversation.
+  mangrove: {
+    Icon: Share2,
+    label: (t) => t.mangrove.title,
+    blurb: (t) => t.uploads.sections.mangrove,
   },
 };
 

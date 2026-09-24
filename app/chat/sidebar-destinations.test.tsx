@@ -31,7 +31,9 @@ function list(props: Partial<Parameters<typeof SidebarDestinations>[0]> = {}) {
 // The centre-pane destinations, in the order the rail and the sidebar both show
 // them. Named here so the three assertions below say "the destinations" rather
 // than "one" or "two", and a third one is a single edit.
-const DESTINATIONS = ["projects", "mangrove"] as const;
+// ONE LEFT. The mangrove was the second and is a right-pane section now, so it is
+// counted among the sections below rather than here.
+const DESTINATIONS = ["projects"] as const;
 
 describe("SidebarDestinations", () => {
   it("renders one named row per entry, projects first and then SECTION_ORDER", () => {
@@ -46,9 +48,9 @@ describe("SidebarDestinations", () => {
   // be unreachable from the only surface that offers a way in, and nothing else in the
   // suite would notice.
   it("renders exactly as many rows as there are sections, plus the destinations", () => {
-    // Two destinations now -- projects and the mangrove -- ahead of the five
-    // sections. Counted as `DESTINATIONS.length` rather than a literal so a
-    // third one updates this in one place.
+    // One destination ahead of the six sections. Counted from the constants rather
+    // than as literals, so moving a row between the two lists updates this in one
+    // place -- which is exactly what the mangrove just did.
     expect(DESTINATION_ROWS).toHaveLength(SECTION_ORDER.length + DESTINATIONS.length);
     expect(list().split("<li>").length - 1).toBe(DESTINATION_ROWS.length);
   });
@@ -99,7 +101,7 @@ describe("an agent whose proxy has no projects", () => {
     const html = list({ hidden: { projects: true } });
     expect(html).not.toContain(`>${en.projects.title}</span>`);
     // Only PROJECTS. The two switches are independent, and hiding one must not
-    // hide the other.
+    // hide the other -- still true with the mangrove among the sections.
     expect(html.split("<li>").length - 1).toBe(SECTION_ORDER.length + DESTINATIONS.length - 1);
     expect(html).toContain(`>${en.mangrove.title}</span>`);
   });
@@ -148,7 +150,12 @@ describe("a deployment with no mangrove", () => {
       onSection: () => {},
     });
     expect(groups.every((g) => g.length > 0)).toBe(true);
-    expect(groups.flat().map((p) => p.key)).toEqual([...SECTION_ORDER]);
+    // The five that are always there. The mangrove is a section now, so hiding it
+    // takes a row out of THIS list rather than out of the destinations beside it --
+    // and the group it leaves behind is still not empty, which is what this asserts.
+    expect(groups.flat().map((p) => p.key)).toEqual(
+      SECTION_ORDER.filter((x) => x !== "mangrove"),
+    );
   });
 });
 
@@ -207,10 +214,11 @@ describe("the rows the rail reads", () => {
   });
 
   // The two kinds read on the rail as the hairline `ResizablePane` draws between
-  // groups, which is all a 48px column has room for.
+  // groups, which is all a 48px column has room for. Still two, and only the second
+  // is labelled -- the rail has no room for a heading either way.
   it("hands the rail one group per kind rather than one list", () => {
     expect(DESTINATION_GROUPS).toHaveLength(2);
-    expect(DESTINATION_GROUPS.map((g) => g.key)).toEqual(["screens", "tools"]);
+    expect(DESTINATION_GROUPS.map((g) => g.key)).toEqual(["places", "tools"]);
     expect(DESTINATION_GROUPS.map((g) => g.collapsible)).toEqual([false, true]);
   });
 });

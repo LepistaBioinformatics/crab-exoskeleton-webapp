@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import type { Workspace } from "./fragment";
-import DestinationScreen from "./destination-screen";
 import MangrovePost from "./mangrove-post";
 import MangrovePeople from "./mangrove-people";
 import MangroveCompose from "./mangrove-compose";
@@ -22,7 +21,7 @@ import MangroveShareAction from "./mangrove-share-action";
 import { actorKind, actorLabel, audienceSummary, audienceLabel, isMine } from "./mangrove-actors";
 import { useMangrove } from "./use-mangrove";
 import {
-  admit,
+  markRead,
   decide,
   newestFirst,
   readIdentity,
@@ -59,12 +58,11 @@ import { useT } from "@/lib/i18n/context";
 // this screen existed (which is every FIRST share), the subscription for one made while
 // it is already open.
 //
-// A READING IS ORDERED HERE, MOST RECENT FIRST, and the newest few are marked out.
-// `claims` arrives as a reduction keyed by (cell, author), so its order is whichever
-// key the proxy saw first -- near enough to chronological to look deliberate and not
-// near enough to be. `newestFirst` makes it a decision. What is marked out is the top
-// of THIS reading, not of the mangrove: three cards, or all of them when there are
-// fewer than three, which is a list too short for "the recent ones" to mean anything.
+// A READING IS ORDERED HERE, MOST RECENT FIRST, and the order is the whole of what
+// says so. `claims` arrives as a reduction keyed by (cell, author), so its order is
+// whichever key the proxy saw first -- near enough to chronological to look deliberate
+// and not near enough to be. `newestFirst` makes it a decision. The top three used to
+// carry an accent edge as well; it repeated what their position already said.
 //
 // WHO WROTE IT AND WHO GOT IT ARE READ OFF THE MEMBER'S OWN IDS. `readIdentity`
 // returns this member's two actors, and matching an author against them is the only
@@ -78,9 +76,6 @@ import { useT } from "@/lib/i18n/context";
 // Collapsing them would mean a member who has simply not been shared anything
 // is told something is broken.
 
-/** How many of a reading's newest cards are marked out. */
-const RECENT = 3;
-
 // A RAIL ENTRY, which is a row and not a chip. It reads left to right -- glyph,
 // label, then whatever count belongs to it -- and fills the rail's width so the
 // current one is a band rather than a word with a box around it.
@@ -88,8 +83,15 @@ const RECENT = 3;
 // `w-full` matters on the narrow layout too, where the rail is a horizontal
 // scroller: `shrink-0` there keeps a label from being squeezed to its first letter
 // rather than scrolling, which is what a flex row does to text by default.
+// `w-full` ONLY IN THE COLUMN. It is right there -- a rail entry fills the 192px
+// column and the five read as one list. In the wrapped row it made every entry as
+// wide as the pane, so five entries were five screenfuls and reaching "Published"
+// meant scrolling sideways past everything before it.
+//
+// `shrink-0` stays in both. Wrapping, it is what keeps a label whole instead of
+// squeezing five of them into their first letters.
 const tab = cva(
-  "flex w-full shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+  "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors @[34rem]:w-full",
   {
     variants: {
       current: {
@@ -114,6 +116,7 @@ export default function MangroveScreen({
   workspace,
   projectName,
   subscriptionName,
+  refreshSignal,
   onReference,
 }: {
   workspace: Workspace;
@@ -132,6 +135,12 @@ export default function MangroveScreen({
    */
   projectName?: string | null;
   /**
+   * Bumped by the pane header's refresh control -- the same counter the graph and
+   * tasks panels take, rather than a callback, so the control does not have to
+   * reach inside this screen for a function it would then have to keep hold of.
+   */
+  refreshSignal?: number;
+  /**
    * Puts a memory in the composer's context slot, the same slot the graph panel fills.
    * Absent where there is no conversation to reference into.
    */
@@ -147,6 +156,10 @@ export default function MangroveScreen({
   // two are not the same answer -- a cross-scope publication appears in no
   // reading at all until whoever governs that scope accepts it.
   const [publishedPending, setPublishedPending] = useState<boolean | null>(null);
+  // READ OPTIMISTICALLY, because the receipt is a round trip and the mark has to
+  // go the instant it is clicked. The server's answer is what survives a reload;
+  // this only has to carry the gap. Object ids, which is what a receipt names.
+  const [readHere, setReadHere] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   // What the member arrived here to share, if they arrived from somewhere else.
@@ -161,7 +174,11 @@ export default function MangroveScreen({
   // which is NOT zero: zero would make everything on the timeline new.
   const [seenAt, setSeenAt] = useState<number | null>(null);
   const [newSince, setNewSince] = useState(0);
-  const { timeline, caps, error, loading, reload, off } = useMangrove(workspace, reading);
+  const { timeline, caps, error, loading, reload, off } = useMangrove(
+    workspace,
+    reading,
+    refreshSignal,
+  );
   const onTimeline = !onPeople && !onCompose;
 
   // ABOVE the early return below, because hooks are. Both halves open the composer, so
@@ -214,9 +231,10 @@ export default function MangroveScreen({
   // Computed while the feed is what is loaded, and then simply kept.
   //
   // THE WATERMARK IS WRITTEN HERE AND `seenAt` IS NOT UPDATED WITH IT. That is what
-  // makes the badge survive the visit that earned it -- the member sees "3 new" beside
-  // the three cards `recent` already marks out, and finds it gone next time rather
-  // than a beat later.
+  // makes the badge survive the visit that earned it -- the member sees "3 new" on the
+  // rail while reading, and finds it gone next time rather than a beat later. It is
+  // the only thing left that answers "what is new", now that the cards themselves do
+  // not.
   //
   // OWN POSTS DO NOT COUNT, and the count stays 0 until identity arrives: without the
   // member's own actor ids, `isMine` is false for everything and their own publication
@@ -331,9 +349,8 @@ export default function MangroveScreen({
   // as the proxy answered them: they are decision queues, and oldest-first is the
   // order a queue is worked.
   const claims = newestFirst(timeline?.claims ?? []);
-  const held = timeline?.held ?? [];
   const pending = timeline?.pending ?? [];
-  const nothing = !loading && !error && claims.length === 0 && held.length === 0 && pending.length === 0;
+  const nothing = !loading && !error && claims.length === 0 && pending.length === 0;
 
   return (
     // ONE COLUMN, AND A NARROW ONE -- a feed.
@@ -345,11 +362,12 @@ export default function MangroveScreen({
     // away is the whole job a feed does. Every product doing this -- X, LinkedIn,
     // Mastodon -- is one column, and none of them is wide.
     //
-    // `feed` is NARROWER than `reading` (xl against 2xl), which is the part that is
-    // not obvious. A reading column is sized so the eye finds the start of the next
-    // line; a feed is scanned an object at a time, and past about 600px a card stops
-    // looking like an object and starts looking like a band across the page. It is
-    // also still the answer to "os cards podem ser mais estreitos", which 2xl was not.
+    // THE FEED IS NARROWER THAN A READING COLUMN, which is the part that is not
+    // obvious. A reading column is sized so the eye finds the start of the next line;
+    // a feed is scanned an object at a time, and past roughly 500px a card stops
+    // looking like an object and starts looking like a band across the pane. The cap
+    // has come down twice on that argument -- 2xl, then xl, now lg -- and each time
+    // the complaint was the same one: the cards are too wide.
     //
     // THE FRAME NARROWS, NOT THE CHILDREN. This was a max-w-3xl div inside the 6xl
     // frame, which put the column hard against the left of a pane half again as
@@ -357,13 +375,25 @@ export default function MangroveScreen({
     // would have moved the misalignment rather than fixed it: the heading is the
     // frame's, so it would have stayed at the far left with the prose 200px in from
     // it. Narrowing the frame centres the heading and the reading on one axis.
-    <DestinationScreen title={t.mangrove.title} width="feed">
+    // THE PANE OWNS THE FRAME NOW. This was a `DestinationScreen` -- a heading, a
+    // max-width column and the scroll -- while the mangrove replaced the centre.
+    // `WorkspacePane` supplies all three beside the conversation, so a second set
+    // here would be a heading under a heading and a scroller inside a scroller.
+    //
+    // `@container` is what the rail below reads instead of `sm:`. The pane is
+    // RESIZABLE from 240px, and `sm:` is a VIEWPORT query -- on a desktop window it
+    // would keep a 192px rail inside a 240px pane and leave the feed nothing. Same
+    // class of bug, and same answer, as the `cqw` breakout in file-preview.tsx.
+    <div className="@container flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
       {/* A WHOLE VIEWPORT OF PADDING UNDER IT. Without it the last memory sits
           against the bottom edge, so reading it means scrolling it to the very end
           of the scroll range and then reading at the rim of the screen. The padding
           is part of the scrollable area, so the last card comes to rest wherever the
           reader stops, rather than only at the very bottom of the range. */}
-      <div className="pb-[100vh]">
+      {/* Was `pb-[100vh]`, which is a viewport of empty space -- right in a centre
+          scroller, and absurd in a pane a third as wide. The pane scrolls its own
+          body, so the last card only needs room to clear the bottom edge. */}
+      <div className="pb-24">
           <p className="text-sm text-fg-muted">{t.mangrove.hint}</p>
 
         {/* THE RAIL, AND THE FEED BESIDE IT.
@@ -374,11 +404,21 @@ export default function MangroveScreen({
             order, and the glyph is what makes a destination recognisable without
             reading -- which a row of text-only chips never was.
 
-            NARROW SCREENS KEEP THE ROW, as a scroller. A 180px rail beside a 320px
-            column leaves neither usable, and `shrink-0` on the entry is what makes
-            the overflow scroll instead of squeezing five labels into their first
-            letters. */}
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:gap-6">
+            A NARROW CONTAINER KEEPS THE ROW, and it WRAPS rather than scrolls. A
+            192px rail beside a 320px column leaves neither usable, so below the
+            threshold the five go back to being a row -- but a row that scrolled
+            sideways hid four of the five behind a gesture nothing advertises, and
+            every entry was pane-wide because the column's `w-full` applied there
+            too. Wrapped, all five are on screen in two or three lines.
+
+            AND WHEN IT IS A COLUMN IT SITS ON THE RIGHT -- `flex-row-reverse`, with
+            the rail still FIRST in the DOM. Reversing the row rather than reordering
+            the markup is deliberate: narrow, the same source order puts the tabs
+            ABOVE the cards, which is where a set of tabs belongs; and the reading
+            order stays "here is where you can go, here is what is there", which is
+            the order a screen reader and the tab key should meet them in whichever
+            side the eye finds the rail on. */}
+        <div className="mt-4 flex flex-col gap-4 @[34rem]:flex-row-reverse @[34rem]:gap-6">
           {/* THE RAIL STAYS, the feed moves. Scrolling a long feed used to carry the
               destinations off the top with it, so changing where you were meant
               scrolling back up to somewhere you were not reading.
@@ -395,7 +435,7 @@ export default function MangroveScreen({
               the feed WOULD pass under it and it would need one. */}
           <nav
             aria-label={t.mangrove.title}
-            className="flex gap-1 overflow-x-auto pb-1 sm:sticky sm:top-8 sm:w-48 sm:shrink-0 sm:flex-col sm:gap-0.5 sm:self-start sm:overflow-x-visible sm:pb-0"
+            className="flex flex-wrap gap-1 pb-1 @[34rem]:sticky @[34rem]:top-0 @[34rem]:w-48 @[34rem]:shrink-0 @[34rem]:flex-col @[34rem]:flex-nowrap @[34rem]:gap-0.5 @[34rem]:self-start @[34rem]:pb-0"
           >
             {destinations.map((d) => (
               <button
@@ -434,8 +474,10 @@ export default function MangroveScreen({
 
           {/* THE FEED'S OWN COLUMN, and the width that makes it one. The frame is
               wide enough for the rail AND this; the cap is here so what the member
-              reads stays the narrow single column a feed is, whatever is beside it. */}
-          <div className="min-w-0 max-w-xl flex-1">
+              reads stays the narrow single column a feed is, whatever is beside it.
+              `flex-1` still lets it SHRINK below the cap -- in a 320px pane the cap
+              never binds and the column is simply the pane. */}
+          <div className="min-w-0 max-w-lg flex-1">
         {onPeople && (
           <div className="mt-6">
             <MangrovePeople workspace={workspace} />
@@ -502,43 +544,22 @@ export default function MangroveScreen({
           </div>
         )}
 
-        {/* Held: addressed at this member, NOT yet in their agent's memory. */}
-        {onTimeline && held.length > 0 && (
-          <section className="mt-6">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-              <Inbox size={16} aria-hidden /> {t.mangrove.heldTitle}
-            </h2>
-            <p className="mt-1 text-xs text-fg-muted">{t.mangrove.heldHint}</p>
-            <ul className="mt-3 flex flex-col gap-3">
-              {held.map((h) => (
-                <MangrovePost
-                  key={h.activityId}
-                  action="held"
-                  workspace={workspace}
-                  projectName={projectName}
-                  object={h.object}
-                  subscriptionName={subscriptionName}
-                  author={actorLabel(h.from, identity, t)}
-                  authorKind={actorKind(h.from, identity)}
-                  title={h.object.cell}
-                  subtitle={t.mangrove.sheetFrom
-                    .replace("{who}", actorLabel(h.from, identity, t))
-                    .replace("{cell}", h.object.cell)}
-                  onReference={onReference}
-                  actions={
-                    <Button
-                      size="sm"
-                      disabled={busy === h.activityId}
-                      onClick={() => void run(h.activityId, () => admit(workspace, h.activityId))}
-                    >
-                      {t.mangrove.admit}
-                    </Button>
-                  }
-                />
-              ))}
-            </ul>
-          </section>
-        )}
+        {/* THERE WAS A SECOND LIST HERE -- "Waiting for you", everything
+            addressed at this member that they had not pressed Admit on.
+            It is gone, and the button with it.
+
+            Admit was described as the thing that kept a shared memory out of
+            your agent until you took it. It was not: the held item was
+            delivered with its object, the mangrove builds a reader's view from
+            the workspace tuple and never from the calling actor, so the agent's
+            `mangrove_timeline` got the same bytes this screen did -- and the
+            agent had an admit of its own to clear the hold with. What actually
+            keeps shared memory out of an agent is AD-031, the merge, which is a
+            person's act on this screen and is untouched.
+
+            So what the button was really doing for members was marking mail
+            read, in a mangrove that already had AS2's Read and never read it
+            back. Opening a card does that now, which is what an inbox does. */}
 
         {/* Pending: only ever rendered for a governing role. */}
         {onTimeline && pending.length > 0 && (
@@ -611,6 +632,12 @@ export default function MangroveScreen({
                 const own = isMine(c.author, identity) && !c.deleted;
                 const revocable = reading === "published" && !c.deleted;
                 const audience = audienceSummary(c.audience, identity, t, own);
+                // UNREAD IS ONLY EVER ABOUT THE FEED. On `published` these are
+                // this member's own posts -- they wrote them -- and `read` is
+                // not even on the wire there; the wire carries `readBy` instead,
+                // which is the other half of the same fact.
+                const unread =
+                  reading === "received" && !c.read && !readHere.has(c.object.id) && !c.deleted;
                 return (
                   <MangrovePost
                     key={`${c.cell}:${c.author}`}
@@ -627,8 +654,18 @@ export default function MangroveScreen({
                     author={actorLabel(c.author, identity, t)}
                     authorKind={actorKind(c.author, identity)}
                     title={c.cell}
-                    recent={i < RECENT}
                     dimmed={c.deleted}
+                    unread={unread}
+                    onRead={() => {
+                      if (!unread) return;
+                      setReadHere((prev) => new Set(prev).add(c.object.id));
+                      // Best effort. The mark is already gone from the screen,
+                      // and putting it back because a receipt did not land would
+                      // tell the member they had not read something they just
+                      // read. The next reload asks the server again.
+                      void markRead(workspace, c.object.id).catch(() => {});
+                    }}
+                    readBy={reading === "published" ? c.readBy : undefined}
                     recipients={audience}
                     endorsed={c.evidence}
                     subtitle={t.mangrove.sheetFrom
@@ -705,6 +742,6 @@ export default function MangroveScreen({
           </div>
         </div>
       </div>
-    </DestinationScreen>
+    </div>
   );
 }

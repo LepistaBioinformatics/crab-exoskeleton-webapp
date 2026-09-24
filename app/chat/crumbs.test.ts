@@ -177,34 +177,39 @@ describe("which segments are links", () => {
 // asked whether there was a destination and never which one. Standing in the
 // mangrove read as standing in a list of projects.
 //
-// The paragraph in crumbs.ts already gives the argument against that: a segment
-// naming a level the member never walked through. The mangrove is exactly that
-// case -- nobody reaches it by way of the projects list.
+// THERE IS ONE DESTINATION LEFT. The mangrove became a right-pane section, so the
+// bug above is now unreachable by construction rather than by a branch -- and the
+// rule that replaces it is the one the five sections already obeyed: a pane beside
+// the transcript is not a place you are standing, so no section is ever a crumb.
 describe("a destination names itself", () => {
-  it("says Mangrove in the mangrove, not Projects", () => {
-    const labels = crumbs({ destination: "mangrove" }).map((c) => c.label);
-    expect(labels).toContain(t.mangrove.title);
-    expect(labels).not.toContain(t.projects.title);
-  });
-
-  it("still says Projects on the projects list", () => {
+  it("says Projects on the projects list", () => {
     const labels = crumbs({ destination: "projects" }).map((c) => c.label);
     expect(labels).toContain(t.projects.title);
-    expect(labels).not.toContain(t.mangrove.title);
   });
 
-  // Inside a project the list IS a level the member walked through, so it stays
-  // -- and the mangrove is where they are now, after it.
-  it("keeps Projects when a project is open, and ends at the mangrove", () => {
-    const labels = crumbs({ project, destination: "mangrove" }).map((c) => c.label);
-    expect(labels).toEqual(["Acme · alpha", t.projects.title, project.name, t.mangrove.title]);
+  // The mangrove is a section now. It was the one destination that had to argue its
+  // way into the trail; as a pane it never appears, like the other five.
+  it("never names the mangrove, which is a pane and not a place", () => {
+    for (const trail of [
+      crumbs({ destination: "projects" }),
+      crumbs({ project, destination: "projects" }),
+      crumbs({}),
+    ]) {
+      expect(trail.map((c) => c.label)).not.toContain(t.mangrove.title);
+    }
+  });
+
+  // Inside a project the list IS a level the member walked through, so it stays.
+  it("keeps Projects when a project is open, and ends at the project", () => {
+    const labels = crumbs({ project, destination: "projects" }).map((c) => c.label);
+    expect(labels).toEqual(["Acme · alpha", t.projects.title, project.name]);
   });
 
   // The last crumb is where you are standing, and the bar does not offer a
   // button for that.
-  it("leaves the mangrove crumb unlinked when it is the last", () => {
-    const trail = crumbs({ destination: "mangrove" });
-    expect(trail[trail.length - 1].label).toBe(t.mangrove.title);
+  it("leaves the last crumb unlinked", () => {
+    const trail = crumbs({ project, destination: "projects" });
     expect(trail[trail.length - 1].go).toBeUndefined();
   });
 });
+

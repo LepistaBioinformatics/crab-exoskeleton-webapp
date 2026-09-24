@@ -15,7 +15,7 @@ import { act } from "react";
 
 const readTimeline = vi.fn();
 const readCapabilities = vi.fn();
-const admit = vi.fn();
+const markRead = vi.fn();
 const decide = vi.fn();
 const revoke = vi.fn();
 const publish = vi.fn();
@@ -31,7 +31,7 @@ vi.mock("@/lib/mangrove", async (importOriginal) => {
     ...actual,
     readTimeline: (...a: unknown[]) => readTimeline(...a),
     readCapabilities: (...a: unknown[]) => readCapabilities(...a),
-    admit: (...a: unknown[]) => admit(...a),
+    markRead: (...a: unknown[]) => markRead(...a),
     decide: (...a: unknown[]) => decide(...a),
     revoke: (...a: unknown[]) => revoke(...a),
     publish: (...a: unknown[]) => publish(...a),
@@ -245,29 +245,243 @@ describe("the mangrove tab", () => {
     expect(revoke).toHaveBeenCalledWith(workspace, "mangrove:obj:9", "soil-ph");
   });
 
-  it("shows a directly shared item as HELD, with a way to admit it", async () => {
+  // ONE LIST, AND AN UNREAD MARK ON IT. There was a second section here --
+  // "Waiting for you", with an Admit button under each card -- and both are
+  // gone. Admit was described as what kept a shared memory out of your agent
+  // until you took it; it never was, because the held item was delivered with
+  // its object and the agent had an admit of its own. What members were really
+  // doing with it was marking mail read, so that is what it is.
+  it("shows a directly shared item in the feed, marked unread", async () => {
     readTimeline.mockResolvedValue({
       reading: "received",
-      claims: [],
-      held: [
+      claims: [
         {
-          activityId: "mangrove:act:1",
-          from: "mangrove:actor:bob:service",
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
           object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
           published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: false,
         },
       ],
     });
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
 
     const html = await render();
-    expect(html).toContain(en.mangrove.heldTitle);
-    expect(html).toContain(en.mangrove.heldHint);
-    expect(html).toContain(en.mangrove.admit);
     expect(html).toContain("6.4");
+    const unreadCard = host!.querySelector<HTMLLIElement>("[data-unread]");
+    expect(unreadCard, "the unread mark is missing").not.toBeNull();
+    // THE MARK IS THE LEFT EDGE, and the attribute alone does not draw it. A dot
+    // needs a corner and competes with the byline for the one the eye already
+    // uses; an edge is read down a whole column at once, which is the question an
+    // inbox is being asked -- which of these have I not been through.
+    expect([...unreadCard!.classList], "nothing draws the unread edge").toContain(
+      "border-l-accent",
+    );
+    // RESERVED, NOT ADDED. Four pixels on the left whether or not they are
+    // coloured, or every card in the list shifts three pixels sideways the moment
+    // one is opened.
+    expect([...unreadCard!.classList]).toContain("border-l-4");
+    // NO SECOND LIST AND NO BUTTON THAT GATES THE FIRST. Asserted against the
+    // headings that ARE offered rather than against the two strings that used to
+    // be, because those are gone from the catalogue -- a negative assertion on a
+    // string nothing can produce passes forever and says nothing.
+    expect(html.match(/<h2/g) ?? [], "a second section came back").toHaveLength(1);
+    expect(html).toContain(en.mangrove.receivedTitle);
     // Somebody's AGENT, not a peer -- said in words, with the id it is the only
     // handle for kept beside them.
     expect(html).toContain(`${en.mangrove.actorAgent} (bob)`);
+  });
+
+  // OPENING THE CARD IS WHAT SENDS THE RECEIPT, and it names the OBJECT. Every
+  // card opens now -- a short note, a file and a fragment used to answer a click
+  // with nothing, because only long prose had a sheet behind it.
+  it("sends a receipt for the object when the card is opened", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
+          object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: false,
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    markRead.mockResolvedValue({});
+
+    await render();
+    const card = host!.querySelector<HTMLLIElement>("[data-unread]");
+    expect(card, "no unread card to open").not.toBeNull();
+
+    await act(async () => {
+      card!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(markRead).toHaveBeenCalledTimes(1);
+    expect(markRead.mock.calls[0][1], "the receipt must name the object").toBe(
+      "mangrove:obj:1",
+    );
+    // AND THE MARK GOES AT ONCE. The receipt is a round trip; leaving the dot
+    // there until it lands makes the click look like it missed.
+    expect(host!.querySelector("[data-unread]")).toBeNull();
+  });
+
+  // A RECEIPT THAT DOES NOT LAND MUST NOT PUT THE MARK BACK. It would tell the
+  // member they had not read something they had just read, and the next reload
+  // asks the server again anyway.
+  it("keeps it read when the receipt fails", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
+          object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: false,
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    markRead.mockRejectedValue(new Error("down"));
+
+    await render();
+    await act(async () => {
+      host!
+        .querySelector<HTMLLIElement>("[data-unread]")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(host!.querySelector("[data-unread]")).toBeNull();
+  });
+
+  // WHAT A CLOSED CARD SHOWS, AND WHAT IT DOES NOT.
+  //
+  // Who sent it, what it is about and enough of it to recognise stay on screen;
+  // the record and everything that DOES something are behind the open. The
+  // actions were in the open on every card at once, which put "merge into my
+  // memory" -- the one act here that writes a member's own graph -- at the same
+  // weight as the byline.
+  //
+  // `hidden`, not unrendered: the subtree keeps its state, and the attribute is
+  // what takes it out of the tab order and the accessibility tree together.
+  it("keeps the record and the actions behind the open", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
+          object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: true,
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+
+    await render();
+    const card = cardOf("soil-ph");
+    const footer = card.querySelector("footer")!;
+    expect(footer.hidden, "the footer is open on a closed card").toBe(true);
+    // The three that stay: who, what it is about, and the body.
+    expect(card.textContent).toContain("bob");
+    expect(card.textContent).toContain("soil-ph");
+    expect(card.textContent).toContain("6.4");
+
+    await act(async () => {
+      card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(card.querySelector("footer")!.hidden, "opening did not reveal the footer").toBe(
+      false,
+    );
+    expect(card.getAttribute("aria-expanded")).toBe("true");
+
+    // AND IT CLOSES AGAIN. A card that could only ever be opened would leave a
+    // read feed permanently at full height.
+    await act(async () => {
+      card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(card.querySelector("footer")!.hidden).toBe(true);
+  });
+
+  // CLOSING IT AGAIN SENDS NOTHING. Having read something does not stop being
+  // true, and a receipt on every toggle would be noise in the log.
+  //
+  // THE SCREEN IS WHAT ENFORCES THIS, not the card: `onRead` is guarded on the
+  // claim still being unread. The card guards its own edge as well, for any other
+  // caller, but that one is belt and braces and this does not reach it -- taking
+  // it out leaves this test green, which is worth knowing before trusting it as a
+  // test of the card.
+  it("sends one receipt however many times the card is toggled", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
+          object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: false,
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    markRead.mockResolvedValue({});
+
+    await render();
+    const card = cardOf("soil-ph");
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    }
+    expect(markRead).toHaveBeenCalledTimes(1);
+  });
+
+  // ALREADY OPENED MEANS NO MARK. The server answers `read` per reader, so a
+  // card the member has been through is an ordinary card.
+  it("draws no mark on something already opened", async () => {
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
+          object: { id: "mangrove:obj:1", type: "MemoryNote", cell: "soil-ph", content: "6.4" },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: true,
+        },
+      ],
+    });
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    await render();
+    expect(host!.querySelector("[data-unread]")).toBeNull();
+    // The gutter is still four pixels wide -- it is just not coloured.
+    const card = cards()[0];
+    expect([...card.classList]).toContain("border-l-4");
+    expect([...card.classList], "a read card is still wearing the mark").not.toContain(
+      "border-l-accent",
+    );
   });
 
   // Compose is a flag beside People, NOT a reading. Made a member of the union
@@ -1005,7 +1219,7 @@ describe("the reading, as a list of cards", () => {
     // AND NOT ACROSS THE WHOLE PANE. One column only reads as a feed if the column is
     // narrow; at the frame's full width it is a stack of bands. Asserted as the exact
     // cap rather than "some max-width", or widening it would pass.
-    expect(frameOf(list)).toBe("max-w-xl");
+    expect(frameOf(list)).toBe("max-w-lg");
   });
 
   it("renders them most recent first, whatever order they arrived in", async () => {
@@ -1018,30 +1232,224 @@ describe("the reading, as a list of cards", () => {
     expect(order).toEqual(["first", "second", "third", "fourth", "fifth"]);
   });
 
-  it("marks out exactly the three most recent", async () => {
+  // THE ORDER IS THE WHOLE SIGNAL. The top three used to carry an accent edge and a
+  // lift as well, which said a second time what being at the top of a newest-first
+  // list already says -- and said it in the accent, which everywhere else in this
+  // card means "you can act on this". Every card is drawn the same now, and this
+  // asserts the absence so it cannot come back as a well-meant highlight.
+  it("draws every card alike, leaving recency to the order", async () => {
     readTimeline.mockResolvedValue(claimsOf(...SHUFFLED));
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
 
     await render();
-    const recent = [...host!.querySelectorAll('[data-recent="true"]')];
-    expect(recent.length).toBe(3);
-    // The three at the TOP, which is what "most recent" means once the list is sorted.
-    expect(recent).toEqual(cards().slice(0, 3));
-  });
-
-  // Fewer than three is a list too short for "the recent ones" to pick anything out,
-  // so it does not try to.
-  it("marks out all of them when there are fewer than three", async () => {
-    readTimeline.mockResolvedValue(
-      claimsOf(
-        { cell: "older", published: "2026-01-01T00:00:00Z" },
-        { cell: "newer", published: "2026-09-01T00:00:00Z" },
+    const all = cards();
+    expect(all.length).toBe(5);
+    expect(host!.querySelectorAll("[data-recent]")).toHaveLength(0);
+    const edges = new Set(
+      all.map((c) =>
+        [...c.classList].filter((x) => x.startsWith("border") || x.startsWith("shadow")).join(" "),
       ),
     );
+    // ALL FIVE THE SAME, which is the claim -- not "no accent anywhere". The left
+    // edge is the unread mark now and every one of these is unread, so the accent
+    // is on all of them or on none. What must never come back is the top three
+    // carrying something the other two do not, and one distinct value is what
+    // says so.
+    expect([...edges], "some cards carry an edge the others do not").toHaveLength(1);
+  });
+});
+
+// HOW HEAVY A CARD IS WHEN NOBODY IS ON IT.
+//
+// Every card carried a `rule-strong` edge and two `elevated` bands -- byline across
+// the top, record across the bottom -- against its own `surface`. One card at a time
+// that is structure; a column of them is three tones and an outline repeating down
+// the pane, which is what "grosseiro" named. The structure is not gone, it is on the
+// POINTER now: at rest the only step left is the one a reader actually needs, the
+// card's `surface` against the pane's `bg`, with the gap doing the separating.
+//
+// Asserted on the classes, because jsdom computes no styles and cannot hover -- the
+// same reason `pane-ground.test.ts` reads source. What is pinned is the PAIR: that
+// the resting tone is gone AND that a hover variant took its place, because dropping
+// the first alone is a card with no structure at all.
+describe("how heavy a card is at rest", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+  });
+
+  it("carries a transparent edge that only colours under the pointer", async () => {
+    await render();
+    const card = cards()[0];
+    const cls = [...card.classList];
+    expect(cls, "the edge is reserved so colouring it cannot move anything").toContain(
+      "border-transparent",
+    );
+    expect(cls, "a resting edge is the outline being removed").not.toContain(
+      "border-rule-strong",
+    );
+    expect(
+      cls.some((c) => c.startsWith("hover:border-") || c.startsWith("focus-within:border-")),
+      "nothing ever draws this card's edge",
+    ).toBe(true);
+  });
+
+  it("is the hover group its own regions read", async () => {
+    await render();
+    // NAMED, not bare. `group-hover:` binds to whichever ancestor carries `group`,
+    // so a bare one here would hand the card's treatment to any pane or row that
+    // grew one later -- and every card in the list would light up together.
+    expect([...cards()[0].classList]).toContain("group/card");
+  });
+
+  it("leaves its bands untinted until then", async () => {
+    await render();
+    const card = cards()[0];
+    const bands = [card.querySelector("[data-inner]")!, card.querySelector("footer dl")!];
+    for (const band of bands) {
+      const cls = [...band.classList];
+      expect(cls, "a band tinted at rest is one of the two steps being removed").not.toContain(
+        "bg-elevated",
+      );
+      expect(cls, "and it has to come back on hover, or the region has no edge at all").toContain(
+        "group-hover/card:bg-elevated",
+      );
+    }
+  });
+
+  // The pointer is not the only way in. A member on the keyboard reaching a card's
+  // controls gets the same regions the pointer does, or the card is structureless for
+  // exactly the people with the least other signal about where they are. `:focus-visible`
+  // rather than `:focus-within`, so a MOUSE click on a card's button does not leave the
+  // card lit up behind the pointer that has already moved on.
+  it("does the same for the keyboard", async () => {
+    await render();
+    const card = cards()[0];
+    for (const band of [card.querySelector("[data-inner]")!, card.querySelector("footer dl")!]) {
+      expect([...band.classList]).toContain("group-has-[:focus-visible]/card:bg-elevated");
+    }
+  });
+
+  // THE ONE CONTRAST LEFT, and the reason the rest could go. Were the card to sit on
+  // the pane's own fill it would have no edge at rest whatsoever.
+  it("keeps the step between the card and the pane under it", async () => {
+    await render();
+    // The other half of the step -- that the pane under it is NOT also `surface` --
+    // is `pane-ground.test.ts`'s, which owns what each region of the shell sits on.
+    expect([...cards()[0].classList]).toContain("bg-surface");
+  });
+});
+
+// KEEPING IT CURRENT, WHICH IS THIS SECTION'S PROBLEM AND NOT THE OTHER FIVE'S.
+//
+// Files, memory, the graph and tasks change because this member or their own agent
+// changed them -- the pane is looking at them as it happens. A claim arrives because
+// SOMEBODY ELSE'S agent published it, while the member is reading the conversation
+// beside the pane, and until now nothing said so short of closing the pane and
+// opening it again.
+//
+// Two answers, and the pane header's control is only one of them. There is no SWR or
+// query cache in this app: `useMangrove` is a `useState`/`useEffect` pair, so the
+// refetch is a `setInterval` and everything a cache would have given for free -- not
+// revalidating a hidden tab, not clobbering good data with a failed background read --
+// is written out and asserted here.
+describe("keeping the mangrove current", () => {
+  beforeEach(() => {
+    readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reads itself again a minute after it mounted", async () => {
+    await render();
+    expect(readTimeline).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(readTimeline).toHaveBeenCalledTimes(2);
+  });
+
+  // A MINUTE, not a second. Asserted as "not yet" at 59s as well as "yes" at 60s,
+  // because an interval that fired far too often would pass the test above.
+  it("does not read more often than that", async () => {
+    await render();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(59_000);
+    });
+    expect(readTimeline).toHaveBeenCalledTimes(1);
+  });
+
+  // THE ONE A CACHE WOULD HAVE GIVEN FOR FREE. A read the member never asked for must
+  // not be able to replace the feed they are reading with an error -- so a failed poll
+  // keeps the last good answer and waits for the next one.
+  it("keeps what is on screen when a poll fails", async () => {
+    await render();
+    expect(cards()).toHaveLength(1);
+
+    readTimeline.mockRejectedValue(new MangroveError("mangrove_unreachable"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(readTimeline).toHaveBeenCalledTimes(2);
+    expect(cards(), "a background read replaced the feed with an error").toHaveLength(1);
+  });
+
+  // A pane left open in a background tab would otherwise read itself all day for
+  // nobody.
+  it("does not read while the tab is hidden", async () => {
+    await render();
+    const before = readTimeline.mock.calls.length;
+    Object.defineProperty(document, "visibilityState", {
+      value: "hidden",
+      configurable: true,
+    });
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180_000);
+      });
+      expect(readTimeline).toHaveBeenCalledTimes(before);
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+    }
+  });
+
+  // `mangrove_off` is not a transient failure -- it is an operator who never configured
+  // one, and it cannot change without the proxy restarting. Polling it is a request a
+  // minute, forever, for an answer nobody is waiting on.
+  it("does not poll a deployment that has no mangrove", async () => {
+    readTimeline.mockRejectedValue(new MangroveError("mangrove_off"));
+    readCapabilities.mockRejectedValue(new MangroveError("mangrove_off"));
 
     await render();
-    expect(host!.querySelectorAll('[data-recent="true"]').length).toBe(2);
+    const before = readTimeline.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300_000);
+    });
+    expect(readTimeline).toHaveBeenCalledTimes(before);
+  });
+
+  // THE PANE HEADER'S CONTROL, from this side. A counter rather than a callback, the
+  // same shape the graph and tasks panels take -- `workspace-screen.test.tsx` asserts
+  // the button exists and is labelled for the mangrove; this asserts it lands.
+  it("re-reads when the refresh signal is bumped", async () => {
+    await render();
+    expect(readTimeline).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root!.render(
+        <MangroveScreen workspace={workspace} subscriptionName="Soil Lab" refreshSignal={1} />,
+      );
+    });
+    expect(readTimeline).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1055,9 +1463,13 @@ describe("a card as the way into the sheet", () => {
     return cards()[0];
   }
 
-  it("opens it when the card body is clicked", async () => {
+  // A CLICK ON THE CARD OPENS THE CARD. It used to open the sheet, which only
+  // long prose had -- so a file, a fragment and a short note each answered a
+  // click with nothing while their actions sat in the open regardless. The sheet
+  // is one of the controls the open reveals now.
+  it("expands the card when the body is clicked, and does not jump to the sheet", async () => {
     const card = await renderOne();
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(card.getAttribute("aria-expanded")).toBe("false");
 
     // On a paragraph of the body, which is card and not control -- the event bubbles
     // to the card the way a click anywhere in its body does.
@@ -1067,6 +1479,20 @@ describe("a card as the way into the sheet", () => {
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(card.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      document.querySelector('[role="dialog"]'),
+      "opening a card threw the member straight into a sheet",
+    ).toBeNull();
+  });
+
+  it("offers the sheet from inside the opened card, with the whole body in it", async () => {
+    const card = await renderOne();
+    await act(async () => {
+      card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await clickText(en.mangrove.readInFull);
     const sheet = document.querySelector('[role="dialog"]');
     expect(sheet).toBeTruthy();
     // The whole body, which is what the card was cutting.
@@ -1102,8 +1528,9 @@ describe("a card as the way into the sheet", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  // Otherwise the sheet is mouse-only, which for a whole card is worse than the
-  // button it replaced: at least that one was in the tab order.
+  // Otherwise the card is mouse-only, which for the thing that both reveals every
+  // control and sends the receipt is worse than the button it replaced: at least
+  // that one was in the tab order.
   it("opens on Enter and on Space, with an accessible name", async () => {
     const card = await renderOne();
     expect(card.getAttribute("role")).toBe("button");
@@ -1116,33 +1543,35 @@ describe("a card as the way into the sheet", () => {
       await act(async () => {
         card.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
       });
-      expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+      expect(card.getAttribute("aria-expanded"), `${key} did not open it`).toBe("true");
       // Back to closed, so the next key is opening it rather than finding it open.
       await act(async () => {
-        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        card.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
       });
-      await act(async () => {
-        document
-          .querySelector('[role="dialog"]')!
-          .dispatchEvent(new Event("animationend", { bubbles: true }));
-      });
-      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(card.getAttribute("aria-expanded")).toBe("false");
     }
   });
 
-  // A card that opens onto exactly what is already on it is an affordance that lies,
-  // so a short memory is not a control at all.
-  it("is not a control when there is nothing more to read", async () => {
+  // A SHORT MEMORY IS STILL A CONTROL, and this is the assertion that reversed.
+  // It used to say the opposite: a card whose body was whole on screen had no
+  // sheet, so making it clickable was an affordance that lied. Opening does
+  // something for every card now -- it reveals the record and the controls, and
+  // it is how the thing gets marked read -- so the one kind of card that used to
+  // be inert is the one this checks.
+  it("is a control even when the body is whole on the card", async () => {
     const card = await renderOne("Two lines.\nThat is all.");
-    expect(card.getAttribute("role")).toBeNull();
-    expect(card.getAttribute("tabindex")).toBeNull();
+    expect(card.getAttribute("role")).toBe("button");
+    expect(card.tabIndex).toBe(0);
 
     await act(async () => {
       bodyOf(card)
         .querySelector("p")!
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(card.getAttribute("aria-expanded")).toBe("true");
+    // And no sheet is offered, because there is nothing it would show that the
+    // card is not already showing.
+    expect(card.textContent).not.toContain(en.mangrove.readInFull);
   });
 });
 
@@ -1242,12 +1671,24 @@ describe("the record under a card", () => {
 
   // THE RECORD IS NOT THE BODY. A click on it must not open a sheet over the memory:
   // it is dense small print with controls in it, and the share panel lives there too.
-  it("does not open the sheet when the record is clicked", async () => {
+  // THE REGIONS THAT ARE NOT THE BODY MUST NOT TOGGLE THE CARD. The claim moved
+  // with the card's click: it used to be "these do not open the sheet", and the
+  // sheet is no longer what a click does. What they must not do is open and close
+  // the card under a member who was reading the record in it -- and the record is
+  // only on screen at all while the card is open, so a click that closed it would
+  // take away the thing being clicked.
+  it("does not toggle the card when the record is clicked", async () => {
     readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
     await render();
     const card = cards()[0];
-    // A card that really does have a sheet, or this asserts nothing.
     expect(card.getAttribute("role")).toBe("button");
+
+    // Open it first: the record is behind the open now, so there is nothing to
+    // click on a closed card.
+    await act(async () => {
+      bodyOf(card).querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(card.getAttribute("aria-expanded")).toBe("true");
 
     for (const el of [
       // The byline band is `data-inner` for the same reason the record is: an avatar
@@ -1260,15 +1701,17 @@ describe("the record under a card", () => {
       await act(async () => {
         el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(card.getAttribute("aria-expanded"), "a click on a region closed the card").toBe(
+        "true",
+      );
     }
 
-    // And the body still does open it, so the guard above is not simply a card that
-    // stopped working.
+    // And the body still does close it, so the guard above is not simply a card
+    // that stopped answering clicks.
     await act(async () => {
       bodyOf(card).querySelector("p")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(card.getAttribute("aria-expanded")).toBe("false");
   });
 });
 
@@ -1803,21 +2246,29 @@ describe("what the card says happened", () => {
     expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionPublished);
   });
 
-  it("marks something waiting on the member as theirs to take", async () => {
+  // NOTHING IS "WAITING ON THE MEMBER" ANY MORE. This asserted the `held` badge
+  // on a card in a list that no longer exists; what a directly shared item says
+  // now is what it IS -- published -- with the unread mark carrying the only
+  // thing the badge was really telling anybody.
+  it("marks something shared straight with the member as published, not as a chore", async () => {
     readTimeline.mockResolvedValue({
       reading: "received",
-      claims: [],
-      held: [
+      claims: [
         {
-          activityId: "act-held",
-          from: "mangrove:actor:bob:service",
+          cell: "soil-ph",
+          author: "mangrove:actor:bob:service",
           object: PROSE_CLAIM,
           published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: false,
         },
       ],
     });
     await render();
-    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionHeld);
+    expect(actionOf(cardOf("soil-ph"))).toBe(en.mangrove.actionPublished);
+    expect(host!.querySelector("[data-unread]")).not.toBeNull();
   });
 
   it("marks something waiting on a governing role as a decision", async () => {
@@ -1848,7 +2299,6 @@ describe("what the card says happened", () => {
         dict.mangrove.actionPublished,
         dict.mangrove.actionUpdated,
         dict.mangrove.actionRevoked,
-        dict.mangrove.actionHeld,
         dict.mangrove.actionPending,
       ];
       expect(new Set(words).size, `${locale}: ${words.join(" / ")}`).toBe(words.length);
@@ -1871,24 +2321,72 @@ describe("the destination rail", () => {
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
   });
 
-  it("sticks to the top of the content area rather than scrolling away", async () => {
+  // A CONTAINER QUERY, NOT `sm:`, and the difference is the whole reason this test
+  // changed. The mangrove renders in the resizable right-hand pane now, whose minimum
+  // is 240px -- and `sm:` asks the VIEWPORT, so on a desktop window it would keep a
+  // 192px rail inside that pane and leave the feed nothing.
+  it("stacks or sits beside the feed by its own width, not the window's", async () => {
     await render();
     const rail = host!.querySelector("nav")!;
-    expect(rail.className).toContain("sm:sticky");
-    expect(rail.className, "a stretched flex item cannot stick").toContain("sm:self-start");
+    expect(rail.className).toContain("@[34rem]:flex-col");
+    expect(rail.className, "a stretched flex item cannot stick").toContain(
+      "@[34rem]:self-start",
+    );
+    expect(rail.className).toContain("@[34rem]:sticky");
+    // No viewport breakpoint left on it: one of the two would win by specificity and
+    // which one is not something a reader should have to work out.
+    expect(rail.className.split(" ").filter((c) => c.startsWith("sm:"))).toEqual([]);
   });
 
-  // Only from `sm` up. On a narrow screen the rail is a horizontal scroller ABOVE
-  // the feed, so the feed would pass under it -- and a pinned strip with nothing
-  // painted behind it shows the cards through itself.
-  it("is not pinned on a narrow screen, where the feed would pass under it", async () => {
+  // THE NARROW FORM WRAPS, AND IT IS A PAIR. Below the threshold the rail was a
+  // single scrolling line whose entries each carried the column's `w-full`, so one
+  // entry filled the pane and the other four were behind a sideways gesture nothing
+  // announces. Neither half fixes it alone: wrapping a row of pane-wide entries just
+  // stacks them, and shrinking the entries without wrapping still overflows.
+  it("wraps its entries instead of scrolling them out of reach when narrow", async () => {
     await render();
     const rail = host!.querySelector("nav")!;
-    for (const unprefixed of ["sticky", "self-start"]) {
-      expect(
-        rail.className.split(" ").includes(unprefixed),
-        `${unprefixed} applies at every width`,
-      ).toBe(false);
+    expect(rail.className).toContain("flex-wrap");
+    expect(
+      rail.className,
+      "a wrapped rail must not also be a scroller -- that is the state being removed",
+    ).not.toMatch(/(^|\s)overflow-x-auto(\s|$)/);
+
+    for (const entry of rail.querySelectorAll("button")) {
+      const cls = entry.className;
+      expect(cls, "an entry as wide as the pane is one entry per line").not.toMatch(
+        /(^|\s)w-full(\s|$)/,
+      );
+      expect(cls, "and it still fills the column when there is one").toContain(
+        "@[34rem]:w-full",
+      );
     }
   });
+
+  // WHICH SIDE THE RAIL IS ON, and that the answer is a painting rather than a
+  // reordering. Reversing the row leaves the nav first in the markup, which is what
+  // keeps the narrow form's tabs ABOVE the cards from the same source order -- the
+  // alternative, moving the nav after the feed and letting it fall into place, would
+  // have put the tabs underneath everything they switch between.
+  it("draws the rail to the right of the cards, still reading rail-then-feed", async () => {
+    await render();
+    const row = host!.querySelector("nav")!.parentElement!;
+    expect(row.className).toContain("@[34rem]:flex-row-reverse");
+    expect(
+      row.className.split(" "),
+      "plain flex-row would win or lose by order and put the rail back on the left",
+    ).not.toContain("@[34rem]:flex-row");
+    expect(row.firstElementChild, "the rail must stay first in the DOM").toBe(
+      host!.querySelector("nav"),
+    );
+  });
+
+  // The query measures the nearest container, so something has to BE one. Without this
+  // every `@[34rem]:` class above is inert and the rail silently stays stacked.
+  it("declares the container the query measures", async () => {
+    await render();
+    const rail = host!.querySelector("nav")!;
+    expect(rail.closest(".\\@container"), "no @container ancestor to measure").not.toBeNull();
+  });
 });
+

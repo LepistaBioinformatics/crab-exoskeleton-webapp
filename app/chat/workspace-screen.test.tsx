@@ -34,6 +34,8 @@ const BODY: Record<Section, string> = {
   tasks: t.scheduledTasks.hint,
   files: t.uploads.organiseHint,
   secrets: t.secrets.savedForYou,
+  // The line the mangrove opens with, before any reading has loaded.
+  mangrove: t.mangrove.hint,
 };
 
 describe("WorkspaceScreen", () => {
@@ -62,9 +64,15 @@ describe("WorkspaceScreen", () => {
   // pane has an actions slot instead, and only the two sections that go stale on their
   // own claim it: the graph because the agent writes to it mid-conversation, tasks
   // because it schedules them between visits.
-  it("offers refresh on the graph and on tasks, each labelled for itself", () => {
+  it("offers refresh on the graph, on tasks and on the mangrove, each labelled for itself", () => {
     expect(screen("graph")).toContain(t.memoryGraph.refreshAria);
     expect(screen("tasks")).toContain(t.scheduledTasks.refreshAria);
+    // THE THIRD, and the only one whose staleness is not this member's own doing:
+    // the others go stale because their agent wrote something, this one because
+    // SOMEBODY ELSE'S did. It polls on its own as well -- see `use-mangrove.ts` --
+    // and the control is what a member reaches for rather than waiting out the
+    // minute.
+    expect(screen("mangrove")).toContain(t.mangrove.refreshAria);
   });
 
   // Files has one too, but it belongs to the listing rather than to the frame — it sits

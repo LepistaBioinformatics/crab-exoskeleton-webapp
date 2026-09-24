@@ -108,14 +108,23 @@ export interface MangroveClaim {
   /** Distinct actors who endorsed this. Weight of evidence, never a verdict. */
   evidence: number;
   audience: string[];
-}
-
-/** Addressed at this member, and NOT yet in their agent's memory. */
-export interface MangroveHeld {
-  activityId: string;
-  from: string;
-  object: MangroveObject;
-  published: string;
+  /**
+   * Whether THIS reader has opened it. Only on the `received` reading, and only
+   * ever about the person asking -- who else opened it is the author's business.
+   */
+  read?: boolean;
+  /**
+   * Who has opened it, on the `published` reading: the author's receipts.
+   *
+   * Actor ids, not a count, because a member's person and their agent are
+   * different answers -- somebody reading their mail, against a turn passing
+   * over it. `mangroveActorKind` tells them apart.
+   *
+   * SAME SUBSCRIPTION ONLY. A receipt is appended to the shard of whoever
+   * emitted it, so one from another subscription lands where this author does
+   * not read. Absent is "nobody here has opened it", never "nobody has".
+   */
+  readBy?: string[];
 }
 
 /** A cross-scope publication waiting on a governing role. */
@@ -130,7 +139,6 @@ export interface MangrovePending {
 export interface MangroveTimeline {
   reading: MangroveReading;
   claims?: MangroveClaim[];
-  held?: MangroveHeld[];
   pending?: MangrovePending[];
 }
 
@@ -276,13 +284,29 @@ export function readIdentity(w: Workspace): Promise<MangroveIdentity> {
   return call<MangroveIdentity>("identity", w);
 }
 
-/** Take something sent directly to you into your own agent's memory. */
-export function admit(w: Workspace, activityId: string): Promise<unknown> {
-  return call("admit", w, {
+/**
+ * Say that this person has opened something.
+ *
+ * IT REPLACES `admit`. Admitting claimed to keep a memory out of the reader's
+ * agent until they took it; it never did -- the held item was delivered with its
+ * object, and the agent had an admit of its own -- so what members were actually
+ * doing with that button was marking their mail read. This is that, named for
+ * it, over AS2's Read.
+ *
+ * THE OBJECT ID, NOT THE ACTIVITY ID. A receipt outlives its author correcting
+ * the memory: having read something stays true across an Update.
+ */
+export function markRead(w: Workspace, objectId: string, undo = false): Promise<unknown> {
+  return call("read", w, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ activityId }),
+    body: JSON.stringify({ objectId, undo }),
   });
+}
+
+/** Whether a receipt is somebody reading their mail, or their agent passing over it. */
+export function mangroveActorKind(actorId: string): "person" | "agent" {
+  return actorId.endsWith(":service") ? "agent" : "person";
 }
 
 /** Accept or reject a cross-scope publication. Governing role only. */
@@ -323,7 +347,7 @@ export type MangroveMediaType = "text/markdown" | "text/plain";
  */
 export interface MangroveEmailTarget {
   email: string;
-  /** Reaches them, to admit or ignore. */
+  /** Reaches them, in their own inbox. */
   person: boolean;
   /** Reaches their agent's memory. */
   agent: boolean;
