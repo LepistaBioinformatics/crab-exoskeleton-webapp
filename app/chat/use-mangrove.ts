@@ -19,34 +19,80 @@ import {
  * see the tab disappear, not a tab that loads and then apologises — the same
  * treatment `projects_unsupported` gets, for the same reason.
  */
-export function useMangrove(workspace: Workspace | null, reading: MangroveReading) {
+/**
+ * How often a mounted mangrove re-reads itself.
+ *
+ * The mangrove is the one section of this pane whose content is written by SOMEBODY
+ * ELSE. Files, memory, the graph and tasks all change because this member or their
+ * own agent changed them, so the pane is looking at them when they change; a claim
+ * from another member's agent arrives while the member is reading the conversation
+ * beside it, and nothing on screen would say so until they closed the pane and opened
+ * it again.
+ */
+const POLL_MS = 60_000;
+
+export function useMangrove(
+  workspace: Workspace | null,
+  reading: MangroveReading,
+  /** Bumped by the pane header's refresh control, the same counter the graph and
+   *  tasks panels take. In the deps of the load below rather than of the fetch
+   *  itself, so "look again" means exactly what the first read meant. */
+  refreshSignal = 0,
+) {
   const [timeline, setTimeline] = useState<MangroveTimeline | null>(null);
   const [caps, setCaps] = useState<MangroveCapabilities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    if (!workspace) return;
-    setLoading(true);
-    try {
-      const [tl, cp] = await Promise.all([
-        readTimeline(workspace, reading),
-        readCapabilities(workspace),
-      ]);
-      setTimeline(tl);
-      setCaps(cp);
-      setError(null);
-    } catch (err) {
-      setTimeline(null);
-      setError(err instanceof MangroveError ? err.code : "unknown");
-    } finally {
-      setLoading(false);
-    }
-  }, [workspace, reading]);
+  /**
+   * `quiet` is the poll, and it differs in BOTH directions.
+   *
+   * It does not raise `loading` -- which would hide the "nothing yet" state for a
+   * beat every minute, so an empty mangrove would flicker between two empty states
+   * forever. And it does not clear what is on screen when it fails: a read the
+   * member never asked for must not be able to replace a feed they are reading with
+   * an error, so a failed poll leaves the last good answer exactly where it is and
+   * waits for the next one. A read the member DID ask for still reports.
+   */
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!workspace) return;
+      if (!quiet) setLoading(true);
+      try {
+        const [tl, cp] = await Promise.all([
+          readTimeline(workspace, reading),
+          readCapabilities(workspace),
+        ]);
+        setTimeline(tl);
+        setCaps(cp);
+        setError(null);
+      } catch (err) {
+        if (quiet) return;
+        setTimeline(null);
+        setError(err instanceof MangroveError ? err.code : "unknown");
+      } finally {
+        if (!quiet) setLoading(false);
+      }
+    },
+    [workspace, reading],
+  );
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshSignal]);
+
+  // THE POLL. Skipped while the tab is hidden -- a mangrove left open in a background
+  // tab would otherwise read itself all day for nobody -- and not started at all once
+  // the deployment has answered `mangrove_off`, which is not a state that changes
+  // without an operator restarting the proxy.
+  useEffect(() => {
+    if (!workspace || error === "mangrove_off") return;
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void load(true);
+    }, POLL_MS);
+    return () => clearInterval(id);
+  }, [load, workspace, error]);
 
   return {
     timeline,

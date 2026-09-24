@@ -10,6 +10,7 @@ import {
   FolderDown,
   GitMerge,
   Network,
+  Maximize2,
   Quote,
   StickyNote,
   User,
@@ -21,6 +22,7 @@ import { formatSize } from "@/app/chat/file-visuals";
 import {
   blobFile,
   downloadBlob,
+  mangroveActorKind,
   mergeFragment,
   parseGraphFragment,
   MangroveError,
@@ -98,7 +100,10 @@ import { useT } from "@/lib/i18n/context";
  * section. That is fine while the section is on screen and useless the moment a
  * card is read anywhere else, which is what a card is for.
  */
-export type PostAction = MangroveAction | "held" | "pending";
+// `"held"` was a fourth, for a card in a list that no longer exists. `"pending"`
+// stays: a cross-scope publication really is waiting on somebody, and that one
+// is a governing role's queue rather than an inbox.
+export type PostAction = MangroveAction | "pending";
 
 /**
  * The pill, and why it is a pill rather than another line of the byline.
@@ -117,7 +122,12 @@ const actionPill = cva(
   {
     variants: {
       tone: {
-        record: "bg-surface text-fg-muted ring-rule-strong",
+        // AT REST IT IS JUST THE WORD. `ring-1` stays on the base and goes
+        // transparent so restoring it costs no layout; the fill and the edge come
+        // back with the band under it. `attention` keeps both at rest -- held and
+        // pending are the two states that ARE asking for something.
+        record:
+          "bg-transparent text-fg-muted ring-transparent transition-colors group-hover/card:bg-surface group-hover/card:ring-rule group-has-[:focus-visible]/card:bg-surface group-has-[:focus-visible]/card:ring-rule",
         attention: "bg-accent/10 text-accent ring-accent/40",
       },
     },
@@ -134,29 +144,46 @@ function actionBadge(action: PostAction, t: ChatDict) {
       return { label: t.mangrove.actionUpdated, tone: "record" as const };
     case "revoked":
       return { label: t.mangrove.actionRevoked, tone: "record" as const };
-    case "held":
-      return { label: t.mangrove.actionHeld, tone: "attention" as const };
     case "pending":
       return { label: t.mangrove.actionPending, tone: "attention" as const };
   }
 }
 
-/** Recent, cut, or neither -- the two things that change how a card looks. */
-const card = cva("overflow-hidden rounded-xl border bg-surface transition-colors", {
-  variants: {
-    // An accent edge and a lift -- the treatment chat-view already gives the one
-    // card on screen it wants read first. NOT a different background: the preview's
-    // fade-out is painted `from-surface`, so a card that changed its background
-    // would show the fade as a wash across its last two lines.
-    recent: { true: "border-accent/40 shadow-elevated", false: "border-rule-strong" },
-    // The accent means "interactive", which is exactly what this is saying.
-    openable: {
-      true: "cursor-pointer hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-      false: "",
+/** Openable or not, which is now the only thing that changes how a card looks.
+ *
+ * THE NEWEST THREE USED TO BE MARKED OUT, with an accent edge and a lift. In a
+ * reading that is already ordered newest-first, that told the reader what the
+ * position at the top of the list had already told them -- and it read as
+ * "these three need you", which is a claim the marker was never making. Gone:
+ * a card is a card, and recency is the order. */
+//
+// `openable` USED TO BE A VARIANT HERE, because only long prose had a sheet to
+// open. Every card opens now, so the pointer and the hover edge are the base and
+// there is nothing left to branch on but whether it has been read.
+const card = cva(
+  [
+    "group/card cursor-pointer overflow-hidden rounded-xl bg-surface transition-colors",
+    // FOUR PIXELS ON THE LEFT AT ALL TIMES, coloured or not. Reserved rather than
+    // added when unread: grown on marking, every card in the list would shift
+    // three pixels sideways the moment one was opened.
+    "border border-l-4 border-transparent",
+    "hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+  ].join(" "),
+  {
+    variants: {
+      // THE UNREAD MARK, and it is the left edge rather than a dot. A dot needs
+      // somewhere to sit and competes with the byline for the one corner the eye
+      // already uses; an edge is read down a whole column at once, which is the
+      // question an inbox is actually being asked -- which of these have I not
+      // been through.
+      unread: {
+        true: "border-l-accent hover:border-l-accent",
+        false: "",
+      },
     },
+    defaultVariants: { unread: false },
   },
-  defaultVariants: { recent: false, openable: false },
-});
+);
 
 /**
  * Whether an event that reached the card started at something with its own answer to it.
@@ -252,7 +279,7 @@ function saveFailure(err: unknown, t: ChatDict, errs: ErrorDict): string {
  */
 function Chip({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <li className="flex items-center gap-1.5 rounded-md bg-elevated px-2 py-1 text-[11px] text-fg">
+    <li className="flex items-center gap-1.5 rounded-md bg-elevated/50 px-2 py-1 text-[11px] text-fg transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated">
       <span className="shrink-0 text-fg-muted">{icon}</span>
       {children}
     </li>
@@ -353,12 +380,15 @@ function FragmentView({
   object,
   fragment,
   canTake,
+  expanded,
 }: {
   workspace: Workspace;
   projectName?: string | null;
   object: MangroveObject;
   fragment: GraphFragment;
   canTake: boolean;
+  /** Collapsed, the card is a summary. Merging is not something you do to a summary. */
+  expanded: boolean;
 }) {
   const t = useT(chatCopy);
   const [merging, setMerging] = useState(false);
@@ -400,7 +430,7 @@ function FragmentView({
           {shown.map((e) => (
             <li
               key={e.name}
-              className="rounded-md bg-elevated px-1.5 py-0.5 text-[11px] text-fg"
+              className="rounded-md bg-elevated/50 px-1.5 py-0.5 text-[11px] text-fg transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated"
             >
               {e.name}
               {e.entityType && <span className="ml-1 text-fg-muted">{e.entityType}</span>}
@@ -463,7 +493,10 @@ function FragmentView({
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      {/* THE MERGE LIVES BEHIND THE OPEN. It is the one act on this screen that
+          writes a member's own graph, and offering it on a card the eye is
+          scrolling past is offering the heaviest thing here the most cheaply. */}
+      <div hidden={!expanded} className="mt-3 flex flex-wrap items-center gap-2">
         {canTake && (
           <Button size="sm" variant="tonal" disabled={merging} onClick={() => void merge()}>
             <GitMerge size={14} aria-hidden /> {merging ? t.mangrove.merging : t.mangrove.merge}
@@ -500,9 +533,12 @@ function FileView({
   projectName,
   object,
   canTake,
+  expanded,
 }: {
   workspace: Workspace;
   projectName?: string | null;
+  /** Collapsed, the card says what the file IS; what to DO with it is behind the open. */
+  expanded: boolean;
   object: MangroveObject;
   canTake: boolean;
 }) {
@@ -582,7 +618,7 @@ function FileView({
       {/* STACKED, NOT WRAPPED. Two controls in a column this narrow wrap anyway, and a
           wrap puts the second one hard against the left edge under a first that ended
           mid-line -- a ragged pair rather than a list of what can be done. */}
-      <div className="flex flex-col items-start gap-2">
+      <div hidden={!expanded} className="flex flex-col items-start gap-2">
         <Button
           size="sm"
           variant="tonal"
@@ -625,6 +661,16 @@ function FileView({
  * there is no honest answer. It also means a reader on a screen reader hears "From:
  * you" rather than two adjacent fragments whose relationship is a stylesheet.
  */
+/** "2 people · 1 agent", and either half alone when the other is zero. */
+function receiptSummary(readBy: readonly string[], t: ChatDict): string {
+  const people = readBy.filter((id) => mangroveActorKind(id) === "person").length;
+  const agents = readBy.length - people;
+  const parts: string[] = [];
+  if (people > 0) parts.push(t.mangrove.readByPeople.replace("{n}", String(people)));
+  if (agents > 0) parts.push(t.mangrove.readByAgents.replace("{n}", String(agents)));
+  return parts.join(" · ");
+}
+
 function Field({
   label,
   value,
@@ -670,9 +716,11 @@ export default function MangrovePost({
   subtitle,
   recipients,
   endorsed = 0,
+  readBy,
   actions,
   canTake = true,
-  recent = false,
+  unread = false,
+  onRead,
   dimmed = false,
   onReference,
 }: {
@@ -712,6 +760,18 @@ export default function MangrovePost({
   subscriptionName?: string | null;
   /** How many have endorsed it. Weight of evidence, never a verdict; 0 says nothing. */
   endorsed?: number;
+  /**
+   * Who has opened this, for the author of it. Actor ids.
+   *
+   * ONLY ON THE AUTHOR'S OWN READING. A recipient is told whether THEY have
+   * opened something and never who else has -- receipts belong to the person
+   * who addressed the thing.
+   *
+   * SAME SUBSCRIPTION ONLY, because a receipt is appended to the shard of
+   * whoever emitted it. Absent means "nobody here has opened it", which is not
+   * quite "nobody has", and the copy says the smaller thing.
+   */
+  readBy?: string[];
   /** What the reading lets a member DO with it -- admit, decide, revoke. */
   actions?: React.ReactNode;
   /**
@@ -726,8 +786,22 @@ export default function MangrovePost({
    * bytes in `uploads/` are what the agent reads on the next turn.
    */
   canTake?: boolean;
-  /** One of the newest few in this reading. */
-  recent?: boolean;
+  /**
+   * This member has not opened it yet. A property of the card rather than a
+   * list of its own -- there were two lists and the second was the hold, which
+   * held nothing.
+   */
+  unread?: boolean;
+  /**
+   * Called when this member does something that means they have read it.
+   *
+   * WHY IT IS NOT "ON RENDER". The mangrove's own react endpoint says it: a
+   * receipt that fires because something appeared in a listing is a receipt for
+   * nothing. So it is the deliberate acts -- opening the sheet, or clicking the
+   * unread mark itself, which is the affordance an inbox already uses for the
+   * message that has nothing to open.
+   */
+  onRead?: () => void;
   /** Revoked: still listed, struck through, and no longer something to act on. */
   dimmed?: boolean;
   onReference?: (ref: MangroveReference) => void;
@@ -736,37 +810,60 @@ export default function MangrovePost({
   const badge = actionBadge(action, t);
   const [referenced, setReferenced] = useState(false);
   const [open, setOpen] = useState(false);
+  // COLLAPSED UNTIL ASKED. What stays on a card the eye is scrolling past is who
+  // sent it, what it is about and enough of it to recognise -- the three things a
+  // reader uses to decide whether this is the one. Everything that DOES something
+  // (merge into my graph, save the file, quote it into the conversation) and the
+  // record under it are behind one click, which is also the click that says this
+  // member opened it.
+  const [expanded, setExpanded] = useState(false);
   const fragment = parseGraphFragment(object);
   const content = object.content ?? "";
-  // ONLY PROSE HAS MORE THAN THE CARD SHOWS. A fragment's card is a summary by
-  // intent -- names and counts, never the JSON -- and a file's card is the whole
-  // of what arrived. A sheet over either would open onto what is already on screen.
-  const openable = !fragment && !object.blob && isCut(content);
+  // EVERY CARD OPENS NOW, and that is the change. `openable` used to mean "there
+  // is a sheet behind this one", which was true of long prose only -- so most
+  // cards answered a click with nothing, and the actions sat in the open on all
+  // of them.
+  //
+  // The sheet is still prose-only and still what `isCut` decides; it has just
+  // stopped being what a click on the card does. It is offered as one of the
+  // controls the open reveals, beside the others.
+  const hasSheet = !fragment && !object.blob && isCut(content);
 
-  const opener: React.LiHTMLAttributes<HTMLLIElement> = openable
-    ? {
-        role: "button",
-        tabIndex: 0,
-        "aria-label": t.mangrove.openPost.replace("{cell}", object.cell),
-        onClick: (e) => {
-          if (!fromControl(e.target)) setOpen(true);
-        },
-        onKeyDown: (e) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          if (fromControl(e.target)) return;
-          // Space scrolls the page otherwise, which is the reading being lost
-          // at the moment it opens.
-          e.preventDefault();
-          setOpen(true);
-        },
-      }
-    : {};
+  // OPENING IS WHAT SENDS THE RECEIPT, and only opening. The mangrove's own react
+  // endpoint puts it plainly: a receipt that fires because something appeared in
+  // a listing is a receipt for nothing. Closing it again sends nothing either --
+  // having read something does not stop being true.
+  const toggle = () => {
+    setExpanded((was) => {
+      if (!was) onRead?.();
+      return !was;
+    });
+  };
+
+  const opener: React.LiHTMLAttributes<HTMLLIElement> = {
+    role: "button",
+    tabIndex: 0,
+    "aria-expanded": expanded,
+    "aria-label": t.mangrove.openPost.replace("{cell}", object.cell),
+    onClick: (e) => {
+      if (fromControl(e.target)) return;
+      toggle();
+    },
+    onKeyDown: (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (fromControl(e.target)) return;
+      // Space scrolls the page otherwise, which is the reading being lost at the
+      // moment it opens.
+      e.preventDefault();
+      toggle();
+    },
+  };
 
   return (
     <li
       {...opener}
-      data-recent={recent ? "true" : undefined}
-      className={card({ recent, openable })}
+      data-unread={unread ? "true" : undefined}
+      className={card({ unread })}
     >
       {/* WHO IT IS FROM, ACROSS THE TOP.
           This used to be a column in the footer, under a heading, read last. It is the
@@ -778,8 +875,11 @@ export default function MangrovePost({
           `data-inner`, because the band is a region -- a padding gutter and an avatar,
           neither of them a control -- and a click on it must not open a sheet over the
           body. */}
-      <div data-inner className="flex items-center gap-2.5 bg-elevated px-3.5 py-2.5">
-        <span className="shrink-0 rounded-full bg-surface p-1.5 text-accent ring-1 ring-rule-strong">
+      <div
+        data-inner
+        className="flex items-center gap-2.5 px-3.5 py-2.5 transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated"
+      >
+        <span className="shrink-0 rounded-full p-1.5 text-accent ring-1 ring-transparent transition-colors group-hover/card:bg-surface group-hover/card:ring-rule-strong group-has-[:focus-visible]/card:bg-surface group-has-[:focus-visible]/card:ring-rule-strong">
           {authorKind === "agent" ? (
             <Bot size={16} aria-hidden />
           ) : (
@@ -846,6 +946,7 @@ export default function MangrovePost({
             object={object}
             fragment={fragment}
             canTake={canTake}
+            expanded={expanded}
           />
         ) : object.blob ? (
           <FileView
@@ -853,6 +954,7 @@ export default function MangrovePost({
             projectName={projectName}
             object={object}
             canTake={canTake}
+            expanded={expanded}
           />
         ) : (
           <MangroveContent
@@ -877,20 +979,34 @@ export default function MangrovePost({
           before it broke, so every value wrapped and the columns stopped lining up
           with anything. A heading over its answer, stacked, survives any width.
 
-          SEPARATED BY TONE AND NOT BY A HAIRLINE, and the alternation is what does it:
-          the byline band and this record are `elevated`, the title, the body and the
-          controls under here are the card's own `surface`. Three regions, two tones,
-          no lines -- which is `pane-weight`'s rule (a horizontal rule survives only
-          where content scrolls past it, and nothing scrolls past the bottom of a
-          card) satisfied rather than argued with. The tone change is also why the
-          controls sit OUTSIDE the tinted block: what you can DO is not part of the
-          record, and here that is said by the background rather than by a line.
+          SEPARATED BY TONE, AND ONLY UNDER THE POINTER. The band above and this
+          record used to be `elevated` against the card's `surface` at all times:
+          three regions and two tones on every card, down a list of them. Read as a
+          list that is what it was called -- coarse. The alternation is still the
+          thing that separates the regions and still says why the controls sit
+          OUTSIDE this block, but it is now something the card DOES when you are on
+          it rather than something it asserts while you scroll past.
+
+          WHICH LEAVES THE CARD ITSELF AS THE ONLY CONTRAST AT REST, and that is the
+          point: `surface` against the pane's `bg`, with the gap between cards the
+          edge. One step, in the one place a reader needs it -- where a card ends and
+          the next begins.
 
           THE TINT IS ON THIS REGION, NOT ON THE CARD. The preview's fade is painted
           `from-surface` and lives in the body above, so the card's own background has
-          to stay `surface` -- which is why `recent` is a border and a lift. */}
-      <footer data-inner>
-        <dl className="grid gap-y-2.5 bg-elevated px-3.5 py-3">
+          to stay `surface` -- which is the constraint that ruled out ever tinting a
+          whole card to say anything about it, and the reason the hover treatment is
+          painted on the regions rather than on the card. */}
+      {/* THE WHOLE FOOTER IS BEHIND THE OPEN. Collapsed, a card is who sent it,
+          what it is about and enough of it to recognise; the record and the
+          controls are what you asked for by opening it.
+
+          `hidden` rather than not rendering it: the children keep their state, so
+          a merge result or a "referenced" note is still there if the card is
+          closed and opened again, and the attribute takes the subtree out of the
+          accessibility tree and the tab order at the same time. */}
+      <footer data-inner hidden={!expanded}>
+        <dl className="grid gap-y-2.5 px-3.5 py-3 transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated">
           {recipients && recipients.length > 0 && (
             <Recipients
               workspace={workspace}
@@ -903,6 +1019,13 @@ export default function MangrovePost({
           <Field label={t.mangrove.identifierLabel} value={object.cell} mono />
           {endorsed > 0 && (
             <Field label={t.mangrove.endorsedLabel} value={String(endorsed)} />
+          )}
+          {/* WHO OPENED IT, and which of their two actors did. An agent passing
+              over a memory in a turn is not its human reading it, and telling an
+              author the second when it was the first would be the receipt
+              lying. */}
+          {readBy && readBy.length > 0 && (
+            <Field label={t.mangrove.readByLabel} value={receiptSummary(readBy, t)} />
           )}
         </dl>
 
@@ -932,6 +1055,20 @@ export default function MangrovePost({
                     otherwise report the click. */}
                 {referenced && (
                   <span className="text-xs text-fg-muted">{t.mangrove.referenced}</span>
+                )}
+                {/* THE SHEET IS ONE OF THE CONTROLS NOW. It used to be what a
+                    click on the card did, which left every card without one --
+                    a file, a fragment, a short note -- answering a click with
+                    nothing at all. Here it is what it always was: a way to read
+                    a long body without the card growing to the length of it. */}
+                {hasSheet && (
+                  <Button
+                    size="sm"
+                    variant="tonal"
+                    onClick={() => setOpen(true)}
+                  >
+                    <Maximize2 size={14} aria-hidden /> {t.mangrove.readInFull}
+                  </Button>
                 )}
               </div>
             )}

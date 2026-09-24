@@ -6,8 +6,18 @@ import { SECTION_ORDER, asSection, nextSidebarValue } from "./workspace-sections
 // pane's own heading all read it now. Several renderings of the same list is several
 // places that can disagree about what a workspace holds.
 describe("the workspace's sections", () => {
+  // ...and then the one that is not this workspace's at all. Shared memory spans
+  // subscriptions and tenants, so it sits last -- where a reader looks for the odd
+  // one out -- rather than among the five the argument above orders.
   it("lists what the agent knows, then what it does, then what the member manages", () => {
-    expect(SECTION_ORDER).toEqual(["memory", "graph", "tasks", "files", "secrets"]);
+    expect(SECTION_ORDER).toEqual([
+      "memory",
+      "graph",
+      "tasks",
+      "files",
+      "secrets",
+      "mangrove",
+    ]);
   });
 });
 

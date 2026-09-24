@@ -24,8 +24,11 @@ const en = {
     // Plain nouns rather than a sentence each: they head two and five rows that are
     // already labelled, so the heading's whole job is to say which of the two a row
     // belongs to.
+    // ONE GROUP, and it is the foldable one. There were two -- Screens over Projects
+    // and the mangrove, Tools over the five sections -- and the mangrove becoming a
+    // section left Screens as a heading over a list of one, which is a word that earns
+    // nothing. New chat and Projects sit together above the group now, unlabelled.
     groups: {
-      screens: "Screens",
       tools: "Tools",
     },
     // The rail entry that reveals the conversation list, and the ONLY one whose hover
@@ -893,6 +896,7 @@ const en = {
       tasks: "What runs on a schedule, and its results.",
       files: "Uploads and files in this workspace.",
       secrets: "Keys the agent uses, and which model answers.",
+      mangrove: "Memory shared with colleagues, and what they shared back.",
     },
     refreshAria: "Refresh files",
     refresh: "Refresh",
@@ -935,6 +939,12 @@ const en = {
   mangrove: {
     title: "Mangrove Network",
     blurb: "Memory shared with you, and memory your agent shared.",
+    refresh: "Check for new memories",
+    refreshAria: "Refresh the mangrove",
+    readInFull: "Read in full",
+    readByLabel: "Opened by",
+    readByPeople: "{n} in person",
+    readByAgents: "{n} by an agent",
     hint: "The mangrove is where agents share what they learn. Your agent publishes as your bot, and nothing it shares goes further than you can already reach.",
     received: "Feed",
     published: "Published",
@@ -944,11 +954,8 @@ const en = {
     pending: "Pending decisions",
     receivedTitle: "Shared with you",
     publishedTitle: "Published by you and your agent",
-    heldTitle: "Waiting for you",
-    heldHint: "Sent to you directly. It is not in your agent's memory until you admit it.",
     pendingTitle: "Waiting on your decision",
     from: "from {who}",
-    admit: "Admit",
     accept: "Accept",
     reject: "Reject",
     advanced: "Advanced options",
@@ -1015,7 +1022,6 @@ const en = {
     actionPublished: "Published",
     actionUpdated: "Updated",
     actionRevoked: "Revoked",
-    actionHeld: "For you",
     actionPending: "Your decision",
     recipientsLabel: "Recipients",
     recipientsAll: "Show all {count}",
@@ -1190,7 +1196,6 @@ const pt: ChatDict = {
     closeMenu: "Fechar menu",
     destinations: "Ir para",
     groups: {
-      screens: "Telas",
       tools: "Ferramentas",
     },
     conversations: "Conversas",
@@ -1828,6 +1833,7 @@ const pt: ChatDict = {
       tasks: "O que roda em horário programado, e seus resultados.",
       files: "Uploads e arquivos deste workspace.",
       secrets: "Chaves que o agente usa, e qual modelo responde.",
+      mangrove: "Memória compartilhada com colegas, e o que eles compartilharam.",
     },
     refreshAria: "Atualizar arquivos",
     refresh: "Atualizar",
@@ -1864,6 +1870,12 @@ const pt: ChatDict = {
   mangrove: {
     title: "Rede Mangue",
     blurb: "Memória compartilhada com você, e a que seu agente compartilhou.",
+    refresh: "Buscar novas memórias",
+    refreshAria: "Atualizar o mangue",
+    readInFull: "Ler completo",
+    readByLabel: "Abriram",
+    readByPeople: "{n} em pessoa",
+    readByAgents: "{n} por agente",
     hint: "O mangue é onde os agentes compartilham o que aprendem. Seu agente publica como bot seu, e nada do que ele compartilha vai além do que você já alcança.",
     received: "Feed",
     published: "Publicados",
@@ -1872,11 +1884,8 @@ const pt: ChatDict = {
     pending: "Decisões pendentes",
     receivedTitle: "Compartilhado com você",
     publishedTitle: "Publicado por você e seu agente",
-    heldTitle: "Esperando por você",
-    heldHint: "Enviado direto a você. Só entra na memória do seu agente quando você admitir.",
     pendingTitle: "Esperando sua decisão",
     from: "de {who}",
-    admit: "Admitir",
     accept: "Aceitar",
     reject: "Recusar",
     advanced: "Opções avançadas",
@@ -1915,7 +1924,6 @@ const pt: ChatDict = {
     actionPublished: "Publicou",
     actionUpdated: "Atualizou",
     actionRevoked: "Revogou",
-    actionHeld: "Para você",
     actionPending: "Sua decisão",
     recipientsLabel: "Destinatários",
     recipientsAll: "Ver todos os {count}",

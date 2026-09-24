@@ -29,7 +29,6 @@ import ChatView from "./chat-view";
 import TurnDock from "./turn-dock";
 import WorkspaceGrid from "./workspace-grid";
 import ProjectsScreen from "./projects-screen";
-import MangroveScreen from "./mangrove-screen";
 import LandingScreen from "./landing-screen";
 import WorkspaceScreen from "./workspace-screen";
 import RestartBanner from "./restart-banner";
@@ -435,18 +434,6 @@ export default function ChatShell({ email }: { email: string }) {
                 onBrowse={(id) => setFragmentProject(id)}
               />
             )}
-            {centre.kind === "destination" && workspace && centre.at === "mangrove" && (
-              <MangroveScreen
-                workspace={workspace}
-                // The NAME, never `project` -- both are strings, so tsc would take the
-                // id just as happily and a member would read a uuid.
-                projectName={openProject?.name ?? null}
-                // Already resolved above for the header; a recipient that is the
-                // whole subscription is named from it rather than fetched again.
-                subscriptionName={subscription}
-                onReference={setChatRef}
-              />
-            )}
             {/* A place before a conversation is chosen: the agent's root and a
                 project's root alike. It replaced an empty transcript, and the effect
                 that used to fill that transcript with a freshly minted conversation is
@@ -498,6 +485,12 @@ export default function ChatShell({ email }: { email: string }) {
             key={`${workspace.t}|${workspace.s}|${workspace.r}|${project ?? ""}`}
             workspace={workspace}
             section={shownSection}
+            // For the mangrove alone, which is the one section that has to say where a
+            // file will land and to name a recipient that is the whole subscription.
+            // The NAME, never `project` -- both are strings, so tsc would take the id
+            // just as happily and a member would read a uuid.
+            projectName={openProject?.name ?? null}
+            subscriptionName={subscription}
             onClose={() => setRightSidebar(null)}
             closing={openSection === null}
             onClosed={() => setExiting(null)}

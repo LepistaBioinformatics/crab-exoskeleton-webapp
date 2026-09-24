@@ -92,18 +92,10 @@ export function buildCrumbs({
 
   if (project) crumbs.push({ key: "project", label: project.name, go: onProject });
 
-  // THE CRUMB NAMES THE DESTINATION IT IS, which it did not: every destination
-  // pushed one labelled `Projects`, so standing in the mangrove read as standing
-  // in a list of projects. The paragraph above already gives the argument against
-  // that -- a segment naming a level the member never walked through -- and the
-  // mangrove is exactly that case: nobody reaches it by way of the projects list.
-  //
-  // AFTER the project, because the project is a context the member is still
-  // inside while they look at the mangrove, and the last crumb is where they are
-  // standing.
-  if (destination === "mangrove") {
-    crumbs.push({ key: "mangrove", label: t.mangrove.title, go: onMangrove });
-  }
+  // THE MANGROVE IS NOT HERE ANY MORE, and the rule below is the reason. It was a
+  // centre destination and got a crumb; it is a right-pane section now, and the
+  // paragraph under this one says why no section ever appears in the path: a pane
+  // beside the transcript is not a place you are standing.
 
   // The conversation, and only when the centre is showing it. On the projects list the
   // path ends at the project (or at `Projects` with none open): the list is where the

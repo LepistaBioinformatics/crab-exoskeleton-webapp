@@ -10,6 +10,7 @@ import MemoryEditor from "./memory-editor";
 import MemoryGraphPanel from "./memory-graph-panel";
 import ScheduledTasksPanel from "./scheduled-tasks-panel";
 import SecretsSection from "./secrets-section";
+import MangroveScreen from "./mangrove-screen";
 import { IconButton } from "@/components/ui/icon-button";
 import type { ChatReference } from "@/lib/chatReference";
 import { chatCopy } from "@/lib/i18n/chat";
@@ -34,6 +35,8 @@ import { useT } from "@/lib/i18n/context";
 export default function WorkspaceScreen({
   workspace,
   section,
+  projectName,
+  subscriptionName,
   onClose,
   closing,
   onClosed,
@@ -42,6 +45,14 @@ export default function WorkspaceScreen({
 }: {
   workspace: Workspace;
   section: Section;
+  /**
+   * Two strings the shell has already resolved for its own header, threaded through
+   * for the mangrove alone. It needs them to say where a file will land and to name a
+   * recipient that is the whole subscription -- and resolving either here would be a
+   * second read that can be a beat behind the breadcrumb.
+   */
+  projectName?: string | null;
+  subscriptionName?: string | null;
   /** Closes the pane — the shell clears `rs`. */
   onClose: () => void;
   /** Passed straight through to the pane's chrome; see `workspace-pane.tsx`. */
@@ -63,6 +74,10 @@ export default function WorkspaceScreen({
   // between visits, so each goes stale on its own and neither needs the other re-read.
   const [graphRefresh, setGraphRefresh] = useState(0);
   const [taskRefresh, setTaskRefresh] = useState(0);
+  // A THIRD, for the same reason there are two: the mangrove goes stale on its own
+  // schedule -- somebody else's agent publishing -- which has nothing to do with
+  // either of the others.
+  const [mangroveRefresh, setMangroveRefresh] = useState(0);
 
   // "Look again", offered where the pane puts a section's own controls. The files
   // screen keeps its copy inside its body instead, beside upload and new-folder: there
@@ -72,7 +87,9 @@ export default function WorkspaceScreen({
       ? { label: t.memoryGraph.refresh, aria: t.memoryGraph.refreshAria, bump: setGraphRefresh }
       : section === "tasks"
         ? { label: t.scheduledTasks.refresh, aria: t.scheduledTasks.refreshAria, bump: setTaskRefresh }
-        : null;
+        : section === "mangrove"
+          ? { label: t.mangrove.refresh, aria: t.mangrove.refreshAria, bump: setMangroveRefresh }
+          : null;
 
   return (
     <WorkspacePane
@@ -101,6 +118,18 @@ export default function WorkspaceScreen({
           column (see workspace-pane.tsx), so each of the five sizes itself from it
           directly and the workaround has nothing left to work around. */}
       {section === "memory" && <MemoryEditor workspace={workspace} />}
+      {/* The sixth, and the only one not scoped by this workspace. It renders its own
+          body frameless: the title, the scroll and the close control above are this
+          pane's. */}
+      {section === "mangrove" && (
+        <MangroveScreen
+          workspace={workspace}
+          projectName={projectName}
+          subscriptionName={subscriptionName}
+          refreshSignal={mangroveRefresh}
+          onReference={onReference}
+        />
+      )}
       {section === "graph" && (
         <MemoryGraphPanel
           workspace={workspace}

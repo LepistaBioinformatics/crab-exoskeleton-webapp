@@ -18,7 +18,7 @@ import type { Workspace } from "./fragment";
 // React-free so it can be tested without mounting anything (the suite runs
 // `environment: "node"`).
 
-export type Destination = "projects" | "mangrove";
+export type Destination = "projects";
 
 /**
  * The fragment's `v` as a Destination, or null.
@@ -37,7 +37,10 @@ export function asDestination(value: string | null | undefined): Destination | n
   // the one the comment above gives: what this refuses is every OTHER string,
   // including the five section names a link written against the one-key model
   // still carries. Listing the values rather than casting is the whole point.
-  return value === "projects" || value === "mangrove" ? value : null;
+  // `mangrove` was one of these and is a right-pane section now. It is refused here
+  // rather than translated, so a stale `d=mangrove` link lands on the conversation
+  // with no pane instead of on a destination this shell can no longer draw.
+  return value === "projects" ? value : null;
 }
 
 export type Centre =

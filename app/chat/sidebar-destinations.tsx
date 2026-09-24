@@ -37,17 +37,22 @@ import type { Destination } from "./destination";
 // request of 2026-09-22: screens and tools.
 
 /** One row, and which of the two things a click on it means. */
-export type DestinationRow =
-  | { kind: "projects" }
-  | { kind: "mangrove" }
-  | { kind: "section"; section: Section };
+export type DestinationRow = { kind: "projects" } | { kind: "section"; section: Section };
 
-export type DestinationGroupKey = "screens" | "tools";
+export type DestinationGroupKey = "places" | "tools";
 
 /** One labelled group of rows, and whether the member may fold it away. */
 export interface DestinationGroup {
   key: DestinationGroupKey;
-  label: (t: ChatDict) => string;
+  /**
+   * OPTIONAL, and its absence is what puts New chat and Projects together.
+   *
+   * There were two labelled groups. The mangrove became a right-pane section, which
+   * left the first one a heading over a list of ONE -- a word that earns nothing, and
+   * a line between Projects and the New chat button directly above it. Unlabelled, the
+   * two read as what they are: the places this column can take you.
+   */
+  label?: (t: ChatDict) => string;
   /**
    * ONLY TOOLS FOLDS, and the asymmetry is the point rather than an omission.
    *
@@ -69,18 +74,11 @@ export interface DestinationGroup {
 // level up, now that the rail draws a hairline between them.
 export const DESTINATION_GROUPS: DestinationGroup[] = [
   {
-    key: "screens",
-    label: (t) => t.shell.groups.screens,
+    key: "places",
+    // No label: see DestinationGroup.label. One row, sitting under the New chat
+    // button, which is the other thing that takes you somewhere.
     collapsible: false,
-    rows: [
-      { kind: "projects" },
-      // The mangrove sits with Projects rather than with the five sections, and the
-      // distinction is the one this file already draws: a section is scoped BY a
-      // workspace and opens beside a conversation, while these replace the centre.
-      // The mangrove spans subscriptions and tenants and is not read alongside one
-      // conversation, so it is a destination.
-      { kind: "mangrove" },
-    ],
+    rows: [{ kind: "projects" }],
   },
   {
     key: "tools",
@@ -106,19 +104,16 @@ export const DESTINATION_ROWS: DestinationRow[] = DESTINATION_GROUPS.flatMap(
 // five keep coming from the module that owns them.
 export function rowKey(row: DestinationRow): string {
   if (row.kind === "projects") return "projects";
-  if (row.kind === "mangrove") return "mangrove";
   return row.section;
 }
 
 export function rowLabel(row: DestinationRow, t: ChatDict): string {
   if (row.kind === "projects") return t.projects.title;
-  if (row.kind === "mangrove") return t.mangrove.title;
   return SECTIONS[row.section].label(t);
 }
 
 export function rowIcon(row: DestinationRow): LucideIcon {
   if (row.kind === "projects") return Folders;
-  if (row.kind === "mangrove") return Share2;
   return SECTIONS[row.section].Icon;
 }
 
@@ -134,7 +129,6 @@ export function rowIcon(row: DestinationRow): LucideIcon {
  */
 export function rowBlurb(row: DestinationRow, t: ChatDict): string {
   if (row.kind === "projects") return t.projects.blurb;
-  if (row.kind === "mangrove") return t.mangrove.blurb;
   return SECTIONS[row.section].blurb(t);
 }
 
@@ -145,12 +139,19 @@ export function rowBlurb(row: DestinationRow, t: ChatDict): string {
  * ONE FILTER FOR BOTH, because the sidebar and the collapsed rail read it and
  * the file's own comments already say what a second hand-written answer costs.
  */
+// STILL BOTH, and the mangrove's flag survived its move between the two lists.
+//
+// It gates a real thing: a deployment that never configured the mangrove offered the
+// row anyway and answered it with a blank pane, which is what #100 fixed. Becoming a
+// SECTION does not make that go away -- the row is drawn from SECTION_ORDER now, so
+// the filter has to reach into section rows rather than only into the named ones.
 export type HiddenRows = { projects?: boolean; mangrove?: boolean };
 
 function visibleRows(group: DestinationGroup, hidden: HiddenRows): DestinationRow[] {
   return group.rows.filter((row) => {
     if (row.kind === "projects") return !hidden.projects;
-    if (row.kind === "mangrove") return !hidden.mangrove;
+    // The one section with a switch. The other five exist wherever a workspace does.
+    if (row.section === "mangrove") return !hidden.mangrove;
     return true;
   });
 }
@@ -335,13 +336,17 @@ export default function SidebarDestinations({
         if (rows.length === 0) return null;
 
         const open = group.collapsible ? toolsOpen : true;
-        const name = group.label(t);
+        const name = group.label?.(t);
         const listId = `destinations-${group.key}`;
         const Chevron = open ? ChevronDown : ChevronRight;
 
         return (
           <div key={group.key} className="px-2 pb-1 pt-3">
-            {group.collapsible ? (
+            {/* No heading at all when the group has no label -- not an empty one.
+                A blank header would still take the vertical space that separates
+                Projects from the New chat button above it, which is the gap this
+                change exists to close. */}
+            {name === undefined ? null : group.collapsible ? (
               <button
                 type="button"
                 onClick={toggleTools}
@@ -377,7 +382,10 @@ export default function SidebarDestinations({
             {open && (
               <ul
                 id={listId}
-                aria-labelledby={`${listId}-label`}
+                // Only when a heading exists to point at. `aria-labelledby` naming an
+                // id that is not in the document is the same dangling reference the
+                // `aria-controls` above is careful to avoid.
+                aria-labelledby={name === undefined ? undefined : `${listId}-label`}
                 className="flex flex-col gap-0.5"
               >
                 {rows.map((entry) => {
