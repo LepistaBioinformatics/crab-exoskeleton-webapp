@@ -26,7 +26,11 @@ const ACTIONS: Record<string, "GET" | "POST"> = {
   capabilities: "GET",
   directory: "GET",
   identity: "GET",
-  admit: "POST",
+  // A person saying they have opened something. It was `admit` -- the button that
+  // cleared a hold which turned out to hold nothing -- and renaming it here was
+  // missed when the rest of the chain was renamed, so every receipt 404'd at this
+  // line and the feed came back unread on the next load.
+  read: "POST",
   decide: "POST",
   revoke: "POST",
   publish: "POST",
