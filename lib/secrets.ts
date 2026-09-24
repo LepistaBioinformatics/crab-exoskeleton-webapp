@@ -42,7 +42,40 @@ function workspaceQuery(workspace: Workspace): URLSearchParams {
   });
 }
 
-export async function listSecrets(workspace: Workspace): Promise<SecretNames> {
+/**
+ * WHICH FORMATS THIS AGENT'S HARNESS ACTUALLY DELIVERS.
+ *
+ * The tab offers four and they do not all arrive. Under the ganglion `dotenv` and
+ * `json` become marked environment the shell can read; `native` is picoclaw's own
+ * slot file, and `file` has never reached any harness at all. A member picking one
+ * of the last two saved a credential, got a 200, and their agent could not see it
+ * -- with nothing anywhere saying so.
+ *
+ * Keyed on the harness rather than shipped as a list from the proxy, so the answer
+ * lives once and beside the formats it is about.
+ */
+export function formatReaches(format: SecretFormat, harness: string | null): boolean {
+  // Unknown harness: claim nothing. A wrong "your agent cannot see this" is worse
+  // than no badge, and the proxy only omits this for a version that predates it.
+  if (harness === null) return true;
+  if (format === "file") return false;
+  if (harness === "ganglion") return format === "dotenv" || format === "json";
+  return true;
+}
+
+export interface SecretListing extends SecretNames {
+  /** Which runtime this agent orchestrates, or null from a proxy that predates it. */
+  harness: string | null;
+  /**
+   * Names of THIS member's secrets that also exist in a scope above them.
+   *
+   * The cascade is "user wins", so these are the ones their own value is silently
+   * replacing an admin's with -- and the member is the one who can undo it.
+   */
+  shadowing: string[];
+}
+
+export async function listSecrets(workspace: Workspace): Promise<SecretListing> {
   const res = await fetch(`/api/secrets?${workspaceQuery(workspace).toString()}`);
   if (!res.ok) throw new Error(await errorCode(res));
   const data = await res.json();
@@ -52,6 +85,8 @@ export async function listSecrets(workspace: Workspace): Promise<SecretNames> {
     json: Array.isArray(s.json) ? s.json : [],
     native: Array.isArray(s.native) ? s.native : [],
     file: Array.isArray(s.file) ? s.file : [],
+    harness: typeof data.harness === "string" ? data.harness : null,
+    shadowing: Array.isArray(data.shadowing) ? data.shadowing : [],
   };
 }
 

@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
+  formatReaches,
   listSecrets,
   setSecret,
   deleteSecret,
   SECRET_FORMATS,
   USER_SECRET_FORMATS,
-  type SecretNames,
+  type SecretListing,
   type SecretFormat,
 } from "@/lib/secrets";
 import type { Workspace } from "./fragment";
@@ -55,7 +56,7 @@ export default function SecretsSection({
 }) {
   const t = useT(chatCopy);
   const errs = useT(errorCopy);
-  const [secrets, setSecrets] = useState<SecretNames | null>(null);
+  const [secrets, setSecrets] = useState<SecretListing | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // Set after a successful write/delete so the pane says, in place, that the
@@ -176,6 +177,8 @@ export default function SecretsSection({
                 // a union and the check has to be structural.
                 notice={"notice" in copy ? copy.notice : undefined}
                 names={secrets?.[fmt] ?? []}
+                unreachable={secrets !== null && !formatReaches(fmt, secrets.harness)}
+                shadowing={secrets?.shadowing}
                 writable={WRITABLE.includes(fmt)}
                 busy={busy}
                 onSave={onSave}

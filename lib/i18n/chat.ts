@@ -813,6 +813,11 @@ const en = {
     title: "Agent secrets",
     // "Saved for <you> on <agent x> — kept across…"
     savedForBefore: "Saved for ",
+    notDelivered:
+      "This agent's runtime does not deliver this format. Your agent cannot read what you save here — use the .env or secrets.json format instead.",
+    shadowsShared:
+      "An administrator set this same name for everyone in your scope. Yours is what your agent uses; delete it here to let theirs through.",
+    shadowsSharedShort: "overrides shared",
     savedForYou: "you",
     savedForOn: " on ",
     savedForAfter:
@@ -1773,6 +1778,11 @@ const pt: ChatDict = {
   secrets: {
     title: "Segredos do agente",
     savedForBefore: "Salvo para ",
+    notDelivered:
+      "O runtime deste agente não entrega este formato. Seu agente não consegue ler o que você salvar aqui — use o formato .env ou secrets.json.",
+    shadowsShared:
+      "Um administrador definiu esse mesmo nome para todo o seu escopo. O seu é o que o agente usa; apague aqui para deixar o dele passar.",
+    shadowsSharedShort: "sobrepõe compartilhada",
     savedForYou: "você",
     savedForOn: " no ",
     savedForAfter:
