@@ -30,6 +30,8 @@ export default function SecretFormatGroup({
   names,
   writable,
   notice,
+  unreachable = false,
+  shadowing,
   busy,
   onSave,
   onDelete,
@@ -42,6 +44,23 @@ export default function SecretFormatGroup({
   writable: boolean;
   /** Said above the list when the sink needs a caveat of its own. */
   notice?: string;
+  /**
+   * This format does not reach the agent under the harness this agent runs.
+   *
+   * The tab offers four sinks and they do not all arrive: `file` has never
+   * reached any harness, and `native` is picoclaw's own slot file. A member
+   * picking one of those saved a credential, got a 200, and their agent could not
+   * see it -- with nothing anywhere saying so.
+   */
+  unreachable?: boolean;
+  /**
+   * Names in this group whose value is silently replacing an admin's.
+   *
+   * The cascade is "user wins" and it wins ACROSS the two sinks, so a name here
+   * means the shared credential an admin set never reaches this member. They are
+   * the one holding the winning value, so they are the one who can undo it.
+   */
+  shadowing?: readonly string[];
   busy: string | null;
   onSave: (format: SecretFormat, name: string, value: string) => Promise<boolean>;
   onDelete: (format: SecretFormat, name: string) => void;
@@ -86,6 +105,12 @@ export default function SecretFormatGroup({
     <Accordion title={title} summary={summary} hint={hint} variant="section">
       {notice && <Alert severity="info">{notice}</Alert>}
 
+      {/* SAID ONCE, AT THE TOP OF THE GROUP, because it is true of the sink and
+          not of any one secret in it. A warning rather than info: this is the
+          difference between a credential working and not, and it used to be
+          invisible on both sides of the save. */}
+      {unreachable && <Alert severity="warning">{t.secrets.notDelivered}</Alert>}
+
       {names.length > 0 && (
         <ul className="flex flex-col gap-1">
           {names.map((secretName) => (
@@ -94,6 +119,18 @@ export default function SecretFormatGroup({
               className="flex items-center gap-2 rounded-lg border border-rule bg-elevated px-3 py-1.5"
             >
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{secretName}</span>
+              {/* THE COLLISION, ON THE ROW THAT CAUSES IT. An admin set this same
+                  name for the whole scope and this value is what wins -- deleting
+                  it here is what lets theirs through, which is why the mark sits
+                  beside the delete control rather than in a summary somewhere. */}
+              {shadowing?.includes(secretName) && (
+                <span
+                  title={t.secrets.shadowsShared}
+                  className="shrink-0 rounded-full bg-notice-weak px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-notice"
+                >
+                  {t.secrets.shadowsSharedShort}
+                </span>
+              )}
               <IconButton
                 variant="ghost"
                 size="sm"
