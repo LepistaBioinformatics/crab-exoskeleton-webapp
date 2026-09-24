@@ -413,6 +413,7 @@ export default function ChatView({
   sessionId,
   project,
   onRestartNeeded,
+  onSent,
 }: {
   workspace: Workspace;
   /**
@@ -433,6 +434,15 @@ export default function ChatView({
   // Forwarded to the secrets drawer: a saved secret now needs an explicit
   // restart (restart-control DEC-3), and the banner above lives in the shell.
   onRestartNeeded?: () => void;
+  /**
+   * A message was accepted into this conversation.
+   *
+   * The shell uses it to KEEP the tab: writing into a conversation is the strongest
+   * signal that a member is working in it, and it is the one the request leads with.
+   * Fired on acceptance rather than on completion -- a member whose turn is still
+   * running is working in it more than one whose turn has finished.
+   */
+  onSent?: () => void;
 }) {
   const t = useT(chatCopy);
   // The reader's own locale, for the timestamp under each message. Taken from
@@ -897,6 +907,9 @@ export default function ChatView({
     setAttachments([]);
     onChatRef(null);
     storeEnqueue(sessionId, composed, runContext());
+    // AFTER acceptance, never before: a compose that returned null was refused, and a
+    // tab kept for a message that was never sent is a tab the member did not open.
+    onSent?.();
     return true;
   }
 

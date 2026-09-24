@@ -40,6 +40,12 @@ function horizontalRules(text: string): number {
 const PINNED: Record<string, { rules: number; why: string }> = {
   "unified-sidebar.tsx": { rules: 1, why: "the conversation list scrolls under the account footer" },
   "workspace-pane.tsx": { rules: 1, why: "the panel body scrolls under the pane header" },
+  // THE SAME JUSTIFICATION AS THE LINE ABOVE, which is why this is the allowlist
+  // working rather than being bent: the strip is pinned between the breadcrumb and the
+  // centre, and the transcript scrolls UNDER it. The alternative -- separating it by
+  // tone -- would put a third fill in a column that already carries the breadcrumb's
+  // and the transcript's.
+  "conversation-tab-strip.tsx": { rules: 1, why: "the centre pane scrolls under the strip" },
   // THREE, AND TWO OF THEM BREAK FR-1.0 ON PURPOSE. The first is the pinned
   // stack the task list scrolls under, which the rule allows. The other two are
   // SEPARATORS INSIDE A SCROLLING LIST -- exactly what this file exists to

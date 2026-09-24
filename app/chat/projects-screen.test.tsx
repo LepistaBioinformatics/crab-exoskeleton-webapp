@@ -348,3 +348,57 @@ describe("a harness without projects", () => {
     expect(host.querySelector("button")).toBeNull();
   });
 });
+
+// A LIST IN A COLUMN, NEWEST FIRST.
+//
+// This was a three-column grid of tall cards at the frame's full 6xl width: a shape
+// for browsing a gallery, spread across a band wider than anything else in the app,
+// for a handful of entries most members can count on one hand. Each card also
+// reserved height for a blurb that is usually one line or none.
+describe("the shape of the list", () => {
+  const rowsOf = (host: HTMLElement) => [...host.querySelectorAll("li")];
+
+  it("orders them newest first", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "old", name: "Oldest", createdAt: "2026-01-01T00:00:00Z" }),
+      project({ id: "new", name: "Newest", createdAt: "2026-06-01T00:00:00Z" }),
+      project({ id: "mid", name: "Middle", createdAt: "2026-03-01T00:00:00Z" }),
+    ]);
+    const host = await mount();
+    // The first row is the way OUT of a project, not a project -- it is why the
+    // names are read rather than the rows counted from zero.
+    const names = rowsOf(host)
+      .map((li) => li.textContent ?? "")
+      .filter((x) => /Oldest|Newest|Middle/.test(x));
+    expect(names[0]).toContain("Newest");
+    expect(names[1]).toContain("Middle");
+    expect(names[2]).toContain("Oldest");
+  });
+
+  // AN UNKNOWN DATE IS NOT "THE OLDEST". `createdAt` is "" when the proxy sent none,
+  // and sorting those to the top would give the least-known entries the most
+  // prominent place in the list.
+  it("puts the ones with no date last, not first", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "none", name: "Undated", createdAt: "" }),
+      project({ id: "dated", name: "Dated", createdAt: "2026-01-01T00:00:00Z" }),
+    ]);
+    const host = await mount();
+    const names = rowsOf(host)
+      .map((li) => li.textContent ?? "")
+      .filter((x) => /Undated|Dated/.test(x));
+    expect(names[0]).toContain("Dated");
+    expect(names[1]).toContain("Undated");
+  });
+
+  it("stacks them rather than laying them out in a grid", async () => {
+    listProjects.mockResolvedValue([project()]);
+    const host = await mount();
+    const list = host.querySelector("ul")!;
+    expect([...list.classList]).toContain("flex-col");
+    expect(
+      [...list.classList].filter((c) => c.includes("grid")),
+      "the grid came back",
+    ).toEqual([]);
+  });
+});
