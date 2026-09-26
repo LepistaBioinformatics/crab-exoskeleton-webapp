@@ -99,8 +99,21 @@ one most likely to be closed.
 **AC-3.1** — closing a tab that is not active leaves the active one alone, and does not
 navigate.
 **AC-3.2** — closing the ACTIVE tab activates its neighbour, preferring the one to the
-right, as an editor does. Closing the last one leaves the shell where it is rather than
-navigating anywhere: the member closed a tab, they did not ask to go somewhere.
+right, as an editor does.
+**AC-3.3** — closing the LAST tab lands on the workspace's landing screen: the project's
+own, or the agent's at the root. Either one offers a new conversation and the history.
+
+> **AC-3.3 reverses what this spec first said**, which was that closing the last tab
+> leaves the shell where it is — *the member closed a tab, they did not ask to go
+> somewhere*. That is right for one close among several and wrong for the last one,
+> because there is then nowhere to stay: the transcript stayed on screen under an empty
+> strip, so the conversation was open and not open at the same time. The owner reported
+> it as a bug and it is one — the strip is the answer to "what am I working in", so a
+> centre pane the strip does not list makes the strip wrong.
+>
+> Landing is written with the same fragment write `New chat` makes, so it drops `sid`
+> and `v` and keeps `p` and `rs`: a pane open beside the conversation is not a place the
+> member was standing, and closing a tab is not a reason to put the file list away.
 
 ### FR-4 — the strip survives a reload, and a tab that no longer exists
 
