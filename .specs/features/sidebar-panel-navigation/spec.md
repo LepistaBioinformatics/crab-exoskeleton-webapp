@@ -107,6 +107,22 @@ tenant|subs|role).
 
 ### R4 — Auto-selection of a single workspace
 
+> **SUPERSEDED on 2026-09-25 by `.specs/features/lone-workspace-and-the-agent-list`.**
+> The behaviour below was deleted as collateral of the shell redesign (`d42e9c7`,
+> 2026-09-13), which removed `workspace-nav.tsx` whole and with it the `browsing` state
+> R4.3 depended on. It was restored in `chat-shell.tsx`, which is mounted for the whole
+> session and is therefore where the once-per-session guard can actually live — the
+> picker remounts on the way back, so a ref inside it would reset.
+>
+> Two clauses did NOT survive the move, deliberately. R4.1's *"so a fresh conversation is
+> created"* is reversed by `shell-path-and-landing` FR-3.5: entering writes `t`/`s`/`r`
+> alone and lands on the landing, and no conversation is minted. R4.3's `browsing` gate
+> is replaced by the shell's mount, which grants the same guarantee without the state.
+>
+> This requirement was specified three times and tested never, which is why its deletion
+> was silent. The restoration is tested.
+
+
 **R4.1** When the fragment carries no workspace, the subscription tree has
 resolved to exactly one agent leaf, and `browsing` is false, that leaf is
 selected automatically — through the same path as a manual pick, so a fresh

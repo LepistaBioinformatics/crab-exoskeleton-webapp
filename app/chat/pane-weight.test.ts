@@ -77,7 +77,11 @@ const PINNED: Record<string, { rules: number; why: string }> = {
   // the pane beside the conversation; the same rule applies here and the diff belongs to
   // its own pass, the way FR-1.4 puts `/admin` in one. Listed with a count rather than
   // skipped, so the pass that does reach them starts from a number.
-  "workspace-grid.tsx": { rules: 1, why: "centre pane — a heading over the agent grid, not yet swept" },
+  //
+  // `workspace-grid.tsx` was here at 1 -- the hairline under each tenant heading -- and
+  // came off the list on its own, without the pass: rebuilding the picker as one row per
+  // agent removed the tenant headings, and the rule went with them. It is now held at
+  // zero by the default, which is the outcome the pass was for.
   "composer.tsx": { rules: 1, why: "a divider inside the attach POPOVER, which FR-1.4 leaves alone" },
 };
 

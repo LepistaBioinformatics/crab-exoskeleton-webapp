@@ -12,6 +12,7 @@ import {
   setFragmentProject,
   setFragmentProjectSid,
   setWorkspace,
+  enterWorkspace,
 } from "./fragment";
 import { asDestination, resolveCentre } from "./destination";
 import { asSection, type Section } from "./workspace-sections";
@@ -19,6 +20,7 @@ import { railDestinationGroups } from "./sidebar-destinations";
 import { useMangroveEnabled } from "./use-mangrove";
 import { buildCrumbs } from "./crumbs";
 import { useWorkspaceGroups } from "./use-workspaces";
+import { loneWorkspace } from "@/lib/subscriptions";
 import { useProjects } from "./use-projects";
 import { useConversations } from "./use-conversations";
 import ConversationTabStrip from "./conversation-tab-strip";
@@ -303,6 +305,46 @@ export default function ChatShell({ email }: { email: string }) {
   const hidden = { projects: hideProjects, mangrove: mangroveOn !== true };
 
   const centre = resolveCentre({ resolved, workspace, destination, sid: sessionId ?? null });
+
+  // A WORKSPACE WITH ONE ANSWER IS NOT A QUESTION. A member whose whole account is one
+  // agent, in one subscription, in one tenant, is shown a picker with a single row and
+  // asked to press it before anything can happen.
+  //
+  // This is a RESTORATION. It shipped on 2026-07-29 in workspace-nav.tsx -- "A member
+  // with exactly one workspace skips the tree entirely" -- and died on 2026-09-13 when
+  // the shell redesign deleted that file whole. The deletion was collateral: the design
+  // note recorded the check that allowed it ("checked: unified-sidebar.tsx is its only
+  // importer, and WorkspaceGrid builds its own tiles"), and that check asked whether
+  // anything would fail to RENDER, not what behaviour the component carried. Nothing
+  // went red because the shortcut was specified three times and tested never;
+  // `loneWorkspace` is tested, which is the part that keeps this from happening twice.
+  //
+  // IT LIVES IN THE SHELL, NOT IN THE PICKER, and that placement is the requirement
+  // rather than a preference. The way back to the picker is the breadcrumb root, which
+  // calls `clearWorkspace`, which empties the hash -- so `centre.kind` flips to `agents`
+  // and WorkspaceGrid REMOUNTS. A one-shot ref inside the picker would reset with it and
+  // throw the member straight forward again, which is exactly the failure the original
+  // spec's R4.3 was written to prevent (it had a `browsing` flag for it; that state no
+  // longer exists). ChatShell is mounted for the session, so its ref is not reset by the
+  // trip back, and "once" means once.
+  //
+  // `centre.kind === "agents"` carries two of the old four guards for free: it is only
+  // reached when the fragment has RESOLVED and named no workspace, so there is no risk
+  // of firing over a fragment that already points somewhere, and none of acting on the
+  // first client render when `useFragment` has not read the hash yet.
+  //
+  // It does not mint. `enterWorkspace` writes t/s/r alone and `resolveCentre` answers the
+  // absent `sid` with the landing -- the screen the request asks for. The tab-resume
+  // effect above then lands a returning member on their remembered tab, which is not a
+  // conflict with that: both are "where I was".
+  const autoEntered = useRef(false);
+  useEffect(() => {
+    if (autoEntered.current || centre.kind !== "agents") return;
+    const lone = loneWorkspace(groups);
+    if (!lone) return;
+    autoEntered.current = true;
+    enterWorkspace({ t: lone.tenantId, s: lone.subsAccId, r: lone.role });
+  }, [centre.kind, groups]);
 
   // "New chat" NAVIGATES now; it does not create. It used to mint a conversation and
   // write its id straight into the fragment, which put a member in a blank transcript

@@ -120,3 +120,34 @@ export function accessLabel(perms: string[]): string {
   if (set.has("write")) parts.push("write");
   return parts.join("·"); // "read·write"
 }
+
+// Every agent the member can reach, flattened out of the tree in tree order.
+//
+// THE LEAF IS THE UNIT, which is the whole of the picker's redesign in one function.
+// The tree's shape — tenant, then subscription, then agent — is the shape of the
+// PERMISSION model, and the picker used to render it literally: three levels of nesting
+// to reach the only thing that is clickable. A member choosing where to work is choosing
+// an agent; the tenant and the subscription are facts ABOUT that agent, and belong on
+// its row rather than above a box containing it.
+export function agentRows(groups: TenantGroup[]): AgentLeaf[] {
+  return groups.flatMap((tenant) => tenant.accounts.flatMap((account) => account.agents));
+}
+
+/**
+ * The one workspace to enter without being asked, or null.
+ *
+ * A member with exactly one agent is being asked a question with one possible answer.
+ *
+ * COUNTED OVER LEAVES, across the whole tree, because the agent is what is being chosen:
+ * two agents in one subscription is a choice, and so is one agent in each of two
+ * subscriptions. Only a single leaf anywhere means there was nothing to decide.
+ *
+ * `null` groups are "not fetched yet", and answering them would be answering before the
+ * question is known — it is deliberately not the same as an empty list, which is a
+ * member with no workspaces at all and a different screen.
+ */
+export function loneWorkspace(groups: TenantGroup[] | null): AgentLeaf | null {
+  if (!groups) return null;
+  const rows = agentRows(groups);
+  return rows.length === 1 ? rows[0] : null;
+}

@@ -78,11 +78,19 @@ const en = {
     body: "Choose a tenant, account, and agent on the left. Its conversations open in a second panel, ready for you to type.",
   },
   workspaceGrid: {
-    title: "Pick a workspace",
-    body: "Everything you can reach, grouped by tenant and subscription. Click an agent to open a fresh conversation with it.",
+    title: "Pick an agent",
+    body: "Every agent you can reach, with the tenant and subscription it belongs to.",
+    columns: {
+      agent: "Agent",
+      tenant: "Tenant",
+      subscription: "Subscription",
+    },
     // Only read-only access is marked: write is the norm, and a pencil beside a name read as
     // a control rather than a statement about permission.
     readOnly: "read-only access",
+    // A SUBSCRIPTION with nothing on disk yet, not an agent. See NotSetUp in
+    // workspace-grid.tsx for why the distinction has to survive into the wording.
+    notSetUp: "subscription not set up yet",
   },
   connectivity: {
     title: "Can't reach the gateway",
@@ -1245,9 +1253,15 @@ const pt: ChatDict = {
     body: "Escolha um tenant, uma conta e um agente à esquerda. As conversas dele abrem em um segundo painel, prontas para você escrever.",
   },
   workspaceGrid: {
-    title: "Escolha um workspace",
-    body: "Tudo o que você pode acessar, agrupado por tenant e assinatura. Clique num agente para abrir uma conversa nova com ele.",
+    title: "Escolha um agente",
+    body: "Todos os agentes que você pode acessar, com o tenant e a assinatura a que pertencem.",
+    columns: {
+      agent: "Agente",
+      tenant: "Tenant",
+      subscription: "Assinatura",
+    },
     readOnly: "acesso somente leitura",
+    notSetUp: "assinatura ainda não configurada",
   },
   connectivity: {
     title: "Não foi possível falar com o gateway",
