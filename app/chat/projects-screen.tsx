@@ -238,7 +238,7 @@ export default function ProjectsScreen({
             aria-label={t.projects.instructionsLabel}
             rows={4}
           />
-          <p className="text-xs text-muted">{t.projects.instructionsHint}</p>
+          <p className="text-xs text-fg-muted">{t.projects.instructionsHint}</p>
           <div className="flex justify-end gap-1">
             <Button type="button" variant="text" size="sm" onClick={() => setDraft(null)}>
               {t.projects.cancel}
@@ -334,7 +334,7 @@ export default function ProjectsScreen({
                       Hidden on a phone, where the row has no width to spare and the
                       date is the least of the three things on it. */}
                   {created && (
-                    <span className="hidden shrink-0 text-xs text-muted sm:block">{created}</span>
+                    <span className="hidden shrink-0 text-xs text-fg-muted sm:block">{created}</span>
                   )}
                 </button>
                 <div className="absolute right-2 top-2 flex items-center gap-0.5">

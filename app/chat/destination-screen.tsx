@@ -5,18 +5,20 @@ import type { ReactNode } from "react";
 // The frame a centre-pane destination renders inside: a heading, a max-width column, and
 // the scroll.
 //
-// IT WAS WRITTEN FOR SIX SCREENS AND HAS ONE. The five workspace sections went back to
-// the pane beside the conversation on 2026-09-12 (DEC-14), where `workspace-pane.tsx` is
-// their frame, so the projects grid is the only thing left that fills the centre.
+// IT WAS WRITTEN FOR SIX SCREENS, DROPPED TO ONE, AND HAS TWO. The five workspace
+// sections went to the pane beside the conversation on 2026-09-12 (DEC-14), where
+// `workspace-pane.tsx` is their frame; the mangrove followed them out later, for the
+// same reason and in its own words ("THE PANE OWNS THE FRAME NOW"). That left the
+// projects list alone here, and the agent picker has now joined it.
 //
-// Kept as its own file anyway, and not folded into projects-screen.tsx. The reason it
-// was split out is the one thing the reversal did not change: a destination is reached
-// the same way the agent grid is, and two pickers in the same slot that disagree about
-// column width or about where their controls sit make a member re-learn the pane. The
-// second centre screen is the one that would drift, and this is what it will be handed.
-//
-// The measurements are workspace-grid.tsx's, not new ones, for exactly that reason
-// (FR-2.3).
+// It was kept as its own file through the lean period rather than folded into
+// projects-screen.tsx, on the argument that "the second centre screen is the one that
+// would drift, and this is what it will be handed" -- and the agent picker is precisely
+// the case that argument was about. It drew its own heading in its own column for
+// months, out of measurements copied FROM this file, which is the predicted drift
+// arriving exactly where it was predicted. It renders inside the frame now, and the
+// copying went the other way: `full` is described below in terms of what the picker
+// needs, because the picker is what has that shape.
 /**
  * The three column widths a destination can be, and what each one is for.
  *
@@ -33,7 +35,11 @@ import type { ReactNode } from "react";
  *     by line, and every product doing this (X, LinkedIn, Mastodon) lands between 500
  *     and 600px, past which a card stops looking like an object and starts looking
  *     like a band across the page.
- *   - `full` is a grid that wants the room, which is what Projects is.
+ *   - `full` is a list or grid that wants the room, which is what the agent picker is:
+ *     a row carrying an agent, its tenant and its subscription needs three columns'
+ *     worth of width before the third one stops truncating. It used to say "which is
+ *     what Projects is", and Projects moved to `reading` when it became a list of five
+ *     short rows -- a different list, with one column, and therefore a different answer.
  */
 type Width = "reading" | "feed" | "full";
 

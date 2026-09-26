@@ -60,6 +60,9 @@ const SHARED = new Set([
   // beside it -- "não aprovado", "falhou" -- are translated, which is what makes
   // this one a shared string rather than a forgotten one.
   "chat.view.eventOk",
+  // "Tenant" is the loanword Portuguese uses unchanged, the same reason the four
+  // admin entries below carry it. This is the picker's column heading.
+  "chat.workspaceGrid.columns.tenant",
   "admin.shell.tabs.skills",
   // A dotted config.json path and a JSON literal. Both are what the admin types
   // verbatim into the field, so translating either would be wrong.

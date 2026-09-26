@@ -281,6 +281,38 @@ export function setWorkspace(workspace: Workspace, sid: string, project?: string
   window.location.hash = params.toString();
 }
 
+/**
+ * ARRIVES in a workspace, without naming a conversation in it.
+ *
+ * The sibling of `setWorkspace`, and the difference is the whole point: that one says
+ * "take me to this conversation, which is over there", this one says "take me there".
+ * `resolveCentre` answers an absent `sid` with the landing, whose composer is the one
+ * place a conversation is minted (shell-path-and-landing FR-3.5) -- so arriving creates
+ * nothing, and a member who never sends has left nothing behind.
+ *
+ * It is what both doors into a workspace use: the picker's click, and the lone-workspace
+ * shortcut that skips the picker. The picker used to call `createConversation` first and
+ * hand the new id to `setWorkspace`, which predates FR-3.5 and was never brought in
+ * line; every entry through it minted a conversation nobody asked for.
+ *
+ * `p` and `v` GO. Both are qualified by the workspace being left: a project belongs to
+ * one agent, and a destination names a surface scoped to both. Carrying either into a
+ * different workspace would name something that does not exist there. `hv` and `rs`
+ * stay, as they do for every other move -- how you like the history drawn, and what is
+ * open beside you, are not places you were standing.
+ */
+export function enterWorkspace(workspace: Workspace): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  params.set("t", workspace.t);
+  params.set("s", workspace.s);
+  params.set("r", workspace.r);
+  params.delete("sid");
+  params.delete("msg");
+  params.delete("p");
+  params.delete("v");
+  window.location.hash = params.toString();
+}
+
 // Leaves the workspace entirely: back to the agent grid.
 //
 // Clears the WHOLE selection rather than only `t`/`s`/`r`. Everything else in the

@@ -141,7 +141,11 @@ describe("identity survives the plan untouched", () => {
     ]);
   });
 
-  it("finds the sole leaf the single-workspace shortcut acts on", () => {
+  // NOT the single-workspace shortcut any more, which is what this was named for. That
+  // moved to `loneWorkspace` in lib/subscriptions.ts, which counts over the flattened
+  // agent rows the picker draws rather than over tree nodes; this stayed behind, passing
+  // under a name describing a caller that had been deleted. Renamed to what it tests.
+  it("finds the sole leaf of a one-agent tree", () => {
     const nodes = planWorkspaceTree([tenant("acme", [["growth", ["alpha"]]])], {});
     expect(planLeaves(nodes)).toHaveLength(1);
     expect(leafKey(planLeaves(nodes)[0])).toBe("acme|growth|alpha");
