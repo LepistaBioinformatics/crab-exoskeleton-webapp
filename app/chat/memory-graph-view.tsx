@@ -15,6 +15,7 @@ import { applyHighlight } from "./graph-highlight";
 import MapTools, {
   MapFilterBar,
   MapToolsButton,
+  SelectModeToggle,
   type MapFilter,
   type ToolGroup,
 } from "./memory-graph-tools";
@@ -62,6 +63,17 @@ const PALETTE_VARS = [
 // 0.5x is the DEFAULT, not the middle of the range: at 1x the graph opened wider than it
 // needed to and the first thing anyone did was pull it in. The range runs upward from here
 // because a dense graph is the case that needs the room, not a sparse one.
+/**
+ * The floor under the drawing area, and the number the detail pane is not allowed to eat into.
+ *
+ * Exported because the pane's ceiling is expressed against it (`MAP_DETAIL_MAX_HEIGHT` in the
+ * panel). Two literals could drift, and the failure when they do is not visual noise: the column
+ * stops fitting the pane, its content spills into the panel's scroll area, and the vertical
+ * scrollbar that appears takes ~15px of width from a canvas that was sized before it existed —
+ * which is a horizontal scrollbar over a map that was supposed to fill the pane exactly.
+ */
+export const MAP_STAGE_MIN_HEIGHT = 240;
+
 const MIN_SPREAD = 0.5;
 const DEFAULT_SPREAD = 0.5;
 const MAX_SPREAD = 8;
@@ -98,6 +110,7 @@ export default function MemoryGraphView({
   filter,
   selected,
   onSelect,
+  onPick,
   checked,
   shareNames,
   selectionBar,
@@ -145,10 +158,20 @@ export default function MemoryGraphView({
   filter: MapFilter;
   selected: string | null;
   /**
-   * Picking a node. `additive` is a Ctrl or Cmd click: the panel adds the node to its
-   * multi-select instead of replacing it, and leaves the detail pane where it was.
+   * Opening an entity, and nothing else. `null` closes the detail pane.
+   *
+   * It used to carry an `additive` flag, which made one callback mean two unrelated things and
+   * is why a plain click both opened an entity and threw the multi-select away. The two acts
+   * are two callbacks now — see `onPick`.
    */
-  onSelect: (name: string | null, opts?: { additive?: boolean }) => void;
+  onSelect: (name: string | null) => void;
+  /**
+   * Ticking an entity into the multi-select, or taking it back off.
+   *
+   * The only way this view changes that set: a tap in select mode and a Ctrl/Cmd tap both come
+   * through here, so there is one path into the selection rather than two that have to agree.
+   */
+  onPick: (name: string) => void;
   /**
    * The panel's multi-select — the SAME set the entity list ticks into, so a member who
    * ticked rows and then opened the map finds those nodes already marked. Drawn through
@@ -208,6 +231,8 @@ export default function MemoryGraphView({
   // would re-run the layout and move every node.
   const select = useRef(onSelect);
   select.current = onSelect;
+  const pick = useRef(onPick);
+  pick.current = onPick;
   // Reassigned every render so the tap handler reads current state without the graph being
   // rebuilt to refresh a closure — a rebuild re-runs the layout.
   const onNodeTap = useRef<(id: string, additive: boolean) => void>(() => {});
@@ -232,6 +257,14 @@ export default function MemoryGraphView({
   // per pick, so two picks would mean two requests and clicking the already-picked node would
   // clear the state mid-trace (GD-C3).
   const [pathMode, setPathMode] = useState(false);
+  // Whether a click on a node ticks it or opens it.
+  //
+  // Here rather than in the panel's `useMapTools`, alongside path mode and for the same
+  // reason: it is how a click is READ, not part of the picture. The cost is that it resets
+  // when the member leaves the map, and that is affordable precisely because of the change
+  // this mode exists for — their selection is the panel's and survives, and a plain click in
+  // normal mode can no longer damage it.
+  const [selectMode, setSelectMode] = useState(false);
   const [pathFrom, setPathFrom] = useState<string | null>(null);
   const [path, setPath] = useState<PathResult | null>(null);
   // The theme, read from the app's tokens once per graph build. Held BOTH ways on purpose: the
@@ -380,10 +413,27 @@ export default function MemoryGraphView({
     setPath(null);
   }
 
+  // Two ways to read a click cannot both be on. Enforced HERE, at the two switches, rather
+  // than by the order of the branches in `onNodeTap`: a silent winner between three live modes
+  // is the shape of the bug this mode was added to remove.
+  function chooseSelectMode(on: boolean) {
+    setSelectMode(on);
+    if (on) setPathMode(false);
+  }
+
+  function choosePathMode(on: boolean) {
+    setPathMode(on);
+    if (on) setSelectMode(false);
+  }
+
   // "Dirty" spans three owners: the tools (this hook's state, in the panel), the query and the
   // entity-type filter (the panel's, and the latter is SHARED with the Entities tab), and path mode
   // (this view's). Only this component sees all three, which is why the reset is composed here
   // rather than in the panel or in the tools panel.
+  //
+  // SELECT MODE is deliberately not here. Reset restores what the map SHOWS; a selection in
+  // progress and the mode that builds it are the member's own work, and the reset control must
+  // not be a way to lose it. Path mode counts because a half-traced path is part of the picture.
   const dirty =
     !isDefaultTools(tools) || typeFilter !== null || filter.value !== "" || pathMode;
 
@@ -394,13 +444,21 @@ export default function MemoryGraphView({
     onResetFilters();
   }
 
-  // Endpoint picking. Never routed through the panel's select() — see the path state above.
+  // What a tap on a node MEANS, decided in one place: a path endpoint, a tick, or an entity
+  // to open. Three readings of one gesture is why this is a single ordered branch and why the
+  // two modes cannot both be on — the version that tried to serve two of them at once with a
+  // modifier key is the one this replaced.
   //
+  // Path endpoints are never routed through the panel's select() — see the path state above.
   // `additive` is ignored in path mode on purpose: a trace has exactly two endpoints, so
   // "add another" has nothing to mean there.
   onNodeTap.current = (id: string, additive: boolean) => {
     if (!pathMode) {
-      select.current(id, { additive });
+      // Select mode, or the Ctrl/Cmd that has always meant "this one as well". Both tick and
+      // neither opens the detail pane — which is the whole point: the member is building a
+      // selection, not reading entities.
+      if (selectMode || additive) pick.current(id);
+      else select.current(id);
       return;
     }
     const instance = cy.current;
@@ -661,22 +719,24 @@ export default function MemoryGraphView({
   }
   const filteredToNothing = built.nodes.length === 0;
 
-  const controls = (
-    <div className="absolute bottom-2 right-2 flex gap-1">
+  const viewControls = (
+    <div className="flex gap-1">
+      {/* Fit before fullscreen: one adjusts what you are looking at, the other changes where
+          you are looking at it from, and the more drastic of the two goes last. */}
       {[
-        {
-          key: "expand",
-          label: expanded ? "⤡" : "⤢",
-          title: expanded ? copy.collapseMap : copy.expandMap,
-          disabled: false,
-          onClick: toggleFullscreen,
-        },
         {
           key: "fit",
           label: "⤾",
           title: copy.fitMap,
           disabled: false,
           onClick: () => cy.current?.fit(undefined, 40),
+        },
+        {
+          key: "expand",
+          label: expanded ? "⤡" : "⤢",
+          title: expanded ? copy.collapseMap : copy.expandMap,
+          disabled: false,
+          onClick: toggleFullscreen,
         },
       ].map((b) => (
         <button
@@ -694,10 +754,12 @@ export default function MemoryGraphView({
     </div>
   );
 
-  // The spread group is separate from the icon row because it needs a readout, and a
-  // number wedged between two 28px icon buttons reads as an icon rather than a value.
+  // The spread group keeps its own box because it needs a readout, and a number wedged
+  // between two 28px icon buttons reads as an icon rather than a value. It sits in the SAME
+  // corner as the view controls, though: they are one question — how am I looking at this —
+  // and answering it from two opposite corners was two things to find instead of one.
   const spreadControl = (
-    <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md border border-rule-strong bg-surface/90 px-1">
+    <div className="flex items-center gap-1 rounded-md border border-rule-strong bg-surface/90 px-1">
       <button
         type="button"
         title={copy.spreadIn}
@@ -743,11 +805,15 @@ export default function MemoryGraphView({
       {hover && (
         <HoverCard node={hover.node} left={hover.left} top={hover.top} copy={copy} />
       )}
-      {!toolsOpen && <MapToolsButton onOpen={() => setToolsOpen(true)} copy={copy} />}
       {/* Pan, zoom and spread act on a graph that is not there when a filter hid everything,
-          so they go with it. The tools sidebar deliberately does not. */}
-      {!filteredToNothing && spreadControl}
-      {!filteredToNothing && controls}
+          so they go with it. The tools sidebar deliberately does not — it is in the switch row
+          above, which is the one place a control that survives an empty stage can live. */}
+      {!filteredToNothing && (
+        <div className="absolute bottom-2 right-2 flex flex-wrap items-center justify-end gap-1">
+          {spreadControl}
+          {viewControls}
+        </div>
+      )}
     </>
   );
 
@@ -771,7 +837,7 @@ export default function MemoryGraphView({
       // list — it falls back to open_nodes. That is what makes an off-map row clickable.
       onSelectEntity={(name) => select.current(name)}
       pathMode={pathMode}
-      onPathModeChange={setPathMode}
+      onPathModeChange={choosePathMode}
       pathFrom={pathFrom}
       pathResult={path}
       onPathClear={clearPath}
@@ -795,7 +861,21 @@ export default function MemoryGraphView({
     // An explicit min-height also overrides flex's `min-height: auto`, which is what `min-h-0`
     // would otherwise be needed for.
     <div ref={shell} className="flex h-full flex-col bg-bg">
-      <MapFilterBar filter={filter} tools={tools} set={setTool} copy={copy} />
+      <MapFilterBar
+        filter={filter}
+        tools={tools}
+        set={setTool}
+        // Between the box that finds an entity and the bar that acts on the ones found, which
+        // is the order the member works in — and on ONE line with the search scope, because
+        // three switches stacked three rows deep is what buried the graph.
+        trailing={
+          <>
+            <SelectModeToggle on={selectMode} onChange={chooseSelectMode} copy={copy} />
+            <MapToolsButton open={toolsOpen} onToggle={setToolsOpen} copy={copy} />
+          </>
+        }
+        copy={copy}
+      />
       {/* BELOW the filter bar, never above it. The panel renders this same bar above the
           content on every other tab, which put the share controls on top of the map's search
           box — the member searches for what to pick before picking it, so the order was
@@ -808,7 +888,10 @@ export default function MemoryGraphView({
             map, which is what keeps it inside the graph's area instead of running underneath the
             tools strip — and what stops it resizing them. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="relative min-h-[240px] flex-1">
+          <div
+            className="relative flex-1"
+            style={{ minHeight: MAP_STAGE_MIN_HEIGHT }}
+          >
             {stage}
             {built.truncated > 0 && (
               // Never silent: a capped picture that looks complete is worse than one that says

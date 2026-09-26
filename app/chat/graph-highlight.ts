@@ -131,8 +131,16 @@ export function applyHighlight(cy: Core, input: HighlightInput): void {
   // names it is given, so a fragment drawn as unconnected dots would misdescribe the payload.
   // They are exempt from the fade but do NOT get `near` — that class means "inside the focus
   // radius", which these are not.
+  // The TICKS are exempt on their own account, not only through `shared`, which is absent
+  // wherever there is no mangrove. Since the map gained a select mode the member ticks nodes
+  // with a detail pane open as a matter of course, and a node they just ticked drawn at
+  // `opacity: 0.1` is a map that does not say what they picked. Where a mangrove exists this
+  // adds nothing: the seeds are already inside `shareNames`.
+  const ticked = checked
+    ? cy.nodes().filter((n) => checked.has(n.id() as string))
+    : cy.collection();
   const sharedArea = shared.union(shared.edgesWith(shared));
-  cy.elements().difference(near.union(sharedArea)).addClass("faded");
+  cy.elements().difference(near.union(sharedArea).union(ticked)).addClass("faded");
   near.edges().addClass("near");
   node.addClass("picked");
 }

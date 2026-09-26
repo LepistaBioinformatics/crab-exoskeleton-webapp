@@ -95,6 +95,7 @@ function map(graph: SummaryGraph, query = "") {
       query={query}
       selected={null}
       onSelect={() => {}}
+      onPick={() => {}}
       checked={new Set()}
       matchNames={null}
       filter={{

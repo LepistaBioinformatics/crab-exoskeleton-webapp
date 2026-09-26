@@ -228,6 +228,17 @@ describe("applyHighlight — the multi-select", () => {
     cy.destroy();
   });
 
+  // Since the map gained a select mode, ticking nodes with a detail pane open is the ordinary
+  // flow rather than an accident. `shareNames` would have carried this exemption — but it is
+  // absent wherever there is no mangrove, and a node the member just ticked drawn at
+  // `opacity: 0.1` is a map that does not say what they picked.
+  it("keeps a ticked node out of the fade when it sits outside the focus radius", () => {
+    const cy = line();
+    applyHighlight(cy, { ...IDLE, selected: "a", checked: new Set(["d"]) });
+    expect(lit(cy)).toEqual(["a", "b", "d"]);
+    cy.destroy();
+  });
+
   it("is independent of the open entity: a node can be both", () => {
     const cy = line();
     applyHighlight(cy, { ...IDLE, selected: "a", checked: new Set(["a"]) });

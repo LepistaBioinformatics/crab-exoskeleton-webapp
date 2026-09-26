@@ -13,9 +13,10 @@ import type { Core } from "cytoscape";
 // implementation of the library, and the wiring under test here is precisely the part that
 // talks to it: which mouse modifier arrived with a tap.
 //
-// The three claims: a plain click REPLACES the selection and a Ctrl/Cmd click ADDS to it,
-// the map and the entity list hold ONE set rather than two that agree, and what the share
-// sends is that set expanded by the hop control — in either direction along a relation.
+// The three claims: which of the two acts a click means is the MODE's to say — a plain click
+// opens an entity and leaves the selection alone, a click in select mode ticks it — the map and
+// the entity list hold ONE set rather than two that agree, and what the share sends is that set
+// expanded by the hop control, in either direction along a relation.
 
 const instances: Core[] = [];
 vi.mock("cytoscape", async (importOriginal) => {
@@ -59,6 +60,8 @@ const MemoryGraphPanel = (await import("./memory-graph-panel")).default;
 const { takePendingShare } = await import("./mangrove-share-bus");
 const { MAX_SHARE_NAMES } = await import("./graph-hops");
 const { chatCopy } = await import("@/lib/i18n/chat");
+const { MAP_STAGE_MIN_HEIGHT } = await import("./memory-graph-view");
+const DEFAULT_DETAIL_HEIGHT = 320;
 import type { Workspace } from "./fragment";
 
 const g = chatCopy.en.memoryGraph;
@@ -151,6 +154,21 @@ async function openMap(host: HTMLElement) {
   await act(async () => {});
 }
 
+/** The switch that makes a tap tick a node rather than open it. */
+async function selectMode(host: HTMLElement, on = true) {
+  await act(async () => byText(host, on ? g.selection.pick : g.selection.pickOff).click());
+  await act(async () => {});
+}
+
+/**
+ * The map, open and ticking — which is what every test below that builds a selection by
+ * tapping needs, now that a bare tap opens an entity instead.
+ */
+async function openMapPicking(host: HTMLElement) {
+  await openMap(host);
+  await selectMode(host);
+}
+
 /** The live map, which is rebuilt on every filter change — so always the newest one. */
 function map(): Core {
   const cy = instances[instances.length - 1];
@@ -231,24 +249,93 @@ describe("the graph panel's tabs, after the Search tab was removed", () => {
 });
 
 describe("picking entities on the map", () => {
-  it("replaces the selection on a plain click", async () => {
+  // THE report this feature exists for. A plain click used to replace the whole multi-select
+  // with the one node clicked, so reading entities one after another quietly destroyed a
+  // selection the member had built — and there was no way to build one without knowing about
+  // a modifier key nothing mentioned.
+  it("opens an entity on a plain click without touching the selection", async () => {
+    const host = await mount();
+    await act(async () => tick(host, "Samuel")!.click());
+    await openMap(host);
+
+    await tap("Onboarding");
+
+    // The detail pane opened...
+    expect(host.querySelector(`[aria-label="${g.closeDetail}"]`)).not.toBeNull();
+    // ...and the entity the member had ticked is still the selection, alone.
+    expect(host.textContent).toContain(g.selection.one);
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+  });
+
+  it("ticks instead of opening once select mode is on", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+
+    await tap("Samuel");
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+    // The other selection stayed shut: in this mode a click is a tick and nothing else.
+    expect(host.querySelector(`[aria-label="${g.closeDetail}"]`)).toBeNull();
+
+    await tap("Onboarding");
+    // TWO, not one replaced by the other — the mode is what makes a bare click accumulate.
+    expect(host.textContent).toContain(g.selection.many.replace("{count}", "2"));
+    expect(drawnAsChecked()).toEqual(["Onboarding", "Samuel"]);
+  });
+
+  it("takes a node back off on a second tap in select mode", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+
+    await tap("Samuel");
+    await tap("Samuel");
+
+    expect(drawnAsChecked()).toEqual([]);
+  });
+
+  // Leaving the mode is not the same act as clearing, and the member has a separate button
+  // for the second one.
+  it("keeps what was ticked when the mode goes off, and stops ticking", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+    await tap("Samuel");
+
+    await selectMode(host, false);
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+
+    await tap("Onboarding");
+    expect(drawnAsChecked()).toEqual(["Samuel"]);
+    expect(host.textContent).toContain(g.selection.one);
+  });
+
+  // Two ways to read a click cannot both be on. Asserted through the controls rather than
+  // through the handler, because the exclusivity lives at the switches on purpose.
+  it("turns path mode off when select mode comes on, and the reverse", async () => {
     const host = await mount();
     await openMap(host);
 
-    await tap("Samuel");
-    expect(host.textContent).toContain(g.selection.one);
+    // The tools sidebar, then its Path group: both are shut in the narrow column, and the
+    // mode switch this test is about lives at the bottom of the second.
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>(`[aria-label="${g.mapTools.open}"]`)!
+        .click(),
+    );
+    await act(async () => byText(host, g.mapTools.path).click());
+    await act(async () => byText(host, g.mapTools.pathEnable).click());
+    await selectMode(host);
+    // Path mode surrendered: its own button offers to START tracing again.
+    expect(byText(host, g.mapTools.pathEnable)).toBeDefined();
 
-    await tap("Onboarding");
-    // Still ONE, and it is the second node — a plain click is "this instead", not "this too".
-    expect(host.textContent).toContain(g.selection.one);
-    expect(drawnAsChecked()).toEqual(["Onboarding"]);
+    await act(async () => byText(host, g.mapTools.pathEnable).click());
+    // ...and taking path mode back turns the select mode off, so its button offers to start.
+    expect(byText(host, g.selection.pick)).toBeDefined();
   });
 
   it("adds to the selection on a Ctrl click", async () => {
     const host = await mount();
     await openMap(host);
 
-    await tap("Samuel");
+    await tap("Samuel", { ctrlKey: true });
     await tap("Onboarding", { ctrlKey: true });
 
     expect(host.textContent).toContain(g.selection.many.replace("{count}", "2"));
@@ -261,7 +348,7 @@ describe("picking entities on the map", () => {
     const host = await mount();
     await openMap(host);
 
-    await tap("Samuel");
+    await tap("Samuel", { ctrlKey: true });
     await tap("Rust", { metaKey: true });
 
     expect(host.textContent).toContain(g.selection.many.replace("{count}", "2"));
@@ -271,7 +358,7 @@ describe("picking entities on the map", () => {
     const host = await mount();
     await openMap(host);
 
-    await tap("Samuel");
+    await tap("Samuel", { ctrlKey: true });
     await tap("Onboarding", { ctrlKey: true });
     await tap("Onboarding", { ctrlKey: true });
 
@@ -307,7 +394,7 @@ describe("the map's selection and the list's are the same set", () => {
 describe("sharing a fragment of the map", () => {
   it("sends the picked nodes alone at one hop", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Island");
 
     expect(host.textContent).toContain(g.selection.sharing.replace("{count}", "1"));
@@ -317,7 +404,7 @@ describe("sharing a fragment of the map", () => {
 
   it("reaches one hop out of what was picked", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
 
     expect(host.textContent).toContain(g.selection.sharing.replace("{count}", "2"));
@@ -335,7 +422,7 @@ describe("sharing a fragment of the map", () => {
   // control the member actually turns.
   it("reaches two hops, including a neighbour that points the other way", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
 
     await act(async () =>
@@ -354,7 +441,7 @@ describe("sharing a fragment of the map", () => {
 
   it("never reaches an entity nothing connects to the selection", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await act(async () =>
       byText(host, g.selection.hopsPlural.replace("{count}", "3")).click(),
@@ -395,7 +482,7 @@ describe("the whole-graph guard", () => {
 
   it("says how many would travel, and refuses past the ceiling", async () => {
     const host = await mount(hub);
-    await openMap(host);
+    await openMapPicking(host);
     await tap("hub");
 
     const total = hub.entities.length;
@@ -413,7 +500,7 @@ describe("the whole-graph guard", () => {
 
   it("nothing is parked on the bus while the share is refused", async () => {
     const host = await mount(hub);
-    await openMap(host);
+    await openMapPicking(host);
     await tap("hub");
 
     await act(async () => share(host)!.click());
@@ -430,7 +517,7 @@ describe("the whole-graph guard", () => {
 describe("the map shows what the share would carry", () => {
   it("marks the hop the selection reached, distinctly from the seed", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
 
     expect(drawnAsChecked()).toEqual(["Samuel"]);
@@ -439,7 +526,7 @@ describe("the map shows what the share would carry", () => {
 
   it("marks more nodes as the hop count goes up", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await setHops(host, 2);
 
@@ -450,7 +537,7 @@ describe("the map shows what the share would carry", () => {
 
   it("takes them off again as it comes back down", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await setHops(host, 3);
     expect(drawnAsReached()).toEqual(["Onboarding", "Rust"]);
@@ -465,7 +552,7 @@ describe("the map shows what the share would carry", () => {
   // `opacity: 0.1` and the map would still look identical to the member.
   it("keeps what it reached visible rather than faded out", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await setHops(host, 2);
 
@@ -476,7 +563,7 @@ describe("the map shows what the share would carry", () => {
 
   it("never marks an entity nothing connects to the selection", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await setHops(host, 3);
 
@@ -487,7 +574,7 @@ describe("the map shows what the share would carry", () => {
   // not: two expansions that disagree can still both say "3".
   it("draws exactly the names the share sends, not its own expansion", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await setHops(host, 2);
 
@@ -499,12 +586,125 @@ describe("the map shows what the share would carry", () => {
 
   it("marks nothing once the selection is cleared", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
     await act(async () => byText(host, g.selection.clear).click());
     await act(async () => {});
 
     expect(drawnAsShared()).toEqual([]);
+  });
+});
+
+// The third report: too many controls, in too many places, in too many shapes. The map used
+// to stack the filter, the scope chips, the select mode and its explanatory sentence as four
+// separate bands above the graph, and then scatter three more clusters across three corners of
+// the stage. What is pinned here is the consolidation, because it is the kind of thing a later
+// change undoes by adding "just one more" row.
+describe("where the map's own controls sit", () => {
+  const byLabel = (host: HTMLElement, label: string) =>
+    host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+
+  it("puts both mode switches on the scope row, not one row each", async () => {
+    const host = await mount();
+    await openMap(host);
+
+    const pick = byText(host, g.selection.pick);
+    const tools = byLabel(host, g.mapTools.open)!;
+    const scope = byText(host, g.mapTools.scopeNames);
+    // One row: the two switches share a parent, and that parent sits beside the scope group.
+    expect(pick.parentElement).toBe(tools.parentElement);
+    expect(pick.parentElement!.parentElement!.contains(scope)).toBe(true);
+  });
+
+  it("keeps the tools switch out of the stage, so it survives an empty one", async () => {
+    const host = await mount();
+    await openMap(host);
+
+    // The stage is where the canvas goes. A control that lives there disappears with it.
+    const tools = byLabel(host, g.mapTools.open)!;
+    const searchBox = host.querySelector(`[aria-label="${g.mapFilterPlaceholder}"]`)!;
+    const position = searchBox.compareDocumentPosition(tools);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tools.closest("[class*='absolute']")).toBeNull();
+  });
+
+  it("gathers pan, spread and fit into one corner", async () => {
+    const host = await mount();
+    await openMap(host);
+
+    const fit = byLabel(host, g.fitMap)!;
+    const spread = byLabel(host, g.spreadOut)!;
+    const expand = byLabel(host, g.expandMap)!;
+    const cluster = fit.parentElement!.parentElement!;
+    expect(cluster.contains(spread)).toBe(true);
+    expect(cluster.contains(expand)).toBe(true);
+  });
+});
+
+// A layout report, and a pre-existing one: opening an entity on the map made the panel's
+// horizontal scrollbar appear and disappear over and over.
+//
+// The arithmetic behind it: the graph column holds the stage, which will not go below its
+// floor, and the detail pane, whose height is a fixed pixel count from a drag. Together they
+// were taller than the column, so the overflow spilled into the panel's scroll area; its
+// vertical scrollbar took ~15px of width; and the Cytoscape canvas, sized before that
+// scrollbar existed, then overhung by exactly that much. The overflow is what was measured;
+// the oscillation on top of it is put down to Cytoscape's own ResizeObserver re-matching the
+// canvas, which was not reproduced outside a real browser.
+//
+// jsdom does no layout, so what is asserted here is the CONTRACT that makes the arithmetic
+// work: on the map the pane carries a ceiling expressed against the stage's floor, and
+// everywhere else it does not, because there its neighbour is a list that can shrink.
+describe("how tall the detail pane may grow", () => {
+  const pane = (host: HTMLElement) =>
+    host.querySelector<HTMLElement>(`[aria-label="${g.resizeDetail}"]`)?.parentElement ??
+    null;
+
+  it("may not eat into the graph's floor on the map", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+
+    const style = pane(host)!.style;
+    expect(style.height).toBe(`${DEFAULT_DETAIL_HEIGHT}px`);
+    // The floor the stage keeps, subtracted from the column — see MAP_STAGE_MIN_HEIGHT.
+    expect(style.maxHeight).toContain(`calc(100% - ${MAP_STAGE_MIN_HEIGHT}px)`);
+  });
+
+  // The trap the ceiling sets: state still holds 320 while the pane draws at the cap, so a
+  // drag that measured from state would spend its first hundred pixels changing a number
+  // nobody can see. The handle would read as broken.
+  it("drags from the height on screen, not the one in state", async () => {
+    const host = await mount();
+    await openMap(host);
+    await tap("Samuel");
+
+    const handle = host.querySelector<HTMLElement>(`[aria-label="${g.resizeDetail}"]`)!;
+    // jsdom lays nothing out, so the rendered height has to be supplied. 209px is what the
+    // ceiling leaves on a 600px pane — measured in a browser, see the spec's BUG-1.
+    handle.parentElement!.getBoundingClientRect = () =>
+      ({ height: 209 }) as DOMRect;
+
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientY: 500 }));
+      document.dispatchEvent(new MouseEvent("mousemove", { clientY: 490 }));
+      document.dispatchEvent(new MouseEvent("mouseup"));
+    });
+
+    // Ten pixels up from what was on screen. From state it would have been 330.
+    expect(pane(host)!.style.height).toBe("219px");
+  });
+
+  it("is uncapped on the entity list, whose neighbour can shrink", async () => {
+    const host = await mount();
+    // The list's own row, which is what opens the pane on that tab — not the tick beside it.
+    const row = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent?.includes("Samuel") && !b.getAttribute("aria-label"),
+    )!;
+    await act(async () => row.click());
+    await act(async () => {});
+
+    expect(pane(host)!.style.maxHeight).toBe("");
   });
 });
 
@@ -516,7 +716,7 @@ describe("where the selection controls sit", () => {
 
   it("puts them after the search box on the map", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
 
     const position = searchBox(host)!.compareDocumentPosition(share(host)!);
@@ -525,7 +725,7 @@ describe("where the selection controls sit", () => {
 
   it("renders them once, not once per home", async () => {
     const host = await mount();
-    await openMap(host);
+    await openMapPicking(host);
     await tap("Samuel");
 
     const shares = [...host.querySelectorAll("button")].filter(
