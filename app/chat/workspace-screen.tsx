@@ -10,6 +10,7 @@ import MemoryEditor from "./memory-editor";
 import MemoryGraphPanel from "./memory-graph-panel";
 import ScheduledTasksPanel from "./scheduled-tasks-panel";
 import SecretsSection from "./secrets-section";
+import SkillsPanel from "./skills-panel";
 import MangroveScreen from "./mangrove-screen";
 import { IconButton } from "@/components/ui/icon-button";
 import type { ChatReference } from "@/lib/chatReference";
@@ -84,6 +85,10 @@ export default function WorkspaceScreen({
   // schedule -- somebody else's agent publishing -- which has nothing to do with
   // either of the others.
   const [mangroveRefresh, setMangroveRefresh] = useState(0);
+  // A FOURTH, and the one whose other writer is not a person at all: the agent's own
+  // evolution writes the member's skills directory, so a skill can appear or change
+  // between two readings with nobody here having asked for it.
+  const [skillsRefresh, setSkillsRefresh] = useState(0);
 
   // "Look again", offered where the pane puts a section's own controls. The files
   // screen keeps its copy inside its body instead, beside upload and new-folder: there
@@ -95,7 +100,9 @@ export default function WorkspaceScreen({
         ? { label: t.scheduledTasks.refresh, aria: t.scheduledTasks.refreshAria, bump: setTaskRefresh }
         : section === "mangrove"
           ? { label: t.mangrove.refresh, aria: t.mangrove.refreshAria, bump: setMangroveRefresh }
-          : null;
+          : section === "skills"
+            ? { label: t.skills.refresh, aria: t.skills.refreshAria, bump: setSkillsRefresh }
+            : null;
 
   return (
     <WorkspacePane
@@ -165,6 +172,13 @@ export default function WorkspaceScreen({
       {section === "files" && <FilesScreen workspace={workspace} />}
       {section === "secrets" && (
         <SecretsSection workspace={workspace} onRestartNeeded={onRestartNeeded} />
+      )}
+      {/* The seventh, and the only one NOT handed the project: the harness reads
+          skills from the main workspace alone, so a project-scoped one is a file
+          nothing loads. `workspace` still carries `p` — the panel is what declines
+          to send it, which is where the rule can be tested (spec DEC-1). */}
+      {section === "skills" && (
+        <SkillsPanel workspace={workspace} refreshSignal={skillsRefresh} />
       )}
     </WorkspacePane>
   );

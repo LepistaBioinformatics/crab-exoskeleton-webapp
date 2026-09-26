@@ -903,6 +903,85 @@ const en = {
       },
     },
   },
+  skills: {
+    title: "Skills",
+    refresh: "Refresh",
+    refreshAria: "Refresh the skills list",
+    // THE GROUP HEADINGS SAY WHO OWNS THE LAYER, not what it is called internally.
+    // "shared" and "managed" are the proxy's words for the administrator's cascade
+    // and the operator's embedded set, and neither means anything to a member.
+    groups: {
+      member: "Yours",
+      shared: "From your administrator",
+      managed: "Native skills",
+    },
+    files: "files",
+    // The index inside one open skill. A skill is a directory, and until FR-4c the
+    // badge above was the only thing that said so -- the member was told templates
+    // existed and could never open one.
+    filesHeading: "Files in this skill",
+    // Said in place of an editor, never beside one. The proxy withheld the bytes
+    // rather than send a lossy decoding of them, so there is nothing to edit.
+    binary: "not a text file, so it can't be changed here.",
+    // Over a supporting file, where the --- block does not apply. Worth saying: the
+    // member has just come from a screen that refused to save without one.
+    supportingFile:
+      "A file this skill carries. It doesn't need the --- block — it is whatever your agent reads it as.",
+    filePlaceholder: "Whatever this file has to hold.",
+    // FR-2's plain marker. An administrator published a skill under this same name,
+    // the agent loads theirs, and this file does nothing — so a member editing it
+    // would be editing something with no effect, which is the whole reason the
+    // backend computes the flag.
+    shadowed: "has no effect",
+    shadowedHint:
+      "An administrator published a skill with this same name, and that is the one your agent loads. Yours is still here, and changing it changes nothing — save it under another name and delete this one to make it count again.",
+    readOnly: "You can read this one. Only the skills under Yours can be changed.",
+    none: "No skills yet.",
+    noneHint:
+      "Write one to tell your agent how you want a recurring job done — it opens the sheet itself when it judges the skill applies.",
+    newSkill: "New skill",
+    nameLabel: "Name",
+    namePlaceholder: "e.g. writing-style",
+    // Said at the point where it stops being changeable, not after. The directory
+    // name is the skill's identity and the frontmatter has to agree with it, so
+    // renaming is create-then-delete and the member does it themselves.
+    nameFixed: "The name can't be changed later — a rename is a new skill plus a delete.",
+    bodyPlaceholder: "What the agent should do, and when.",
+    preview: "Preview",
+    hidePreview: "Hide preview",
+    showPreview: "Show preview",
+    frontmatter: "Metadata",
+    openPrefix: "Open",
+    editPrefix: "Edit",
+    deletePrefix: "Delete",
+    saving: "Saving…",
+    // NO CLAIM ABOUT WHEN, and the absence is the decision. The proxy establishes
+    // that the change is in the next turn's prompt for the ganglion and has never
+    // checked picoclaw (backend DEC-9), which is why the spec gates the "takes effect
+    // on the next message" line on the harness — and the frozen listing response
+    // carries no harness field to gate it with. A sentence that is right on one
+    // runtime and a guess on the other is worse than no sentence.
+    saved: "Saved.",
+    deleteTitle: "Delete this skill?",
+    deleteMessage: "“{name}” leaves your workspace. Your agent will stop reading it.",
+    // A 409 on a save. The offer is a reload, NEVER a silent overwrite: the other
+    // writer is the agent's own evolution, and what it wrote is a skill the agent
+    // taught itself.
+    conflictTitle: "This skill changed while you had it open.",
+    // The same refusal over a supporting file. Each file carries its own version, so
+    // saying "this skill changed" would send the member to re-read the wrong one.
+    conflictFile: "This file changed while you had it open.",
+    conflictReload: "Reload it",
+    // The proxy's own refusals, mirrored so the member is told before a round trip.
+    // Each names what to change rather than quoting the rule.
+    problems: {
+      name: "Use lower-case letters, numbers and . _ - only, starting with a letter or number.",
+      frontmatter:
+        "The sheet has to open with a --- block holding name and description, and close it with another ---.",
+      empty: "Fill in both name and description.",
+      mismatch: "The name in the --- block has to match the skill's name.",
+    },
+  },
   uploads: {
     newFolder: "New folder",
     upload: "Upload",
@@ -937,6 +1016,7 @@ const en = {
       tasks: "What runs on a schedule, and its results.",
       files: "Uploads and files in this workspace.",
       secrets: "Keys the agent uses, and which model answers.",
+      skills: "Instruction sheets the agent opens when they apply.",
       mangrove: "Memory shared with colleagues, and what they shared back.",
     },
     refreshAria: "Refresh files",
@@ -1887,6 +1967,55 @@ const pt: ChatDict = {
       },
     },
   },
+  skills: {
+    title: "Skills",
+    refresh: "Atualizar",
+    refreshAria: "Atualizar a lista de skills",
+    groups: {
+      member: "Suas",
+      shared: "Do seu administrador",
+      managed: "Habilidades nativas",
+    },
+    files: "arquivos",
+    filesHeading: "Arquivos desta skill",
+    binary: "não é um arquivo de texto, então não dá para alterar por aqui.",
+    supportingFile:
+      "Um arquivo que esta skill carrega. Ele não precisa do bloco --- — é o que seu agente ler nele.",
+    filePlaceholder: "O que este arquivo precisa guardar.",
+    shadowed: "não tem efeito",
+    shadowedHint:
+      "Um administrador publicou uma skill com esse mesmo nome, e é a dele que seu agente carrega. A sua continua aqui, e alterá-la não muda nada — salve-a com outro nome e exclua esta para que volte a valer.",
+    readOnly: "Esta você só pode ler. Apenas as skills em “Suas” podem ser alteradas.",
+    none: "Nenhuma skill ainda.",
+    noneHint:
+      "Escreva uma para dizer ao agente como você quer que uma tarefa recorrente seja feita — ele mesmo abre a folha quando julga que a skill se aplica.",
+    newSkill: "Nova skill",
+    nameLabel: "Nome",
+    namePlaceholder: "ex.: writing-style",
+    nameFixed: "O nome não pode ser alterado depois — renomear é criar outra e excluir esta.",
+    bodyPlaceholder: "O que o agente deve fazer, e quando.",
+    preview: "Prévia",
+    hidePreview: "Ocultar a prévia",
+    showPreview: "Mostrar a prévia",
+    frontmatter: "Metadados",
+    openPrefix: "Abrir",
+    editPrefix: "Editar",
+    deletePrefix: "Excluir",
+    saving: "Salvando…",
+    saved: "Salva.",
+    deleteTitle: "Excluir esta skill?",
+    deleteMessage: "“{name}” sai do seu workspace. Seu agente deixa de lê-la.",
+    conflictTitle: "Esta skill mudou enquanto você a tinha aberta.",
+    conflictFile: "Este arquivo mudou enquanto você o tinha aberto.",
+    conflictReload: "Recarregar",
+    problems: {
+      name: "Use apenas letras minúsculas, números e . _ -, começando por letra ou número.",
+      frontmatter:
+        "A folha precisa começar com um bloco --- contendo name e description, e fechar com outro ---.",
+      empty: "Preencha name e description.",
+      mismatch: "O name dentro do bloco --- precisa ser igual ao nome da skill.",
+    },
+  },
   uploads: {
     newFolder: "Nova pasta",
     upload: "Enviar",
@@ -1910,6 +2039,7 @@ const pt: ChatDict = {
       tasks: "O que roda em horário programado, e seus resultados.",
       files: "Uploads e arquivos deste workspace.",
       secrets: "Chaves que o agente usa, e qual modelo responde.",
+      skills: "Folhas de instrução que o agente abre quando se aplicam.",
       mangrove: "Memória compartilhada com colegas, e o que eles compartilharam.",
     },
     refreshAria: "Atualizar arquivos",

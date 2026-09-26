@@ -6,17 +6,25 @@ import { SECTION_ORDER, asSection, nextSidebarValue } from "./workspace-sections
 // pane's own heading all read it now. Several renderings of the same list is several
 // places that can disagree about what a workspace holds.
 describe("the workspace's sections", () => {
-  // ...and then the one that is not this workspace's at all. Shared memory spans
-  // subscriptions and tenants, so it sits last -- where a reader looks for the odd
-  // one out -- rather than among the five the argument above orders.
-  it("lists what the agent knows, then what it does, then what the member manages", () => {
+  // The one section that is not this workspace's at all -- shared memory spans
+  // subscriptions and tenants -- used to sit last for that reason. It leads now,
+  // because it became a tool opened beside a live conversation and reach is what
+  // that move was for. Position never carried the scope; the source says so.
+  it("leads with the mangrove, then what the agent knows, does and the member manages", () => {
     expect(SECTION_ORDER).toEqual([
+      // FIRST, and this is the assertion that would catch it silently drifting back.
+      // The mangrove stopped being a screen and became a tool in this pane; leading
+      // the list is what that move was for. The source records why the old
+      // "odd one out goes last" argument no longer applies.
+      "mangrove",
       "memory",
       "graph",
       "tasks",
       "files",
       "secrets",
-      "mangrove",
+      // SKILLS JOINED THE THIRD RUN, not the end. It is one more thing the member
+      // manages about this workspace, so it sits with secrets and files.
+      "skills",
     ]);
   });
 });
