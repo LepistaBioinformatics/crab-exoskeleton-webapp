@@ -103,24 +103,38 @@ export function close(tabs: readonly Tab[], ref: TabRef): Tab[] {
 }
 
 /**
- * Which tab to activate when the ACTIVE one is closed.
+ * What the shell does when a tab is closed.
  *
- * The neighbour to the RIGHT, falling back to the left, which is what an editor does
- * and what a member's hand expects after closing several in a row.
+ * THREE ANSWERS, NOT TWO, and the third is the whole reason this is a union rather than
+ * a nullable ref. It used to return `TabRef | null`, and that `null` carried two
+ * unrelated meanings: "the closed tab was not the active one, so nothing moves" and
+ * "that was the last one". The shell could only act on the first, so closing the last
+ * tab left the transcript on screen with no tab above it -- a conversation the strip
+ * said was not open.
  *
- * Null means there is nothing left, and the shell stays where it is: the member closed
- * a tab, they did not ask to go anywhere. Null is also the answer when the tab being
- * closed is not the active one — nothing should move at all.
+ * Reported by the owner, and it is a real contradiction rather than a rough edge: the
+ * strip is the answer to "what am I working in", so a centre pane it does not list
+ * makes the strip wrong. Closing the last tab now lands on the workspace's own landing,
+ * which is where New chat and the conversation history are -- the screen a member with
+ * nothing open is meant to be looking at. This REVERSES the earlier rule that the shell
+ * stays put because "the member closed a tab, they did not ask to go anywhere": true of
+ * one close among several, false of the last, because there is then nowhere to stay.
  */
+export type AfterClose = { to: "stay" } | { to: "tab"; ref: TabRef } | { to: "landing" };
+
 export function nextAfterClose(
   tabs: readonly Tab[],
   closing: TabRef,
   active: TabRef | null,
-): TabRef | null {
-  if (!active || !sameTab(closing, active)) return null;
+): AfterClose {
+  // Closing a tab the member is not in must not take them out of what they are reading.
+  if (!active || !sameTab(closing, active)) return { to: "stay" };
   const at = tabs.findIndex((x) => sameTab(x, closing));
-  if (at < 0) return null;
-  return tabs[at + 1] ?? tabs[at - 1] ?? null;
+  if (at < 0) return { to: "stay" };
+  // The neighbour to the RIGHT, falling back to the left, which is what an editor does
+  // and what a member's hand expects after closing several in a row.
+  const next = tabs[at + 1] ?? tabs[at - 1];
+  return next ? { to: "tab", ref: next } : { to: "landing" };
 }
 
 /** Rename a tab in place — the shell resolves titles as conversations load. */

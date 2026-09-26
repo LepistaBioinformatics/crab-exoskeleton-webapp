@@ -145,21 +145,42 @@ describe("closing", () => {
   // NOTHING MOVES when the closed tab is not the active one. A strip that navigated
   // on every close would take a member out of what they were reading.
   it("does not navigate when the closed tab is not active", () => {
-    expect(nextAfterClose(three, ref({ sid: "b" }), ref({ sid: "a" }))).toBeNull();
+    expect(nextAfterClose(three, ref({ sid: "b" }), ref({ sid: "a" }))).toEqual({ to: "stay" });
+  });
+
+  it("stays put when nothing is active at all", () => {
+    expect(nextAfterClose(three, ref({ sid: "b" }), null)).toEqual({ to: "stay" });
   });
 
   it("activates the neighbour to the right, as an editor does", () => {
-    expect(nextAfterClose(three, ref({ sid: "b" }), ref({ sid: "b" }))?.sid).toBe("c");
+    expect(nextAfterClose(three, ref({ sid: "b" }), ref({ sid: "b" }))).toMatchObject({
+      to: "tab",
+      ref: { sid: "c" },
+    });
   });
 
   it("falls back to the left at the end of the strip", () => {
-    expect(nextAfterClose(three, ref({ sid: "c" }), ref({ sid: "c" }))?.sid).toBe("b");
+    expect(nextAfterClose(three, ref({ sid: "c" }), ref({ sid: "c" }))).toMatchObject({
+      to: "tab",
+      ref: { sid: "b" },
+    });
   });
 
-  // The member closed a tab; they did not ask to go anywhere. The shell stays put.
-  it("goes nowhere when the last one closes", () => {
+  // THE LANDING, NOT "STAY PUT", and this assertion is the reversal of the rule the
+  // feature shipped with. Staying put left the closed conversation on screen with an
+  // empty strip above it -- open and not open at once, which is what the owner reported.
+  // There is nowhere to stay once the last tab goes, so the answer is the screen a
+  // member with nothing open belongs on: New chat and the history.
+  it("goes to the landing when the last one closes", () => {
     const one = [tab({ sid: "a" })];
-    expect(nextAfterClose(one, ref({ sid: "a" }), ref({ sid: "a" }))).toBeNull();
+    expect(nextAfterClose(one, ref({ sid: "a" }), ref({ sid: "a" }))).toEqual({ to: "landing" });
+  });
+
+  // Not the landing. A close the strip does not recognise is not evidence the member
+  // has nothing open -- the other tabs are still there, and throwing them off the
+  // conversation they are reading would be a worse answer than doing nothing.
+  it("stays put when the closing tab is not in the strip", () => {
+    expect(nextAfterClose(three, ref({ sid: "zz" }), ref({ sid: "zz" }))).toEqual({ to: "stay" });
   });
 });
 

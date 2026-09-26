@@ -260,11 +260,26 @@ export default function ChatShell({ email }: { email: string }) {
   };
 
   const onCloseTab = (ref: TabRef) => {
-    const goTo = nextAfterClose(tabs, ref, activeTab);
+    const after = nextAfterClose(tabs, ref, activeTab);
     setTabs((prev) => closeTab(prev, ref));
     // Only when the ACTIVE one closed. Closing a tab the member is not in must not
-    // take them out of what they are reading.
-    if (goTo) goToTab(goTo);
+    // take them out of what they are reading -- that is `stay`, and it does nothing.
+    if (after.to === "tab") goToTab(after.ref);
+    // THE LAST TAB LEAVES THE CENTRE WITH NOTHING TO SHOW. Doing nothing here is what
+    // the owner reported: the transcript stayed on screen under an empty strip, so the
+    // conversation was open and not open at once.
+    //
+    // `setFragmentProject` is the write `New chat` and the breadcrumb's project crumb
+    // already make -- it drops `sid`, `msg` and `v` and keeps the project, so the member
+    // lands on the landing of wherever they were standing: the project's own screen, or
+    // the agent's at the root, either one offering a new conversation and the history.
+    // `ref.p` rather than `project` because the ref is the tab that was active, and the
+    // two are the same value read from the two ends.
+    //
+    // `rs` survives, as it does for every other landing: a pane open beside the
+    // conversation is not a place the member was standing, and closing a tab is not a
+    // reason to put the mangrove or the file list away.
+    else if (after.to === "landing") setFragmentProject(ref.p);
   };
   // The alias wins where there is one: it is what the member named the conversation,
   // and the title is what the transcript's first message made of it.
