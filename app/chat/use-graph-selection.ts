@@ -31,16 +31,14 @@ import { useCallback, useState } from "react";
 export interface GraphSelection {
   /** Read-only on the way out: the state object itself must never be mutated in place. */
   checked: ReadonlySet<string>;
-  toggle: (name: string) => void;
   /**
-   * The whole selection, replaced.
+   * The only way in or out of the set, on every surface.
    *
-   * This exists for the MAP, where a plain click means "these instead" and a Ctrl/Cmd click
-   * means "these as well" — the convention every multi-select canvas already uses, and the
-   * only one under which a bare click on a node is not an ever-growing pile. The lists have
-   * no use for it: a row's tick is a toggle and nothing else.
+   * There used to be a `replace` beside it, for the map, where a plain click meant "these
+   * instead". That click now means "open this entity" and does not touch the selection at
+   * all — the map has a select mode instead — so the wholesale replacement went with it.
    */
-  replace: (names: Iterable<string>) => void;
+  toggle: (name: string) => void;
   clear: () => void;
 }
 
@@ -56,11 +54,6 @@ export function useGraphSelection(): GraphSelection {
     });
   }, []);
 
-  const replace = useCallback(
-    (names: Iterable<string>) => setChecked(new Set(names)),
-    [],
-  );
-
   // `prev` when already empty, not a fresh Set: this runs inside the panel's `reset`,
   // which fires on every workspace switch, and a new identity there is a re-render of the
   // whole list for nothing.
@@ -69,7 +62,7 @@ export function useGraphSelection(): GraphSelection {
     [],
   );
 
-  return { checked, toggle, replace, clear };
+  return { checked, toggle, clear };
 }
 
 /**

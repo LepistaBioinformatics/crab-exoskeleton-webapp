@@ -18,7 +18,7 @@ import {
 import { setDestination, setFragmentSid, type Workspace } from "./fragment";
 import type { EntityReference } from "@/lib/chatReference";
 import { listConversations, type ConversationSummary } from "@/lib/chatSession";
-import MemoryGraphView from "./memory-graph-view";
+import MemoryGraphView, { MAP_STAGE_MIN_HEIGHT } from "./memory-graph-view";
 import { MAX_NODES } from "./graph-elements";
 import { useMapTools } from "./use-map-tools";
 import { countHiddenChecked, useGraphSelection } from "./use-graph-selection";
@@ -93,6 +93,23 @@ type Mode = "browse" | "map" | "recent";
 const MIN_DETAIL_HEIGHT = 120;
 const DEFAULT_DETAIL_HEIGHT = 320;
 
+/**
+ * The pane's ceiling ON THE MAP, where it shares the graph column with the drawing area.
+ *
+ * `100%` is that column. Taking the stage's floor off it is what keeps the two of them
+ * together no taller than the space they have — without it the column overflows, the panel's
+ * scroll area gains a vertical scrollbar, that scrollbar takes ~15px of width, and the
+ * Cytoscape canvas sized before it appeared then overhangs by exactly that much: a horizontal
+ * scrollbar under a map that is supposed to fill the pane. The overflow and its removal were
+ * measured in a browser; what makes the bar OSCILLATE rather than just appear is inferred from
+ * Cytoscape's ResizeObserver, and was not reproduced headlessly.
+ *
+ * The `max()` is for a pane too short to give both their floors. The pane keeps its own
+ * minimum there rather than collapsing to nothing, because a member who clicked an entity and
+ * got a 0px pane has been told nothing at all.
+ */
+const MAP_DETAIL_MAX_HEIGHT = `max(${MIN_DETAIL_HEIGHT}px, calc(100% - ${MAP_STAGE_MIN_HEIGHT}px))`;
+
 function maxDetailHeight(): number {
   if (typeof window === "undefined") return DEFAULT_DETAIL_HEIGHT;
   return Math.max(MIN_DETAIL_HEIGHT, window.innerHeight - 220);
@@ -138,7 +155,6 @@ export default function MemoryGraphPanel({
   const {
     checked,
     toggle: toggleChecked,
-    replace: replaceChecked,
     clear: clearChecked,
   } = useGraphSelection();
   // Sharing the selection into the mangrove. ABSENT where there is no mangrove, the way
@@ -381,30 +397,25 @@ export default function MemoryGraphPanel({
   }
 
   /**
-   * Picking a node on the map, which is two acts sharing one gesture.
+   * Opening an entity from the map, and ONLY that.
    *
-   * A PLAIN click means "this one instead": it replaces the multi-select and opens the detail
-   * pane, which is what a bare click on a canvas means everywhere else. A CTRL or CMD click
-   * means "this one as well": it toggles the node in the set and leaves the detail pane
-   * alone, exactly as the tick beside a list row does — the map gains a second way to reach
-   * the same selection, not a second selection.
+   * This used to be two acts on one gesture: a plain click replaced the multi-select AND
+   * opened the detail pane. That made reading three entities in a row leave behind a
+   * selection nobody asked for, and made building a selection of four depend on a modifier
+   * key nothing on screen mentioned. The map now asks which act the member means — see
+   * `SelectModeToggle` — and ticking comes through `toggleChecked` instead.
    *
    * Tapping the BACKGROUND deliberately does not clear the set. It closes the detail pane and
    * nothing else: dropping a selection the member never asked to drop is the failure
    * use-graph-selection.ts is built around, and an empty-canvas click is easy to make by
    * accident while panning.
    */
-  function selectOnMap(name: string | null, opts?: { additive?: boolean }) {
+  function selectOnMap(name: string | null) {
     if (!name) {
       setSelected(null);
       setDetail(null);
       return;
     }
-    if (opts?.additive) {
-      toggleChecked(name);
-      return;
-    }
-    replaceChecked([name]);
     void select(name);
   }
 
@@ -412,7 +423,14 @@ export default function MemoryGraphPanel({
   function startDetailResize(e: React.MouseEvent) {
     e.preventDefault();
     const startY = e.clientY;
-    const startHeight = detailHeight;
+    // From the height on SCREEN, not the one in state. On the map the pane renders at
+    // MAP_DETAIL_MAX_HEIGHT whenever the stored height is taller than the column can give,
+    // and a drag that started from the stored number would move nothing until it had
+    // travelled the difference — the handle would simply feel dead for the first hundred
+    // pixels. `parentElement` is the pane root; the handle is its first child.
+    const rendered =
+      e.currentTarget.parentElement?.getBoundingClientRect().height ?? 0;
+    const startHeight = rendered > 0 ? rendered : detailHeight;
     const onMove = (ev: globalThis.MouseEvent) => {
       const next = startHeight + (startY - ev.clientY);
       setDetailHeight(
@@ -572,41 +590,47 @@ export default function MemoryGraphPanel({
                 </button>
               ))}
             </div>
-            {/* Said BEFORE the share, not discovered after it: the hops are what make the
-                payload bigger than the count the member ticked, so the number that will
-                actually travel has to be on screen next to the button that sends it. */}
+          </>
+        )}
+        {/* The actions, in one right-hand group. `sharing N` belongs HERE rather than at the
+            end of the left-hand run: it is what the button is about to send, and read beside
+            the count of what was ticked it looked like a second count of the same thing. Said
+            BEFORE the share, never discovered after it — the hops are what make the payload
+            bigger than the number the member picked. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+          {mangroveOn === true && mode === "map" && (
             <span className="shrink-0 text-fg-muted">
               {t.memoryGraph.selection.sharing.replace(
                 "{count}",
                 String(shareNames.length),
               )}
             </span>
-          </>
-        )}
-        {mangroveOn === true && (
+          )}
+          {mangroveOn === true && (
+            <button
+              type="button"
+              // The names, not the entities: the mangrove extracts them itself, along
+              // with the relations among them, so what travels is the same key the graph
+              // is indexed by everywhere else in this panel.
+              onClick={() => {
+                requestMangroveShare({ kind: "entities", names: shareNames });
+                setDestination("mangrove");
+              }}
+              disabled={shareTooMany}
+              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <Waves size={12} aria-hidden />
+              {t.memoryGraph.selection.share}
+            </button>
+          )}
           <button
             type="button"
-            // The names, not the entities: the mangrove extracts them itself, along
-            // with the relations among them, so what travels is the same key the graph
-            // is indexed by everywhere else in this panel.
-            onClick={() => {
-              requestMangroveShare({ kind: "entities", names: shareNames });
-              setDestination("mangrove");
-            }}
-            disabled={shareTooMany}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            onClick={clearChecked}
+            className="shrink-0 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
           >
-            <Waves size={12} aria-hidden />
-            {t.memoryGraph.selection.share}
+            {t.memoryGraph.selection.clear}
           </button>
-        )}
-        <button
-          type="button"
-          onClick={clearChecked}
-          className={`${mangroveOn === true ? "" : "ml-auto "}shrink-0 rounded px-1.5 py-0.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg`}
-        >
-          {t.memoryGraph.selection.clear}
-        </button>
+        </div>
         {/* A disabled control with no reason on screen is the thing that makes a member
             think the feature is broken. Its own line, so the remedy sits under the
             control that provides it. */}
@@ -621,28 +645,31 @@ export default function MemoryGraphPanel({
     ) : null;
 
   // Built once and placed differently per tab: inside the map's graph column, below the list
-  // everywhere else. Same element, same state, two homes — which is why it is a variable rather
-  // than duplicated JSX.
-  const detailPane = entity ? (
-    <EntityDetail
-      entity={entity}
-      relations={entityRelations}
-      formatWhen={formatWhen}
-      copy={t.memoryGraph}
-      conversationTitle={conversationTitle}
-      // Walking the graph: a theme entity's relations are how a member reaches what
-      // it contains, so an endpoint has to open that entity. `select` already
-      // handles a name that is NOT in the current list — it calls open_nodes.
-      onOpenEntity={select}
-      height={detailHeight}
-      onResizeStart={startDetailResize}
-      onClose={closeDetail}
-      // Navigating by fragment is how the whole app switches conversation; the
-      // chat view is already listening for it, so no extra plumbing.
-      onOpenConversation={setFragmentSid}
-      onReference={onReference}
-    />
-  ) : null;
+  // everywhere else. Same element, same state, two homes — which is why this is a function
+  // rather than duplicated JSX. The ceiling is the ONE thing the two homes do not share; see
+  // MAP_DETAIL_MAX_HEIGHT.
+  const detailPane = (maxHeight?: string) =>
+    entity ? (
+      <EntityDetail
+        entity={entity}
+        relations={entityRelations}
+        formatWhen={formatWhen}
+        copy={t.memoryGraph}
+        conversationTitle={conversationTitle}
+        // Walking the graph: a theme entity's relations are how a member reaches what
+        // it contains, so an endpoint has to open that entity. `select` already
+        // handles a name that is NOT in the current list — it calls open_nodes.
+        onOpenEntity={select}
+        height={detailHeight}
+        maxHeight={maxHeight}
+        onResizeStart={startDetailResize}
+        onClose={closeDetail}
+        // Navigating by fragment is how the whole app switches conversation; the
+        // chat view is already listening for it, so no extra plumbing.
+        onOpenConversation={setFragmentSid}
+        onReference={onReference}
+      />
+    ) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -687,7 +714,11 @@ export default function MemoryGraphPanel({
           so the controls that act on a selection came before the box used to find one. */}
       {mode !== "map" && selectionBar}
 
-      <div className="mt-2 min-h-0 flex-1 overflow-auto">
+      {/* Vertical only. Nothing in this panel is read sideways, so a horizontal scrollbar here
+          has never been anything but a layout fault leaking into the member's view — and on the
+          map it is one that oscillates, because the bar it appears next to changes the width
+          that produced it. */}
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {error && (
           <div className="px-3 pb-2">
             <Alert severity="error">{errorText(err, error)}</Alert>
@@ -731,13 +762,14 @@ export default function MemoryGraphPanel({
                   relations={graph.relations}
                   selected={selected}
                   onSelect={selectOnMap}
+                  onPick={toggleChecked}
                   checked={checked}
                   shareNames={drawnShareSet}
                   selectionBar={selectionBar}
                   typeFilter={typeFilter}
                   onTypeFilter={setTypeFilter}
                   onResetFilters={resetMapFilters}
-                  detail={detailPane}
+                  detail={detailPane(MAP_DETAIL_MAX_HEIGHT)}
                   query={mapQueryApplied}
                   matchNames={matchNames}
                   filter={{
@@ -772,7 +804,7 @@ export default function MemoryGraphPanel({
           opening it shrank the map area and visibly resized the tools sidebar, pulling the eye off
           the entity the member had just clicked. Every other tab still stacks it below the list,
           which is right for a list. */}
-      {mode !== "map" && detailPane}
+      {mode !== "map" && detailPane()}
     </div>
   );
 }

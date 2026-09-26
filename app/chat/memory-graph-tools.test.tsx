@@ -165,16 +165,30 @@ describe("MapTools", () => {
   });
 });
 
-// Separate from the panel because the panel is a sidebar and this is an overlay on the stage — two
-// placements, so two components rather than one that has to know which it is.
+// Separate from the panel because the panel is the sidebar itself and this is the switch that
+// shows it — two things, so two components rather than one that has to know which it is.
 describe("MapToolsButton", () => {
   it("is labelled, not just an icon", () => {
-    const html = renderToStaticMarkup(<MapToolsButton onOpen={() => {}} copy={g} />);
+    const html = renderToStaticMarkup(
+      <MapToolsButton open={false} onToggle={() => {}} copy={g} />,
+    );
     expect(html).toContain(g.mapTools.open);
   });
 
+  // One control for both directions. It used to vanish once the sidebar was open, so the way
+  // back out was a different control somewhere else.
+  it("says it will close the sidebar once the sidebar is open", () => {
+    const html = renderToStaticMarkup(
+      <MapToolsButton open onToggle={() => {}} copy={g} />,
+    );
+    expect(html).toContain(g.mapTools.close);
+    expect(html).toContain('aria-pressed="true"');
+  });
+
   it("carries none of the panel's contents", () => {
-    const html = renderToStaticMarkup(<MapToolsButton onOpen={() => {}} copy={g} />);
+    const html = renderToStaticMarkup(
+      <MapToolsButton open={false} onToggle={() => {}} copy={g} />,
+    );
     expect(html).not.toContain(g.mapTools.legend);
     expect(html).not.toContain(g.mapTools.resetHint);
   });
@@ -219,6 +233,7 @@ describe("MemoryGraphView — the tools survive a filter that matched nothing", 
         }}
         selected={null}
         onSelect={() => {}}
+        onPick={() => {}}
         tools={MAP_TOOLS_DEFAULTS}
         setTool={() => {}}
         copy={g}

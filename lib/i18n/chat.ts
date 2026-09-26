@@ -386,6 +386,13 @@ const en = {
       // `{name}` is the entity, and it is what makes forty identical ticks tell a screen
       // reader which row it is on.
       selectEntity: "Select {name}",
+      // The MAP's mode switch. A click on a node used to open its details AND rebuild this
+      // set from the one node clicked, so reading three entities left a selection nobody
+      // asked for and building one meant knowing about a modifier key nothing mentioned.
+      // The button says which of the two a click means.
+      pick: "Select entities",
+      pickOff: "Stop selecting",
+      pickHint: "Clicking an entity ticks it instead of opening it.",
       one: "1 entity selected",
       many: "{count} entities selected",
       // A checked entity the current filter, search or tab is not showing. It stays
@@ -1588,6 +1595,9 @@ const pt: ChatDict = {
     markerEntity: "entidade do grafo",
     selection: {
       selectEntity: "Selecionar {name}",
+      pick: "Selecionar entidades",
+      pickOff: "Parar de selecionar",
+      pickHint: "Um clique marca a entidade em vez de abri-la.",
       one: "1 entidade selecionada",
       many: "{count} entidades selecionadas",
       hidden: "{count} fora da visão",

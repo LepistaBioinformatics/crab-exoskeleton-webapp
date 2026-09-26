@@ -1,7 +1,14 @@
 "use client";
 
 import { cva } from "class-variance-authority";
-import { ChevronRight, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import {
+  ChevronRight,
+  MousePointerClick,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Insights,
@@ -56,15 +63,21 @@ const segment = cva(
 
 // The map filter's scope switch. Smaller than the tab row because it qualifies an input rather
 // than naming a view.
-const scopeChip = cva("rounded-full border px-1.5 py-0.5 text-[10px] transition-colors", {
-  variants: {
-    active: {
-      true: "border-accent/40 bg-accent/15 text-accent",
-      false: "border-rule-strong text-fg-muted hover:text-fg",
+// One height for every chip in the switch row — the scope pair, the select mode and the tools
+// button all sit on the same line, and three chips agreeing to within a pixel is what makes a
+// row read as a row rather than as three controls that happen to be adjacent.
+const scopeChip = cva(
+  "flex h-[22px] items-center rounded-full border px-1.5 py-0.5 text-[10px] transition-colors",
+  {
+    variants: {
+      active: {
+        true: "border-accent/40 bg-accent/15 text-accent",
+        false: "border-rule-strong text-fg-muted hover:text-fg",
+      },
     },
+    defaultVariants: { active: false },
   },
-  defaultVariants: { active: false },
-});
+);
 
 // Rotated rather than swapped for a second glyph, so the open/closed states read as one control
 // changing rather than two different icons.
@@ -112,11 +125,21 @@ export function MapFilterBar({
   filter,
   tools,
   set,
+  trailing,
   copy,
 }: {
   filter: MapFilter;
   tools: MapToolsState;
   set: <K extends keyof MapToolsState>(key: K, value: MapToolsState[K]) => void;
+  /**
+   * The map's mode switches, on the right of the scope row.
+   *
+   * They used to be a row of their own each — the select mode under the filter bar, the tools
+   * button floating in the stage's top-right corner — which put four bands of chrome and a
+   * loose icon between the member and the graph. One row, one alignment, one place to look
+   * for a switch.
+   */
+  trailing?: ReactNode;
   copy: ChatDict["memoryGraph"];
 }) {
   const c = copy.mapTools;
@@ -129,21 +152,26 @@ export function MapFilterBar({
         placeholder={copy.mapFilterPlaceholder}
         aria-label={copy.mapFilterPlaceholder}
       />
-      <div className="mt-1 flex items-center gap-1">
-        <span className="text-[10px] text-fg-muted">{c.scopeLabel}</span>
-        {(["names", "contents"] as const).map((scope) => (
-          <button
-            key={scope}
-            type="button"
-            aria-pressed={tools.searchScope === scope}
-            title={scope === "names" ? c.scopeNamesHint : c.scopeContentsHint}
-            onClick={() => set("searchScope", scope)}
-            className={scopeChip({ active: tools.searchScope === scope })}
-          >
-            {scope === "names" ? c.scopeNames : c.scopeContents}
-          </button>
-        ))}
+      <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1">
+        {/* The label became the group's NAME rather than a line of text. Two chips directly
+            under a search box do not need four words telling the eye what they qualify, and a
+            screen reader still hears it. */}
+        <div role="group" aria-label={c.scopeLabel} className="flex items-center gap-1">
+          {(["names", "contents"] as const).map((scope) => (
+            <button
+              key={scope}
+              type="button"
+              aria-pressed={tools.searchScope === scope}
+              title={scope === "names" ? c.scopeNamesHint : c.scopeContentsHint}
+              onClick={() => set("searchScope", scope)}
+              className={scopeChip({ active: tools.searchScope === scope })}
+            >
+              {scope === "names" ? c.scopeNames : c.scopeContents}
+            </button>
+          ))}
+        </div>
         {filter.searching && <span className="text-[10px] text-fg-muted">{c.scopeSearching}</span>}
+        {trailing && <div className="ml-auto flex items-center gap-1">{trailing}</div>}
       </div>
       {/* A FAILED search and a search that matched nothing are different facts, and the map's
           empty state can only speak to the second. */}
@@ -157,6 +185,48 @@ export function MapFilterBar({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The map's select-mode switch: whether a click on a node ticks it or opens it.
+ *
+ * Rendered by the view in the FLOW, under the filter bar, rather than as one more corner
+ * overlay. Three reasons, in order of how much each cost to learn: a control in the flow is
+ * inside the fullscreen element, which is what the filter bar and the selection bar each had
+ * to be moved in here to get; the corners are already taken by the tools button, the
+ * truncation notice, the spread readout and the fit controls; and a mode announced by a 28px
+ * glyph is a mode nobody finds.
+ *
+ * It cannot live in the selection bar, which is the other obvious home: that bar renders only
+ * once something is ticked, so the control that starts the ticking would never be reachable
+ * from an empty selection.
+ *
+ * What a click now does is said in the TITLE and by the pressed state, not in a sentence
+ * beside the button. The sentence was a fifth band of chrome above the graph, and it said what
+ * the label and the lit chip already say.
+ */
+export function SelectModeToggle({
+  on,
+  onChange,
+  copy,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  copy: ChatDict["memoryGraph"];
+}) {
+  const c = copy.selection;
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      title={c.pickHint}
+      onClick={() => onChange(!on)}
+      className={`flex shrink-0 items-center gap-1 ${scopeChip({ active: on })}`}
+    >
+      <MousePointerClick size={11} aria-hidden />
+      {on ? c.pickOff : c.pick}
+    </button>
   );
 }
 
@@ -518,21 +588,30 @@ export default function MapTools({
 
 /** The collapsed affordance, floated over the stage. Separate because the open panel is a sidebar. */
 export function MapToolsButton({
-  onOpen,
+  open,
+  onToggle,
   copy,
 }: {
-  onOpen: () => void;
+  open: boolean;
+  onToggle: (open: boolean) => void;
   copy: ChatDict["memoryGraph"];
 }) {
+  // One control that both opens and shuts the sidebar, in the switch row beside the others.
+  // It used to float in the stage's top-right corner and disappear once the sidebar was open,
+  // so the way back out was a different control in a different place.
+  const label = open ? copy.mapTools.close : copy.mapTools.open;
   return (
     <button
       type="button"
-      title={copy.mapTools.open}
-      aria-label={copy.mapTools.open}
-      onClick={onOpen}
-      className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border border-rule-strong bg-surface/90 text-fg-muted transition-colors hover:text-fg"
+      title={label}
+      aria-label={label}
+      aria-pressed={open}
+      onClick={() => onToggle(!open)}
+      className={`flex size-[22px] shrink-0 items-center justify-center ${scopeChip({
+        active: open,
+      })}`}
     >
-      <SlidersHorizontal size={13} aria-hidden />
+      <SlidersHorizontal size={12} aria-hidden />
     </button>
   );
 }

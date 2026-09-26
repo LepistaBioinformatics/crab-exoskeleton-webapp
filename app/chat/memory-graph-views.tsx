@@ -425,6 +425,7 @@ export function EntityDetail({
   onOpenEntity,
   onReference,
   height,
+  maxHeight,
   onResizeStart,
   onClose,
 }: {
@@ -453,6 +454,16 @@ export function EntityDetail({
   onReference?: (ref: EntityReference) => void;
   /** Pixel height, owned by the panel so it survives re-selecting an entity. */
   height: number;
+  /**
+   * A ceiling on that height, as a CSS length — for the home where this pane SHARES a column
+   * with something that has a floor of its own.
+   *
+   * On the map that something is the graph, and without the ceiling the two of them together
+   * are taller than the column: the overflow spills into the panel's scroll area, whose
+   * vertical scrollbar then takes ~15px of width from a canvas already sized without it. Absent
+   * everywhere else, where the pane's sibling is a list that can shrink to a sliver.
+   */
+  maxHeight?: string;
   onResizeStart: (e: React.MouseEvent) => void;
   onClose: () => void;
   /** Title for a conversation id, or null when it no longer exists. */
@@ -465,7 +476,7 @@ export function EntityDetail({
   return (
     <div
       className="flex shrink-0 flex-col border-t-2 border-accent/60 bg-surface shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.45)]"
-      style={{ height }}
+      style={{ height, maxHeight }}
     >
       {/* The drag handle. The pane sits UNDER the list it was opened from, so without a
           way to resize it a long entity is read three lines at a time — and the list
