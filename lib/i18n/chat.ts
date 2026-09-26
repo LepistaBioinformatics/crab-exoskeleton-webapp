@@ -77,6 +77,28 @@ const en = {
     title: "Pick a workspace to start",
     body: "Choose a tenant, account, and agent on the left. Its conversations open in a second panel, ready for you to type.",
   },
+  // ONE TOOL CALL, opened from a step. The transcript carries neither the whole
+  // command nor the output -- the harness caps the arguments at 200 runes and
+  // never writes a result to history -- so these label a record fetched only
+  // when the member asks for it.
+  toolCall: {
+    open: "Show what this ran",
+    title: "Tool call",
+    command: "Command",
+    output: "Output",
+    detail: "Detail",
+    // "took 1.4s"
+    took: "took {s}s",
+    // Ordinary rather than a failure, and the reasons are named: a conversation
+    // older than the record, or an agent on a harness that writes none. A bare
+    // "nothing here" reads as a bug.
+    unrecorded:
+      "This call was not recorded. Conversations from before tool-call records existed, and agents running another harness, do not keep one.",
+    // Distinct from unrecorded: the record exists and says what was running. The
+    // call never returned, because the turn ended inside it.
+    noOutput: "No output was recorded — the turn ended while this was still running.",
+    failed: "Could not load this tool call.",
+  },
   workspaceGrid: {
     title: "Pick an agent",
     body: "Every agent you can reach, with the tenant and subscription it belongs to.",
@@ -1251,6 +1273,18 @@ const pt: ChatDict = {
   emptyState: {
     title: "Escolha um workspace para começar",
     body: "Escolha um tenant, uma conta e um agente à esquerda. As conversas dele abrem em um segundo painel, prontas para você escrever.",
+  },
+  toolCall: {
+    open: "Ver o que isso executou",
+    title: "Chamada de ferramenta",
+    command: "Comando",
+    output: "Saída",
+    detail: "Detalhe",
+    took: "levou {s}s",
+    unrecorded:
+      "Esta chamada não foi registrada. Conversas anteriores ao registro de chamadas, e agentes em outro harness, não guardam um.",
+    noOutput: "Nenhuma saída foi registrada — o turno terminou enquanto isso ainda rodava.",
+    failed: "Não foi possível carregar esta chamada.",
   },
   workspaceGrid: {
     title: "Escolha um agente",

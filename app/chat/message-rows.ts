@@ -31,8 +31,42 @@ export interface TurnEvent {
    */
   status?: string;
   detail?: string;
+  /**
+   * Names this call's durable record: the FULL command and the output, neither
+   * of which is in the transcript. `arguments` above is capped at 200 runes by
+   * the harness and a tool result is never written to history at all, so this
+   * is the only way to either.
+   *
+   * ABSENT IS THE COMMON CASE and it means "there is nothing to open": every
+   * transcript written before the harness minted these, every conversation
+   * under picoclaw, and every event that is not a tool call. A row only becomes
+   * clickable when it has one.
+   */
+  // Snake case, like `created_at` on ChatMessage below: these objects are the
+  // proxy's JSON re-serialised whole, with no mapping layer anywhere between,
+  // so a camelCase name here would simply be undefined at runtime.
+  audit_id?: string;
   /** How many of something: for "compact", the messages that were dropped. */
   count?: number;
+}
+
+/**
+ * Whether this event has a record a member can open.
+ *
+ * BOTH HALVES ARE REQUIRED and each rules out a different thing. The kind rules
+ * out the events that have no command and no output to show at all -- a model
+ * fallback, a depth change, a compaction -- which would open a sheet with two
+ * empty sections. The id rules out the tool calls that DO have both but whose
+ * record was never written: every conversation older than the record, every one
+ * under a harness that writes none, and any call whose write failed.
+ *
+ * Here rather than in the component because it decides two things that must not
+ * drift apart -- whether the row is a button, and whether the sheet has anything
+ * to fetch -- and because a rule in a 1500-line client component is a rule no
+ * test reaches.
+ */
+export function opensRecord(e: TurnEvent): boolean {
+  return e.kind === "tool" && !!e.audit_id;
 }
 
 export interface ChatMessage {
