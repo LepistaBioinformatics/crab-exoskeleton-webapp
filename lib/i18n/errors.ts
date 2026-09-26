@@ -30,6 +30,23 @@ const en = {
   project_name_taken: "You already have a project with that name.",
   projects_unsupported: "This agent does not support projects.",
   native_is_admin_only: "Only an administrator can change this.",
+  // member-owned-skills. The proxy states each of these as an English sentence of
+  // its own ("SKILL.md frontmatter may hold only name and description"), which
+  // `errorText` cannot translate -- so the BFF forwards the STATUS as a code and the
+  // wording lives here. See `skillsError` in lib/mycelium.ts.
+  // NAMES BOTH CAUSES, because the status cannot tell them apart. The panel mirrors
+  // the frontmatter rules and catches most of these before the round trip, but the
+  // proxy also reserves the operator's own skill names unconditionally (backend
+  // DEC-6) — including one the listing does not show and one it shows only when a
+  // flag is on, so no client check can be sure of them. "Check the --- block" alone
+  // would send someone looking in the wrong half of the form.
+  skill_invalid: "Your agent wouldn't be able to load that skill — check the name and the --- block at the top.",
+  // Says only that the skill is not the member's, and deliberately does not name a
+  // layer: almost always this is an administrator's or the operator's, but the
+  // licence chain answers 403 on this surface too.
+  skill_read_only: "That skill isn't one of yours to change.",
+  skill_name_taken: "You already have a skill with that name.",
+  skill_changed: "This skill changed since you opened it — reload it before saving.",
   invalid_email: "That email address doesn't look right.",
   invalid_code: "Invalid code. Try again.",
   workspaces_load_failed: "Couldn't load your workspaces.",
@@ -124,6 +141,10 @@ const pt: ErrorDict = {
   project_name_taken: "Você já tem um projeto com esse nome.",
   projects_unsupported: "Este agente não suporta projetos.",
   native_is_admin_only: "Apenas um administrador pode alterar isso.",
+  skill_invalid: "Seu agente não conseguiria carregar essa skill — confira o nome e o bloco --- no topo.",
+  skill_read_only: "Essa skill não é sua para alterar.",
+  skill_name_taken: "Você já tem uma skill com esse nome.",
+  skill_changed: "Esta skill mudou desde que você a abriu — recarregue antes de salvar.",
   invalid_email: "Esse e-mail não parece válido.",
   invalid_code: "Código inválido. Tente de novo.",
   workspaces_load_failed: "Não foi possível carregar seus workspaces.",

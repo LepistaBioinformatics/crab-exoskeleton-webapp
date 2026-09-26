@@ -34,6 +34,12 @@ const BODY: Record<Section, string> = {
   tasks: t.scheduledTasks.hint,
   files: t.uploads.organiseHint,
   secrets: t.secrets.savedForYou,
+  // The line the skills pane opens with. It says what a skill IS, which is the one
+  // thing the pane has to answer before anything has been fetched -- and here that
+  // is literally all it has drawn, since no effect fires in this environment.
+  // The panel's standing explanation was removed at the owner's request, so the
+  // marker is the one control the list always draws.
+  skills: t.skills.newSkill,
   // The line the mangrove opens with, before any reading has loaded.
   mangrove: t.mangrove.hint,
 };
@@ -64,9 +70,13 @@ describe("WorkspaceScreen", () => {
   // pane has an actions slot instead, and only the two sections that go stale on their
   // own claim it: the graph because the agent writes to it mid-conversation, tasks
   // because it schedules them between visits.
-  it("offers refresh on the graph, on tasks and on the mangrove, each labelled for itself", () => {
+  it("offers refresh on the graph, tasks, the mangrove and skills, each labelled for itself", () => {
     expect(screen("graph")).toContain(t.memoryGraph.refreshAria);
     expect(screen("tasks")).toContain(t.scheduledTasks.refreshAria);
+    // THE FOURTH, and the only one whose other writer is not a person: the agent's
+    // own evolution writes the member's skills directory, so the list goes stale
+    // between two readings with nobody having asked for it.
+    expect(screen("skills")).toContain(t.skills.refreshAria);
     // THE THIRD, and the only one whose staleness is not this member's own doing:
     // the others go stale because their agent wrote something, this one because
     // SOMEBODY ELSE'S did. It polls on its own as well -- see `use-mangrove.ts` --

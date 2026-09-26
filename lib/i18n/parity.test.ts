@@ -63,6 +63,11 @@ const SHARED = new Set([
   // "Tenant" is the loanword Portuguese uses unchanged, the same reason the four
   // admin entries below carry it. This is the picker's column heading.
   "chat.workspaceGrid.columns.tenant",
+  // The pane's name. "Skill" is the loanword Portuguese uses for this unchanged, and
+  // it is the product's own term in both locales -- the sentence under it is
+  // translated, which is what makes this a shared name rather than a forgotten one.
+  // `admin.shell.tabs.skills` below has carried the same word since the admin tab.
+  "chat.skills.title",
   "admin.shell.tabs.skills",
   // A dotted config.json path and a JSON literal. Both are what the admin types
   // verbatim into the field, so translating either would be wrong.

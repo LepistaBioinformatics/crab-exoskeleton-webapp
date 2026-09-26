@@ -68,6 +68,38 @@ export function mediaError(res: Response): { error: string; status: number } {
   return { error: MEDIA_ERROR_CODES[res.status] ?? "unknown", status: res.status };
 }
 
+// The member-skills surface answers in codes for the same reason the media one
+// does, and it is the same proxy stating the same kind of refusal as an English
+// sentence -- "SKILL.md frontmatter may hold only name and description". Forwarded
+// verbatim that reaches the member as "Something went wrong", which is the one
+// thing a validation failure must not say.
+//
+// Every distinction the panel acts on survives, because each has its own status:
+// 403 is a layer the member does not own, 409 is a write that cannot go through
+// as sent, 400 is content the harness would not load, 404 is a skill that is
+// already gone.
+//
+// 403 IS NOT WORDED AS "read-only layer" even though that is what it almost always
+// is: the licence chain answers 403 too. That second cause is unreachable from the
+// panel -- an unlicensed member's listing fails first, so they never see a row to
+// edit -- but `skill_read_only` still says only "not one of yours to change", so the
+// sentence stays true if some other caller ever gets there.
+//
+// ONE CODE FOR BOTH 409s. The proxy refuses an existing name on a create and a
+// stale `modifiedAt` on a save with the same status, and only the caller knows
+// which of the two it sent; `lib/skills.ts` splits them there.
+const SKILL_ERROR_CODES: Record<number, string> = {
+  400: "skill_invalid",
+  403: "skill_read_only",
+  404: "not_found",
+  409: "skill_conflict",
+  413: "too_large",
+};
+
+export function skillsError(res: Response): { error: string; status: number } {
+  return { error: SKILL_ERROR_CODES[res.status] ?? "unknown", status: res.status };
+}
+
 // Wraps fetch() against mycelium-gateway so every route handler distinguishes
 // "the gateway answered" (even with 401/403/500) from "couldn't reach it at
 // all" -- the two need different error shapes downstream (design.md's Error

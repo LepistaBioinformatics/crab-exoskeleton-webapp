@@ -683,8 +683,13 @@ export default function FilePreview({
  * no fields" is a different fact from "there is none", and for someone reviewing a
  * skill it is the more interesting one -- the proxy rejects a SKILL.md whose
  * `name` or `description` is missing.
+ *
+ * EXPORTED for `skills-panel.tsx`, which shows a member their own SKILL.md and needs
+ * exactly this. The last paragraph was already written about skills while this was
+ * private, which is how close the two readers are -- a second copy of it would drift
+ * on the first change to either.
  */
-function FrontmatterPanel({ rows, label }: { rows: FrontmatterRow[]; label: string }) {
+export function FrontmatterPanel({ rows, label }: { rows: FrontmatterRow[]; label: string }) {
   return (
     // NO HAIRLINES INSIDE IT -- not under the label, not between the rows.
     // `pane-weight.test.ts` states the rule this obeys: a horizontal rule survives

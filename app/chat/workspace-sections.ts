@@ -1,4 +1,4 @@
-import { Brain, CalendarClock, FileText, KeyRound, Network, Share2 } from "lucide-react";
+import { BookText, Brain, CalendarClock, FileText, KeyRound, Network, Share2 } from "lucide-react";
 import type { ChatDict } from "@/lib/i18n/chat";
 
 // What a workspace holds, and the one list every rendering of it reads.
@@ -9,22 +9,41 @@ import type { ChatDict } from "@/lib/i18n/chat";
 // list now, and three copies of a list is three places that can disagree about what a
 // workspace has.
 //
-// Ordered deliberately: memory and the graph are what a member asks about ("what does
-// it know about me"), scheduled tasks are what it does on its own, files and secrets
-// are what they manage.
-export type Section = "memory" | "graph" | "tasks" | "files" | "secrets" | "mangrove";
+// Ordered deliberately: the mangrove leads, then memory and the graph are what a
+// member asks about ("what does it know about me"), scheduled tasks are what it does
+// on its own, and files, secrets and skills are what they manage.
+export type Section =
+  | "mangrove"
+  | "memory"
+  | "graph"
+  | "tasks"
+  | "files"
+  | "secrets"
+  | "skills";
 
-// The mangrove is LAST, and that is the order's argument continuing rather than a
-// row appended. Everything before it is scoped BY this workspace; shared memory is
-// the only one of the six that is not -- it spans subscriptions and tenants. Last is
-// where a reader looks for the odd one out.
+// THE MANGROVE IS FIRST, and it used to be last for a reason that stopped being true.
+//
+// The old argument: everything else is scoped BY this workspace and shared memory is
+// not, so last is where a reader looks for the odd one out. That held while the
+// mangrove was a SCREEN a member navigated to. It is a tool in this pane now, opened
+// beside a live conversation so posts can be managed while talking to the agent --
+// and the whole point of that move was reach. A row a member has to scroll past six
+// others to find is the move half-made.
+//
+// So the ordering rule changed rather than being violated: the list now leads with
+// what the member came here to do, and the taxonomy below orders the rest. The odd
+// one out is still the odd one out; being named first is not a claim that it is
+// scoped by this workspace, and nothing reads position to decide scope.
 export const SECTION_ORDER: Section[] = [
+  "mangrove",
   "memory",
   "graph",
   "tasks",
   "files",
   "secrets",
-  "mangrove",
+  // BESIDE SECRETS. Skills join the run of things the member manages about THIS
+  // workspace, which is what the order's last clause names.
+  "skills",
 ];
 
 // THE BLURB IS BACK, and the reason it was deleted is the reason it returns.
@@ -59,6 +78,13 @@ export const SECTIONS: Record<
     Icon: KeyRound,
     label: (t) => t.secrets.title,
     blurb: (t) => t.uploads.sections.secrets,
+  },
+  // Three layers of skill reach an agent and only one of them is the member's, so
+  // the label is the plain noun and the pane is where the distinction gets made.
+  skills: {
+    Icon: BookText,
+    label: (t) => t.skills.title,
+    blurb: (t) => t.uploads.sections.skills,
   },
   // IT USED TO BE A DESTINATION, one of two things that replaced the centre. Reading
   // what a colleague shared meant putting the conversation away, which is the opposite
