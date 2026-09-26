@@ -15,7 +15,7 @@ interface HistoryResponse {
     // whole, so an undeclared field reaches the client either way -- but a
     // filter that consults one it has not declared is a filter one rename away
     // from silently dropping everything again.
-    events?: { kind: string; count?: number }[];
+    events?: { kind: string; count?: number; audit_id?: string }[];
   }[];
 }
 

@@ -20,11 +20,13 @@ import {
   rowRole,
   landingIndex,
   compactedCount,
+  opensRecord,
   type ChatMessage,
   type StepItem,
   type TurnEvent,
 } from "@/app/chat/message-rows";
 import Composer from "@/app/chat/composer";
+import ToolCallSheet from "@/app/chat/tool-call-sheet";
 import { cva } from "class-variance-authority";
 import {
   ArrowDown,
@@ -263,29 +265,53 @@ function StepRun({
   changed,
   registerRef,
   t,
+  onOpenTool,
 }: {
   items: StepItem[];
   changed: boolean;
   registerRef: (el: HTMLDivElement | null) => void;
   t: ChatDict;
+  /** Opens one call's record. The run holds no state; the shell owns which is open. */
+  onOpenTool: (e: TurnEvent) => void;
 }) {
   const label = items.length === 1 ? t.view.stepOne : t.view.stepsOther.replace("{n}", String(items.length));
   return (
     <div ref={registerRef} className={bandGap({ changed })}>
       <div className="mx-auto w-full max-w-[720px] px-4 py-1">
         <Disclosure label={label}>
-          <div className="mt-1 flex flex-col gap-2 border-l border-current/15 pl-3 text-sm text-fg-muted">
-            {items.map(({ m, i, events }) => {
+          {/* A TIMELINE, not a stream of paragraphs. The spine is one border on
+              the list and each step hangs a numbered marker on it, so where one
+              step ends and the next begins is drawn rather than inferred from a
+              gap -- which is what the request asked for and what a single
+              shared `border-l` could never say.
+
+              The number is the step's place IN THIS RUN. Runs merge only with
+              immediate neighbours (see `toRows`), so one turn can produce two of
+              them with an answer in between; numbering across that would count
+              something the member cannot see. */}
+          <ol className="mt-1 flex flex-col gap-3 border-l border-current/15 pl-4 text-sm text-fg-muted">
+            {items.map(({ m, i, events }, n) => {
               const { text } = parseAnexos(m.content);
               return (
-                <div key={i}>
+                <li key={i} className="relative">
+                  {/* Sat ON the spine, not beside it: half its width to the left
+                      of the padding edge. A marker inside the text column would
+                      indent every step by its own size and read as a bullet. */}
+                  <span
+                    aria-hidden
+                    className="absolute -left-4 top-0.5 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-elevated text-[10px] font-medium tabular-nums text-fg-muted ring-1 ring-rule"
+                  >
+                    {n + 1}
+                  </span>
                   {text && <MessageContent content={text} />}
-                  {events && events.length > 0 && <StepEvents events={events} t={t} />}
+                  {events && events.length > 0 && (
+                    <StepEvents events={events} t={t} onOpen={onOpenTool} />
+                  )}
                   {m.reasoning && <Reasoning text={m.reasoning} t={t} />}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </Disclosure>
       </div>
     </div>
@@ -342,24 +368,74 @@ function eventStatusLabel(status: string | undefined, t: ChatDict): string {
   }
 }
 
-function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
+// A ROW PER CALL, BOUNDED, and that is the change from a flat `<ul>`.
+//
+// They were one line each in a list with a 2px gap, which made a run of
+// fourteen calls a paragraph of monospace: nothing said where one ended. Each is
+// now its own surface with its own padding, and the boundary is a tone rather
+// than a rule -- the same answer the mangrove cards reached, and for the same
+// reason: eighteen hairlines down a transcript is a ladder.
+//
+// HOVER IS THE AFFORDANCE, not decoration. A row that opens something has to
+// look like it does before it is clicked, and the request asks for the
+// separation to be strongest exactly then.
+const eventRow = cva(
+  "flex w-full min-w-0 items-baseline gap-1.5 rounded-lg px-2 py-1 text-left text-xs transition-colors",
+  {
+    variants: {
+      openable: {
+        // `cursor-default` on the plain one: without it a <div> and a <button>
+        // that look identical would disagree under the pointer, which is a
+        // worse lie than either alone.
+        true: "cursor-pointer hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+        false: "cursor-default",
+      },
+    },
+    defaultVariants: { openable: false },
+  },
+);
+
+function StepEvents({
+  events,
+  t,
+  onOpen,
+}: {
+  events: TurnEvent[];
+  t: ChatDict;
+  onOpen: (e: TurnEvent) => void;
+}) {
   return (
-    <ul className="mt-1 flex flex-col gap-0.5">
+    <ul className="mt-1.5 flex flex-col gap-0.5">
       {events.map((e, k) => {
         const Icon = EVENT_ICONS[e.kind] ?? Wrench;
         const status = eventStatusLabel(e.status, t);
-        return (
-          <li key={k} className="flex min-w-0 items-baseline gap-1.5 text-xs">
+        // The rule lives in message-rows.ts, beside the type, because it decides
+        // both whether this row is a button and whether the sheet has anything
+        // to fetch -- two things that must not drift apart.
+        const openable = opensRecord(e);
+        // Read inside `inner` below, so it is resolved first.
+        const inner = (
+          <>
             <Icon size={11} className="shrink-0 translate-y-0.5 opacity-60" aria-hidden />
             <span className="shrink-0 opacity-70">{eventKindLabel(e.kind, t)}</span>
             {e.name && <span className="shrink-0 font-mono text-fg">{e.name}</span>}
             {/* The arguments are what make a step VERIFIABLE -- "ran sh" says
                 nothing anyone can check, "ran sh with ls" says what happened.
                 They are capped in the harness already; this truncates what is
-                left rather than wrapping the block open, with the whole value on
-                the title the way the admin key list does it. */}
+                left rather than wrapping the block open.
+
+                THE NATIVE TOOLTIP SURVIVES ON THE ROWS THAT DO NOT OPEN, and
+                only on those. Where there is a record the sheet is the better
+                answer and a tooltip repeating a truncated string beside it is
+                two ways to ask one question. Where there is none -- every
+                conversation older than the record, every one under picoclaw --
+                it is the ONLY way to read the rest, and dropping it everywhere
+                took that away from exactly the rows that had nothing else. */}
             {e.arguments && (
-              <span className="min-w-0 flex-1 truncate font-mono opacity-60" title={e.arguments}>
+              <span
+                className="min-w-0 flex-1 truncate font-mono opacity-60"
+                title={openable ? undefined : e.arguments}
+              >
                 {e.arguments}
               </span>
             )}
@@ -367,6 +443,27 @@ function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
               <span className={e.arguments ? "shrink-0 opacity-70" : "ml-auto shrink-0 opacity-70"}>
                 {status}
               </span>
+            )}
+          </>
+        );
+        return (
+          <li key={k} className="min-w-0">
+            {openable ? (
+              <button
+                type="button"
+                onClick={() => onOpen(e)}
+                // NO `aria-label`. One here would REPLACE the row's own text for
+                // a screen reader, so the tool's name, its arguments and its
+                // outcome -- everything the row exists to say -- would be
+                // announced as "show what this ran" and nothing else. The
+                // contents are the label; the tooltip carries the affordance.
+                title={t.toolCall.open}
+                className={eventRow({ openable: true })}
+              >
+                {inner}
+              </button>
+            ) : (
+              <div className={eventRow()}>{inner}</div>
             )}
           </li>
         );
@@ -377,7 +474,7 @@ function StepEvents({ events, t }: { events: TurnEvent[]; t: ChatDict }) {
       {events
         .filter((e) => e.detail)
         .map((e, k) => (
-          <li key={`d-${k}`} className="pl-[1.1rem] text-xs italic opacity-60">
+          <li key={`d-${k}`} className="px-2 text-xs italic opacity-60">
             {e.detail}
           </li>
         ))}
@@ -477,6 +574,10 @@ export default function ChatView({
   // module-scope store -- so it is still here when you come back from another
   // chat, or another workspace (which remounts this component).
   const turn = useTurn(sessionId);
+  // WHICH TOOL CALL IS OPEN, and the only state this screen gains for the
+  // feature. The sheet owns its own fetch and its own empty states; the run and
+  // its rows hold nothing at all.
+  const [openTool, setOpenTool] = useState<TurnEvent | null>(null);
   const {
     pending,
     queue,
@@ -1233,6 +1334,7 @@ export default function ChatView({
                         for (const { i } of r.items) messageRefs.current[i] = el;
                       }}
                       t={t}
+                      onOpenTool={setOpenTool}
                     />
                   );
                 }
@@ -1486,6 +1588,19 @@ export default function ChatView({
             </div>
           </div>
         </div>
+      )}
+      {/* OUTSIDE the transcript's scroll container, and mounted whether or not
+          anything is open: the sheet portals to <body> and plays its own exit,
+          so unmounting it on close would cut the animation. `event` being null
+          is what closes it. */}
+      {sessionId && (
+        <ToolCallSheet
+          event={openTool}
+          workspace={workspace}
+          sessionId={sessionId}
+          project={project}
+          onClose={() => setOpenTool(null)}
+        />
       )}
     </div>
   );
