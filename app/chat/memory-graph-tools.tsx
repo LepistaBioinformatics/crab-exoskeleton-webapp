@@ -147,7 +147,10 @@ export function MapFilterBar({
       </div>
       {/* A FAILED search and a search that matched nothing are different facts, and the map's
           empty state can only speak to the second. */}
-      {filter.failed && <p className="mt-1 text-[10px] text-danger">{c.scopeFailed}</p>}
+      {/* `text-blocked`, not `text-danger`: there is no `--color-danger` token, so that
+          class emitted nothing and this failure has been rendering in the inherited
+          colour. `--blocked` is the palette's red. */}
+      {filter.failed && <p className="mt-1 text-[10px] text-blocked">{c.scopeFailed}</p>}
       {filter.capped && (
         <p className="mt-1 text-[10px] text-fg-muted">
           {c.scopeCapped.replace("{count}", String(filter.cap))}
