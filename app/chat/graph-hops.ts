@@ -8,8 +8,16 @@ import type { Relation } from "@/lib/memoryGraph";
 // renders perfectly and carries the wrong entities. The component around it cannot be
 // asked to prove any of that.
 
-/** The hop counts the share control offers. Zero is reachable in code, never in the UI. */
-export type HopRadius = 1 | 2 | 3;
+/**
+ * The hop counts the share control offers.
+ *
+ * ZERO IS ONE OF THEM, and it is the default: what the member ticked is what the share
+ * carries. The control used to start at one, so picking a single entity always published its
+ * neighbours too and there was no way to say "just this one" — the reach is an enlargement,
+ * and an enlargement the member did not ask for is a payload they did not agree to. The
+ * expansion below has always answered zero correctly; it was the UI that had no way to ask.
+ */
+export type HopRadius = 0 | 1 | 2 | 3;
 
 /**
  * The most names one share may carry.

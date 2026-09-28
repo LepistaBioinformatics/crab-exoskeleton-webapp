@@ -40,10 +40,6 @@ export interface FragmentState {
   // when opening a conversation (e.g. clicking a past point in the tree view).
   // Transient -- consumed and stripped once the target is scrolled into view.
   msg?: string;
-  // History sidebar view mode ("tree" | "list"); persisted in the URL so a reload or
-  // shared link keeps it. Absent means the default, which is TREE: the tree shows how
-  // conversations branch from one another, and a flat list is the reduction of it.
-  hv?: string;
   // Which screen the centre pane shows INSTEAD of the conversation. Its only value is
   // "projects". ABSENT means the conversation, which is the shell's resting state and
   // therefore the one that costs no key.
@@ -56,7 +52,7 @@ export interface FragmentState {
   //
   // A fragment key and not a route segment, for the reason setFragmentProject records
   // below: a path change is a pushState, which does not fire `hashchange`, and the shell
-  // paid for that twice over. `hv` and `rs` already live here and already work.
+  // paid for that twice over. `rs` already lives here and already works.
   v?: string;
   // Which workspace section is open in the pane BESIDE the conversation, or absent for
   // no pane. Live, and written by setRightSidebar.
@@ -152,7 +148,6 @@ function readFragment(): FragmentState {
     sid: params.get("sid") ?? undefined,
     p: params.get("p") ?? undefined,
     msg: params.get("msg") ?? undefined,
-    hv: params.get("hv") ?? undefined,
     rs: params.get("rs") ?? undefined,
     v: params.get("v") ?? undefined,
   };
@@ -198,21 +193,8 @@ export function setFragmentSid(sid: string, msg?: string): void {
   window.location.hash = params.toString();
 }
 
-// Persists the history sidebar view mode in the URL. Assigns `location.hash`
-// (same mechanism as setFragmentSid) so a native `hashchange` fires reliably and
-// the address bar updates -- other params are preserved. TREE is the default, so it
-// is dropped from the hash to keep it clean and "list" is what gets written.
-export function setHistoryView(view: "list" | "tree"): void {
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  // Tree is the default, so it is "list" that has to be written into the URL.
-  if (view === "list") params.set("hv", "list");
-  else params.delete("hv");
-  window.location.hash = params.toString();
-}
-
-
 // Sends the centre pane to a destination, or back to the conversation with `null`. Same
-// assign-`location.hash` mechanism as setHistoryView, and the conversation is written by
+// assign-`location.hash` mechanism as setFragmentSid, and the conversation is written by
 // REMOVING the key.
 //
 // IT PRESERVES `sid`, WHICH IS THE EXACT OPPOSITE OF WHAT setFragmentProject DOES WITH
@@ -233,7 +215,7 @@ export function setDestination(destination: string | null): void {
 }
 
 // Opens a workspace section in the pane BESIDE the conversation, or closes the pane with
-// `null`. Same assign-`location.hash` mechanism as setHistoryView, and closed is written
+// `null`. Same assign-`location.hash` mechanism as setFragmentSid, and closed is written
 // by REMOVING the key -- which is also what keeps a shared link from carrying a pane the
 // recipient did not ask for.
 //
@@ -253,9 +235,8 @@ export function setRightSidebar(section: string | null): void {
 
 // Selects a whole workspace (replacing any previous t/s/r) plus its opening
 // session in one write -- used when picking a workspace from the nav sidebar.
-// Same native-hashchange mechanism as setFragmentSid. Preserves the history view
-// mode (`hv`) so switching workspaces doesn't silently reset tree -> list; drops
-// the transient scroll anchor (`msg`).
+// Same native-hashchange mechanism as setFragmentSid. Drops the transient scroll
+// anchor (`msg`).
 export function setWorkspace(workspace: Workspace, sid: string, project?: string | null): void {
   const params = new URLSearchParams(window.location.hash.slice(1));
   params.set("t", workspace.t);
@@ -297,9 +278,8 @@ export function setWorkspace(workspace: Workspace, sid: string, project?: string
  *
  * `p` and `v` GO. Both are qualified by the workspace being left: a project belongs to
  * one agent, and a destination names a surface scoped to both. Carrying either into a
- * different workspace would name something that does not exist there. `hv` and `rs`
- * stay, as they do for every other move -- how you like the history drawn, and what is
- * open beside you, are not places you were standing.
+ * different workspace would name something that does not exist there. `rs` stays, as it
+ * does for every other move -- what is open beside you is not a place you were standing.
  */
 export function enterWorkspace(workspace: Workspace): void {
   const params = new URLSearchParams(window.location.hash.slice(1));

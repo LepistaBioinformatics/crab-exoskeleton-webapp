@@ -2,6 +2,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import WorkspacePane from "./workspace-pane";
 
 // THE PANE LEAVING, which for a long time it did in a single frame while arriving took
@@ -52,8 +54,48 @@ function animationEnd(el: Element) {
   });
 }
 
+// A DESKTOP PANE THAT DOES NOT ANIMATE OPEN.
+//
+// It grew its width from zero over 200ms, which read well for the gesture it was written
+// for — pressing the rail icon. Conversation tabs gave it a second trigger nobody designed:
+// the pane is keyed on the workspace AND the project, so switching to a tab in another
+// project remounts it, and every switch replayed the arrival beside a transcript the member
+// was already reading.
+//
+// Asserted against the stylesheet, which is where the decision lives. The class name alone
+// cannot say it: the same class is what animates the phone's drawer.
+describe("how the pane arrives", () => {
+  // Same shape pane-switcher.test.tsx uses to read a source file from a jsdom suite:
+  // `import.meta.url` is not a file URL under this environment.
+  const css = readFileSync(join(__dirname, "..", "globals.css"), "utf8");
+  const phone = css.indexOf("@media (max-width: 767px)");
+
+  it("has no width animation on a desktop", () => {
+    expect(css).not.toContain("@keyframes paneOpen");
+    const rules = [...css.matchAll(/\.pane-open\s*\{/g)].map((m) => m.index ?? -1);
+    expect(rules.length, "the class must still exist for the phone").toBeGreaterThan(0);
+    // Every rule that gives it an animation sits inside the phone's media query.
+    expect(rules.every((at) => at > phone)).toBe(true);
+  });
+
+  it("still rises as a drawer on a phone", () => {
+    // The RULE, not the word: `sheetRise` is named in prose here too, and a test that
+    // matched the prose would pass with the rule deleted.
+    expect(css.slice(phone)).toMatch(/\.pane-open\s*\{\s*animation:\s*sheetRise/);
+  });
+
+  // Leaving is the member's own decision, and the animation is what makes the column's
+  // departure legible instead of a frame of missing screen.
+  it("still animates on the way out", () => {
+    expect(css).toContain("@keyframes paneClose");
+    expect(css).toMatch(/\.pane-close\s*\{\s*animation:/);
+  });
+});
+
 describe("the pane's exit", () => {
-  it("plays the opening animation while it is open", () => {
+  // The class is still applied while the pane is open — on a phone it carries the
+  // drawer's rise. What it no longer carries on a desktop is asserted below.
+  it("carries the arrival class while it is open, and only that one", () => {
     const aside = mount();
     expect(aside.className).toContain("pane-open");
     expect(aside.className).not.toContain("pane-close");

@@ -143,11 +143,12 @@ export default function WorkspacePane({
 
   // ONCE THE PANE HAS STARTED LEAVING IT NEVER PLAYS THE ARRIVAL AGAIN.
   //
-  // `pane-open` animates width from zero, which is right on a mount and wrong on anything
-  // else. A member who re-opens the section mid-exit flips `closing` back to false, and
-  // re-applying the class there RESTARTS that animation: the half-shrunk pane snapped to
-  // nothing and grew back. Dropping straight to the element's own width is a jump from
-  // most of the way open, which is the smaller of the two.
+  // `pane-open` no longer animates anything on a DESKTOP — that rule is gone, because
+  // conversation tabs replayed it on every switch into another project (see globals.css).
+  // It still carries the drawer's rise on a phone, and there the guard still earns its
+  // keep: a member who re-opens the section mid-exit flips `closing` back to false, and
+  // re-applying the class restarts the rise from off-screen on a sheet that is most of the
+  // way up.
   const hasClosed = useRef(false);
   if (closing) hasClosed.current = true;
   const phase = closing
@@ -203,8 +204,9 @@ export default function WorkspacePane({
       <aside
         aria-label={title}
         style={{ width }}
-        // pane-open animates width from 0 on mount and pane-close animates it back to 0
-        // on the way out (see globals.css). Animations rather than transitions precisely
+        // pane-close animates the width back to 0 on the way out (see globals.css), and
+        // pane-open is the phone's drawer rising — on a desktop it draws nothing, so the
+        // column simply takes its space. An animation rather than a transition precisely
         // because this width is drag-resizable: a transition would make the drag lag.
         //
         // `max-md:w-[92vw]!` — the `!` is load-bearing. `width` above is an inline style

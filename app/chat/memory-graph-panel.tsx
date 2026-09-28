@@ -73,7 +73,7 @@ const hopSegment = cva(
   },
 );
 
-const SHARE_HOPS: HopRadius[] = [1, 2, 3];
+const SHARE_HOPS: HopRadius[] = [0, 1, 2, 3];
 
 // "map" is the node-link view. It reads the SAME browse projection the list does and
 // drives the SAME select(), so choosing a node opens the existing detail pane — which
@@ -168,7 +168,9 @@ export default function MemoryGraphPanel({
   // it lives in a sidebar that is collapsed by default in the column, and a member who widened
   // it to look around would silently be publishing three hops of their graph. What travels is
   // worth its own control, beside the button that sends it.
-  const [shareHops, setShareHops] = useState<HopRadius>(1);
+  // Zero by default: a share carries what the member ticked, and reaching past that is
+  // something they ask for rather than something they have to notice and undo. See HopRadius.
+  const [shareHops, setShareHops] = useState<HopRadius>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Monotonic request id, so an out-of-order detail response is dropped.
@@ -583,10 +585,12 @@ export default function MemoryGraphPanel({
                   onClick={() => setShareHops(h)}
                   className={hopSegment({ active: shareHops === h })}
                 >
-                  {(h === 1
-                    ? t.memoryGraph.selection.hops
-                    : t.memoryGraph.selection.hopsPlural
-                  ).replace("{count}", String(h))}
+                  {h === 0
+                    ? t.memoryGraph.selection.hopsNone
+                    : (h === 1
+                        ? t.memoryGraph.selection.hops
+                        : t.memoryGraph.selection.hopsPlural
+                      ).replace("{count}", String(h))}
                 </button>
               ))}
             </div>
@@ -598,7 +602,10 @@ export default function MemoryGraphPanel({
             BEFORE the share, never discovered after it — the hops are what make the payload
             bigger than the number the member picked. */}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
-          {mangroveOn === true && mode === "map" && (
+          {/* Only while the hops are actually reaching. At zero the payload IS the count
+              on the left, and one bar saying the same number twice reads as two numbers
+              that happen to agree. */}
+          {mangroveOn === true && mode === "map" && shareHops > 0 && (
             <span className="shrink-0 text-fg-muted">
               {t.memoryGraph.selection.sharing.replace(
                 "{count}",

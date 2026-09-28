@@ -456,27 +456,24 @@
   }
 }
 
-/* The right-hand workspace panel sliding open.
+/* THE RIGHT-HAND PANEL NO LONGER ANIMATES OPEN ON A DESKTOP, and the rule that did it is
+ * gone rather than shortened — a 1ms animation is still an animation, and the next reader
+ * would have had to work out whether the duration meant something.
  *
- * An ANIMATION, not a transition, and that is the whole point: the panel's width is
- * drag-resizable, and a `transition: width` would make the edge lag behind the cursor
- * on every drag. An animation runs once when the element mounts and can never
- * interfere with the drag afterwards.
+ * It grew its width from zero over 200ms, which read well for the one gesture it was
+ * written for: a member pressing the rail icon. Conversation tabs gave it a second
+ * trigger nobody designed. The panel is keyed on the workspace AND the project
+ * (chat-shell.tsx), because a section addresses one workspace directory — so switching to
+ * a tab in another project REMOUNTS it, and every such switch replayed the arrival. The
+ * column vanished and grew back beside a transcript the member was already reading.
  *
- * Only `from` is declared: the implicit `to` is the element's own computed width, which
- * is the inline px value the resize handle writes. That is what lets one rule animate
- * open to whatever width the member last chose. Because the panel is anchored to the
- * right edge, growing its width reads as sliding in from that edge.
+ * The class stays, and still means something: on a phone the pane is a drawer over the
+ * page, and the media query below gives `.pane-open` the shared sheet motion. A layer
+ * that covers what you were reading has to announce itself; a column that takes its own
+ * space beside it does not.
  *
- * Auto-neutralized by the reduced-motion guard below. */
-@keyframes paneOpen {
-  from {
-    width: 0;
-  }
-}
-.pane-open {
-  animation: paneOpen 200ms ease-out;
-}
+ * `.pane-close` is untouched. Leaving is the member's own decision and the animation is
+ * what makes the column's departure legible instead of a frame of missing screen. */
 
 /* The same panel closing, which for a long time it simply did not do.
  *
@@ -488,11 +485,12 @@
  *
  * `forwards`, and only `to` is declared: the implicit `from` is the element's own
  * computed width — the inline px value the resize handle writes — so this closes from
- * whatever width the member had dragged it to, the mirror of paneOpen. The fill keeps it
+ * whatever width the member had dragged it to. The fill keeps it
  * at zero for the frame between the animation ending and React removing the node.
  *
- * An animation rather than a transition for paneOpen's reason, unchanged: a
- * `transition: width` would lag the cursor on every drag.
+ * An animation rather than a transition, for the reason the opening one was written that
+ * way before it was removed: the width is drag-resizable, and a `transition: width` would
+ * lag the cursor on every drag.
  *
  * Auto-neutralized by the reduced-motion guard below, which is also what makes the
  * unmount immediate for those members — `animationend` fires at once. */
@@ -509,7 +507,8 @@
  *
  * It used to shorten `paneClose` to 1ms, because the drawer was a right-edge column at
  * `max-md:w-[92vw]!` and that `!important` beat any animation of `width` — so neither
- * paneOpen nor paneClose could move the element on a phone, and leaving it at 200ms only
+ * the opening nor the closing width animation could move the element on a phone, and
+ * leaving the exit at 200ms only
  * held a dead drawer and its backdrop on screen for a fifth of a second.
  *
  * The drawer rises from the bottom edge now, so it animates on TRANSFORM, which nothing

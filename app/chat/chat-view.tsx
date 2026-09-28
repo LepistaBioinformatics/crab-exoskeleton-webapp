@@ -864,9 +864,21 @@ export default function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.t, workspace.s, workspace.r, workspace.p, mediaRefresh]);
 
+  // ARRIVING somewhere: the end of a transcript that just loaded, or the message a tree
+  // node named. Instant, not animated.
+  //
+  // The glide made sense when opening a conversation was a whole-screen change nobody could
+  // do twice in a second. With tabs it is a switch, and every switch replayed a scroll from
+  // the top of the transcript down to its end — a long animation over content the member
+  // did not ask to see, between them and the message they clicked the tab for.
+  //
+  // The two OTHER scrolls in this view stay smooth, and the difference is who asked. Both
+  // are movements the member causes while already reading: the jump-to-latest button, where
+  // the glide is what says the button did something, and pinning what you just sent to the
+  // top, which travels a screen at most.
   useEffect(() => {
     if (scrollToIndex === null) return;
-    messageRefs.current[scrollToIndex]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    messageRefs.current[scrollToIndex]?.scrollIntoView({ behavior: "auto", block: "start" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
 

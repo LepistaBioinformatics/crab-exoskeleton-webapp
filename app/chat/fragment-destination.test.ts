@@ -34,7 +34,7 @@ describe("setDestination", () => {
   });
 
   it("preserves everything else on the fragment", () => {
-    window.location.hash = "t=tenant-1&s=subs-1&r=alpha&sid=conv-a&p=proj-x&hv=list&rs=files";
+    window.location.hash = "t=tenant-1&s=subs-1&r=alpha&sid=conv-a&p=proj-x&rs=files";
     setDestination("projects");
     const f = readFragmentForTest();
     expect(f.v).toBe("projects");
@@ -43,7 +43,6 @@ describe("setDestination", () => {
     expect(f.t).toBe("tenant-1");
     expect(f.s).toBe("subs-1");
     expect(f.r).toBe("alpha");
-    expect(f.hv).toBe("list");
     expect(f.rs).toBe("files");
   });
 
@@ -97,15 +96,14 @@ describe("setRightSidebar", () => {
   // and `v` is the screen the member chose to be on — clobbering any of them would move
   // the member somewhere else as a side effect of opening a panel.
   it("leaves every other key alone, `v` included", () => {
-    window.location.hash = "t=acme&s=growth&r=alpha&sid=abc&hv=list&p=proj-x&v=projects";
+    window.location.hash = "t=acme&s=growth&r=alpha&sid=abc&p=proj-x&v=projects";
     setRightSidebar("tasks");
     const f = readFragmentForTest();
-    expect([f.t, f.s, f.r, f.sid, f.hv, f.p, f.v]).toEqual([
+    expect([f.t, f.s, f.r, f.sid, f.p, f.v]).toEqual([
       "acme",
       "growth",
       "alpha",
       "abc",
-      "list",
       "proj-x",
       "projects",
     ]);
