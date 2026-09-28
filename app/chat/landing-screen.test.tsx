@@ -51,15 +51,11 @@ vi.mock("./turn-store", async () => {
   };
 });
 
-// `hv` decides list vs tree, exactly as it does in the sidebar. Stubbed rather than
-// driven through `window.location.hash` so a test says which view it is asserting on.
-let hv: string | undefined;
-
 vi.mock("./fragment", async () => {
   const actual = await vi.importActual<typeof import("./fragment")>("./fragment");
   return {
     ...actual,
-    useFragment: () => ({ hv }),
+    useFragment: () => ({}),
     setFragmentProjectSid: (project: string | null, sid: string) => {
       navigated.push({ project, sid });
     },
@@ -112,7 +108,6 @@ beforeEach(() => {
   navigated.length = 0;
   list = [];
   loaded = true;
-  hv = "list";
   treeRows.length = 0;
 });
 
@@ -201,40 +196,18 @@ describe("LandingScreen", () => {
     expect(el.textContent).not.toContain("Legal");
   });
 
-  it("lists the scope's conversations and opens one", async () => {
+  // The screen used to draw its own rows and call `onOpen`; the tree draws them now and
+  // navigates itself with `setFragmentSid`, which is correct here because `p` is already
+  // this screen's project. What is left to assert is what it hands over.
+  it("hands the scope's conversations to the tree", async () => {
     list = [conversation({ id: "c1", title: "Parecer TBDC" })];
-    const opened: string[] = [];
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () => {
-      root!.render(
-        <LandingScreen
-          workspace={{ t: "acme", s: "growth", r: "alpha", p: null }}
-          project={null}
-          onOpen={(id) => opened.push(id)}
-        />,
-      );
-    });
-    const button = Array.from(host.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("Parecer TBDC"),
-    )!;
-    expect(button).toBeTruthy();
-    await act(async () => {
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(opened).toEqual(["c1"]);
+    const el = await mount(null);
+    expect(el.querySelector("[data-tree]")).toBeTruthy();
+    expect(treeRows).toEqual([["c1"]]);
   });
 
   // The alias is what the member named it; the title is what the first message made of
   // it. Same order the breadcrumb and the sidebar read them in.
-  it("prefers the alias over the generated title", async () => {
-    list = [conversation({ alias: "  Contrato  ", title: "Parecer TBDC" })];
-    const el = await mount(null);
-    expect(el.textContent).toContain("Contrato");
-    expect(el.textContent).not.toContain("Parecer TBDC");
-  });
-
   // The list starts empty and fills from an effect, and a member reaches this screen
   // four ways -- entering an agent, entering a project, New chat, and deleting the
   // conversation they were reading. Without this it said "no conversations yet" on every
@@ -293,10 +266,8 @@ describe("LandingScreen", () => {
       conversation({ id: "legal", project: "legal", title: "Dentro do Legal" }),
       conversation({ id: "other", project: "hr", title: "De outro projeto" }),
     ];
-    const el = await mount("legal");
-    expect(el.textContent).toContain("Dentro do Legal");
-    expect(el.textContent).not.toContain("No projeto nenhum");
-    expect(el.textContent).not.toContain("De outro projeto");
+    await mount("legal");
+    expect(treeRows).toEqual([["legal"]]);
   });
 
   it("lists only the agent's own conversations at its root", async () => {
@@ -304,35 +275,24 @@ describe("LandingScreen", () => {
       conversation({ id: "root", project: null, title: "No projeto nenhum" }),
       conversation({ id: "legal", project: "legal", title: "Dentro do Legal" }),
     ];
-    const el = await mount(null);
-    expect(el.textContent).toContain("No projeto nenhum");
-    expect(el.textContent).not.toContain("Dentro do Legal");
+    await mount(null);
+    expect(treeRows).toEqual([["root"]]);
   });
 
-  // Same key the sidebar reads, so the two never disagree about which view is on. The
-  // switch itself stays in the sidebar: two controls for one setting is how they drift.
+  // There is one rendering now. The `hv` key that used to choose between a flat list and
+  // the tree is gone, here and in the sidebar, so there is nothing left to disagree about.
   describe("which view it draws", () => {
-    it("draws the tree unless the member asked for a list", async () => {
-      hv = undefined;
+    it("draws the tree, with no key that could say otherwise", async () => {
       list = [conversation({ id: "c1" })];
       const el = await mount(null);
       expect(el.querySelector("[data-tree]")).toBeTruthy();
       expect(treeRows).toEqual([["c1"]]);
     });
 
-    it("draws a list when hv says list", async () => {
-      hv = "list";
-      list = [conversation({ id: "c1", title: "Parecer TBDC" })];
-      const el = await mount(null);
-      expect(el.querySelector("[data-tree]")).toBeNull();
-      expect(el.textContent).toContain("Parecer TBDC");
-    });
-
     // The tree gets the SAME narrowed list, not the raw one: it navigates itself with
     // `setFragmentSid`, which leaves `p` alone, so a row from another project would land
-    // on the same wrong-workspace transcript the list did.
+    // on a wrong-workspace transcript.
     it("hands the tree the project's conversations only", async () => {
-      hv = undefined;
       list = [
         conversation({ id: "legal", project: "legal" }),
         conversation({ id: "other", project: "hr" }),

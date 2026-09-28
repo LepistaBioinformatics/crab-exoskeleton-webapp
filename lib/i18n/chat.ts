@@ -405,6 +405,9 @@ const en = {
       // The MAP's hop control, which decides how far out of the picked nodes the shared
       // fragment reaches. Spelled out rather than shown as a bare number, because "2" in a
       // row that already carries two counts reads as a quantity of entities.
+      // The floor of the hop control, and where it now starts. Named rather than rendered
+      // as "+0 hops", which reads as an amount of something rather than as none of it.
+      hopsNone: "No hops",
       hops: "+{count} hop",
       hopsPlural: "+{count} hops",
       hopsLabel: "How far around the selected entities the share reaches",
@@ -686,11 +689,7 @@ const en = {
   },
   history: {
     collapseConversations: "Collapse Conversations",
-    listView: "List view",
-    list: "List",
-    treeView: "Tree view",
     treeAria: "Conversation tree",
-    tree: "Tree",
     noMatches: "No conversation matches your filter.",
     noMatchesHint:
       "Clear the filter, or narrow it with tag: alias: text: date:.",
@@ -710,10 +709,6 @@ const en = {
     deleteMessage: "“{title}” is removed from your list. This can't be undone.",
     deleteFallbackTitle: "This chat",
     titleEmpty: "Title can't be empty.",
-    // "{n} messages" -- the singular form is never rendered (the badge only
-    // shows for counts above one), but both are kept so the pair is explicit.
-    messagesOne: "1 message",
-    messagesOther: "{n} messages",
   },
   search: {
     // The prefixes themselves (tag:, alias:, text:, date:) are query syntax and
@@ -731,7 +726,6 @@ const en = {
     tagsOne: "1 tag",
     tagsOther: "{n} tags",
     aliasAria: "Conversation alias",
-    saveAlias: "Save alias",
     removeTagPrefix: "Remove tag",
     removeTag: "Remove tag",
     namePlaceholder: "name",
@@ -1602,6 +1596,7 @@ const pt: ChatDict = {
       many: "{count} entidades selecionadas",
       hidden: "{count} fora da visão",
       share: "Compartilhar no mangue",
+      hopsNone: "Sem saltos",
       hops: "+{count} salto",
       hopsPlural: "+{count} saltos",
       hopsLabel: "Até onde o compartilhamento alcança em volta das entidades escolhidas",
@@ -1783,11 +1778,7 @@ const pt: ChatDict = {
   },
   history: {
     collapseConversations: "Recolher Conversas",
-    listView: "Visão em lista",
-    list: "Lista",
-    treeView: "Visão em árvore",
     treeAria: "Árvore de conversas",
-    tree: "Árvore",
     noMatches: "Nenhuma conversa corresponde ao filtro.",
     noMatchesHint: "Limpe o filtro, ou refine com tag: alias: text: date:.",
     noneYet: "Nenhuma conversa ainda.",
@@ -1803,8 +1794,6 @@ const pt: ChatDict = {
     deleteMessage: "“{title}” sai da sua lista. Isso não pode ser desfeito.",
     deleteFallbackTitle: "Esta conversa",
     titleEmpty: "O título não pode ficar vazio.",
-    messagesOne: "1 mensagem",
-    messagesOther: "{n} mensagens",
   },
   search: {
     placeholder: "Filtrar: tag:  alias:  text:  date:",
@@ -1818,7 +1807,6 @@ const pt: ChatDict = {
     tagsOne: "1 tag",
     tagsOther: "{n} tags",
     aliasAria: "Apelido da conversa",
-    saveAlias: "Salvar apelido",
     removeTagPrefix: "Remover tag",
     removeTag: "Remover tag",
     namePlaceholder: "nome",

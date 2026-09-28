@@ -47,12 +47,13 @@ describe("entering a workspace", () => {
     expect(readFragmentForTest().msg).toBeUndefined();
   });
 
-  // How the history is drawn and what is open beside you are not places you were
-  // standing, so neither is a reason to reset on arrival. Same asymmetry setWorkspace
-  // and setFragmentProject already keep.
-  it("keeps the history view and the pane open beside it", () => {
-    window.location.hash = "hv=tree&rs=files";
+  // What is open beside you is not a place you were standing, so it is not a reason to
+  // reset on arrival. Same asymmetry setWorkspace and setFragmentProject already keep.
+  // (`hv`, the history view, used to be asserted here too; the tree is the only
+  // rendering now and the key is gone.)
+  it("keeps the pane open beside it", () => {
+    window.location.hash = "rs=files";
     enterWorkspace(ws);
-    expect(readFragmentForTest()).toMatchObject({ hv: "tree", rs: "files" });
+    expect(readFragmentForTest()).toMatchObject({ rs: "files" });
   });
 });

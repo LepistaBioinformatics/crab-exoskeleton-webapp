@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Tags, AtSign, Type, CalendarDays } from "lucide-react";
 import { cva } from "class-variance-authority";
 import { Input } from "@/components/ui/input";
@@ -52,14 +52,36 @@ export default function ConversationSearchBar({
   onChange,
   conversations,
   searching = false,
+  autoFocus = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   conversations: ConversationSummary[];
   searching?: boolean;
+  /**
+   * Whether mounting means the member ASKED for this field.
+   *
+   * In the sidebar it does: the bar exists only while the magnifier is toggled open, so
+   * reaching for the field after asking for it is a step nobody wants — and on a phone the
+   * keyboard rising is the whole point of having tapped search.
+   *
+   * On the landing it does not. The bar is part of the screen, mounted whether or not the
+   * member came to filter, and the field they DID come for is the composer above it.
+   * Taking focus there raised the soft keyboard over the new-chat screen on arrival, and on
+   * a desktop it raced the composer's own focus for the cursor. Off by default, so a new
+   * caller has to say that mounting is asking.
+   */
+  autoFocus?: boolean;
 }) {
   const t = useT(chatCopy);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Focused HERE rather than through the `autoFocus` attribute. That attribute is a
+  // parse-time instruction and this field is mounted long after the document is parsed, on
+  // both of its surfaces, so what actually moves the cursor is a focus() call — an effect
+  // says so out loud instead of leaving it to React to do quietly.
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
@@ -123,10 +145,6 @@ export default function ConversationSearchBar({
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
         <Input
           ref={inputRef}
-          // The bar is mounted only while the panel's magnifier is toggled open, so
-          // mounting IS opening — and reaching for the field after asking for it is a
-          // step nobody wants.
-          autoFocus
           variant="subtle"
           inputSize="sm"
           className={cn("pl-8", searching && "pr-8")}

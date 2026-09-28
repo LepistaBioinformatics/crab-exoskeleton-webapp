@@ -22,10 +22,24 @@ export default function ConversationTabStrip({
   onActivate,
   onPin,
   onClose,
+  projectName,
 }: {
   tabs: readonly Tab[];
   /** Where the fragment currently points, or null when the centre is not a conversation. */
   active: TabRef | null;
+  /**
+   * The display name of a tab's project, or null for the agent's own workspace and for a
+   * project this shell cannot name.
+   *
+   * A LOOKUP rather than a field on the tab. Tabs are persisted to `localStorage`, so a
+   * name stored beside the id would still read the old one after a rename — `title` already
+   * has that flaw and there is no reason to add a second. Resolved at render instead.
+   *
+   * It answers null for a tab pointing into ANOTHER workspace's project: the shell only
+   * holds the current workspace's list. Nothing is drawn in that case, which is a gap and
+   * not a lie.
+   */
+  projectName?: (ref: TabRef) => string | null;
   onActivate: (ref: TabRef) => void;
   /** A double click keeps it. The composer pins too, without coming through here. */
   onPin: (ref: TabRef) => void;
@@ -46,6 +60,8 @@ export default function ConversationTabStrip({
     >
       {tabs.map((tab) => {
         const here = active !== null && sameTab(tab, active);
+        const label = tab.title || t.tabs.untitled;
+        const project = tab.p ? (projectName?.(tab) ?? null) : null;
         return (
           // THE × IS A SIBLING OF THE TAB, NOT A CHILD, and that is what keeps closing
           // from first navigating into the thing being closed. A button nested in a
@@ -77,19 +93,41 @@ export default function ConversationTabStrip({
               // tab that is already active, and that is why activate is not guarded.
               onClick={() => onActivate(tab)}
               onDoubleClick={() => onPin(tab)}
-              title={tab.title || t.tabs.untitled}
-              className={[
-                "min-w-0 flex-1 truncate py-2 text-left text-xs",
-                // ITALIC IS THE PREVIEW, which is the one visual convention every editor
-                // shares for "this will be replaced by the next thing you click".
-                tab.preview ? "italic" : "",
-              ].join(" ")}
+              title={project ? `${label} — ${project}` : label}
+              // A COLUMN: the project goes under the conversation's name, not beside it.
+              // Centred, so a tab that has no project keeps its title on the same line as
+              // the tabs that do — the strip has one height, not one per tab.
+              className="flex min-w-0 flex-1 flex-col justify-center py-1.5 text-left text-xs"
             >
-              {tab.title || t.tabs.untitled}
+              {/* TEN CHARACTERS OF ROOM, whatever the title. A three-letter name used to
+                  draw a tab barely wider than its own × — the target was a few pixels of
+                  text with the close button against it, so aiming at the tab closed it. */}
+              <span
+                className={[
+                  "min-w-[10ch] truncate leading-tight",
+                  // ITALIC IS THE PREVIEW, which is the one visual convention every editor
+                  // shares for "this will be replaced by the next thing you click".
+                  tab.preview ? "italic" : "",
+                ].join(" ")}
+              >
+                {label}
+              </span>
+              {/* WHICH PROJECT, for the case the tab tuple exists for: the same conversation
+                  title open in two of them. Under the name and smaller, because it qualifies
+                  the name rather than being one.
+                  Beside it, the two competed for the same line: flex took from both and a
+                  tab read "Uma conversa de nome … Juri…", where the qualifier is the part
+                  short enough to survive whole and the one that is useless in pieces. On its
+                  own line neither has to give. */}
+              {project && (
+                <span className="truncate text-[10px] leading-tight text-fg-muted">
+                  {project}
+                </span>
+              )}
             </button>
             <button
               type="button"
-              aria-label={`${t.tabs.close} ${tab.title || t.tabs.untitled}`}
+              aria-label={`${t.tabs.close} ${label}`}
               title={t.tabs.close}
               onClick={() => onClose(tab)}
               className={[

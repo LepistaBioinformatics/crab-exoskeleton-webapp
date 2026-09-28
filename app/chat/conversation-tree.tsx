@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cva } from "class-variance-authority";
-import { MessageSquare, Tags } from "lucide-react";
+import { MessageSquare, Tags, Trash2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { PanelEmpty } from "@/components/ui/panel-empty";
 import { IconButton } from "@/components/ui/icon-button";
@@ -19,12 +19,13 @@ import {
 } from "./conversation-bursts";
 import { useT, useLocale } from "@/lib/i18n/context";
 import { chatCopy } from "@/lib/i18n/chat";
+import { commonCopy } from "@/lib/i18n/common";
 import { BCP47 } from "@/lib/i18n/format";
 
 // The "Tree" view: a single vertical timeline where each conversation is a
 // colored lane and each *visit* is a node -- a visit ("burst") is a run of
 // consecutive messages in the same conversation with no other conversation's
-// message between them in time. Ordered most-recent on top (HEAD). It reconciles
+// message between them in time. Ordered most-recent on top. It reconciles
 // the agent's continuous per-session transcript with the web's recency-first
 // list -- the git-graph look comes from activity hopping between lanes over time,
 // and returning to a conversation makes a NEW node, so the interleaving stays
@@ -63,16 +64,30 @@ export default function ConversationTree({
   activeSessionId,
   onSelect,
   onApply,
+  onDelete,
 }: {
   workspace: Workspace;
   conversations: ConversationSummary[];
   activeSessionId?: string;
   onSelect?: () => void;
   // Optimistic update of a conversation's metadata (alias/tags), so editing from
-  // the tree updates the shared list the same way the list view does.
+  // the tree updates the shared list the caller holds.
   onApply?: (id: string, fn: (c: ConversationSummary) => ConversationSummary) => void;
+  /**
+   * Asking to delete the conversation this row belongs to.
+   *
+   * The CONFIRMATION and the deletion itself belong to the caller: the optimistic drop has
+   * to reach both the conversation list and the search results, and this component holds
+   * neither. Absent where the tree is read-only — the landing screen passes nothing, the
+   * same way it passes no `onApply`.
+   *
+   * A row is a VISIT, and several rows can belong to one conversation. Deleting from any of
+   * them deletes the thread, which is what the caller's confirmation says by naming it.
+   */
+  onDelete?: (conversation: ConversationSummary) => void;
 }) {
   const t = useT(chatCopy);
+  const common = useT(commonCopy);
   const tag = BCP47[useLocale().locale];
   const [events, setEvents] = useState<TreeEvent[] | null>(null);
 
@@ -262,7 +277,6 @@ export default function ConversationTree({
         const conv = convById.get(b.conversationId);
         const color = laneColorFor(conv, b.conversationId);
         const active = b.conversationId === activeSessionId;
-        const isHead = i === 0; // single HEAD = the most recent visit overall
         const key = `${b.conversationId}-${b.startAnchor}`;
         const title = conv?.title ?? b.label;
         const alias = conv?.alias ?? null;
@@ -342,37 +356,55 @@ export default function ConversationTree({
                 >
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm text-fg">{b.text}</span>
-                    {b.count > 1 && (
-                      <span className="shrink-0 text-xs tabular-nums text-fg-muted" title={t.history.messagesOther.replace("{n}", String(b.count))}>
-                        ·{b.count}
-                      </span>
-                    )}
-                    {isHead && (
-                      <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wide text-accent">
-                        HEAD
-                      </span>
-                    )}
                     {b.isLatest && tags.length > 0 && <TagCluster tags={tags} />}
-                    <span className="shrink-0 text-xs tabular-nums text-fg-muted">{formatWhen(b.ts, tag)}</span>
                   </span>
-                  {b.isLatest && alias && (
-                    <span className="w-full truncate text-xs text-fg-muted">{alias}</span>
-                  )}
+                  {/* Under the message, not at the crowded right-hand end of it, and quiet
+                      until asked for.
+                      OPACITY, never `hidden`: the line keeps its space at rest, so hovering
+                      a row cannot push the rows below it down. This list animates its own
+                      reordering, and a hover that moved everything under the cursor would
+                      fight that animation.
+                      Always on below `md`, like the action buttons in the same row: a touch
+                      screen has no hover, and a date nobody can reach is worse than one
+                      that is simply there. */}
+                  <span className="flex w-full items-baseline gap-2">
+                    {b.isLatest && alias && (
+                      <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+                        {alias}
+                      </span>
+                    )}
+                    <span className="shrink-0 text-[10px] leading-none tabular-nums text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
+                      {formatWhen(b.ts, tag)}
+                    </span>
+                  </span>
                 </span>
               </button>
 
-              {onApply && conv && (
+              {(onApply || onDelete) && conv && (
                 <div className="absolute right-1 top-1 z-10 flex items-center rounded-lg bg-surface/95 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    aria-label={t.history.aliasAndTags}
-                    title={t.history.aliasAndTags}
-                    onClick={() => setEnrichingId(editing ? null : key)}
-                    aria-expanded={editing}
-                  >
-                    <Tags size={14} aria-hidden />
-                  </IconButton>
+                  {onApply && (
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t.history.aliasAndTags}
+                      title={t.history.aliasAndTags}
+                      onClick={() => setEnrichingId(editing ? null : key)}
+                      aria-expanded={editing}
+                    >
+                      <Tags size={14} aria-hidden />
+                    </IconButton>
+                  )}
+                  {onDelete && (
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t.history.deleteAria}
+                      title={common.actions.delete}
+                      onClick={() => onDelete(conv)}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </IconButton>
+                  )}
                 </div>
               )}
             </div>

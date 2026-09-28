@@ -557,6 +557,12 @@ export default function ChatShell({ email }: { email: string }) {
             <ConversationTabStrip
               tabs={tabs}
               active={activeTab}
+              // Resolved here and not stored on the tab: `projects` is already in hand for
+              // the breadcrumb, and a name kept beside the id in localStorage would still
+              // read the old one after a rename.
+              projectName={(ref) =>
+                projects.find((candidate) => candidate.id === ref.p)?.name ?? null
+              }
               onActivate={goToTab}
               onPin={(ref) => setTabs((prev) => pinTab(prev, ref, ref.sid))}
               onClose={onCloseTab}

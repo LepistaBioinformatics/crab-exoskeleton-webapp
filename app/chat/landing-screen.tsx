@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { MessageSquare } from "lucide-react";
-import { cva } from "class-variance-authority";
 import { createConversation, type ConversationSummary } from "@/lib/chatSession";
 import { PanelEmpty } from "@/components/ui/panel-empty";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,8 +15,7 @@ import ConversationTree from "./conversation-tree";
 import type { Project } from "@/lib/projects";
 import type { Workspace } from "./fragment";
 import { chatCopy } from "@/lib/i18n/chat";
-import { useLocale, useT } from "@/lib/i18n/context";
-import { BCP47 } from "@/lib/i18n/format";
+import { useT } from "@/lib/i18n/context";
 
 // WHAT A PLACE LOOKS LIKE BEFORE A CONVERSATION IS CHOSEN — the agent's root and a
 // project's root alike (FR-3.1).
@@ -36,13 +34,6 @@ import { BCP47 } from "@/lib/i18n/format";
 // and persists nothing — the row appears on the first message — so a landing that minted
 // on arrival would leave a ghost id in the fragment for every place the member merely
 // looked at, which is what the breadcrumb's chevron was tripping over.
-
-const row = cva(
-  [
-    "flex w-full items-baseline gap-3 rounded-lg px-3 py-2 text-left",
-    "transition-colors hover:bg-elevated",
-  ],
-);
 
 export default function LandingScreen({
   workspace,
@@ -65,13 +56,8 @@ export default function LandingScreen({
   focusSignal?: number;
 }) {
   const t = useT(chatCopy);
-  const tag = BCP47[useLocale().locale];
   const router = useRouter();
   const fragment = useFragment();
-  // Tree unless the member asked for a list, which is the sidebar's own rule read off
-  // the same fragment key. ONE setting, one control: the switch lives in the sidebar's
-  // panel and this follows it rather than offering a second one that could disagree.
-  const asList = fragment?.hv === "list";
   const { conversations: all, loaded } = useConversations(workspace);
 
   // THE PROJECT FILTER, and leaving it out was a defect.
@@ -190,28 +176,11 @@ export default function LandingScreen({
             title={query ? t.history.noMatches : t.history.noneYet}
             body={query ? t.history.noMatchesHint : undefined}
           />
-        ) : asList ? (
-          <ul className="mt-2 flex flex-col">
-            {visible.map((conversation) => (
-              <li key={conversation.id}>
-                <button type="button" onClick={() => onOpen(conversation.id)} className={row()}>
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg">
-                    {label(conversation)}
-                  </span>
-                  <span className="shrink-0 text-xs text-fg-muted">
-                    {new Date(conversation.updatedAt).toLocaleDateString(tag, {
-                      day: "2-digit",
-                      month: "short",
-                    })}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
         ) : (
-          // The same tree the sidebar draws, off the same `hv` key and the same list.
-          // It navigates itself (`setFragmentSid`), which is correct here because `p`
-          // is already this screen's project — the rows it shows are scoped to it.
+          // The same tree the sidebar draws, off the same list. It used to be one of two
+          // renderings here, chosen by the sidebar's switch; the tree is the only one now.
+          // It navigates itself (`setFragmentSid`), which is correct here because `p` is
+          // already this screen's project — the rows it shows are scoped to it.
           <div className="mt-2">
             <ConversationTree workspace={workspace} conversations={visible} />
           </div>
@@ -221,9 +190,3 @@ export default function LandingScreen({
   );
 }
 
-// The alias wins where there is one: it is what the member named the conversation, and
-// the title is what the transcript's first message made of it. Same order the breadcrumb
-// reads them in, and the sidebar.
-function label(conversation: ConversationSummary): string {
-  return conversation.alias?.trim() || conversation.title;
-}

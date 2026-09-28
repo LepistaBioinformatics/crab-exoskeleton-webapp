@@ -223,9 +223,11 @@ const drawnAsShared = () =>
 /** Setting the share's reach through the control the member actually turns. */
 async function setHops(host: HTMLElement, hops: number) {
   const label =
-    hops === 1
-      ? g.selection.hops.replace("{count}", "1")
-      : g.selection.hopsPlural.replace("{count}", String(hops));
+    hops === 0
+      ? g.selection.hopsNone
+      : hops === 1
+        ? g.selection.hops.replace("{count}", "1")
+        : g.selection.hopsPlural.replace("{count}", String(hops));
   await act(async () => byText(host, label).click());
   await act(async () => {});
 }
@@ -392,10 +394,46 @@ describe("the map's selection and the list's are the same set", () => {
 });
 
 describe("sharing a fragment of the map", () => {
-  it("sends the picked nodes alone at one hop", async () => {
+  // THE report this option exists for: the control used to start at one hop, so picking a
+  // single entity always published its neighbours with it and there was no way to say "just
+  // this one". The reach is an enlargement, and an enlargement nobody asked for is a payload
+  // nobody agreed to.
+  it("sends exactly what was picked, reaching nothing, by default", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+    await tap("Samuel");
+
+    await act(async () => share(host)!.click());
+    expect(takePendingShare()).toEqual({ kind: "entities", names: ["Samuel"] });
+  });
+
+  it("says nothing about a reach while there is none", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+    await tap("Samuel");
+
+    // At zero the payload IS the count on the left of the bar. A second number saying the
+    // same thing reads as two numbers that happen to agree.
+    expect(host.textContent).toContain(g.selection.one);
+    expect(host.textContent).not.toContain(g.selection.sharing.replace("{count}", "1"));
+  });
+
+  it("comes back to the seeds alone when the reach is turned off again", async () => {
+    const host = await mount();
+    await openMapPicking(host);
+    await tap("Samuel");
+    await setHops(host, 2);
+    await setHops(host, 0);
+
+    await act(async () => share(host)!.click());
+    expect(takePendingShare()).toEqual({ kind: "entities", names: ["Samuel"] });
+  });
+
+  it("sends an isolated entity alone whatever the reach", async () => {
     const host = await mount();
     await openMapPicking(host);
     await tap("Island");
+    await setHops(host, 3);
 
     expect(host.textContent).toContain(g.selection.sharing.replace("{count}", "1"));
     await act(async () => share(host)!.click());
@@ -406,6 +444,7 @@ describe("sharing a fragment of the map", () => {
     const host = await mount();
     await openMapPicking(host);
     await tap("Samuel");
+    await setHops(host, 1);
 
     expect(host.textContent).toContain(g.selection.sharing.replace("{count}", "2"));
     await act(async () => share(host)!.click());
@@ -484,6 +523,7 @@ describe("the whole-graph guard", () => {
     const host = await mount(hub);
     await openMapPicking(host);
     await tap("hub");
+    await setHops(host, 1);
 
     const total = hub.entities.length;
     expect(host.textContent).toContain(
@@ -502,6 +542,7 @@ describe("the whole-graph guard", () => {
     const host = await mount(hub);
     await openMapPicking(host);
     await tap("hub");
+    await setHops(host, 1);
 
     await act(async () => share(host)!.click());
     expect(takePendingShare()).toBeNull();
@@ -519,6 +560,7 @@ describe("the map shows what the share would carry", () => {
     const host = await mount();
     await openMapPicking(host);
     await tap("Samuel");
+    await setHops(host, 1);
 
     expect(drawnAsChecked()).toEqual(["Samuel"]);
     expect(drawnAsReached()).toEqual(["Onboarding"]);

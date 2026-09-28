@@ -88,6 +88,24 @@ describe("jump to the latest message", () => {
     expect(src).toContain("{!atLatest && (");
   });
 
+  // Arriving is not the same gesture as jumping, and with tabs the difference became
+  // visible: every switch replayed a smooth scroll from the top of the transcript down to
+  // its end. The button keeps its glide — that is what says the button did something.
+  it("lands instantly when a conversation opens, and glides only when asked to", () => {
+    const arrival = src.slice(
+      src.indexOf("if (scrollToIndex === null) return;"),
+      src.indexOf("if (scrollToIndex === null) return;") + 200,
+    );
+    expect(arrival).toContain('behavior: "auto"');
+    expect(arrival).not.toContain("smooth");
+
+    const button = src.slice(
+      src.indexOf("const scrollToLatest"),
+      src.indexOf("const scrollToLatest") + 400,
+    );
+    expect(button).toContain('behavior: "smooth"');
+  });
+
   it("takes its copy from the dict, in both locales", () => {
     expect(src).toContain("t.view.scrollToLatest");
     expect(chatCopy.en.view.scrollToLatest).toBeTruthy();

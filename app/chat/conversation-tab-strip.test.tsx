@@ -46,7 +46,11 @@ afterEach(() => {
   closed.length = 0;
 });
 
-function mount(tabs: Tab[], active: TabRef | null = null) {
+function mount(
+  tabs: Tab[],
+  active: TabRef | null = null,
+  projectName?: (ref: TabRef) => string | null,
+) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -55,6 +59,7 @@ function mount(tabs: Tab[], active: TabRef | null = null) {
       <ConversationTabStrip
         tabs={tabs}
         active={active}
+        projectName={projectName}
         onActivate={(r) => activated.push(r)}
         onPin={(r) => pinned.push(r)}
         onClose={(r) => closed.push(r)}
@@ -65,6 +70,8 @@ function mount(tabs: Tab[], active: TabRef | null = null) {
 }
 
 const tabButtons = () => [...host!.querySelectorAll('[role="tab"]')];
+/** The title inside a tab — the italic and the ten-character floor both live on it. */
+const tabLabel = (i: number) => tabButtons()[i].querySelector("span")!;
 
 function click(el: Element, times = 1) {
   act(() => {
@@ -105,8 +112,42 @@ describe("the strip", () => {
   // thing you click will replace this".
   it("draws a preview in italic and a kept one upright", () => {
     mount([tab({ sid: "a", preview: true }), tab({ sid: "b" })]);
-    expect([...tabButtons()[0].classList]).toContain("italic");
-    expect([...tabButtons()[1].classList]).not.toContain("italic");
+    expect([...tabLabel(0).classList]).toContain("italic");
+    expect([...tabLabel(1).classList]).not.toContain("italic");
+  });
+
+  // A three-letter title used to draw a tab barely wider than its own ×, so aiming at the
+  // tab hit the close button. The floor is on the TITLE, which is what the request names:
+  // room for ten characters whatever the conversation is called.
+  it("gives a short title ten characters of room", () => {
+    mount([tab({ title: "Doc" })]);
+    expect([...tabLabel(0).classList]).toContain("min-w-[10ch]");
+  });
+});
+
+// The reason the tab's identity is the whole tuple and not the sid: the same conversation
+// title can be open in two projects. Until now the strip drew them identically.
+describe("which project a tab belongs to", () => {
+  it("names it, under the conversation's own name", () => {
+    mount([tab({ p: "legal", title: "Parecer" })], null, (ref) =>
+      ref.p === "legal" ? "Jurídico" : null,
+    );
+    expect(tabButtons()[0].textContent).toContain("Parecer");
+    expect(tabButtons()[0].textContent).toContain("Jurídico");
+    // And in the tooltip, where the truncated version can still be read in full.
+    expect(tabButtons()[0].getAttribute("title")).toBe("Parecer — Jurídico");
+  });
+
+  it("says nothing for a conversation at the agent's root", () => {
+    mount([tab({ p: null, title: "Parecer" })], null, () => "Jurídico");
+    expect(tabButtons()[0].textContent).toBe("Parecer");
+  });
+
+  // The shell holds only the CURRENT workspace's projects, so a tab pointing into another
+  // one cannot be named. Nothing is drawn — a gap, not a wrong label.
+  it("says nothing where the project cannot be named", () => {
+    mount([tab({ p: "elsewhere", title: "Parecer" })], null, () => null);
+    expect(tabButtons()[0].textContent).toBe("Parecer");
   });
 });
 
