@@ -1057,6 +1057,26 @@ const en = {
     allow: "Allow",
     refuse: "Refuse",
     reasonPlaceholder: "Why not (optional) — your agent will read this",
+    // THE RECORD THE CARD LEAVES BEHIND. The card is gone within seconds of the
+    // answer -- and within minutes without one, because the harness refuses on
+    // its own deadline. These are the divider that stays in the transcript, so
+    // "what did I allow" and "why did nothing happen" are answerable later.
+    //
+    // Composed from the outcome and the tool, never from what the harness
+    // wrote: it has no locale, and the sentences it stores for the other three
+    // outcomes are written for the model, in English.
+    loggedAllowed: "You allowed {tool}",
+    loggedRefused: "You refused {tool}",
+    // NOT "you refused". Nobody did -- the question went unanswered and the
+    // deadline passed, which is the case that used to leave no trace at all.
+    loggedExpired: "{tool} was not answered in time, so it did not run",
+    loggedFailed: "{tool} could not be checked for permission, so it did not run",
+    // A record from a harness that named no tool. Reads as a sentence in place
+    // of the name rather than leaving a gap where one belongs.
+    loggedUnknownTool: "an action",
+    loggedWhat: "See what was asked",
+    loggedArgs: "What was asked for",
+    loggedReason: "The reason you gave",
   },
   mangrove: {
     title: "Mangrove Network",
@@ -2071,6 +2091,14 @@ const pt: ChatDict = {
     allow: "Permitir",
     refuse: "Recusar",
     reasonPlaceholder: "Por que não (opcional) — seu agente vai ler isto",
+    loggedAllowed: "Você permitiu {tool}",
+    loggedRefused: "Você recusou {tool}",
+    loggedExpired: "{tool} ficou sem resposta a tempo e não rodou",
+    loggedFailed: "Não deu para verificar a permissão de {tool}, e ela não rodou",
+    loggedUnknownTool: "uma ação",
+    loggedWhat: "Ver o que foi pedido",
+    loggedArgs: "O que foi pedido",
+    loggedReason: "O motivo que você deu",
   },
   mangrove: {
     title: "Rede Mangue",

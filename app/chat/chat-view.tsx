@@ -19,6 +19,7 @@ import {
   toRows,
   rowRole,
   landingIndex,
+  approvalRecord,
   compactedCount,
   opensRecord,
   type ChatMessage,
@@ -60,6 +61,7 @@ import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import ApprovalCard from "@/app/chat/approval-card";
+import ApprovalRow from "@/app/chat/approval-row";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { chatCopy, type ChatDict } from "@/lib/i18n/chat";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
@@ -1321,6 +1323,25 @@ export default function ChatView({
                 const role = rowRole(r);
                 const changed = Boolean(prev && rowRole(prev) !== role);
 
+                if (r.row === "approval") {
+                  const record = approvalRecord(r.m);
+                  // A record the client cannot read is not drawn at all. It
+                  // only happens if the kind and the event ever disagree,
+                  // which would be a proxy change away -- and an empty band
+                  // between two messages is worse than a missing note.
+                  if (!record) return null;
+                  return (
+                    <div
+                      key={`approval-${r.i}`}
+                      ref={(el) => {
+                        messageRefs.current[r.i] = el;
+                      }}
+                      className={bandGap({ changed: true })}
+                    >
+                      <ApprovalRow record={record} t={t} />
+                    </div>
+                  );
+                }
                 if (r.row === "compaction") {
                   return (
                     <CompactionRow
