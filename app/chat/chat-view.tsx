@@ -49,11 +49,12 @@ import {
   type Workspace,
 } from "@/app/chat/fragment";
 import { subscribeToPreviewRequests } from "@/app/chat/media-preview-bus";
-import { publishMediaChanged, subscribeToMediaChanged } from "@/app/chat/media-refresh-bus";
+import { publishMediaChanged } from "@/app/chat/media-refresh-bus";
 import AttachmentButton from "@/app/chat/attachment-button";
-import { uploadMedia, listWorkspaceMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
 import { useFileDrop, type DroppedFiles } from "@/app/chat/use-file-drop";
-import { resolveMentions, type MentionCandidate } from "@/lib/fileMentions";
+import { attachmentMarkers } from "@/lib/fileMentions";
+import { useMentionFiles } from "@/app/chat/use-mention-files";
 import { buildReferenceMarker, type ChatReference } from "@/lib/chatReference";
 import { TagChip } from "@/app/chat/conversation-enrichment";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -389,7 +390,7 @@ const eventRow = cva(
         // `cursor-default` on the plain one: without it a <div> and a <button>
         // that look identical would disagree under the pointer, which is a
         // worse lie than either alone.
-        true: "cursor-pointer hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+        true: "cursor-pointer hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
         false: "cursor-default",
       },
     },
@@ -559,18 +560,10 @@ export default function ChatView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
-  // Bumped by the bus, never directly. The upload that changes the workspace's files is
-  // right here in this component, so a plain setState would have worked until the files
-  // panel stopped being a sibling of the conversation — see media-refresh-bus for why a
-  // component that is no longer mounted cannot be reached with a prop.
-  const [mediaRefresh, setMediaRefresh] = useState(0);
-  useEffect(() => subscribeToMediaChanged(() => setMediaRefresh((n) => n + 1)), []);
   // What `@` can reference. Held HERE rather than in the composer because both need
   // it and they must not disagree: the composer offers the menu, and compose() below
-  // resolves what was actually typed against the same list. Refreshed by the same
-  // signal the files panel uses, so a file uploaded from either place is mentionable
-  // at once.
-  const [mentionFiles, setMentionFiles] = useState<MentionCandidate[]>([]);
+  // resolves what was actually typed against the same list.
+  const mentionFiles = useMentionFiles(workspace);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   // Everything about the turn in flight for THIS conversation, read from the
   // module-scope store -- so it is still here when you come back from another
@@ -848,23 +841,6 @@ export default function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.t, workspace.s, workspace.r, project, sessionId, router]);
 
-  useEffect(() => {
-    let cancelled = false;
-    listWorkspaceMedia(workspace)
-      .then((list) => {
-        if (cancelled) return;
-        // Folders are branches, not things to reference.
-        setMentionFiles(list.filter((f) => !f.isDir).map((f) => ({ name: f.name, path: f.path })));
-      })
-      .catch(() => {
-        // A failed listing means `@` offers nothing; it must never break composing.
-        if (!cancelled) setMentionFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.t, workspace.s, workspace.r, workspace.p, mediaRefresh]);
 
   // ARRIVING somewhere: the end of a transcript that just loaded, or the message a tree
   // node named. Instant, not animated.
@@ -989,12 +965,7 @@ export default function ChatView({
     // rule work: wrapping `@file` in quotes after choosing it from the menu turns it
     // back into prose. The token stays in the sentence; the marker is what the agent
     // acts on — the same one the attach button has always produced.
-    const mentioned = resolveMentions(trimmed, mentionFiles).filter(
-      (m) => !attachments.some((a) => a.path === m.path),
-    );
-    const refs = [...attachments.map((a) => a.path), ...mentioned.map((m) => m.path)]
-      .map((path) => `[anexo: ${path}]`)
-      .join("\n");
+    const refs = attachmentMarkers(trimmed, attachments, mentionFiles);
     const quote = replyTo ? buildQuote(replyTo, t) : "";
     const ref = chatRef ? buildReferenceMarker(chatRef, t) : "";
     return [quote, ref, trimmed, refs].filter(Boolean).join("\n\n");
@@ -1211,7 +1182,7 @@ export default function ChatView({
     // hook's window guard swallows them silently.
     <div className="relative flex h-full min-w-0 flex-1 flex-col" {...drop.dropProps}>
         {drop.over && (
-          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-bg/80">
+          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-rule-emphasis bg-bg/80">
             <span className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-fg shadow-lg">
               {t.composer.dropToAttach}
             </span>
@@ -1276,7 +1247,7 @@ export default function ChatView({
                 onClick={() =>
                   setFragmentProjectSid(resumeCandidate.project, resumeCandidate.id)
                 }
-                className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-accent/40 bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-accent hover:bg-elevated"
+                className="group mx-auto flex w-full max-w-[720px] flex-col items-start gap-1.5 rounded-xl border border-rule-strong bg-surface px-4 py-3 text-left shadow-elevated transition-colors hover:border-rule-emphasis hover:bg-elevated"
               >
                 <span className="w-full truncate text-sm font-medium text-fg">
                   {resumeCandidate.title}

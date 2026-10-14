@@ -497,7 +497,7 @@ describe("EntityDetail chrome", () => {
   // surface and a shadow separate them.
   it("stands out from the list behind it", () => {
     const html = chrome();
-    expect(html).toContain("border-accent/60");
+    expect(html).toContain("border-rule-emphasis");
     expect(html).toContain("shadow-");
     expect(html).not.toContain("bg-elevated");
   });

@@ -47,7 +47,7 @@ import { useT } from "@/lib/i18n/context";
 // which model is answering me, and can I change it.
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg field px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 const row = cva(
   "flex flex-col gap-1 rounded-lg border px-3 py-2 transition-colors",
@@ -55,7 +55,7 @@ const row = cva(
     variants: {
       state: {
         // In use: the accent says which one is answering without a second label.
-        active: "border-accent bg-accent/10",
+        active: "border-rule-emphasis bg-accent/10",
         idle: "border-rule-strong bg-elevated",
         // Registered but an administrator switched it off. Dimmed rather than
         // hidden: it is the member's own record and they may still delete it.
@@ -499,7 +499,7 @@ export default function OwnModelsSection({
               </span>
               <Textarea
                 rows={4}
-                className="rounded-lg border border-brand px-3 py-2 font-mono"
+                className="rounded-lg field px-3 py-2 font-mono"
                 placeholder="{}"
                 value={draft.extra_body}
                 onChange={(e) =>
@@ -515,7 +515,7 @@ export default function OwnModelsSection({
                 {t.thinkingLabel}
               </span>
               <select
-                className="rounded-lg border border-brand bg-transparent px-3 py-2"
+                className="rounded-lg field px-3 py-2"
                 value={draft.thinking_level}
                 onChange={(e) =>
                   setDraft({

@@ -25,13 +25,13 @@ const option = cva(
   [
     "group flex w-full items-center gap-4 rounded-xl border px-4 py-4 text-left",
     "transition-[border-color,background-color,box-shadow]",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ],
   {
     variants: {
       picked: {
-        true: "border-accent bg-accent/15 animate-chooser-pick",
-        false: "border-rule-strong bg-elevated hover:border-brand hover:bg-elevated/70",
+        true: "border-rule-emphasis bg-accent/15 animate-chooser-pick",
+        false: "border-rule-strong bg-elevated hover:border-rule-emphasis hover:bg-elevated/70",
       },
       // The all-agents store is an address, not an agent. Dashed and quiet so it can never
       // read as one more thing to choose between.

@@ -23,7 +23,7 @@ const PILLS: { prefix: Prefix; Icon: typeof Tags }[] = [
 const datePresets = (today: string) => [today, "7d", "30d", String(new Date().getFullYear())];
 
 const pill = cva(
-  "inline-flex items-center gap-1 rounded-full border border-rule-strong px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-brand hover:text-fg",
+  "inline-flex items-center gap-1 rounded-full border border-rule-strong px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-rule-emphasis hover:text-fg",
 );
 
 const suggestionRow = cva("flex w-full cursor-pointer items-center gap-2 px-2 py-1 text-left text-xs", {
@@ -160,7 +160,7 @@ export default function ConversationSearchBar({
           onKeyDown={onKeyDown}
         />
         {searching && (
-          <span className="absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-rule-strong border-t-brand" />
+          <span className="absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-rule-strong border-t-rule-emphasis" />
         )}
       </div>
 

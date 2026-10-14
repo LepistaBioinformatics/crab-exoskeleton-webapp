@@ -25,6 +25,10 @@ const downloadBlob = vi.fn();
 const readIdentity = vi.fn();
 const shareWith = vi.fn();
 
+// The compose form's markdown editor is a plain textarea here -- see
+// markdown-field.test-double.
+vi.mock("next/dynamic", async () => (await import("./markdown-field.test-double")).dynamicMock);
+
 vi.mock("@/lib/mangrove", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/mangrove")>();
   return {
@@ -278,7 +282,7 @@ describe("the mangrove tab", () => {
     // uses; an edge is read down a whole column at once, which is the question an
     // inbox is being asked -- which of these have I not been through.
     expect([...unreadCard!.classList], "nothing draws the unread edge").toContain(
-      "border-l-accent",
+      "border-l-rule-emphasis",
     );
     // RESERVED, NOT ADDED. Four pixels on the left whether or not they are
     // coloured, or every card in the list shifts three pixels sideways the moment
@@ -397,10 +401,11 @@ describe("the mangrove tab", () => {
     const card = cardOf("soil-ph");
     const footer = card.querySelector("footer")!;
     expect(footer.hidden, "the footer is open on a closed card").toBe(true);
-    // The three that stay: who, what it is about, and the body.
-    expect(card.textContent).toContain("bob");
-    expect(card.textContent).toContain("soil-ph");
-    expect(card.textContent).toContain("6.4");
+    // The two that stay on the row: who, and what it is about. The body is behind
+    // the open too now (mangrove-compact-list FR-1) -- it is what made rows uneven.
+    expect(card.querySelector("header")!.textContent).toContain("bob");
+    expect(card.querySelector("header")!.textContent).toContain("soil-ph");
+    expect((bodyOf(card) as HTMLElement).hidden, "the body shows on a closed card").toBe(true);
 
     await act(async () => {
       card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -480,7 +485,7 @@ describe("the mangrove tab", () => {
     const card = cards()[0];
     expect([...card.classList]).toContain("border-l-4");
     expect([...card.classList], "a read card is still wearing the mark").not.toContain(
-      "border-l-accent",
+      "border-l-rule-emphasis",
     );
   });
 
@@ -1128,7 +1133,7 @@ function regionsOf(li: HTMLLIElement): string[] {
  * which is exactly what happened.
  */
 function bylineOf(li: HTMLLIElement): string {
-  return li.children[0].querySelector("p")!.textContent!;
+  return li.querySelector("[data-byline]")!.textContent!;
 }
 
 /**
@@ -1151,22 +1156,22 @@ function tooltip(): HTMLElement | null {
  * matches that selector first.
  */
 function actionOf(li: HTMLLIElement): string {
-  return li.children[0].lastElementChild!.textContent!;
+  return li.querySelector("[data-action]")!.textContent!;
 }
 
 /** The glyph the byline draws, as class tokens -- `lucide-bot` or `lucide-user`. */
 function bylineGlyph(li: HTMLLIElement): string[] {
-  return li.children[0].querySelector("svg")!.getAttribute("class")!.split(" ");
+  return li.querySelector("[data-byline] svg")!.getAttribute("class")!.split(" ");
 }
 
 /** What the card says it IS, above the body. */
 function headerOf(li: HTMLLIElement): string {
-  return li.querySelector("header")!.textContent!;
+  return li.querySelector("header h3")!.textContent!;
 }
 
 /** The body: the region between the title and the record. */
 function bodyOf(li: HTMLLIElement): Element {
-  return li.children[2];
+  return li.children[1];
 }
 
 /** The recipient faces, as [glyph, accessible name] pairs, in order. */
@@ -1305,7 +1310,7 @@ describe("how heavy a card is at rest", () => {
   it("leaves its bands untinted until then", async () => {
     await render();
     const card = cards()[0];
-    const bands = [card.querySelector("[data-inner]")!, card.querySelector("footer dl")!];
+    const bands = [card.querySelector("header")!, card.querySelector("footer dl")!];
     for (const band of bands) {
       const cls = [...band.classList];
       expect(cls, "a band tinted at rest is one of the two steps being removed").not.toContain(
@@ -1325,7 +1330,7 @@ describe("how heavy a card is at rest", () => {
   it("does the same for the keyboard", async () => {
     await render();
     const card = cards()[0];
-    for (const band of [card.querySelector("[data-inner]")!, card.querySelector("footer dl")!]) {
+    for (const band of [card.querySelector("header")!, card.querySelector("footer dl")!]) {
       expect([...band.classList]).toContain("group-has-[:focus-visible]/card:bg-elevated");
     }
   });
@@ -1616,14 +1621,14 @@ describe("the record under a card", () => {
     readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
   });
 
-  it("lays every card out as a byline, a header, a body and a record, in that order", async () => {
+  it("lays every card out as a row, a body and a record, in that order", async () => {
     readTimeline.mockResolvedValue(claimsOf({ cell: "soil-ph", published: "2026-09-22T10:00:00Z" }));
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
 
     readTimeline.mockResolvedValue(SHARED_FILE);
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
 
     // The third kind, whose header is its own branch: a fragment is titled by WHAT it
     // is, since a piece of a graph has no name of its own.
@@ -1637,7 +1642,7 @@ describe("the record under a card", () => {
       }),
     );
     await render();
-    expect(regionsOf(cards()[0])).toEqual(["DIV", "HEADER", "DIV", "FOOTER"]);
+    expect(regionsOf(cards()[0])).toEqual(["HEADER", "DIV", "FOOTER"]);
     expect(headerOf(cards()[0])).toBe(en.mangrove.fragmentTitle);
     expect(field(cards()[0], ID)).toBe("graph:b8d28853aae5");
   });
@@ -1691,9 +1696,6 @@ describe("the record under a card", () => {
     expect(card.getAttribute("aria-expanded")).toBe("true");
 
     for (const el of [
-      // The byline band is `data-inner` for the same reason the record is: an avatar
-      // and a gutter are not controls, and clicking either must not open a sheet.
-      card.children[0],
       card.querySelector("footer")!,
       card.querySelector("footer dt")!,
       card.querySelector("footer dd")!,
@@ -2392,3 +2394,82 @@ describe("the destination rail", () => {
   });
 });
 
+
+// mangrove-compact-list FR-3: a reading is a list of rows with at most one open.
+describe("one open post at a time", () => {
+  beforeEach(() => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: ["alpha", "bravo"].map((cell, i) => ({
+        cell,
+        author: "mangrove:actor:bob:service",
+        object: { id: `mangrove:obj:${i}`, type: "MemoryNote", cell, content: "body" },
+        published: `2026-09-2${i}T10:00:00Z`,
+        deleted: false,
+        evidence: 0,
+        audience: [],
+        read: true,
+      })),
+    });
+  });
+
+  const clickOn = (el: Element) =>
+    act(async () => {
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+  it("closes the open post when another is opened", async () => {
+    await render();
+    await clickOn(cardOf("alpha").querySelector("header")!);
+    expect(cardOf("alpha").getAttribute("aria-expanded")).toBe("true");
+
+    await clickOn(cardOf("bravo").querySelector("header")!);
+    expect(cardOf("bravo").getAttribute("aria-expanded")).toBe("true");
+    expect(cardOf("alpha").getAttribute("aria-expanded")).toBe("false");
+    expect((bodyOf(cardOf("alpha")) as HTMLElement).hidden).toBe(true);
+  });
+
+  it("closes the open post when it is clicked again", async () => {
+    await render();
+    await clickOn(cardOf("alpha").querySelector("header")!);
+    await clickOn(cardOf("alpha").querySelector("header")!);
+    expect(cards().every((c) => c.getAttribute("aria-expanded") === "false")).toBe(true);
+  });
+
+  it("gives every closed post a row of one fixed height", async () => {
+    await render();
+    for (const card of cards()) {
+      expect([...card.querySelector("header")!.classList]).toContain("h-16");
+    }
+  });
+});
+
+describe("the preview line on a closed post", () => {
+  it("shows the opening of a note without its markdown", async () => {
+    readCapabilities.mockResolvedValue({ governs: false, tenantLicensed: false });
+    readTimeline.mockResolvedValue({
+      reading: "received",
+      claims: [
+        {
+          cell: "soil",
+          author: "mangrove:actor:bob:service",
+          object: {
+            id: "mangrove:obj:9",
+            type: "MemoryNote",
+            cell: "soil",
+            content: "## Soil pH\n\nIt is **6.4** on plot 3.",
+          },
+          published: "2026-09-22T10:00:00Z",
+          deleted: false,
+          evidence: 0,
+          audience: [],
+          read: true,
+        },
+      ],
+    });
+    await render();
+    const preview = cardOf("soil").querySelector("header [data-preview]")!;
+    expect(preview.textContent).toBe("Soil pH It is 6.4 on plot 3.");
+  });
+});

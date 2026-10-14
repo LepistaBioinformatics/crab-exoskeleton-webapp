@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { FileText, Network, Send, X } from "lucide-react";
 import type { Workspace } from "./fragment";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,10 @@ import AudiencePicker, {
 import type { MangroveShare } from "./mangrove-share-bus";
 import { chatCopy } from "@/lib/i18n/chat";
 import { useT } from "@/lib/i18n/context";
+
+// Client-only, and only fetched when a markdown body is being written: ProseMirror
+// needs a DOM, and nothing else on the chat screen should pay for an editor.
+const MarkdownField = dynamic(() => import("./markdown-field"), { ssr: false });
 
 // Writing something into the mangrove, as yourself.
 //
@@ -52,7 +57,7 @@ import { useT } from "@/lib/i18n/context";
 // it is set to until somebody says otherwise.
 
 const selectClass =
-  "h-9 rounded-lg border border-rule-strong bg-elevated px-2 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 rounded-lg field px-2 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 export default function MangroveCompose({
   workspace,
@@ -217,15 +222,37 @@ export default function MangroveCompose({
               </select>
             </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
-              <Textarea
-                className="mt-1 min-h-40 rounded-lg border border-brand bg-elevated px-3 py-2"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder={t.mangrove.bodyPlaceholder}
-              />
-            </label>
+            {/* MARKDOWN RENDERS AS IT IS TYPED: `## ` is a heading, `**x**` is bold, and
+                the value is still markdown. Plain text keeps the plain box -- a
+                markdown editor would escape every `*` and `#` in it on the way out.
+                Switching format carries the same string across: the editor reads
+                `content` when it mounts, and the box reads it always.
+
+                A <div>, not a <label>, around the editor: a label focuses a form
+                control, and a contenteditable is not one. The editor carries the
+                label itself. */}
+            {mediaType === "text/markdown" ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
+                <MarkdownField
+                  className="field mt-1 rounded-lg"
+                  value={content}
+                  onChange={setContent}
+                  placeholder={t.mangrove.bodyPlaceholder}
+                  ariaLabel={t.mangrove.bodyLabel}
+                />
+              </div>
+            ) : (
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-fg">{t.mangrove.bodyLabel}</span>
+                <Textarea
+                  className="field mt-1 min-h-40 rounded-lg px-3 py-2"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder={t.mangrove.bodyPlaceholder}
+                />
+              </label>
+            )}
           </div>
         </>
       )}

@@ -126,3 +126,24 @@ export function resolveMentions(
   }
   return out;
 }
+
+/**
+ * The `[anexo: <path>]` markers a message carries: every attached file, then every file
+ * the text `@`-mentions that was not also attached. The marker is what the agent acts
+ * on; the `@token` stays in the sentence as prose.
+ *
+ * One function for both composers (the conversation's and the landing's), because the
+ * agent reads exactly this format and two copies would drift.
+ */
+export function attachmentMarkers(
+  text: string,
+  attached: readonly { path: string }[],
+  candidates: MentionCandidate[],
+): string {
+  const mentioned = resolveMentions(text, candidates).filter(
+    (m) => !attached.some((a) => a.path === m.path),
+  );
+  return [...attached.map((a) => a.path), ...mentioned.map((m) => m.path)]
+    .map((path) => `[anexo: ${path}]`)
+    .join("\n");
+}

@@ -140,7 +140,7 @@ const folderRow = cva(
   "group/dir flex items-center gap-0.5 rounded-lg transition-colors",
   {
     variants: {
-      over: { true: "bg-accent/15 ring-1 ring-accent/50", false: "" },
+      over: { true: "bg-accent/15 ring-1 ring-rule-emphasis", false: "" },
     },
     defaultVariants: { over: false },
   },
@@ -150,7 +150,7 @@ const folderRow = cva(
 // somewhere to land, and without this the only way back to the root would be to
 // re-upload.
 const rootZone = cva("relative min-h-8 rounded-lg transition-colors", {
-  variants: { over: { true: "bg-accent/10 ring-1 ring-accent/40", false: "" } },
+  variants: { over: { true: "bg-accent/10 ring-1 ring-rule-strong", false: "" } },
   defaultVariants: { over: false },
 });
 
@@ -927,7 +927,7 @@ export default function FilesScreen({ workspace }: { workspace: Workspace }) {
               would leave the member looking for a control they had just been given. */}
           {handedOff !== null && (
             <div className="px-2 pt-2">
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-rule-strong bg-accent/10 px-3 py-2">
                 <p className="min-w-0 flex-1 text-xs leading-snug text-fg">
                   {t.mangrove.handedOff.replace("{name}", handedOff)}
                 </p>

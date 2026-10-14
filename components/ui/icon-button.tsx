@@ -6,7 +6,7 @@ const iconButton = cva(
   [
     "relative isolate inline-flex items-center justify-center rounded-full",
     "transition-[transform,box-shadow,opacity]",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
     "disabled:opacity-40 disabled:pointer-events-none",
     "after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:bg-current after:opacity-0 after:transition-opacity hover:after:opacity-10 active:after:opacity-20",
   ],
@@ -15,7 +15,7 @@ const iconButton = cva(
       variant: {
         filled: "bg-accent text-accent-fg",
         ghost: "bg-transparent text-fg",
-        outlined: "border border-brand bg-transparent text-fg",
+        outlined: "border border-rule-strong bg-transparent text-fg",
       },
       size: {
         sm: "h-8 w-8",

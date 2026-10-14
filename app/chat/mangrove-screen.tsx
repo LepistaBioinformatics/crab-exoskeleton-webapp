@@ -161,6 +161,14 @@ export default function MangroveScreen({
   // this only has to carry the gap. Object ids, which is what a receipt names.
   const [readHere, setReadHere] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  // THE ONE OPEN POST, across the pending queue and the timeline
+  // (mangrove-compact-list FR-3). Opening another closes it; a reading of compact rows
+  // with several open at once is the tall, uneven list this replaced. Keyed by the
+  // same string each list already uses as its React key.
+  const [openPost, setOpenPost] = useState<string | null>(null);
+  const togglePost = (key: string) => setOpenPost((was) => (was === key ? null : key));
+  // A different reading is a different list: nothing in it is the one that was open.
+  useEffect(() => setOpenPost(null), [reading]);
   const [actionError, setActionError] = useState<string | null>(null);
   // What the member arrived here to share, if they arrived from somewhere else.
   const [attachment, setAttachment] = useState<MangroveShare | null>(null);
@@ -567,7 +575,7 @@ export default function MangroveScreen({
             <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
               <ShieldQuestion size={16} aria-hidden /> {t.mangrove.pendingTitle}
             </h2>
-            <ul className="mt-3 flex flex-col gap-3">
+            <ul className="mt-3 flex flex-col gap-2">
               {/* A fragment renders as one here too: deciding whether a whole
                   subscription should receive it means reading what is in it. What is
                   NOT offered is merging it — that is a thing to do once it has been
@@ -575,6 +583,8 @@ export default function MangroveScreen({
               {pending.map((p) => (
                 <MangrovePost
                   key={p.activityId}
+                  expanded={openPost === p.activityId}
+                  onToggle={() => togglePost(p.activityId)}
                   action="pending"
                   workspace={workspace}
                   projectName={projectName}
@@ -625,7 +635,7 @@ export default function MangroveScreen({
               <Send size={16} aria-hidden />{" "}
               {reading === "published" ? t.mangrove.publishedTitle : t.mangrove.receivedTitle}
             </h2>
-            <ul className="mt-3 flex flex-col gap-3">
+            <ul className="mt-3 flex flex-col gap-2">
               {claims.map((c, i) => {
                 // Theirs, and still there to act on. BOTH of the member's actors
                 // count: a memory the agent published is the member's to pass on.
@@ -641,6 +651,8 @@ export default function MangroveScreen({
                 return (
                   <MangrovePost
                     key={`${c.cell}:${c.author}`}
+                    expanded={openPost === `${c.cell}:${c.author}`}
+                    onToggle={() => togglePost(`${c.cell}:${c.author}`)}
                     // `deleted` DECIDES, not the log's verb: a mangrove that has
                     // not shipped `action` yet still answers with the tombstone,
                     // and that was the case with no word on the card at all.

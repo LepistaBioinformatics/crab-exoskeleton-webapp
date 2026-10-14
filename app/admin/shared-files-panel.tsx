@@ -149,7 +149,7 @@ export default function SharedFilesPanel({
                 href={sharedFileDownloadUrl(scope, f.name)}
                 download={f.name}
                 aria-label={`${t.sharedFiles.downloadPrefix} ${f.name}`}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
                 <Download size={15} aria-hidden />
               </a>

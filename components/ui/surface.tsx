@@ -12,7 +12,7 @@ const surface = cva("rounded-lg", {
       2: "bg-elevated",
     },
     bordered: {
-      true: "border border-brand",
+      true: "border border-rule-strong",
       false: "",
     },
     shadow: {

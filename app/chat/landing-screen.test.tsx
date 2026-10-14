@@ -62,6 +62,10 @@ vi.mock("./fragment", async () => {
   };
 });
 
+// What `@` can reference, fixed: the real hook lists the workspace over the network.
+const mentionable = [{ name: "q2.pdf", path: "public/q2.pdf" }];
+vi.mock("./use-mention-files", () => ({ useMentionFiles: () => mentionable }));
+
 // The tree measures its own layout and fetches its events; neither is what these tests
 // are about. What matters here is WHICH conversations it is handed.
 const treeRows: string[][] = [];
@@ -305,11 +309,20 @@ describe("LandingScreen", () => {
   // OQ-1: there is no conversation to upload against yet, and the proxy stores an
   // attachment under a session. Omitted rather than disabled — a disabled control
   // swallows its own click.
-  it("offers no attach control, rather than a dead one", async () => {
+  // The first message of a conversation can carry a file like any other: an upload
+  // lands in the workspace's `public/`, and never needed the conversation to exist.
+  it("offers the attach control", async () => {
     const el = await mount(null);
     const attach = Array.from(el.querySelectorAll("button")).find(
       (b) => b.getAttribute("aria-label") === t.composer.attach,
     );
-    expect(attach).toBeUndefined();
+    expect(attach).toBeDefined();
+  });
+
+  it("turns an @-mention into the marker the agent opens", async () => {
+    const el = await mount(null);
+    // Text after the token, so the menu is closed and Enter sends rather than picks.
+    await send(el, "summarise @q2.pdf please");
+    expect(enqueued[0].text).toBe("summarise @q2.pdf please\n\n[anexo: public/q2.pdf]");
   });
 });

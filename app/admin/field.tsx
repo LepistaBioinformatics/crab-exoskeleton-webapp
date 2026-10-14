@@ -18,7 +18,7 @@ import { cva } from "class-variance-authority";
 // which is most of what made the model form hard to read.
 
 const control = cva(
-  "w-full rounded-md border border-rule-strong bg-bg px-2.5 py-2 text-fg placeholder:text-fg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+  "w-full rounded-md field px-2.5 py-2 text-fg placeholder:text-fg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft",
   {
     variants: {
       identifier: {

@@ -26,14 +26,14 @@ const button = cva(
   [
     "relative isolate inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-sans",
     "transition-[transform,box-shadow,opacity,color] select-none",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
     "disabled:opacity-50 disabled:pointer-events-none",
   ],
   {
     variants: {
       variant: {
-        filled: `border border-brand bg-accent text-accent-fg font-semibold ${STATE_LAYER}`,
-        outlined: `border border-brand bg-transparent text-fg font-semibold ${STATE_LAYER}`,
+        filled: `border border-rule-strong bg-accent text-accent-fg font-semibold ${STATE_LAYER}`,
+        outlined: `border border-rule-strong bg-transparent text-fg font-semibold ${STATE_LAYER}`,
         text: `bg-transparent text-fg font-semibold ${STATE_LAYER}`,
         tonal: `border border-rule-strong bg-elevated text-fg font-semibold ${STATE_LAYER}`,
         // A control that reads as a LINK, in the type this app already speaks it in:

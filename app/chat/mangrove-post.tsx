@@ -128,7 +128,7 @@ const actionPill = cva(
         // pending are the two states that ARE asking for something.
         record:
           "bg-transparent text-fg-muted ring-transparent transition-colors group-hover/card:bg-surface group-hover/card:ring-rule group-has-[:focus-visible]/card:bg-surface group-has-[:focus-visible]/card:ring-rule",
-        attention: "bg-accent/10 text-accent ring-accent/40",
+        attention: "bg-accent/10 text-accent ring-rule-strong",
       },
     },
     defaultVariants: { tone: "record" },
@@ -167,7 +167,7 @@ const card = cva(
     // added when unread: grown on marking, every card in the list would shift
     // three pixels sideways the moment one was opened.
     "border border-l-4 border-transparent",
-    "hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "hover:border-rule-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ].join(" "),
   {
     variants: {
@@ -177,7 +177,7 @@ const card = cva(
       // question an inbox is actually being asked -- which of these have I not
       // been through.
       unread: {
-        true: "border-l-accent hover:border-l-accent",
+        true: "border-l-rule-emphasis hover:border-l-rule-emphasis",
         false: "",
       },
     },
@@ -704,6 +704,30 @@ function Field({
  * OBJECT ID, because that is what the agent resolves through mangrove_timeline; the text
  * is never copied into the message, which is the rule every reference kind keeps.
  */
+/**
+ * One line of what a post holds, for its closed row.
+ *
+ * Prose is its opening with the markdown punctuation taken out -- `## Soil` reads as
+ * "Soil" -- and its whitespace collapsed, so a heading and the paragraph under it run
+ * on as one line. A file is its size and type, which is what a reader decides by
+ * before downloading. A fragment is the names of the first few things it describes.
+ */
+function previewOf(object: MangroveObject, fragment: GraphFragment | null, t: ChatDict): string {
+  if (fragment) {
+    const names = fragment.entities.slice(0, 4).map((e) => e.name);
+    const more = fragment.entities.length - names.length;
+    return more > 0 ? `${names.join(", ")} +${more}` : names.join(", ");
+  }
+  if (object.blob) {
+    return [formatSize(object.size), object.mediaType].filter(Boolean).join(" · ");
+  }
+  return (object.content ?? "")
+    .replace(/[#*_>`~|[\]()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240) || t.mangrove.emptyPreview;
+}
+
 export default function MangrovePost({
   workspace,
   projectName,
@@ -723,6 +747,8 @@ export default function MangrovePost({
   onRead,
   dimmed = false,
   onReference,
+  expanded: expandedProp,
+  onToggle,
 }: {
   workspace: Workspace;
   /**
@@ -805,6 +831,13 @@ export default function MangrovePost({
   /** Revoked: still listed, struck through, and no longer something to act on. */
   dimmed?: boolean;
   onReference?: (ref: MangroveReference) => void;
+  /**
+   * Whether this post is the open one, when the LIST decides (mangrove-compact-list
+   * FR-3: one open post per screen). Absent, the post keeps its own state.
+   */
+  expanded?: boolean;
+  /** Asks the list to open or close this post; pairs with `expanded`. */
+  onToggle?: () => void;
 }) {
   const t = useT(chatCopy);
   const badge = actionBadge(action, t);
@@ -816,7 +849,8 @@ export default function MangrovePost({
   // (merge into my graph, save the file, quote it into the conversation) and the
   // record under it are behind one click, which is also the click that says this
   // member opened it.
-  const [expanded, setExpanded] = useState(false);
+  const [ownExpanded, setOwnExpanded] = useState(false);
+  const expanded = expandedProp ?? ownExpanded;
   const fragment = parseGraphFragment(object);
   const content = object.content ?? "";
   // EVERY CARD OPENS NOW, and that is the change. `openable` used to mean "there
@@ -828,16 +862,21 @@ export default function MangrovePost({
   // stopped being what a click on the card does. It is offered as one of the
   // controls the open reveals, beside the others.
   const hasSheet = !fragment && !object.blob && isCut(content);
+  const preview = previewOf(object, fragment, t);
+  const heading = fragment
+    ? t.mangrove.fragmentTitle
+    : object.blob
+      ? object.fileName || object.cell
+      : object.cell;
 
   // OPENING IS WHAT SENDS THE RECEIPT, and only opening. The mangrove's own react
   // endpoint puts it plainly: a receipt that fires because something appeared in
   // a listing is a receipt for nothing. Closing it again sends nothing either --
   // having read something does not stop being true.
   const toggle = () => {
-    setExpanded((was) => {
-      if (!was) onRead?.();
-      return !was;
-    });
+    if (!expanded) onRead?.();
+    if (onToggle) onToggle();
+    else setOwnExpanded(!expanded);
   };
 
   const opener: React.LiHTMLAttributes<HTMLLIElement> = {
@@ -865,79 +904,63 @@ export default function MangrovePost({
       data-unread={unread ? "true" : undefined}
       className={card({ unread })}
     >
-      {/* WHO IT IS FROM, ACROSS THE TOP.
-          This used to be a column in the footer, under a heading, read last. It is the
-          first thing a reader of somebody else's memory wants and the only fact on the
-          card that is about a PERSON rather than about a thing, which is why it gets
-          a band of its own and a glyph: the shape says person-or-agent before the
-          sentence beside it has been read at all.
+      {/* ONE ROW, ONE HEIGHT, WHATEVER THE KIND (mangrove-compact-list FR-1).
+          A closed post is what a reader scans a list by: what kind of thing it is, what
+          it is called, who sent it and what happened to it. It used to be a byline band,
+          a title a size up and the body's preview under both, so every card was as tall
+          as its content and a reading of ten was several screens. The body is behind
+          the open now, with the record and the controls.
 
-          `data-inner`, because the band is a region -- a padding gutter and an avatar,
-          neither of them a control -- and a click on it must not open a sheet over the
-          body. */}
-      <div
-        data-inner
-        className="flex items-center gap-2.5 px-3.5 py-2.5 transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated"
-      >
-        <span className="shrink-0 rounded-full p-1.5 text-accent ring-1 ring-transparent transition-colors group-hover/card:bg-surface group-hover/card:ring-rule-strong group-has-[:focus-visible]/card:bg-surface group-has-[:focus-visible]/card:ring-rule-strong">
-          {authorKind === "agent" ? (
-            <Bot size={16} aria-hidden />
-          ) : (
-            <User size={16} aria-hidden />
-          )}
-        </span>
-        <p className="min-w-0 flex-1 break-words text-xs leading-snug text-fg-muted">
-          {t.mangrove.senderLabel}{" "}
-          <span className="font-medium text-fg">{author}</span>
-        </p>
-        {/* WHAT HAPPENED, at the end of the band the eye already lands on. A
-            revocation used to be a card at reduced opacity and nothing else. */}
-        <span className={actionPill({ tone: badge.tone })}>{badge.label}</span>
-      </div>
+          NOT `data-inner`: this row is the thing a click opens. The glyph is the kind's
+          (note, file, fragment) rather than the sender's -- the sender is a name on the
+          row, and the kind is the one fact a name cannot carry.
 
-      {/* WHAT THIS IS, in the kind's own terms. A file is its name, a fragment is a
-          piece of somebody's graph, and prose is the handle it was filed under. The
-          glyph is ACCENT and the title is set a size up: this is the line the eye
-          should land on after the byline, and a 14px title beside a muted 14px icon
-          was the same weight as everything under it.
-
-          NOT struck through when the memory is revoked: the title is how the reader
-          finds the thing again, and a tombstoned memory is still listed. */}
-      <header className="flex items-start gap-2.5 px-3.5 pt-3.5">
+          The title is NOT struck through when the memory is revoked: it is how the
+          reader finds the thing again, and a tombstoned memory is still listed. */}
+      <header className="flex h-16 items-start gap-2.5 px-3.5 py-2.5 transition-colors group-hover/card:bg-elevated group-has-[:focus-visible]/card:bg-elevated">
         {fragment ? (
-          <>
-            <Network size={20} className="mt-px shrink-0 text-accent" aria-hidden />
-            <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug text-fg">
-              {t.mangrove.fragmentTitle}
-            </h3>
-          </>
+          <Network size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
         ) : object.blob ? (
-          <>
-            <FileText size={20} className="mt-px shrink-0 text-accent" aria-hidden />
-            <h3
-              className="min-w-0 flex-1 break-words text-base font-semibold leading-snug text-fg"
-              title={object.fileName || object.cell}
-            >
-              {object.fileName || object.cell}
-            </h3>
-          </>
+          <FileText size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
         ) : (
-          <>
-            {/* Prose gets one too, so the three kinds read as three of the same thing
-                rather than as two cards and a bare line. */}
-            <StickyNote size={20} className="mt-px shrink-0 text-accent" aria-hidden />
-            <h3
-              className="min-w-0 flex-1 break-words text-base font-semibold leading-snug text-fg"
-              title={object.cell}
-            >
-              {object.cell}
-            </h3>
-          </>
+          <StickyNote size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
         )}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg" title={heading}>
+              {heading}
+            </h3>
+            <p
+              data-byline
+              className="flex min-w-0 max-w-[35%] items-center gap-1 text-xs text-fg-muted"
+            >
+              {authorKind === "agent" ? (
+                <Bot size={12} className="shrink-0" aria-hidden />
+              ) : (
+                <User size={12} className="shrink-0" aria-hidden />
+              )}
+              <span className="sr-only">{t.mangrove.senderLabel} </span>
+              <span className="min-w-0 truncate">{author}</span>
+            </p>
+            <span data-action className={actionPill({ tone: badge.tone })}>
+              {badge.label}
+            </span>
+          </div>
+          {/* THE PREVIEW: one line of what is inside, so a closed row can be recognised
+              without opening it -- the opening of a note, a file's size and type, the
+              first names in a fragment. One line and no more, which is what keeps
+              every row the same height. */}
+          <p data-preview className="mt-1 truncate text-xs text-fg-muted">
+            {preview}
+          </p>
+        </div>
       </header>
 
+      {/* `hidden`, not unmounted, for the footer's reason below: what the body was
+          doing (a merge result, a download in flight) is still there when it reopens. */}
       <div
-        className={`px-3.5 pb-3.5 pt-2.5 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}
+        hidden={!expanded}
+        className={`px-3.5 pb-3.5 pt-1 text-sm ${dimmed ? "text-fg-muted line-through" : "text-fg"}`}
       >
         {fragment ? (
           <FragmentView

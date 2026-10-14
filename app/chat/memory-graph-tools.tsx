@@ -40,7 +40,7 @@ const chip = cva(
   {
     variants: {
       active: {
-        true: "border-accent/40 bg-accent/15 text-accent",
+        true: "border-rule-strong bg-accent/15 text-accent",
         false: "border-rule-strong text-fg-muted hover:text-fg",
       },
     },
@@ -71,7 +71,7 @@ const scopeChip = cva(
   {
     variants: {
       active: {
-        true: "border-accent/40 bg-accent/15 text-accent",
+        true: "border-rule-strong bg-accent/15 text-accent",
         false: "border-rule-strong text-fg-muted hover:text-fg",
       },
     },
@@ -476,7 +476,7 @@ export default function MapTools({
           <select
             value={tools.sizeBy}
             onChange={(e) => set("sizeBy", e.target.value as SizeMetric)}
-            className="mt-0.5 w-full rounded-md border border-rule-strong bg-elevated px-1.5 py-1 text-[11px] text-fg"
+            className="mt-0.5 w-full rounded-md field px-1.5 py-1 text-[11px] text-fg"
           >
             {SIZE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -494,7 +494,7 @@ export default function MapTools({
           <select
             value={tools.colorBy}
             onChange={(e) => set("colorBy", e.target.value as ColorEncoding)}
-            className="mt-0.5 w-full rounded-md border border-rule-strong bg-elevated px-1.5 py-1 text-[11px] text-fg"
+            className="mt-0.5 w-full rounded-md field px-1.5 py-1 text-[11px] text-fg"
           >
             {COLOR_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

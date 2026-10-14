@@ -14,7 +14,7 @@ import { cva } from "class-variance-authority";
 const option = cva("rounded-lg border px-2.5 py-1 text-sm transition-colors", {
   variants: {
     chosen: {
-      true: "border-brand bg-accent text-accent-fg",
+      true: "border-rule-strong bg-accent text-accent-fg",
       false: "border-rule-strong bg-transparent text-fg hover:bg-accent/10",
     },
   },

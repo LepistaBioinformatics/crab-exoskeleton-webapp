@@ -6,15 +6,15 @@ const input = cva(
   [
     "w-full rounded-lg px-3 text-sm text-fg",
     "placeholder:text-fg-muted",
-    "transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+    "transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft",
     "disabled:opacity-50 disabled:pointer-events-none",
   ],
   {
     variants: {
-      // `default` is the bordered field; `subtle` blends into the surface (no
-      // violet border, faint fill) for low-emphasis spots like a search box.
+      // `default` is the app's one field style (`field` in globals.css: a tonal fill,
+      // no visible border); `subtle` is fainter still, for a search box.
       variant: {
-        default: "border border-brand bg-elevated",
+        default: "field",
         subtle: "border border-transparent bg-elevated/60 hover:bg-elevated",
       },
       inputSize: {

@@ -70,7 +70,7 @@ export function TagCluster({
         aria-label={
           tags.length === 1 ? t.enrichment.tagsOne : t.enrichment.tagsOther.replace("{n}", String(tags.length))
         }
-        className="inline-flex items-center gap-0.5 rounded-[4px] border border-rule-strong px-1 py-0.5 text-fg-muted transition-colors hover:border-brand hover:text-fg group-focus-within/tags:border-brand group-focus-within/tags:text-fg"
+        className="inline-flex items-center gap-0.5 rounded-[4px] border border-rule-strong px-1 py-0.5 text-fg-muted transition-colors hover:border-rule-emphasis hover:text-fg group-focus-within/tags:border-rule-emphasis group-focus-within/tags:text-fg"
         style={color ? { borderColor: color, backgroundColor: `${color}1a`, color } : undefined}
       >
         <TagIcon size={11} className="shrink-0" aria-hidden />
@@ -313,7 +313,7 @@ export function ConversationEditor({
               onChange={(e) => setTagColor(e.target.value)}
               aria-label={t.enrichment.tagColor}
               title={t.enrichment.tagColor}
-              className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-brand bg-elevated"
+              className="h-9 w-9 shrink-0 cursor-pointer rounded-lg field"
             />
             <IconButton
               variant="ghost"

@@ -21,7 +21,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 
 const selectClass =
-  "h-9 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 w-full rounded-lg field px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 // Invite someone to this subscription. An agent and an access level together resolve to
 // the mycelium guest role id, because permission is a property of the role rather than of

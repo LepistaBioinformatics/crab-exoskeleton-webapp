@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { createConversation, type ConversationSummary } from "@/lib/chatSession";
@@ -9,7 +10,11 @@ import Composer from "./composer";
 import ConversationSearchBar from "./conversation-search-bar";
 import { useConversations } from "./use-conversations";
 import { useConversationSearch } from "./use-conversation-search";
-import { enqueue as storeEnqueue } from "./turn-store";
+import { enqueue as storeEnqueue, noteUpload } from "./turn-store";
+import { useMentionFiles } from "./use-mention-files";
+import { publishMediaChanged } from "./media-refresh-bus";
+import { uploadMedia, type Attachment } from "@/lib/media";
+import { attachmentMarkers } from "@/lib/fileMentions";
 import { setFragmentProjectSid, useFragment } from "./fragment";
 import ConversationTree from "./conversation-tree";
 import type { Project } from "@/lib/projects";
@@ -60,6 +65,33 @@ export default function LandingScreen({
   const fragment = useFragment();
   const { conversations: all, loaded } = useConversations(workspace);
 
+  // ATTACHING AND `@` WORK HERE TOO. Both were switched off on the belief that an upload
+  // is stored under a conversation, which this screen does not have yet -- but
+  // `uploadMedia` never sent one: a file lands in the workspace's (or the project's)
+  // `public/`, the same place it lands from inside a conversation. So the first message
+  // of a conversation can carry a file like any other.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const mentionFiles = useMentionFiles(workspace);
+
+  async function uploadFiles(files: FileList | File[]) {
+    setAttachError(null);
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const attachment = await uploadMedia(workspace, file);
+        setAttachments((prev) => [...prev, attachment]);
+        publishMediaChanged(); // the files surface and the `@` list both re-read
+        noteUpload(); // arms the store's settle wait for the first turn
+      }
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : "unknown");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   // THE PROJECT FILTER, and leaving it out was a defect.
   //
   // `listConversations` sends tenant/subscription/role and NOT the project, so it
@@ -99,8 +131,13 @@ export default function LandingScreen({
   // is created by the first message (`touchConversation`). If that ever starts hitting
   // the network, the text has to be held until it resolves.
   function send(text: string): boolean {
-    const body = text.trim();
-    if (!body) return false;
+    const trimmed = text.trim();
+    if (!trimmed && attachments.length === 0) return false;
+    // The same markers the conversation's composer appends, from the same function.
+    const body = [trimmed, attachmentMarkers(trimmed, attachments, mentionFiles)]
+      .filter(Boolean)
+      .join("\n\n");
+    setAttachments([]);
     void createConversation(workspace, workspace.p ?? null).then((conversation) => {
       storeEnqueue(conversation.id, body, {
         workspace,
@@ -131,20 +168,20 @@ export default function LandingScreen({
             onSend={send}
             sending={false}
             loadingHistory={false}
-            // No conversation to upload against yet — see Composer's `canAttach`.
             sessionId=""
-            canAttach={false}
-            attachments={[]}
-            uploading={false}
-            attachError={null}
+            attachments={attachments}
+            uploading={uploading}
+            attachError={attachError}
             workspace={workspace}
-            onPickFiles={() => {}}
-            onRemoveAttachment={() => {}}
+            onPickFiles={(files) => void uploadFiles(files)}
+            onRemoveAttachment={(path) =>
+              setAttachments((prev) => prev.filter((a) => a.path !== path))
+            }
             replyTo={null}
             onCancelReply={() => {}}
             chatRef={null}
             onCancelChatRef={() => {}}
-            mentionFiles={[]}
+            mentionFiles={mentionFiles}
             focusSignal={focusSignal}
           />
         </div>

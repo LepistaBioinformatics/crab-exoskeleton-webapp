@@ -90,7 +90,7 @@ export function pasteFilesHandler(onPickFiles: (files: File[]) => void) {
 const contextChip = cva(
   "mb-2 flex items-center gap-2 rounded-lg border-l-2 bg-elevated px-3 py-1.5",
   {
-    variants: { tone: { reply: "border-brand", task: "border-accent" } },
+    variants: { tone: { reply: "border-rule-strong", task: "border-rule-emphasis" } },
     defaultVariants: { tone: "reply" },
   },
 );
@@ -153,16 +153,6 @@ interface ComposerProps {
    */
   mentionFiles: MentionCandidate[];
   /**
-   * False on the landing, where there is no conversation yet to upload against: the
-   * proxy stores an attachment under a session, and `sessionId` is "" until the first
-   * send mints one.
-   *
-   * The control is OMITTED rather than disabled, the rule this codebase already follows
-   * for the rail and for the projects row: a disabled button swallows its own click, so
-   * a member presses what looks like a way in and nothing happens.
-   */
-  canAttach?: boolean;
-  /**
    * Bumped to move the cursor here. Used by the landing, whose "New chat" button sits in
    * a sidebar that is already showing the landing -- so the click had nothing to
    * navigate to and gave no feedback at all.
@@ -210,7 +200,6 @@ export default function Composer({
   chatRef,
   onCancelChatRef,
   mentionFiles,
-  canAttach = true,
   focusSignal,
 }: ComposerProps) {
   const t = useT(chatCopy);
@@ -507,7 +496,7 @@ export default function Composer({
           so the two queries cannot both be active. */}
       {mentionOpen && (
         <div
-          className="mb-2 max-h-64 overflow-y-auto rounded-xl border border-accent/40 bg-surface shadow-lg"
+          className="mb-2 max-h-64 overflow-y-auto rounded-xl border border-rule-strong bg-surface shadow-lg"
           role="listbox"
           aria-label={t.composer.mentionFiles}
         >
@@ -534,7 +523,7 @@ export default function Composer({
 
       {slashOpen && (
         <div
-          className="mb-2 overflow-hidden rounded-xl border border-accent/40 bg-surface shadow-lg"
+          className="mb-2 overflow-hidden rounded-xl border border-rule-strong bg-surface shadow-lg"
           role="listbox"
           aria-label={t.composer.slashCommands}
         >
@@ -559,8 +548,12 @@ export default function Composer({
         </div>
       )}
 
+      {/* NO OUTLINE AT REST: the box is set apart by its fill and its shadow, like every
+          other field since the borders came off them. Focus draws a hairline ring rather
+          than thickening a border -- the 2.5px border it used to grow moved the text
+          inside it by a pixel and a half on every focus. */}
       <div
-        className={`flex flex-col gap-2 rounded-2xl border border-accent/40 bg-composer-bg px-4 pt-4 pb-3 shadow-lg transition-[border-color,box-shadow] focus-within:border-[2.5px] focus-within:border-accent${
+        className={`flex flex-col gap-2 rounded-2xl border border-transparent bg-composer-bg px-4 pt-4 pb-3 shadow-lg transition-shadow focus-within:ring-1 focus-within:ring-rule-strong${
           typing ? " composer-typing" : ""
         }`}
       >
@@ -674,7 +667,6 @@ export default function Composer({
         {/* Toolbar row inside the box, below the textarea: utilities on the
             left, Send on the right. Popovers open upward (bottom-full). */}
         <div className="mt-1 flex items-center gap-1">
-        {canAttach && (
         <div className="relative">
           <IconButton
             variant="ghost"
@@ -691,7 +683,7 @@ export default function Composer({
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-              <div className="absolute bottom-full left-0 z-20 mb-2 w-56 rounded-xl border border-brand bg-surface p-1 shadow-xl">
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-56 rounded-xl border border-rule-strong bg-surface p-1 shadow-xl">
                 {MEDIA_CATEGORIES.map((cat) => {
                   const Icon = CATEGORY_ICON[cat.key] ?? Files;
                   return (
@@ -719,7 +711,6 @@ export default function Composer({
             </>
           )}
         </div>
-        )}
 
         <IconButton
           variant="ghost"

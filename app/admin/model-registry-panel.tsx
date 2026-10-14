@@ -40,7 +40,7 @@ import { useT } from "@/lib/i18n/context";
 import { errorCopy, errorText } from "@/lib/i18n/errors";
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg field px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 const CUSTOM = "__custom__";
 
