@@ -25,7 +25,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^1.24.0",
     "mammoth": "^1.12.2",
-    "next": "^15.5.24",
+    "next": "^15.5.27",
     "pdfjs-dist": "^6.3.289",
     "pg": "^8.13.1",
     "react": "^19.0.0",
@@ -50,7 +50,7 @@
   },
   "resolutions": {
     "postcss": "^8.5.19",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.5"
   },
   "license": "MIT OR Apache-2.0"
 }
