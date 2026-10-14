@@ -90,7 +90,15 @@ export type Row =
    * `rowRole` keeps working off one field; it is a separate variant because it
    * is neither something anyone said nor work the agent did.
    */
-  | { row: "compaction"; m: ChatMessage; i: number };
+  | { row: "compaction"; m: ChatMessage; i: number }
+  /**
+   * A member was asked whether a tool call could run, and answered. Carries `m`
+   * for the same reason the compaction variant does; it is separate from both
+   * of them because it is neither work the agent did nor something that
+   * happened to the conversation -- it is the one row whose subject is the
+   * member.
+   */
+  | { row: "approval"; m: ChatMessage; i: number };
 
 /**
  * One step inside a run: the message that narrated it, plus the events of the
@@ -124,6 +132,13 @@ export function toRows(messages: ChatMessage[]): Row[] {
     // and the only thing separating them is the kind the proxy assigned.
     if (m.kind === KIND_COMPACTION) {
       rows.push({ row: "compaction", m, i });
+      return;
+    }
+    // Same reason, same position: an approval record is an events-only entry
+    // too, and folded into a run it would read as "3 steps" with the decision
+    // the member made hidden inside it.
+    if (m.kind === KIND_APPROVAL) {
+      rows.push({ row: "approval", m, i });
       return;
     }
     if (m.kind !== "step") {
@@ -161,6 +176,58 @@ export function toRows(messages: ChatMessage[]): Row[] {
  */
 export const KIND_COMPACTION = "compaction";
 const EVENT_COMPACT = "compact";
+
+/**
+ * The kind the proxy stamps on the harness's record of an approval decision,
+ * and the event kind inside it.
+ */
+export const KIND_APPROVAL = "approval";
+const EVENT_APPROVAL = "approval";
+
+/** How an approval ended, as the harness records it. */
+export type ApprovalStatus = "ok" | "denied" | "expired" | "failed";
+
+/** One approval decision, as the row renders it. */
+export interface ApprovalRecord {
+  /** The gated tool. Empty only on a record written by something older. */
+  tool: string;
+  /**
+   * The outcome. `expired` is NOT `denied`: the member did not refuse, they
+   * were not there -- which is the half of this that nothing recorded before,
+   * because the proxy drops a request it never got an answer for.
+   */
+  status: ApprovalStatus;
+  /**
+   * The member's own words on a refusal, and nothing else. The harness writes
+   * no detail on the other three outcomes: the sentences it composes for them
+   * are English, written for the model, and this app renders every word the
+   * member reads from `status` instead.
+   */
+  reason: string;
+  /**
+   * The call's arguments, FLATTENED AND CAPPED by the harness. A display
+   * string, never JSON: a truncated document is not one, so this is shown
+   * verbatim and never parsed.
+   */
+  args: string;
+}
+
+const APPROVAL_STATUSES: ApprovalStatus[] = ["ok", "denied", "expired", "failed"];
+
+/**
+ * What an approval record says, or null when the entry carries no such event.
+ *
+ * An unrecognised status falls back to "failed" rather than being dropped: the
+ * decision DID happen, and a row that says "something went wrong with the
+ * permission" is honest about a code this client does not know, where no row at
+ * all would claim nobody was ever asked.
+ */
+export function approvalRecord(m: ChatMessage): ApprovalRecord | null {
+  const e = (m.events ?? []).find((ev) => ev.kind === EVENT_APPROVAL);
+  if (!e) return null;
+  const status = APPROVAL_STATUSES.find((s) => s === e.status) ?? "failed";
+  return { tool: e.name ?? "", status, reason: e.detail ?? "", args: e.arguments ?? "" };
+}
 
 /**
  * How many messages a compaction record says were dropped, or 0 when the record
@@ -201,9 +268,11 @@ export function landingIndex(messages: ChatMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     // A compaction divider is skipped for the same reason a step is: opening a
     // conversation on "12 earlier messages were compacted" lands the member on
-    // a note about the transcript instead of on the transcript.
+    // a note about the transcript instead of on the transcript. An approval
+    // record is skipped on the same ground -- it is a note about a decision,
+    // and what the member wants to see on opening is what was said.
     const k = messages[i].kind;
-    if (k !== "step" && k !== KIND_COMPACTION) return i;
+    if (k !== "step" && k !== KIND_COMPACTION && k !== KIND_APPROVAL) return i;
   }
   return messages.length - 1;
 }
