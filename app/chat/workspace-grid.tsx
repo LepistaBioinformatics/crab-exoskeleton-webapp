@@ -28,6 +28,11 @@ import { useT } from "@/lib/i18n/context";
 // not of the question being asked. A member is choosing an agent; the tenant and the
 // subscription are facts ABOUT that agent, so they belong on its row.
 //
+// THE SUBSCRIPTION LEADS THE ROW, the tenant and the agent follow
+// (picker-subscription-first-and-project-cards FR-1). Still one row per agent -- the
+// agent is what a click enters -- but the subscription is what the owner asked a member
+// to recognise first.
+//
 // projects-screen.tsx reached the same conclusion three weeks earlier and its comment is
 // the argument here too: a gallery shape spread a handful of objects "across a band
 // wider than anything else in the app". A member with six agents has six rows.
@@ -39,7 +44,7 @@ import { useT } from "@/lib/i18n/context";
 const row = cva(
   [
     "flex w-full items-center gap-3 rounded-xl border border-rule-strong bg-surface px-4 py-3 text-left",
-    "transition-colors hover:border-accent/60 hover:bg-elevated disabled:opacity-60",
+    "transition-colors hover:border-rule-emphasis hover:bg-elevated disabled:opacity-60",
   ].join(" "),
 );
 
@@ -88,7 +93,17 @@ export default function WorkspaceGrid() {
   // and the existing welcome copy already says the right thing about it.
   if (groups.length === 0) return <EmptyState />;
 
-  const rows = agentRows(groups);
+  // SUBSCRIPTION, THEN TENANT, THEN AGENT -- the column order, so rows of one
+  // subscription sit together under the column a member scans first. The tree's own
+  // order is tenant-first, which scattered a subscription's agents once the subscription
+  // led the row. Tenant names are compared as shown, uuid until the name lands.
+  const label = (leaf: AgentLeaf) => leaf.accName?.trim() || leaf.subsAccId;
+  const rows = [...agentRows(groups)].sort(
+    (a, b) =>
+      label(a).localeCompare(label(b)) ||
+      (names[a.tenantId] ?? a.tenantId).localeCompare(names[b.tenantId] ?? b.tenantId) ||
+      a.role.localeCompare(b.role),
+  );
 
   return (
     // The destination frame, whose own header says it was written for six screens, has
@@ -108,11 +123,11 @@ export default function WorkspaceGrid() {
             not over the picture. */}
         <span className="w-10 shrink-0" />
         <span className={cells}>
-          <span className="min-w-0 flex-1 truncate">{t.workspaceGrid.columns.agent}</span>
-          <span className="min-w-0 flex-1 truncate">{t.workspaceGrid.columns.tenant}</span>
           <span className="min-w-0 flex-1 truncate">
             {t.workspaceGrid.columns.subscription}
           </span>
+          <span className="min-w-0 flex-1 truncate">{t.workspaceGrid.columns.tenant}</span>
+          <span className="min-w-0 flex-1 truncate">{t.workspaceGrid.columns.agent}</span>
         </span>
         <span className={endSlot} />
       </div>
@@ -121,20 +136,22 @@ export default function WorkspaceGrid() {
         {rows.map((leaf) => (
           <li key={`${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`}>
             <button type="button" onClick={() => pick(leaf)} className={row()}>
-              {/* An initials avatar rather than a robot icon: every agent had the same
-                  glyph, so the picture carried nothing and the name did all the work.
-                  Two letters plus a colour derived from the name make the rows
-                  distinguishable at a glance. */}
-              <TenantAvatar name={leaf.role} size="lg" />
+              {/* An initials avatar rather than a robot icon: the picture is of whatever
+                  leads the row, and the SUBSCRIPTION leads it now. Two letters plus a
+                  colour derived from the name make the rows distinguishable at a glance. */}
+              <TenantAvatar name={label(leaf)} size="lg" />
               <span className={cells}>
-                <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold capitalize text-fg">
-                  {leaf.role}
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="min-w-0 truncate font-display text-base font-semibold text-fg">
+                    {label(leaf)}
+                  </span>
+                  <NotSetUp scaffolded={leaf.scaffolded} t={t} />
                 </span>
                 {/* The brand sits WITH the tenant's name, not at the far end of the
                     row. It is a picture of the thing in this cell; parked past the
-                    subscription it read as a second identity for the row, competing
-                    with the agent's own avatar at the front. */}
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted">
+                    agent it read as a second identity for the row, competing with the
+                    avatar at the front. */}
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg">
                   <TenantAvatar
                     name={names[leaf.tenantId] ?? leaf.tenantId}
                     logo={brands[leaf.tenantId]?.logo}
@@ -142,18 +159,13 @@ export default function WorkspaceGrid() {
                   />
                   {/* The uuid until its name lands, then the name. Never blocks. */}
                   <span className="min-w-0 truncate">
-                    <span className="sm:hidden">{t.workspaceGrid.columns.tenant}: </span>
+                    <span className="text-fg-muted sm:hidden">{t.workspaceGrid.columns.tenant}: </span>
                     {names[leaf.tenantId] ?? leaf.tenantId}
                   </span>
                 </span>
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted">
-                  <span className="min-w-0 truncate">
-                    <span className="sm:hidden">
-                      {t.workspaceGrid.columns.subscription}:{" "}
-                    </span>
-                    {leaf.accName?.trim() || leaf.subsAccId}
-                  </span>
-                  <NotSetUp scaffolded={leaf.scaffolded} t={t} />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium capitalize text-fg">
+                  <span className="text-fg-muted sm:hidden">{t.workspaceGrid.columns.agent}: </span>
+                  {leaf.role}
                 </span>
               </span>
               <span className={endSlot}>

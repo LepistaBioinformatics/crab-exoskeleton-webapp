@@ -79,7 +79,7 @@ export default function ConversationTabStrip({
             className={[
               "group flex min-w-0 max-w-52 shrink-0 items-center gap-1 border-b-2 pl-3 pr-1 transition-colors",
               here
-                ? "border-b-accent bg-elevated text-fg"
+                ? "border-b-rule-emphasis bg-elevated text-fg"
                 : "border-b-transparent text-fg-muted hover:bg-elevated/60 hover:text-fg",
             ].join(" ")}
           >

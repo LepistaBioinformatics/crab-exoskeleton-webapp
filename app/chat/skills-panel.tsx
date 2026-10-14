@@ -835,7 +835,7 @@ function SkillEditor({
         <p className="text-xs text-fg-muted">{t.skills.supportingFile}</p>
       )}
 
-      <div className="rounded-lg border border-rule bg-bg p-2">
+      <div className="field rounded-lg p-2">
         <Textarea
           value={editor.body}
           rows={16}

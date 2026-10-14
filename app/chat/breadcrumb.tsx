@@ -34,7 +34,7 @@ import { useT } from "@/lib/i18n/context";
 const segment = cva(
   [
     "flex min-h-11 min-w-0 items-center rounded-lg px-2 text-sm",
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ],
   {
     variants: {
@@ -279,7 +279,7 @@ export default function Breadcrumb({
             aria-expanded={menu !== null}
             aria-label={t.shell.crumbActions}
             title={t.shell.crumbActions}
-            className="flex min-h-11 shrink-0 items-center rounded-lg px-1 text-fg-muted transition-colors hover:bg-elevated hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex min-h-11 shrink-0 items-center rounded-lg px-1 text-fg-muted transition-colors hover:bg-elevated hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             onClick={(ev) => {
               if (menu) return close(true);
               const rect = ev.currentTarget.getBoundingClientRect();

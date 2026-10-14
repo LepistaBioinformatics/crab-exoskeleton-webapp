@@ -10,7 +10,7 @@ import { useT } from "@/lib/i18n/context";
 import { adminCopy } from "@/lib/i18n/admin";
 
 const selectClass =
-  "h-9 w-full rounded-lg border border-rule-strong bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 w-full rounded-lg field px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 // fallbackCandidates excludes the model itself and every non-active model: the
 // resolver skips a non-active fallback anyway, so offering one would let an admin

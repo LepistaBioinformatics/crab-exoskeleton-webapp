@@ -44,7 +44,7 @@ import { useT } from "@/lib/i18n/context";
 const row = cva(
   [
     "flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm",
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ],
   {
     variants: {

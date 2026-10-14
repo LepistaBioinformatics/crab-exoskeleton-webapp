@@ -100,7 +100,7 @@ function bulkPolicy(policy: RestartPolicy): RestartPolicy {
 const keyRow = cva(
   [
     "flex min-h-11 w-full flex-col items-start justify-center gap-0.5 rounded-lg px-2.5 py-1.5 text-left",
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ],
   {
     variants: {

@@ -39,7 +39,7 @@ import { useT } from "@/lib/i18n/context";
 // governs nothing sees no group option, rather than one that renders and then refuses.
 
 const selectClass =
-  "h-9 rounded-lg border border-rule-strong bg-elevated px-2 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-9 rounded-lg field px-2 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 /** Which of somebody's two actors a memory is addressed at. */
 export type Reach = "person" | "agent" | "both";

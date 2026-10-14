@@ -2,7 +2,7 @@
 
 /*
  * Lepista Bioinformatics Lab design system, expressed as design tokens for a
- * Material 3 structure. Brand identity (cyan accent, violet structural border,
+ * Material 3 structure. Brand identity (cyan accent, neutral structural borders,
  * Bricolage/Hanken/Space Mono type, 8px radius) is preserved; the M3 part is
  * how these are arranged -- tonal surface steps instead of MUI elevation,
  * state layers instead of ripples, nav drawer + secondary drawer shell.
@@ -66,19 +66,40 @@
      one asks for an action. */
   --notice: #9a6400;
   --notice-weak: #fdf1dc;
-  /* THE TWO RULES, and there are only two.
-     `border-brand/<n>` was used 136 times at six different opacities — /30, /20, /40,
-     /25, /50, /10 — which is not a grammar, it is six of them. Region boundaries are
-     drawn by tone now and take no border at all; what is left is these:
+  /* THE BORDER TOKENS. Every border, ring and outline colour in the product is one of
+     the four below, so a change of palette is a change HERE and nowhere else -- a
+     component naming `border-accent` or `border-brand` directly is the thing this block
+     exists to prevent.
 
-       --rule         a boundary INSIDE one surface: a table row, a field group
-       --rule-strong  a boundary that is also a control's edge: an input, an outline
+     NEUTRAL, mixed from --fg rather than from a hue, so they flip with the scheme on
+     their own and sit on teal ink in light and on near-black in dark alike. They were
+     mixed from the violet --brand until the owner asked for neutral borders throughout
+     (2026-10-13): violet hairlines plus cyan hover and selection edges read as two
+     colours competing on every card.
 
-     A case that fits neither is a case this decision missed, and it gets raised rather
-     than a seventh opacity. color-mix on the runtime var so both flip with the scheme —
-     `--brand` is #663a88 in light and #a988c9 in dark, and one definition covers both. */
-  --rule: color-mix(in srgb, var(--brand) 22%, transparent);
-  --rule-strong: color-mix(in srgb, var(--brand) 40%, transparent);
+       --rule           a boundary INSIDE one surface: a table row, a field group
+       --rule-strong    a boundary that is also a control's edge: an input, an outline
+       --rule-emphasis  the same edge, picked out: hover, the current or selected item,
+                        an active tab's underline, a focused field
+       --focus          the KEYBOARD focus ring. Kept on the accent, deliberately: it is
+                        an accessibility signal, and a neutral ring is the one that goes
+                        missing against a neutral border. Repoint it here if that changes.
+
+     Why so few: `border-brand/<n>` was once used 136 times at six different opacities,
+     which is not a grammar, it is six of them. Region boundaries are drawn by tone and
+     take no border at all. A case that fits none of these is a case this decision
+     missed, and it gets raised rather than a fifth token or an inline opacity. */
+  --rule: color-mix(in srgb, var(--fg) 12%, transparent);
+  --rule-strong: color-mix(in srgb, var(--fg) 22%, transparent);
+  --rule-emphasis: color-mix(in srgb, var(--fg) 45%, transparent);
+  --focus: var(--accent);
+  --focus-soft: var(--accent-soft);
+  /* A form field's fill, and the same a step stronger under the pointer. See `field`.
+     TRANSLUCENT, mixed from --fg, so a field reads on whatever it sits on: a field
+     filled with --elevated vanished on the many forms that are themselves --elevated
+     panels. Flips with the scheme because --fg does. */
+  --field: color-mix(in srgb, var(--fg) 6%, transparent);
+  --field-hover: color-mix(in srgb, var(--fg) 10%, transparent);
   /* Elevation shadow, theme-aware. Light: soft brand-tinted drop shadow.
      A plain dark shadow vanishes on a dark background, so dark mode adds a
      faint light hairline (0 0 0 1px) plus a deeper shadow so the lift reads. */
@@ -143,6 +164,9 @@
   --color-brand: var(--brand);
   --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
+  --color-rule-emphasis: var(--rule-emphasis);
+  --color-focus: var(--focus);
+  --color-focus-soft: var(--focus-soft);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-reading-fg: var(--reading-fg);
@@ -425,7 +449,131 @@
   --animate-chooser-pick: chooserPick 150ms ease-out;
 }
 
-/* The composer breathes a soft accent ring while the user is actively typing.
+/* A FORM FIELD: an input, a select, a textarea or the box that wraps one.
+
+   DRAWN BY TONE, NOT BY A LINE (2026-10-14: "cleaner, fewer borders"). Every field used
+   to carry `border-rule-strong`, so a form was a grid of outlined boxes; now a field is
+   a step of fill, a hair darker under the pointer, and a ring only while it has focus.
+   The 1px border is kept and made transparent so swapping a field to this costs no
+   layout, and so a forced-colors (high contrast) mode, which paints borders, still
+   draws an edge.
+
+   One definition: a field anywhere in the app names `field` and sets only its own size
+   and type. The colours are the tokens in :root. */
+/* A translucent field fill would leave a native <select>'s option list see-through in
+   the browsers that paint it from the control. The list gets the opaque surface. */
+option {
+  background-color: var(--surface);
+  color: var(--fg);
+}
+
+@utility field {
+  border: 1px solid transparent;
+  background-color: var(--field);
+  transition:
+    background-color 150ms,
+    box-shadow 150ms;
+  &:hover {
+    background-color: var(--field-hover);
+  }
+  &:focus-visible,
+  &:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-soft);
+  }
+}
+
+/* THE MARKDOWN FIELD's rendered document (app/chat/markdown-field.tsx). The same
+   typography MessageContent gives a published post -- sizes, weights, spacing -- so what
+   the member writes looks like what the reader will see. Colours are the text tokens;
+   nothing here names a hue. */
+.markdown-field .ProseMirror {
+  min-height: 10rem;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.markdown-field .ProseMirror > :last-child { margin-bottom: 0; }
+.markdown-field .ProseMirror p { margin-bottom: 0.5rem; }
+.markdown-field .ProseMirror h1,
+.markdown-field .ProseMirror h2,
+.markdown-field .ProseMirror h3,
+.markdown-field .ProseMirror h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0.25rem 0 0.5rem;
+}
+.markdown-field .ProseMirror h1 { font-size: 1.125rem; }
+.markdown-field .ProseMirror h2 { font-size: 1rem; }
+.markdown-field .ProseMirror h3,
+.markdown-field .ProseMirror h4 { font-size: 0.875rem; }
+.markdown-field .ProseMirror strong { font-weight: 600; }
+.markdown-field .ProseMirror em { font-style: italic; }
+.markdown-field .ProseMirror a { text-decoration: underline; text-underline-offset: 2px; }
+.markdown-field .ProseMirror ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; }
+.markdown-field .ProseMirror ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.5rem; }
+.markdown-field .ProseMirror li > p { margin-bottom: 0.125rem; }
+.markdown-field .ProseMirror blockquote {
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 0.75rem;
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+.markdown-field .ProseMirror code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+.markdown-field .ProseMirror pre {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+}
+.markdown-field .ProseMirror pre code { background: none; padding: 0; }
+.markdown-field .ProseMirror hr { border-color: var(--rule); margin: 0.75rem 0; }
+.markdown-field .ProseMirror table { border-collapse: collapse; margin-bottom: 0.5rem; }
+.markdown-field .ProseMirror th,
+.markdown-field .ProseMirror td { border: 1px solid var(--rule); padding: 0.25rem 0.5rem; }
+
+/* AN OPEN DASHED EDGE, for a card that stands for a place rather than a thing in it
+   (the projects screen's Global chats). `border-dashed` cannot space its dashes, and
+   at 1px they sit close enough to read as a grey line. This draws them through a mask
+   so the colour stays a token: the SVG supplies only the dash pattern and the corner,
+   and `--rule-strong` fills it -- neutral, and a step quieter than the solid edges
+   around it. The stroke is centred on the box edge and half of it is clipped, which
+   is what leaves a 1.5px dash; the radius matches `rounded-xl`.
+
+   The element's own border stays in the box model (no layout shift against its solid
+   neighbours) but is transparent. */
+.edge-dashed-open {
+  position: relative;
+  border-color: transparent !important;
+}
+.edge-dashed-open::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--rule-strong);
+  transition: background-color 150ms;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12' fill='none' stroke='black' stroke-width='3' stroke-dasharray='6 8'/%3E%3C/svg%3E");
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12' fill='none' stroke='black' stroke-width='3' stroke-dasharray='6 8'/%3E%3C/svg%3E");
+}
+.edge-dashed-open:hover::before {
+  background: var(--rule-emphasis);
+}
+
+/* The composer breathes a soft ring while the user is actively typing -- the
+   emphasis rule, like every other picked-out edge.
    Auto-neutralized by the reduced-motion guard below. */
 @keyframes composerPulse {
   0%,
@@ -433,7 +581,7 @@
     box-shadow: 0 0 0 0 transparent;
   }
   50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--rule-emphasis) 50%, transparent);
   }
 }
 .composer-typing {

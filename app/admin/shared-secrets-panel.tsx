@@ -29,7 +29,7 @@ import { adminCopy } from "@/lib/i18n/admin";
 import { useT } from "@/lib/i18n/context";
 
 const selectClass =
-  "h-11 w-full rounded-lg border border-rule-strong bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+  "h-11 w-full rounded-lg field px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-soft";
 
 const FORMAT_LABEL: Record<SecretFormat, string> = {
   dotenv: "dotenv (.env)",

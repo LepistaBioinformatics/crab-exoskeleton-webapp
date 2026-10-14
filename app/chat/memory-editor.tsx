@@ -94,7 +94,7 @@ export default function MemoryEditor({ workspace }: { workspace: Workspace }) {
         </div>
       ) : (
         <>
-          <div className="rounded-lg border border-rule-strong bg-elevated p-2 focus-within:ring-2 focus-within:ring-accent-soft">
+          <div className="rounded-lg field p-2">
             <Textarea
               value={value}
               onChange={(e) => setValue(e.target.value)}

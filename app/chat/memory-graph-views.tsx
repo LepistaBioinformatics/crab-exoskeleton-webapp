@@ -59,8 +59,8 @@ const check = cva(
   {
     variants: {
       checked: {
-        true: "border-accent bg-accent/20 text-accent",
-        false: "border-rule-strong text-fg-muted hover:border-accent/60",
+        true: "border-rule-emphasis bg-accent/20 text-accent",
+        false: "border-rule-strong text-fg-muted hover:border-rule-emphasis",
       },
     },
     defaultVariants: { checked: false },
@@ -110,9 +110,9 @@ const chip = cva(
   {
     variants: {
       active: {
-        true: "border-accent/60 bg-accent/20 text-fg",
+        true: "border-rule-emphasis bg-accent/20 text-fg",
         false:
-          "border-rule-strong text-fg-muted hover:border-accent/40 hover:text-fg",
+          "border-rule-strong text-fg-muted hover:border-rule-emphasis hover:text-fg",
       },
     },
     defaultVariants: { active: false },
@@ -475,7 +475,7 @@ export function EntityDetail({
   const sources = entitySources(entity);
   return (
     <div
-      className="flex shrink-0 flex-col border-t-2 border-accent/60 bg-surface shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.45)]"
+      className="flex shrink-0 flex-col border-t-2 border-rule-emphasis bg-surface shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.45)]"
       style={{ height, maxHeight }}
     >
       {/* The drag handle. The pane sits UNDER the list it was opened from, so without a
@@ -631,7 +631,7 @@ export function EntityDetail({
                     <button
                       type="button"
                       onClick={() => onOpenConversation?.(src.sessionId)}
-                      className="flex w-full items-center gap-1.5 rounded-lg border border-rule-strong bg-surface px-2 py-1 text-left text-[11px] transition-colors hover:border-accent/50 hover:bg-elevated"
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-rule-strong bg-surface px-2 py-1 text-left text-[11px] transition-colors hover:border-rule-emphasis hover:bg-elevated"
                     >
                       <MessageSquare
                         size={11}

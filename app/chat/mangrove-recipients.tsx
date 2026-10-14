@@ -67,8 +67,8 @@ const GLYPH = {
 const FACE = {
   person: "bg-surface text-accent ring-rule-strong",
   agent: "bg-surface text-accent ring-rule-strong",
-  subscription: "bg-accent/15 text-accent ring-accent/40",
-  tenant: "bg-accent/15 text-accent ring-accent/40",
+  subscription: "bg-accent/15 text-accent ring-rule-strong",
+  tenant: "bg-accent/15 text-accent ring-rule-strong",
 } as const;
 
 /**

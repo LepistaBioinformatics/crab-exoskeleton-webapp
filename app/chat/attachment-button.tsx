@@ -186,7 +186,7 @@ export default function AttachmentButton({
             <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} aria-hidden />
             <div
               style={{ position: "fixed", left: pos.x, top: pos.y }}
-              className="z-[60] w-48 rounded-lg border border-brand bg-surface p-1 shadow-xl"
+              className="z-[60] w-48 rounded-lg border border-rule-strong bg-surface p-1 shadow-xl"
             >
               {kind && (
                 <button

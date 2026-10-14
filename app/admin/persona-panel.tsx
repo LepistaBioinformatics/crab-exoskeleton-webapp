@@ -250,7 +250,7 @@ export default function PersonaPanel({
           )}
           <Textarea
             rows={18}
-            className="font-mono text-xs"
+            className="field rounded-lg px-3 py-2 font-mono text-xs"
             value={editing.body}
             onChange={(e) => setEditing({ ...editing, body: e.target.value })}
             aria-label={editing.name}

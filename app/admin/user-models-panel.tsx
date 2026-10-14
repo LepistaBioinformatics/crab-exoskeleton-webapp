@@ -34,7 +34,7 @@ import { errorCopy, errorText } from "@/lib/i18n/errors";
 // endpoint or key is not an authority this screen grants, and no response it
 // reads carries a key.
 
-const selectClass = "h-9 rounded-lg border border-rule-strong bg-surface px-2 text-xs text-fg";
+const selectClass = "h-9 rounded-lg field px-2 text-xs text-fg";
 
 export default function UserModelsPanel({
   scope,

@@ -194,7 +194,7 @@ export default function SharedSkillsPanel({
               readOnly={editor.mode === "preview"}
               placeholder={t.sharedSkills.namePlaceholder}
               onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-              className="min-w-0 flex-1 rounded-lg border border-rule-strong bg-transparent px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-lg field px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
             />
             <IconButton
               variant="ghost"
@@ -205,7 +205,7 @@ export default function SharedSkillsPanel({
               <X size={15} aria-hidden />
             </IconButton>
           </div>
-          <div className="rounded-lg border border-rule bg-bg p-2">
+          <div className="field rounded-lg p-2">
             <Textarea
               value={editor.body}
               readOnly={editor.mode === "preview"}
@@ -272,7 +272,7 @@ export default function SharedSkillsPanel({
                 href={sharedSkillArchiveUrl(scope, s.name)}
                 download={`${s.name}.zip`}
                 aria-label={`${t.sharedSkills.downloadPrefix} ${s.name}`}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-fg transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               >
                 <Download size={15} aria-hidden />
               </a>

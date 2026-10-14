@@ -47,7 +47,7 @@ import {
 const tab = cva("flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-sm transition-colors", {
   variants: {
     chosen: {
-      true: "border-brand bg-accent text-accent-fg",
+      true: "border-rule-strong bg-accent text-accent-fg",
       false: "border-rule-strong bg-transparent text-fg hover:bg-accent/10",
     },
   },

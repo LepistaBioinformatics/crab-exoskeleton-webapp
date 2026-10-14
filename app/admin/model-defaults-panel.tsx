@@ -34,7 +34,7 @@ import { Field, Ident } from "./field";
 import { Accordion } from "@/components/ui/accordion";
 import { ResolutionLadder } from "./resolution-ladder";
 
-const selectClass = "h-9 rounded-lg border border-rule-strong bg-surface px-2 text-xs text-fg";
+const selectClass = "h-9 rounded-lg field px-2 text-xs text-fg";
 
 // The levels this screen WRITES. Narrower than DefaultScope["kind"], which keeps
 // `global` and `agent` because the ladder still READS those to draw them — what

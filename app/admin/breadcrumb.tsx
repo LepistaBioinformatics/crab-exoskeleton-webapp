@@ -21,7 +21,7 @@ import { useT } from "@/lib/i18n/context";
 const segment = cva(
   [
     "flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-sm",
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
   ],
   {
     variants: {

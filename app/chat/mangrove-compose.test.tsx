@@ -14,6 +14,9 @@ import { act } from "react";
 // only to somebody who may use it, and an empty audience is a publication, not
 // a missing field.
 
+// The markdown editor is a plain textarea here -- see markdown-field.test-double.
+vi.mock("next/dynamic", async () => (await import("./markdown-field.test-double")).dynamicMock);
+
 const findPeople = vi.fn();
 const publish = vi.fn();
 
@@ -437,7 +440,9 @@ describe("the body", () => {
     // The SAME heading as the field under it, not its own quieter variety -- compared
     // against the body's rather than against a literal, so the two cannot drift apart
     // while this still passes.
-    const body = el.querySelector("textarea")!.closest("label")!;
+    // The body's wrapper is a <div> while the format is markdown (a contenteditable
+    // is not a labelable control), so the stacked wrapper is what is compared.
+    const body = el.querySelector("textarea")!.closest(".flex-col")!;
     expect(heading.className).toBe(body.querySelector("span")!.className);
   });
 

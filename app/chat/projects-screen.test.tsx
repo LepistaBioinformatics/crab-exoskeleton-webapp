@@ -349,12 +349,8 @@ describe("a harness without projects", () => {
   });
 });
 
-// A LIST IN A COLUMN, NEWEST FIRST.
-//
-// This was a three-column grid of tall cards at the frame's full 6xl width: a shape
-// for browsing a gallery, spread across a band wider than anything else in the app,
-// for a handful of entries most members can count on one hand. Each card also
-// reserved height for a blurb that is usually one line or none.
+// NEWEST FIRST, across the cards and then the table: the order is one order, read
+// left to right and then top to bottom.
 describe("the shape of the list", () => {
   const rowsOf = (host: HTMLElement) => [...host.querySelectorAll("li")];
 
@@ -391,14 +387,99 @@ describe("the shape of the list", () => {
     expect(names[1]).toContain("Undated");
   });
 
-  it("stacks them rather than laying them out in a grid", async () => {
-    listProjects.mockResolvedValue([project()]);
+});
+
+// picker-subscription-first-and-project-cards FR-2: Global chats and the two newest
+// projects are cards; every older project is a table row.
+describe("three cards, then a table", () => {
+  const lists = (host: HTMLElement) => [...host.querySelectorAll("ul")];
+  const names = (list: Element) =>
+    [...list.querySelectorAll(":scope > li > button")].map((b) => b.textContent ?? "");
+
+  it("cards Global chats and the two newest projects, and tables the rest", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "a", name: "Alpha", createdAt: "2026-01-01T00:00:00Z" }),
+      project({ id: "b", name: "Bravo", createdAt: "2026-02-01T00:00:00Z" }),
+      project({ id: "c", name: "Charlie", createdAt: "2026-03-01T00:00:00Z" }),
+      project({ id: "d", name: "Delta", createdAt: "2026-04-01T00:00:00Z" }),
+    ]);
     const host = await mount();
-    const list = host.querySelector("ul")!;
-    expect([...list.classList]).toContain("flex-col");
-    expect(
-      [...list.classList].filter((c) => c.includes("grid")),
-      "the grid came back",
-    ).toEqual([]);
+    const [cardList, table] = lists(host);
+    const carded = names(cardList);
+    expect(carded).toHaveLength(3);
+    expect(carded[0]).toContain(t.projects.mainAgent);
+    expect(carded[1]).toContain("Delta");
+    expect(carded[2]).toContain("Charlie");
+    const rows = names(table);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Bravo");
+    expect(rows[1]).toContain("Alpha");
+    expect(host.textContent).toContain(t.projects.columns.instructions);
+  });
+
+  it("renders no table while every project fits in a card", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "a", name: "Alpha" }),
+      project({ id: "b", name: "Bravo" }),
+    ]);
+    const host = await mount();
+    expect(lists(host)).toHaveLength(1);
+    expect(host.textContent).not.toContain(t.projects.columns.instructions);
+  });
+
+  it("keeps the Global chats card when there are no projects", async () => {
+    listProjects.mockResolvedValue([]);
+    const host = await mount();
+    expect(ownWorkspaceCard(host).textContent).toContain(t.projects.mainAgent);
+    expect(host.textContent).toContain(t.projects.none);
+  });
+
+  it("enters a project from its table row", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "a", name: "Alpha", createdAt: "2026-01-01T00:00:00Z" }),
+      project({ id: "b", name: "Bravo", createdAt: "2026-02-01T00:00:00Z" }),
+      project({ id: "c", name: "Charlie", createdAt: "2026-03-01T00:00:00Z" }),
+    ]);
+    const onBrowse = vi.fn();
+    const host = await mount(null, onBrowse);
+    const row = lists(host)[1].querySelector<HTMLButtonElement>(":scope > li > button")!;
+    await click(row);
+    expect(onBrowse).toHaveBeenCalledWith("a");
+  });
+});
+
+describe("editing in place", () => {
+  it("opens the edit form over the project it edits, not at the top", async () => {
+    listProjects.mockResolvedValue([
+      project({ id: "a", name: "Alpha", createdAt: "2026-01-01T00:00:00Z" }),
+      project({ id: "b", name: "Bravo", createdAt: "2026-02-01T00:00:00Z" }),
+    ]);
+    const host = await mount();
+    const alpha = cards(host).find((c) => c.textContent?.includes("Alpha"))!.closest("li")!;
+    await click(alpha.querySelector<HTMLButtonElement>(`[aria-label="${t.projects.edit}"]`)!);
+
+    const dialog = host.querySelector('[role="dialog"]')!;
+    expect(alpha.contains(dialog)).toBe(true);
+    expect(host.querySelectorAll("form")).toHaveLength(1);
+    expect(dialog.querySelector("input")!.value).toBe("Alpha");
+  });
+
+  it("closes on Escape without saving", async () => {
+    listProjects.mockResolvedValue([project({ id: "a", name: "Alpha" })]);
+    const host = await mount();
+    await click(byLabel(host, t.projects.edit));
+    await act(async () => {
+      host
+        .querySelector("form")!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it("draws Global chats with a dashed edge", async () => {
+    listProjects.mockResolvedValue([]);
+    const host = await mount();
+    expect([...ownWorkspaceCard(host).classList]).toContain("edge-dashed-open");
   });
 });

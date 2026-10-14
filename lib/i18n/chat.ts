@@ -700,7 +700,7 @@ const en = {
     // Heading over the conversations that belong to no project — named for what
     // they are, so it reads as a peer of the projects group above it rather than
     // as "everything".
-    globalChats: "General chats",
+    globalChats: "Global chats",
     renameAria: "Rename conversation",
     rename: "Rename",
     deleteAria: "Delete conversation",
@@ -1233,6 +1233,8 @@ const en = {
     // counts — because the body underneath is JSON, and JSON says nothing about whether
     // this is worth taking.
     fragmentTitle: "A piece of a memory graph",
+    // The closed row's preview line for a note with no body.
+    emptyPreview: "No text",
     fragmentEntities: "Entities",
     fragmentObservations: "Observations",
     fragmentRelations: "Relations",
@@ -1295,7 +1297,7 @@ const en = {
     none: "No projects yet.",
     noneHint:
       "Create one to keep a subject's chats, files and instructions apart from the rest.",
-    mainAgent: "No project",
+    mainAgent: "Global chats",
     mainAgentHint: "Chats in the agent's own workspace.",
     create: "New project",
     createTitle: "Create project",
@@ -1334,6 +1336,8 @@ const en = {
     lockedHint: "A conversation stays in the project it started in.",
     unsupported: "This agent does not support projects.",
     refreshAria: "Refresh projects",
+    // The table's column names, over the projects past the three cards.
+    columns: { name: "Name", instructions: "Instructions", created: "Created" },
   },
 };
 
@@ -1805,7 +1809,7 @@ const pt: ChatDict = {
     noneYetHint: "Comece uma em Nova conversa, acima, e ela aparece aqui.",
     newChat: "Nova conversa",
     newChatBlurb: "Abre um compositor vazio no projeto em que você está.",
-    globalChats: "Conversas gerais",
+    globalChats: "Chats globais",
     renameAria: "Renomear conversa",
     rename: "Renomear",
     deleteAria: "Excluir conversa",
@@ -2214,6 +2218,7 @@ const pt: ChatDict = {
     removeAttachment: "Remover",
     shareFile: "Compartilhar no mangue",
     fragmentTitle: "Um pedaço de um grafo de memória",
+    emptyPreview: "Sem texto",
     fragmentEntities: "Entidades",
     fragmentObservations: "Observações",
     fragmentRelations: "Relações",
@@ -2251,7 +2256,7 @@ const pt: ChatDict = {
     none: "Nenhum projeto ainda.",
     noneHint:
       "Crie um para manter as conversas, os arquivos e as instruções de um assunto separados do resto.",
-    mainAgent: "Sem projeto",
+    mainAgent: "Chats globais",
     mainAgentHint: "Conversas no workspace do próprio agente.",
     create: "Novo projeto",
     createTitle: "Criar projeto",
@@ -2280,6 +2285,7 @@ const pt: ChatDict = {
     lockedHint: "Uma conversa permanece no projeto em que começou.",
     unsupported: "Este agente não suporta projetos.",
     refreshAria: "Atualizar projetos",
+    columns: { name: "Nome", instructions: "Instruções", created: "Criado em" },
   },
 };
 
